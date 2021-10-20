@@ -140,7 +140,7 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "-r")) {
             raw = 1; /* raw */
         }
-        else if (!strcmp(argv[i], "-b") && i + 1 < argc) {
+        else if (!strcmp(argv[i], "-p") && i + 1 < argc) {
             sscanf(argv[++i], "%d,%d", &bus, &port);
         }
         else if (!strcmp(argv[i], "-c") && i + 1 < argc) {
