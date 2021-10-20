@@ -1,0 +1,9 @@
+"pocket_fw.obj",
+"fw.obj",
+"USBJmpTb.obj",
+".\cypress\EZUSB.LIB",
+"dscr.obj" 
+TO "pocket_fw" 
+NOPRINT RAMSIZE(256) 
+CODE( 0x0080 )
+XDATA( 0x2000 )
