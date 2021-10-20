@@ -131,7 +131,7 @@ int main(int argc, char **argv)
     FILE *fp[SDR_MAX_CH] = {0};
     char *files[SDR_MAX_CH], *conf_file = "";
     double tsec = 0.0;
-    int i, n = 0, bus = 0, port = 0, raw = 0;
+    int i, n = 0, bus = -1, port = -1, raw = 0;
     
     for (i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-t") && i + 1 < argc) {
