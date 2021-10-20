@@ -73,8 +73,8 @@ static void transfer_cb(struct libusb_transfer *transfer)
  *  Open a SDR device.
  *
  *  args:
- *      bus         (I)   USB bus number of SDR device  (0:any)
- *      port        (I)   USB port number of SDR device (0:any)
+ *      bus         (I)   USB bus number of SDR device  (-1:any)
+ *      port        (I)   USB port number of SDR device (-1:any)
  *
  *  return
  *      SDR device pointer (NULL: error)

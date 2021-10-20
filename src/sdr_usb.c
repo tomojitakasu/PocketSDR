@@ -22,8 +22,8 @@
  *  Open USB device.
  *
  *  args:
- *      bus         (I)   USB bus number  (0: any)
- *      port        (I)   USB port number (0: any)
+ *      bus         (I)   USB bus number  (-1: any)
+ *      port        (I)   USB port number (-1: any)
  *      vid         (I)   USB device vendor ID
  *      pid         (I)   USB device product ID
  *
@@ -45,8 +45,8 @@ sdr_usb_t *sdr_usb_open(int bus, int port, uint16_t vid, uint16_t pid)
     }
     for (i = 0; i < n; i++) {
         if (libusb_get_device_descriptor(devs[i], &desc) < 0) continue;
-        if ((bus == 0 || bus == libusb_get_bus_number(devs[i])) && 
-            (port == 0 || port == libusb_get_port_number(devs[i])) && 
+        if ((bus < 0 || bus == libusb_get_bus_number(devs[i])) && 
+            (port < 0 || port == libusb_get_port_number(devs[i])) && 
             vid == desc.idVendor && pid == desc.idProduct) {
             break;
         }

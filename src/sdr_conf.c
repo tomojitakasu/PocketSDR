@@ -357,8 +357,8 @@ static void save_regs(sdr_usb_t *usb)
  *  
  *  args:
  *      file     (I)  configuration file ("": stdout)
- *      bus      (I)  SDR device USB bus number  (0:any)
- *      port     (I)  SDR device USB port number (0:any)
+ *      bus      (I)  SDR device USB bus number  (-1:any)
+ *      port     (I)  SDR device USB port number (-1:any)
  *      opt      (I)  options (OR of the followings)
  *                      1: read all registers
  *                      4: output in hexadecimal format
@@ -392,8 +392,8 @@ int sdr_read_settings(const char *file, int bus, int port, int opt)
  *  
  *  args:
  *      file     (I)  configuration file
- *      bus      (I)  SDR device USB bus number  (0:any)
- *      port     (I)  SDR device USB port number (0:any)
+ *      bus      (I)  SDR device USB bus number  (-1:any)
+ *      port     (I)  SDR device USB port number (-1:any)
  *      opt      (I)  options (OR of the followings)
  *                      1: save settings to EEPROM
  *                      4: input in hexadecimal format

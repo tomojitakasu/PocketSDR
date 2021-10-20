@@ -82,7 +82,7 @@ static void show_usage(void)
 int main(int argc, char **argv)
 {
     char *file = "";
-    int i, bus = 0, port = 0, opt1 = 0, opt2 = 0;
+    int i, bus = -1, port = -1, opt1 = 0, opt2 = 0;
     
     for (i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-s")) {
