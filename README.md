@@ -112,8 +112,8 @@ matplotlib to execute pocket_plot.py.
     $ pocket_plot.py ch2.bin -f 12 -IQ &
 ``` 
 
-<img src="PSD_CH1_L1_12MHz_I.jpg" width=45%>
-<img src="PSD_CH2_L6_12MHz_IQ.jpg" width=45%>
+<img src="PSD_CH1_L1_12MHz_I.jpg" width=80%>
+<img src="PSD_CH2_L6_12MHz_IQ.jpg" width=80%>
 
 --------------------------------------------------------------------------------
 
