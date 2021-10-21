@@ -25,10 +25,11 @@ Linux and other environments.
 PocketSDR --+-- bin     PocketSDR utility binary programs for Windows
             +-- src     PocketSDR utility source programs
             +-- conf    Configuration files for device settings
-            +-- util    Windows driver installation utility
-            +-- doc     Documents
+            +-- util    Windows driver installation utility (ref [3])
+            +-- doc     Documents (ref {1], [2])
             +-- FW      Firmware source programs and images
             |   +-- cypress  Cypress libraries for EZ-USB firmware development
+            |                (ref [4])
             +-- HW      PocketSDR CAD data and parts list for hardware
                         (*.brd and *.sch are for Eagle, *.f3d is for Fusion 360)
 ```
@@ -100,10 +101,15 @@ matplotlib to execute pocket_plot.py.
 
 ## **References**
 
-* Maxum integrated, MAX2771 Multiband Universal GNSS Receiver, July 2018
+[1] Maxum integrated, MAX2771 Multiband Universal GNSS Receiver, July 2018
 
-* Cypress, EZ-USB FX2LP USB Microcontroller High-Speed USB Peripheral 
+[2] Cypress, EZ-USB FX2LP USB Microcontroller High-Speed USB Peripheral 
   Controller, Rev. AB, December 6, 2018
+
+[3] Zadig USB driver installation made easy (https://zadig.akeo.ie/)
+
+[4] Cypress, CY3684 EZ-USB FX2LP Development Kit
+    (https://www.cypress.com/documentation/development-kitsboards/cy3684-ez-usb-fx2lp-development-kit)
 
 --------------------------------------------------------------------------------
 
