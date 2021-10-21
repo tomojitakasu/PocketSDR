@@ -18,6 +18,8 @@ PocketSDR contains also some utility programs to configure the device, capture
 and dump the digitized IF (inter-frequency) data. These are supported Windows,
 Linux and other environments.
 
+<img src="pocket_sdr_image.jpg" width=80%>
+
 --------------------------------------------------------------------------------
 
 ## **Package Structure**
