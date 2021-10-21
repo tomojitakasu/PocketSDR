@@ -30,6 +30,7 @@ PocketSDR --+-- bin     PocketSDR utility binary programs for Windows
             +-- FW      Firmware source programs and images
             |   +-- cypress  Cypress libraries for EZ-USB firmware development
             +-- HW      PocketSDR CAD data and parts list for hardware
+                        (*.brd and *.sch are for Eagle, *.f3d is for Fusion 360)
 ```
 
 --------------------------------------------------------------------------------
