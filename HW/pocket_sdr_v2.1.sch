@@ -1450,7 +1450,7 @@
 <part name="C39" library="ttaka_desc" deviceset="C1005" device="" value="100pF"/>
 <part name="U$31" library="power" deviceset="GND" device=""/>
 <part name="U$32" library="power" deviceset="+3.3V" device=""/>
-<part name="TCXO" library="ttaka_misc" deviceset="TCXO" device="" value="16.368 MHz"/>
+<part name="TCXO" library="ttaka_misc" deviceset="TCXO" device="" value="24.000 MHz"/>
 <part name="U$7" library="power" deviceset="GND" device=""/>
 <part name="C13" library="ttaka_desc" deviceset="C1005" device="" value="0.1uF"/>
 <part name="C8" library="ttaka_desc" deviceset="C1005" device="" value="0.01uF"/>

@@ -832,7 +832,7 @@ design rules under a new name.</description>
 <element name="C39" library="ttaka_desc" package="C1005" value="100pF" x="21.6" y="17.9" smashed="yes">
 <attribute name="NAME" x="28.1" y="17.2" size="0.8128" layer="25" font="vector" ratio="12"/>
 </element>
-<element name="TCXO" library="ttaka_misc" package="TCXO" value="16.368 MHz" x="25.1" y="16.55" smashed="yes" rot="R90">
+<element name="TCXO" library="ttaka_misc" package="TCXO" value="24.000 MHz" x="25.1" y="16.55" smashed="yes" rot="R90">
 <attribute name="NAME" x="25.495" y="15.264" size="0.8128" layer="21" font="vector" ratio="12" rot="R90"/>
 </element>
 <element name="C13" library="ttaka_desc" package="C1005" value="0.1uF" x="25.45" y="14.25" smashed="yes">
