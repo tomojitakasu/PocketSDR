@@ -101,6 +101,22 @@ matplotlib to execute pocket_plot.py.
 
 --------------------------------------------------------------------------------
 
+## **Execution Examples of Utility Programs**
+
+```
+    $ pocket_conf conf/pocket_L1L6_12MHz.conf
+    ...
+    $ pocket_dump -t 10 ch1.bin ch2.bin
+    ...
+    $ pocket_plot.py ch1.bin -f 12 &
+    $ pocket_plot.py ch2.bin -f 12 -IQ &
+``` 
+
+<img src="PSD_CH1_L1_12MHz_I.jpg" width=45%>
+<img src="PSD_CH2_L6_12MHz_IQ.jpg" width=45%>
+
+--------------------------------------------------------------------------------
+
 ## **References**
 
 [1] Maxum integrated, MAX2771 Multiband Universal GNSS Receiver, July 2018
