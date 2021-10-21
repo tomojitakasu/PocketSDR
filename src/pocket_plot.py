@@ -155,21 +155,21 @@ if __name__ == '__main__':
     fig = plt.figure(window, figsize=size)
     
     try:
-	    for i in range(0, 10000000):
-	        data = read_data(file, IQ, fs, tint * i, tint)
-	        
-	        if plt.figure(window) != fig: # window closed
-	            exit()
-	        
-	        if len(data) >= int(fs * 1e6 * tint):
-	            fig.clear() 
-	            ax1 = fig.add_axes(rect0)
-	            ax1.axis('off')
-	            ax1.set_title('Digital IF data: FILE = ' + file, fontsize=10)
-	            ax2 = plot_psd(fig, rect1, data, IQ, fs, tint * i, N, fc, bc)
-	            ax3 = plot_hist(fig, rect2, data, IQ, fc, bc)
-	        
-	        plt.pause(1e-3) 
+        for i in range(0, 10000000):
+            data = read_data(file, IQ, fs, tint * i, tint)
+            
+            if plt.figure(window) != fig: # window closed
+                exit()
+            
+            if len(data) >= int(fs * 1e6 * tint):
+                fig.clear() 
+                ax1 = fig.add_axes(rect0)
+                ax1.axis('off')
+                ax1.set_title('Digital IF data: FILE = ' + file, fontsize=10)
+                ax2 = plot_psd(fig, rect1, data, IQ, fs, tint * i, N, fc, bc)
+                ax3 = plot_hist(fig, rect2, data, IQ, fc, bc)
+            
+            plt.pause(1e-3) 
     
     except KeyboardInterrupt:
         exit(0)
