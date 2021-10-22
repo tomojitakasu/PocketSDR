@@ -6,7 +6,7 @@ PocketSDR is an open-source SDR (software defined radio) based GNSS (Global
 Navigation Satellite System) RF front-end device. It supports almost all signal
 bands for GPS, GLONASS, Galileo, QZSS, BeiDou, NavIC and SBAS.
 
-PocketSDR consists of 2 CH Maxium MAX2771 GNSS RF front-end IC (LNA, mixer, filter,
+PocketSDR consists of 2 CH Maxim MAX2771 GNSS RF front-end IC (LNA, mixer, filter,
 ADC, frequency synthesizer) and Cypress EZ-USB FX2LP USB 2.0 controller.
 The front-end CH1 is dedicated for GNSS L1 band (1525 - 1610 MHz) and CH2 is for
 GNSS L2/L5/L6 band (1160 - 1290 MHz).
@@ -15,7 +15,7 @@ The frequency of the reference oscillator (TCXO) is 24.000 MHz and ADC sampling
 frequency can be configured up to 24 MHz.
 
 PocketSDR contains also some utility programs to configure the device, capture
-and dump the digitized IF (inter-frequency) data. These are supported Windows,
+and dump the digitized IF (inter-frequency) data. These supports Windows,
 Linux and other environments.
 
 <img src="pocket_sdr_image.jpg" width=80%>
@@ -119,7 +119,7 @@ matplotlib to execute pocket_plot.py.
 
 ## **References**
 
-[1] Maxum integrated, MAX2771 Multiband Universal GNSS Receiver, July 2018
+[1] Maxim integrated, MAX2771 Multiband Universal GNSS Receiver, July 2018
 
 [2] Cypress, EZ-USB FX2LP USB Microcontroller High-Speed USB Peripheral 
   Controller, Rev. AB, December 6, 2018
