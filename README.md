@@ -141,6 +141,15 @@ After the driver installation , you find "Cypress FX2LP Sample Device" as
 * Execute USB Control Center (C:\Cypress\USB\CY3684_EZ-USB_FX2LP_DVK\1.1\Windows Applications\
 c_sharp\controlcenter\bin\Release\CyControl.exe).
 
+* Select Cypress FX2LP Sample Device, execute menu Program - FX2 - 64KB EEPROM,
+select the F/W image <install_dir>\PocketSDR\FW\pocket_fw.iic and open it.
+
+* If you see "Programming succeeded." in status bar, the F/W is properly written
+to PocketSDR.
+
+* To use utility programs for PocketSDR, you need to reinstall WinUSB driver for
+PocketSDR. Refer "Installation for Windows" above.
+
 --------------------------------------------------------------------------------
 
 ## **References**
