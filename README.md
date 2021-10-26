@@ -117,6 +117,32 @@ matplotlib to execute pocket_plot.py.
 
 --------------------------------------------------------------------------------
 
+## **Rebuild F/W and Write F/W Image to PocketSDR**
+
+* Install Cypress EZ-USB FX2LP Development Kit (ref [4]) to a Windows PC. As
+default, it is installed to C:\Cypress and C:\Keil.
+
+* Execute Keil uVision2 (C:\Keil\UV2\uv2.exe).
+
+* Execute Menu Project - Open Project, select <install_dir>\PocketSDR\FW\pocket_fw.Uv2>
+and open the project.
+
+* Execute Menu Project - Rebuild all target files and you can get a F/W image
+as <install_dir>\PocketSDR\FW\pocket_fw.iic.
+
+* Attach PocketSDR via USB cable to the PC.
+
+* Open Windows Device Manager, select "EZ-USB" as "Universal Serial Bus Device",
+select right-button menu Update Driver, select "Browse your computer for driver software"
+and input the CyUSB driver path (C:\Cypress\USB\CY3684_EZ-USB_FX2LP_DVK\1.1\Drivers).
+After the driver installation , you find "Cypress FX2LP Sample Device" as 
+"Universal Serial Bus Controller" in Windows Device Manager.
+
+* Execute USB Control Center (C:\Cypress\USB\CY3684_EZ-USB_FX2LP_DVK\1.1\Windows Applications\
+c_sharp\controlcenter\bin\Release\CyControl.exe).
+
+--------------------------------------------------------------------------------
+
 ## **References**
 
 [1] Maxim integrated, MAX2771 Multiband Universal GNSS Receiver, July 2018
@@ -134,4 +160,5 @@ matplotlib to execute pocket_plot.py.
 ## **History**
 
 - 2021-10-20  0.1  1st draft version
+- 2021-10-25  0.2  Add Rebuild F/W and Write F/W Image to PocketSDR
 
