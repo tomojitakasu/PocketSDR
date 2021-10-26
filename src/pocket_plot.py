@@ -172,5 +172,5 @@ if __name__ == '__main__':
             plt.pause(1e-3) 
     
     except KeyboardInterrupt:
-        exit(0)
+        exit()
 
