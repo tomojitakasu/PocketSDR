@@ -37,7 +37,7 @@ static void get_usb_string(struct libusb_device *dev, char *name, size_t size)
                 sizeof(buff)) < 0) {
             break;
         }
-        if (p + strlen(buff) + 1 < name + size) {
+        if (p + strlen(buff) + 2 < name + size) {
             p += sprintf(p, " %s", buff);
         }
     }
