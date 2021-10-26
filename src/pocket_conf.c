@@ -76,7 +76,7 @@ static void show_usage(void)
  *
  *  References
  *
- *    [1] maxum integrated, MAX2771 Multiband Universal GNSS Receiver, July 2018
+ *    [1] maxim integrated, MAX2771 Multiband Universal GNSS Receiver, July 2018
  *
  */
 int main(int argc, char **argv)
