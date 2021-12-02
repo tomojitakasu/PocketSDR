@@ -18,7 +18,7 @@ LIBUSB = -L/mingw64/lib -llibusb-1.0
 LDLIBS = $(LIBUSB)
 
 TARGET = pocket_conf pocket_dump pocket_scan
-SCRIPT = pocket_plot.py
+SCRIPT =
 
 all: $(TARGET)
 
