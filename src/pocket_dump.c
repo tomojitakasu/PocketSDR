@@ -5,12 +5,14 @@
  *  T.TAKASU
  *
  *  History:
- *  2021/10/08  0.1  new
+ *  2021-10-08  0.1  new
+ *  2021-12-01  1.0  add default output file paths
  *
  **/
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <time.h>
 #include <sys/time.h>
 #include "pocket.h"
 
@@ -32,7 +34,7 @@ static void sig_func(int sig)
 /* print usage ---------------------------------------------------------------*/
 static void print_usage(void)
 {
-    printf("Usage: %s [-t tsec] [-r] [-p bus[,port]] [-c conf_file] file [file]\n",
+    printf("Usage: %s [-t tsec] [-r] [-p bus[,port]] [-c conf_file] [file [file]]\n",
         PROG_NAME);
     exit(0);
 }
@@ -97,7 +99,7 @@ static void dump_data(int bus, int port, double tsec, int raw, FILE **fp)
 /**
  *  Synopsis
  *
- *    pocket_dump [-t tsec] [-r] [-p bus[,port]] [-c conf_file] file [file]
+ *    pocket_dump [-t tsec] [-r] [-p bus[,port]] [-c conf_file] [file [file]]
  *
  *  Description
  *
@@ -120,16 +122,22 @@ static void dump_data(int bus, int port, double tsec, int raw, FILE **fp)
  *        Configure the SDR deive with a device configuration file before 
  *        capturing.
  *
- *    file [file]
+ *    [file [file]]
  *        Output digital IF data file paths. The first path is for CH1 and
  *        the second one is for CH2. The second one can be omitted. With
- *        option -r, only the first path is used. 
+ *        option -r, only the first path is used. If the file paths omitted,
+ *        default output file paths are used as follows:
+ *        
+ *        CH1: ch1_YYYYMMDD_hhmmss.bin
+ *        CH2: ch2_YYYYMMDD_hhmmss.bin
+ *        (YYYYMMDD: dump start date in UTC, hhmmss: dump start time in UTC)
  *
  */
 int main(int argc, char **argv)
 {
     FILE *fp[SDR_MAX_CH] = {0};
-    char *files[SDR_MAX_CH], *conf_file = "";
+    char *files[SDR_MAX_CH], *conf_file = "", path[2][32];
+    time_t dump_time;
     double tsec = 0.0;
     int i, n = 0, bus = -1, port = -1, raw = 0;
     
@@ -153,9 +161,12 @@ int main(int argc, char **argv)
             files[n++] = argv[i];
         }
     }
-    if (n <= 0) {
-        fprintf(stderr, "Specify output file(s).\n");
-        return -1;
+    if (n == 0) { /* set default file paths */
+        dump_time = time(NULL);
+        strftime(path[0], 32, "ch1_%Y%m%d_%H%M%S.bin", gmtime(&dump_time));
+        strftime(path[1], 32, "ch2_%Y%m%d_%H%M%S.bin", gmtime(&dump_time));
+        files[n++] = path[0];
+        files[n++] = path[1];
     }
     for (i = 0; i < n; i++) {
         if (raw && i > 0) continue;
