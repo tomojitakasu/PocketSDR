@@ -7,6 +7,8 @@
 #
 #  History:
 #  2021-12-01  1.0  new
+#  2021-12-05  1.1  add signals: G1CA, G2CA, B1I, B2I, B1CD, B1CP, B2AD, B2AP,
+#                   B2BI, B3I
 #
 import sys, math, time
 import numpy as np
@@ -38,14 +40,14 @@ def plot_cn0(ax, cn0, prns, fc):
     ax.set_ylabel('C/N0 (dB-Hz)')
 
 # plot correlation 3D ----------------------------------------------------------
-def plot_corr_3d(ax, P, dops, coff, fc):
-    x, y = np.meshgrid(coff, dops)
+def plot_corr_3d(ax, P, dops, coffs, ix, fc):
+    x, y = np.meshgrid(coffs * 1e3, dops)
     z = P / np.mean(P) * 0.015
     #ax.plot_wireframe(x, y, z, rstride=1, cstride=0, color=fc, lw=0.3, alpha=0.8)
     ax.plot_surface(x, y, z, rstride=1, cstride=1, cmap='Greys', vmax=2, lw=0.1, edgecolor='k')
     #ax.plot_surface(x, y, z, rstride=1, cstride=1, cmap='Blues', vmax=2, lw=0.1, edgecolor='b')
-    ax.set_xlim([coff[0], coff[-1]])
-    ax.set_ylim([dops[0], dops[-1]])
+    ax.set_xlim([x[0][0], x[0][-1]])
+    ax.set_ylim([y[0][0], y[-1][0]])
     ax.set_zlim([0, 1])
     ax.set_xlabel('Code Offset (ms)')
     ax.set_ylabel('Doppler Frequency (Hz)')
@@ -112,8 +114,9 @@ def add_text(ax, x, y, text, color='k'):
 #   Options ([]: default)
 #  
 #     -sig sig
-#         GNSS signal type (L1CA, L1CB, L1CP, L1CD, E1B, E1C, L2CM, L5I, L5Q,
-#         E5AI, E5AQ, E5BI, E5BQ, L6D, L6E, E6B or E6C). [L1CA]
+#         GNSS signal type (L1CA, L1CB, L1CP, L1CD, L2CM, L5I, L5Q, L6D, L6E,
+#         G1CA, G2CA, E1B, E1C, E5AI, E5AQ, E5BI, E5BQ, E6B, E6C, B1I, B1CD,
+#         B1CP, B2I, B2AD, B2AP, B2BI, B3I). [L1CA]
 # 
 #     -prn prn[,...]
 #         PRN numbers of the GNSS signal separated by ','. A PRN number can be a
@@ -218,7 +221,7 @@ if __name__ == '__main__':
                 P, dops, coffs, ix, cn0[i], Tc = \
                     sdr_func.search_sig(sig, prns[i], data, fs, fi, zero_pad=opt[2])
                 print('PRN %3d: SIG= %-4s, COFF= %8.5f ms, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz' %
-                    (prns[i], sig, ix[1] / fs * 1e3, dops[ix[0]], cn0[i]))
+                    (prns[i], sig, coffs[ix[1]] * 1e3, dops[ix[0]], cn0[i]))
             
             print('TIME = %.1f ms' % ((time.time() - t) * 1e3))
             ax1 = fig.add_axes(rect0, facecolor=bc)
@@ -232,7 +235,7 @@ if __name__ == '__main__':
                    (coffs[ix[1]] * 1e3, dops[ix[0]], cn0)
             if opt[1]: # plot 3D
                 ax1 = fig.add_axes(rect3, projection='3d', facecolor='None')
-                plot_corr_3d(ax1, P, dops, coffs, fc)
+                plot_corr_3d(ax1, P, dops, coffs, ix, fc)
                 add_text(ax0, 0.98, 0.96, text, color=fc)
             elif opt[0]: # plot power + peak
                 ax1 = fig.add_axes(rect1, facecolor=bc)
