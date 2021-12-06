@@ -47,7 +47,7 @@ def search_code(code, T, data, fs, fi, zero_pad=True):
     
     # resample and FFT code
     N = int(fs * T)
-    code = sdr_code.res_code(code, T, 0.0, fs, N, zero_pad=zero_pad)
+    code = sdr_code.res_code(code, T, 0.0, fs, N, N if zero_pad else 0)
     code_fft = np.conj(fft.fft(code))
     
     # parallel code search with zero-padding
