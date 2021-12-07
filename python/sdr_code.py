@@ -468,23 +468,19 @@ def gen_legendre_seq(N):
         L[(i * i) % N] = 1
     return L
 
-# L1C Weil-code ([7]) ----------------------------------------------------------
-def L1C_weil_code(t, w):
+# generate L1CP/D code ([7]) ---------------------------------------------------
+def gen_code_L1CPD(N, w, p):
     global L1C_L_SEQ
     if len(L1C_L_SEQ) == 0:
         L1C_L_SEQ = gen_legendre_seq(10223)
-    return -L1C_L_SEQ[t] * L1C_L_SEQ[(t + w) % 10223]
-
-# generate L1CP/D code ([7]) ---------------------------------------------------
-def gen_code_L1CPD(N, w, p):
     ins_code = [-1, 1, 1, -1, 1, -1, -1]
     code = np.zeros(N, dtype='int8')
     for t in range(0, p - 1):
-        code[t] = L1C_weil_code(t, w)
+        code[t] = -L1C_L_SEQ[t] * L1C_L_SEQ[(t + w) % 10223]
     for t in range(p - 1, p + 6):
         code[t] = ins_code[t - p + 1]
     for t in range(p + 6, N):
-        code[t] = L1C_weil_code(t - 7, w)
+        code[t] = -L1C_L_SEQ[t - 7] * L1C_L_SEQ[(t - 7 + w) % 10223]
     return code
 
 # generate L1CP code ([7]) -----------------------------------------------------
