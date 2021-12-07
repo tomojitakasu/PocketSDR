@@ -74,7 +74,13 @@ def search_sig(sig, prn, data, fs, fi, zero_pad=True):
     code, T, Tc = sdr_code.gen_code(sig, prn)
     
     if len(code) == 0:
-        return [], [0.0], (0, 0), 0.0, 0.0
+        return [], [0.0], [0.0], (0, 0), 0.0, 0.0
+    
+    # PRN handled as FCN for GLONASS
+    if sig == 'G1CA':
+        fi += 0.5625e6 * prn
+    elif sig == 'G2CA':
+        fi += 0.4375e6 * prn
     
     # search code
     P, dops, coffs = search_code(code, T, data, fs, fi, zero_pad=zero_pad)

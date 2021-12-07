@@ -87,9 +87,15 @@ def parse_prns(argv):
     prns = []
     for str in argv.split(','):
         s = str.split('-')
-        if len(s) >= 2:
+        if len(s) >= 4 and s[0] == '' and s[2] == '': # -n--m
+            prns += range(-int(s[1]), -int(s[3]) + 1)
+        elif len(s) >= 3 and s[0] == '': # -n-m
+            prns += range(-int(s[1]), int(s[2]) + 1)
+        elif len(s) >= 2 and s[0] == '': # -n
+            prns += [-int(s[1])]
+        elif len(s) >= 2: # n-m
             prns += range(int(s[0]), int(s[1]) + 1)
-        else:
+        else: # n
             prns += [int(s[0])]
     return prns
 
@@ -120,7 +126,9 @@ def add_text(ax, x, y, text, color='k'):
 # 
 #     -prn prn[,...]
 #         PRN numbers of the GNSS signal separated by ','. A PRN number can be a
-#         PRN number range like 1-32 with start and end PRN numbers. [1]
+#         PRN number range like 1-32 with start and end PRN numbers. For GLONASS
+#         FDMA signals (G1CA, G2CA), the PRN number is treated as FCN (frequency
+#         channel number). [1]
 # 
 #     -tint tint
 #         Integration time in ms to search GNSS signals. [code cycle]
@@ -160,6 +168,7 @@ if __name__ == '__main__':
     rect2 = [0.08, 0.07, 0.84, 0.41]
     rect3 = [0, -0.05, 1, 1.25]
     file = ''
+    label = 'PRN'
     
     i = 1
     while i < len(sys.argv):
@@ -206,6 +215,9 @@ if __name__ == '__main__':
     if T < Tcode:
         T = Tcode
     
+    if sig == 'G1CA' or sig == 'G2CA':
+        label = 'FCN'
+    
     try:
         # read IF data
         data = sdr_func.read_data(file, fs, 1 if fi > 0 else 2, T + Tcode, toff)
@@ -220,8 +232,9 @@ if __name__ == '__main__':
             for i in range(len(prns)):
                 P, dops, coffs, ix, cn0[i], Tc = \
                     sdr_func.search_sig(sig, prns[i], data, fs, fi, zero_pad=opt[2])
-                print('PRN %3d: SIG= %-4s, COFF= %8.5f ms, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz' %
-                    (prns[i], sig, coffs[ix[1]] * 1e3, dops[ix[0]], cn0[i]))
+                
+                print('SIG= %-4s, %s= %3d, COFF= %8.5f ms, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz' % \
+                    (sig, label, prns[i], coffs[ix[1]] * 1e3, dops[ix[0]], cn0[i]))
             
             print('TIME = %.1f ms' % ((time.time() - t) * 1e3))
             ax1 = fig.add_axes(rect0, facecolor=bc)
@@ -251,8 +264,8 @@ if __name__ == '__main__':
                 ax1.set_xlabel('Code Offset (ms)')
                 add_text(ax1, 0.98, 0.97, text)
             
-            ax0.set_title('PRN %d: SIG = %s, FILE = %s' % (prns[0], sig, file),
-                fontsize=10)
+            ax0.set_title('SIG = %s, %s = %d, FILE = %s' % \
+                (sig, label, prns[0], file), fontsize=10)
         
         plt.show()
     

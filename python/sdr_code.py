@@ -604,7 +604,7 @@ def gen_code_GLO_CA(N):
 
 # generate G1CA code ([14]) ----------------------------------------------------
 def gen_code_G1CA(prn):
-    if prn < 1 or prn > 27:
+    if prn < -7 or prn > 6: # FCN
         return [], 0.0, 0.0
     
     N, T = 511, 1e-3
@@ -744,7 +744,7 @@ def gen_code_B1I(prn):
     if prn < 1 or prn > 63:
         return [], 0.0, 0.0
     
-    N, T = 2046, 2e-3
+    N, T = 2046, 1e-3
     
     if prn not in B1I:
         code1 = gen_code_B1I_G1(N)
@@ -950,14 +950,13 @@ def cyc_code(sig):
     sig = sig.upper()
     if sig == 'L1CA' or sig == 'L1CB' or sig == 'L5I'  or sig == 'L5Q'  or \
        sig == 'G1CA' or sig == 'G2CA' or sig == 'E5AI' or sig == 'E5AQ' or \
-       sig == 'E5BI' or sig == 'E5BQ' or sig == 'E6B'  or sig == 'E6C':
+       sig == 'E5BI' or sig == 'E5BQ' or sig == 'E6B'  or sig == 'E6C'  or \
+       sig == 'B1I'  or sig == 'B2I'  or sig == 'B2AD' or sig == 'B2AP' or \
+       sig == 'B2BI' or sig == 'B3I':
         return 1e-3
-    elif sig == 'B1I' or sig == 'B2I':
-        return 2e-3
     elif sig == 'L6D' or sig == 'L6E' or sig == 'E1B' or sig == 'E1C':
         return 4e-3
-    elif sig == 'L1CP' or sig == 'L1CD' or sig == 'B1CD' or sig == 'B1CP' or \
-         sig == 'B2AD' or sig == 'B2AP' or sig == 'B2BI' or sig == 'B3I':
+    elif sig == 'L1CP' or sig == 'L1CD' or sig == 'B1CD' or sig == 'B1CP':
         return 10e-3
     elif sig == 'L2CM':
         return 20e-3
