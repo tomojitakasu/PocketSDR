@@ -394,11 +394,6 @@ B3I_G2_init = ( # PRN 1 - 63
     0b0111001111000, 0b0010111001010, 0b1100111110110, 0b1001001000101,
     0b0111000100000, 0b0011001000010, 0b0010001001110)
  
-# rotate code ------------------------------------------------------------------
-def rot_code(code, N):
-    N = np.mod(N, len(code))
-    return np.hstack([code[N:], code[:N]])
-
 # modulation of code by sub-carrier --------------------------------------------
 def mod_code(code, sub_carr):
     ix = np.arange(len(code) * len(sub_carr)) // len(sub_carr)
@@ -450,7 +445,7 @@ def gen_code_L1CA(prn):
         if len(L1CA_G1) == 0:
             L1CA_G1 = gen_code_L1CA_G1(N)
             L1CA_G2 = gen_code_L1CA_G2(N)
-        L1CA[prn] = -L1CA_G1 * rot_code(L1CA_G2, -L1CA_G2_delay[prn-1])
+        L1CA[prn] = -L1CA_G1 * np.roll(L1CA_G2, L1CA_G2_delay[prn-1])
     return L1CA[prn], T, T / N
 
 # generate L1C/B code ([3]) ----------------------------------------------------
@@ -544,7 +539,7 @@ def gen_code_L5I(prn):
         if len(L5_XA) == 0:
             L5_XA = gen_code_L5_XA(N)
             L5_XB = gen_code_L5_XB(N)
-        L5I[prn] = -L5_XA * rot_code(L5_XB, L5I_XB_adv[prn-1])
+        L5I[prn] = -L5_XA * np.roll(L5_XB, -L5I_XB_adv[prn-1])
     return L5I[prn], T, T / N
 
 # generate L5Q code ([2]) ------------------------------------------------------
@@ -559,7 +554,7 @@ def gen_code_L5Q(prn):
         if len(L5_XA) == 0:
             L5_XA = gen_code_L5_XA(N)
             L5_XB = gen_code_L5_XB(N)
-        L5Q[prn] = -L5_XA * rot_code(L5_XB, L5Q_XB_adv[prn-1])
+        L5Q[prn] = -L5_XA * np.roll(L5_XB, -L5Q_XB_adv[prn-1])
     return L5Q[prn], T, T / N
 
 # generate L6 code -------------------------------------------------------------
@@ -991,7 +986,8 @@ def sig_freq(sig):
 
 # resample code ----------------------------------------------------------------
 def res_code(code, T, toff, fs, N, Nz):
-    ix = (len(code) / T * (toff + np.arange(N) / fs)).astype('int')
+    dx = len(code) / T / fs
+    ix = ((toff * fs + np.arange(N)) * dx).astype('int')
     code = np.array(code[ix % len(code)], dtype='complex64')
     if Nz > 0:
         code = np.hstack([code, np.zeros(Nz, dtype='complex64')])
