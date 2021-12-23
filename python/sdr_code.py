@@ -6,9 +6,9 @@
 #      Interfaces, May 19, 2019
 #  [2] IS-GPS-705A, Navstar GPS Space Segment / User Segment L5 Interfaces,
 #      June 8, 2010
-#  [3] IS-QZSS-PNT-004, Quasi-Zenith Satellite System Interfacec Specification
-#      Satellite Positioning, Navigation and Timing Service, Novmenber 5, 2018
-#  [4] IS-QZSS-L6-001, Quasi-Zenith Satellite System Interfacec Specification
+#  [3] IS-QZSS-PNT-004, Quasi-Zenith Satellite System Interface Specification
+#      Satellite Positioning, Navigation and Timing Service, November 5, 2018
+#  [4] IS-QZSS-L6-001, Quasi-Zenith Satellite System Interface Specification
 #      Centimeter Level Augmentation Service, November 5, 2018
 #  [5] Galileo Open Service Signal In Space Interface Control Document -
 #      Issue 1, February 2010
@@ -25,9 +25,9 @@
 #      Document - Precise Positioning Service Signal PPP-B2b (Version 1.0),
 #      July, 2020
 #  [12] BeiDou Navigation Satellite System Signal In Space Interface Control
-#      Document - Open Service Signal B1I (Version 3.0), Febrruary, 2019
+#      Document - Open Service Signal B1I (Version 3.0), February, 2019
 #  [13] BeiDou Navigation Satellite System Signal In Space Interface Control
-#      Document - Open Service Signal B3I (Version 1.0), Febrruary, 2018
+#      Document - Open Service Signal B3I (Version 1.0), February, 2018
 #  [14] Global Navigation Satellite System GLONASS Interface Control Document
 #      Navigation radiosignal in bands L1, L2 (Version 5.1), 2008
 #
@@ -38,13 +38,19 @@
 #  2021-12-01  1.0  new
 #  2021-12-05  1.1  add signals: G1CA, G2CA, B1I, B2I, B1CD, B1CP, B2AD, B2AP,
 #                   B2BI, B3I
+#  2021-12-22  1.2  add secondary code generation
 #
 import numpy as np
-import sdr_code_gal
+import scipy.fftpack as fft
+import sdr_func, sdr_code_gal
+
+# constants --------------------------------------------------------------------
+NONE = np.array([], dtype='int8')
 
 # code caches ------------------------------------------------------------------
 L1CA       = {}
 L1CP, L1CD = {}, {}
+L1CO       = {}
 L2CM       = {}
 L5I , L5Q  = {}, {}
 L6D,  L6E  = {}, {}
@@ -55,7 +61,9 @@ E5BI, E5BQ = {}, {}
 E6B , E6C  = {}, {}
 B1I        = {}
 B1CD, B1CP = {}, {}
+B1CS       = {}
 B2AD, B2AP = {}, {}
+B2AS       = {}
 B2BI       = {}
 B3I        = {}
 
@@ -63,8 +71,9 @@ CHIP = (-1, 1)
 L1CA_G1, L1CA_G2 = [], []
 L1C_L_SEQ = []
 L5_XA, L5_XB = [], []
-B1C_L_SEQ = []
+B1C_L_SEQ, B1C_L_SEQ_S = [], []
 B2AD_G1, B2AP_G1 = [], []
+B2A_L_SEQ = []
 B2BI_G1 = []
 B3I_G1 = []
 
@@ -164,6 +173,77 @@ L1CD_ins_idx = ( # PRN 1 - 210
     6178, 1851, 1299,  325,10206, 9968,10191, 5438,10080,  219,  758, 2140,
     9753, 4799,10126,  241, 1245, 1274, 1456, 9967,  235,  512, 1078, 1078,
      953, 5647,  669, 1311, 5827,   15) 
+
+L1CO_S1_poly = ( # PRN 1 - 210
+    0o5111, 0o5421, 0o5501, 0o5403, 0o6417, 0o6141, 0o6351, 0o6501, 0o6205,
+    0o6235, 0o7751, 0o6623, 0o6733, 0o7627, 0o5667, 0o5051, 0o7665, 0o6325,
+    0o4365, 0o4745, 0o7633, 0o6747, 0o4475, 0o4225, 0o7063, 0o4423, 0o6651,
+    0o4161, 0o7237, 0o4473, 0o5477, 0o6163, 0o7223, 0o6323, 0o7125, 0o7035,
+    0o4341, 0o4353, 0o4107, 0o5735, 0o6741, 0o7071, 0o4563, 0o5755, 0o6127,
+    0o4671, 0o4511, 0o4533, 0o5357, 0o5607, 0o6673, 0o6153, 0o7565, 0o7107,
+    0o6211, 0o4321, 0o7201, 0o4451, 0o5411, 0o5141, 0o7041, 0o6637, 0o4577,
+    0o5111, 0o5111, 0o5111, 0o5111, 0o5111, 0o5111, 0o5111, 0o5111, 0o5111,
+    0o5111, 0o5111, 0o5111, 0o5111, 0o5111, 0o5111, 0o5111, 0o5111, 0o5111,
+    0o5111, 0o5111, 0o5111, 0o5111, 0o5111, 0o5111, 0o5111, 0o5111, 0o5111,
+    0o5111, 0o5111, 0o5111, 0o5111, 0o5111, 0o5111, 0o5111, 0o5111, 0o5111,
+    0o5421, 0o5421, 0o5421, 0o5421, 0o5421, 0o5421, 0o5421, 0o5421, 0o5421,
+    0o5421, 0o5421, 0o5421, 0o5421, 0o5421, 0o5421, 0o5421, 0o5421, 0o5421,
+    0o5421, 0o5421, 0o5421, 0o5421, 0o5421, 0o5421, 0o5421, 0o5421, 0o5421,
+    0o5421, 0o5421, 0o5421, 0o5421, 0o5421, 0o5421, 0o5421, 0o5421, 0o5421,
+    0o5421, 0o5421, 0o5421, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403,
+    0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403,
+    0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403,
+    0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403,
+    0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403,
+    0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403,
+    0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o5403, 0o6501,
+    0o6501, 0o6501, 0o6501, 0o6501, 0o6501, 0o6501, 0o6501, 0o6501, 0o6501,
+    0o6501, 0o6501, 0o6501)
+
+L1CO_S1_init = ( # PRN 1 - 210
+    0o3266, 0o2040, 0o1527, 0o3307, 0o3756, 0o3026, 0o0562, 0o0420, 0o3415,
+    0o0337, 0o0265, 0o1230, 0o2204, 0o1440, 0o2412, 0o3516, 0o2761, 0o3750,
+    0o2701, 0o1206, 0o1544, 0o1774, 0o0546, 0o2213, 0o3707, 0o2051, 0o3650,
+    0o1777, 0o3203, 0o1762, 0o2100, 0o0571, 0o3710, 0o3535, 0o3110, 0o1426,
+    0o0255, 0o0321, 0o3124, 0o0572, 0o1736, 0o3306, 0o1307, 0o3763, 0o1604,
+    0o1021, 0o2624, 0o0406, 0o0114, 0o0077, 0o3477, 0o1000, 0o3460, 0o2607,
+    0o2057, 0o3467, 0o0706, 0o2032, 0o1464, 0o0520, 0o1766, 0o3270, 0o0341,
+    0o1740, 0o3664, 0o1427, 0o2627, 0o0701, 0o3460, 0o1373, 0o2540, 0o2004,
+    0o2274, 0o1340, 0o0602, 0o2502, 0o0327, 0o2600, 0o0464, 0o3674, 0o3040,
+    0o1153, 0o0747, 0o1770, 0o3772, 0o1731, 0o1672, 0o1333, 0o2705, 0o2713,
+    0o3562, 0o3245, 0o3770, 0o3202, 0o3521, 0o3250, 0o2117, 0o0530, 0o3021,
+    0o2511, 0o1562, 0o1067, 0o0424, 0o3402, 0o1326, 0o2142, 0o0733, 0o0504,
+    0o1611, 0o2724, 0o0753, 0o3724, 0o2652, 0o1743, 0o0013, 0o3464, 0o2300,
+    0o1334, 0o2175, 0o2564, 0o3075, 0o3455, 0o3627, 0o0617, 0o1324, 0o3506,
+    0o2231, 0o1110, 0o1271, 0o3740, 0o3652, 0o1644, 0o3635, 0o3436, 0o3076,
+    0o0434, 0o3340, 0o0054, 0o2446, 0o0025, 0o0150, 0o2746, 0o2723, 0o2601,
+    0o3440, 0o1312, 0o0544, 0o2062, 0o0176, 0o3616, 0o1740, 0o3777, 0o0432,
+    0o2466, 0o1667, 0o3601, 0o2706, 0o2022, 0o1363, 0o2331, 0o3556, 0o2205,
+    0o3734, 0o2115, 0o0010, 0o2140, 0o3136, 0o0272, 0o3264, 0o2017, 0o2505,
+    0o3532, 0o0647, 0o1542, 0o2154, 0o3734, 0o2621, 0o2711, 0o0217, 0o3503,
+    0o3457, 0o3750, 0o2525, 0o0113, 0o0265, 0o1711, 0o0552, 0o0675, 0o1706,
+    0o3513, 0o1135, 0o0566, 0o0500, 0o0254, 0o3445, 0o2542, 0o1257, 0o0211,
+    0o0534, 0o1420, 0o3401, 0o0714, 0o0613, 0o2475, 0o2572, 0o3265, 0o1250,
+    0o1711, 0o2704, 0o0135)
+
+L1CO_S2_init = ( # 64 - 210
+    0o3035, 0o1557, 0o0237, 0o2527, 0o3307, 0o1402, 0o1225, 0o0607, 0o0351,
+    0o3724, 0o1675, 0o2625, 0o1030, 0o1443, 0o3277, 0o1132, 0o0572, 0o1241,
+    0o0535, 0o1366, 0o0041, 0o0561, 0o0122, 0o1205, 0o3753, 0o2543, 0o3031,
+    0o2260, 0o3773, 0o3156, 0o2215, 0o0146, 0o2413, 0o2564, 0o3310, 0o2267,
+    0o3120, 0o0064, 0o1042, 0o0476, 0o1020, 0o0431, 0o0216, 0o2736, 0o2527,
+    0o2431, 0o1013, 0o0524, 0o0726, 0o1042, 0o3362, 0o1364, 0o3354, 0o0623,
+    0o0145, 0o0214, 0o0223, 0o0151, 0o2405, 0o2522, 0o3235, 0o0452, 0o2617,
+    0o1300, 0o1430, 0o0773, 0o0772, 0o3561, 0o0607, 0o0420, 0o0527, 0o3770,
+    0o2536, 0o2233, 0o3366, 0o3766, 0o3554, 0o2060, 0o2070, 0o0713, 0o3366,
+    0o3247, 0o2776, 0o1244, 0o2102, 0o1712, 0o1245, 0o3344, 0o1277, 0o0165,
+    0o2131, 0o3623, 0o0141, 0o0421, 0o3032, 0o2065, 0o3024, 0o2663, 0o2274,
+    0o2114, 0o1664, 0o0413, 0o1512, 0o0135, 0o2737, 0o1015, 0o1075, 0o1255,
+    0o3473, 0o2716, 0o0101, 0o1105, 0o1407, 0o3407, 0o1046, 0o3237, 0o0154,
+    0o3010, 0o2245, 0o2051, 0o2144, 0o1743, 0o2511, 0o3410, 0o1414, 0o1275,
+    0o2257, 0o2331, 0o0276, 0o3261, 0o1760, 0o0430, 0o3477, 0o1676, 0o1636,
+    0o2411, 0o1473, 0o2266, 0o2104, 0o2070, 0o1766, 0o0711, 0o2533, 0o0353,
+    0o1744, 0o0053, 0o2222) 
 
 L2CM_R_init_1 = ( # PRN 1 - 63
     0o742417664, 0o756014035, 0o002747144, 0o066265724, 0o601403471,
@@ -322,6 +402,22 @@ B1CP_trunc_pnt = ( # PRN 1 - 63
     1713, 6102, 6123, 6070, 1115, 8047, 6795, 2575,   53, 1729, 6388,  682,
     5565, 7160, 2277)
 
+B1CS_ph_diff = ( # PRN 1 - 63
+     269, 1448, 1028, 1324,  822,    5,  155,  458,  310,  959, 1238, 1180,
+    1288,  334,  885, 1362,  181, 1648,  838,  313,  750,  225, 1477,  309,
+     108, 1457,  149,  322,  271,  576, 1103,  450,  399,  241, 1045,  164,
+     513,  687,  422,  303,  324,  495,  725,  780,  367,  882,  631,   37,
+     647, 1043,   24,  120,  134,  136,  158,  214,  335,  340,  661,  889,
+     929, 1002, 1149)
+
+B1CS_trunc_pnt = ( # PRN 1 - 63
+    1889, 1268, 1593, 1186, 1239, 1930,  176, 1696,   26, 1344, 1271, 1182,
+    1381, 1604, 1333, 1185,   31,  704, 1190, 1646, 1385,  113,  860, 1656,
+    1921, 1173, 1928,   57,  150, 1214, 1148, 1458, 1519, 1635, 1257, 1687,
+    1382, 1514,    1, 1583, 1806, 1664, 1338, 1111, 1706, 1543, 1813,  228,
+    2871, 2884, 1823,   75,   11,   63, 1937,   22, 1768, 1526, 1402, 1445,
+    1680, 1290, 1245)
+
 B2AD_G2_init = ( # PRN 1 - 63
     0b1000000100101, 0b1000000110100, 0b1000010101101, 0b1000101001111,
     0b1000101010101, 0b1000110101110, 0b1000111101110, 0b1000111111011,
@@ -358,6 +454,22 @@ B2AP_G2_init = ( # PRN 1 - 63
     0b1111011011010, 0b1111011111000, 0b1111011111111, 0b1111110110101,
     0b1010010000110, 0b0010111111000, 0b0001101010101)
 
+B2AS_ph_diff = ( # PRN 1 - 63
+     123,   55,   40,  139,   31,  175,  350,  450,  478,    8,   73,   97,
+     213,  407,  476,    4,   15,   47,  163,  280,  322,  353,  375,  510,
+     332,    7,   13,   16,   18,   25,   50,   81,  118,  127,  132,  134,
+     164,  177,  208,  249,  276,  349,  439,  477,  498,   88,  155,  330,
+       3,   21,   84,  111,  128,  153,  197,  199,  214,  256,  265,  291,
+     324,  326,  340)
+
+B2AS_trunc_pnt = ( # PRN 1 - 63
+     138,  570,  351,   77,  885,  247,  413,  180,    3,   26,   17,  172,
+      30, 1008,  646,  158,  170,   99,   53,  179,  925,  114,   10,  584,
+      60,    3,  684,  263,  545,   22,  546,  190,  303,  234,   38,  822,
+      57,  668,  697,   93,   18,   66,  318,  133,   98,   70,  132,   26,
+     354,   58,   41,  182,  944,  205,   23,    1,  792,  641,   83,    7,
+     111,   96,   92)
+
 B2BI_G2_init = ( # PRN 1 - 63
     0b1000000100101, 0b1000000110100, 0b1000010101101, 0b1000101001111,
     0b1000101010101, 0b1000110101110, 0b1000111101110, 0b1000111111011,
@@ -393,494 +505,24 @@ B3I_G2_init = ( # PRN 1 - 63
     0b0000000011000, 0b1000000000100, 0b0011010100110, 0b1011001000110,
     0b0111001111000, 0b0010111001010, 0b1100111110110, 0b1001001000101,
     0b0111000100000, 0b0011001000010, 0b0010001001110)
+
+NH10 = ( # 10 bits Neuman-Hofman code
+    -1, -1, -1, -1, 1, 1, -1, 1, -1, 1)
  
-# modulation of code by sub-carrier --------------------------------------------
-def mod_code(code, sub_carr):
-    ix = np.arange(len(code) * len(sub_carr)) // len(sub_carr)
-    return -code[ix] * np.array(sub_carr * len(code), dtype='int8')
+NH20 = ( # 20 bits Neuman-Hofman code
+   -1, -1, -1, -1, -1, 1, -1, -1, 1, 1, -1, 1, -1, 1, -1, -1, 1, 1, 1, -1)
 
-# read code HEX strings --------------------------------------------------------
-def read_code_hex(str, N):
-    code = np.zeros(N, dtype='int8')
-    for i in range(N):
-        code[i] = CHIP[(int(str[i // 4], 16) >> (3 - i % 4)) & 1]
-    return code
-
-# reverse bits in shift register -----------------------------------------------
-def rev_reg(R, N):
-    RR = 0
-    for i in range(N):
-        RR = (RR << 1) | ((R >> i) & 1)
-    return RR
-
-# exculsive-or of all bits in shift register -----------------------------------
-def xor_reg(R):
-    return bin(R).count('1') % 2
-
-# generate code by LFSR  -------------------------------------------------------
-def LFSR(N, R, tap, n):
-    code = np.zeros(N, dtype='int8')
-    for i in range(N):
-        code[i] = CHIP[R & 1]
-        R = (xor_reg(R & tap) << (n - 1)) | (R >> 1)
-    return code
-
-# generate L1C/A G1 code -------------------------------------------------------
-def gen_code_L1CA_G1(N):
-    return LFSR(N, 0b1111111111, 0b0010000001, 10)
-
-# generate L1C/A G2 code -------------------------------------------------------
-def gen_code_L1CA_G2(N):
-    return LFSR(N, 0b1111111111, 0b0110010111, 10)
-
-# generate L1C/A code ([1]) ----------------------------------------------------
-def gen_code_L1CA(prn):
-    if prn < 1 or prn > 210:
-        return [], 0.0, 0.0
-    
-    N, T = 1023, 1e-3 # code length (chip), cycle (s)
-    
-    if prn not in L1CA:
-        global L1CA_G1, L1CA_G2
-        if len(L1CA_G1) == 0:
-            L1CA_G1 = gen_code_L1CA_G1(N)
-            L1CA_G2 = gen_code_L1CA_G2(N)
-        L1CA[prn] = -L1CA_G1 * np.roll(L1CA_G2, L1CA_G2_delay[prn-1])
-    return L1CA[prn], T, T / N
-
-# generate L1C/B code ([3]) ----------------------------------------------------
-def gen_code_L1CB(prn):
-    if prn < 203 or prn > 206:
-        return [], 0.0, 0.0
-    
-    code, T, Tc = gen_code_L1CA(prn)
-    return mod_code(code, [1, -1]), T, Tc # BOC(1,1)
-
-# generate Legendre sequence ([7]) ---------------------------------------------
-def gen_legendre_seq(N):
-    L = np.full(N, -1, dtype='int8')
-    for i in range(1, N):
-        L[(i * i) % N] = 1
-    return L
-
-# generate L1CP/D code ([7]) ---------------------------------------------------
-def gen_code_L1CPD(N, w, p):
-    global L1C_L_SEQ
-    if len(L1C_L_SEQ) == 0:
-        L1C_L_SEQ = gen_legendre_seq(10223)
-    ins_code = [-1, 1, 1, -1, 1, -1, -1]
-    code = np.zeros(N, dtype='int8')
-    for t in range(0, p - 1):
-        code[t] = -L1C_L_SEQ[t] * L1C_L_SEQ[(t + w) % 10223]
-    for t in range(p - 1, p + 6):
-        code[t] = ins_code[t - p + 1]
-    for t in range(p + 6, N):
-        code[t] = -L1C_L_SEQ[t - 7] * L1C_L_SEQ[(t - 7 + w) % 10223]
-    return code
-
-# generate L1CP code ([7]) -----------------------------------------------------
-def gen_code_L1CP(prn):
-    if prn < 1 or prn > 210:
-        return [], 0.0, 0.0
-    
-    N, T = 10230, 10e-3
-    
-    if prn not in L1CP:
-        code = gen_code_L1CPD(N, L1CP_weil_idx[prn-1], L1CP_ins_idx[prn-1])
-        L1CP[prn] = mod_code(code, [1, -1]) # BOC(1,1) instead of TMBOC(6,1,4/33)
-    return L1CP[prn], T, T / N
-
-# generate L1CD code ([7]) -----------------------------------------------------
-def gen_code_L1CD(prn):
-    if prn < 1 or prn > 210:
-        return [], 0.0, 0.0
-    
-    N, T = 10230, 10e-3
-    
-    if prn not in L1CD:
-        code = gen_code_L1CPD(N, L1CD_weil_idx[prn-1], L1CD_ins_idx[prn-1])
-        L1CD[prn] = mod_code(code, [1, -1]) # BOC(1,1)
-    return L1CD[prn], T, T / N
-
-# generate L2CM code ([1]) -----------------------------------------------------
-def gen_code_L2CM(prn):
-    if (prn < 1 or prn > 63) and (prn < 159 or prn > 210):
-        return [], 0.0, 0.0
-    
-    N, T = 10230, 20e-3
-    
-    if prn not in L2CM:
-        code = np.zeros(N, dtype='int8')
-        R = L2CM_R_init_1[prn-1] if prn <= 63 else L2CM_R_init_2[prn-159]
-        for i in range(N):
-            code[i] = CHIP[R & 1]
-            R = (R >> 1) ^ (0b100100101001001010100111100 * (R & 1))
-        L2CM[prn] = mod_code(code, [1, 0]) # TDM
-    return L2CM[prn], T, T / N
-
-# generate L5 XA code ----------------------------------------------------------
-def gen_code_L5_XA(N):
-    code = LFSR(8190, 0b1111111111111, 0b0000000011011, 13)
-    return np.hstack([code, code[:N-8190]])
-
-# generate L5 XB code ----------------------------------------------------------
-def gen_code_L5_XB(N):
-    return LFSR(N, 0b1111111111111, 0b1011011100011, 13)
-
-# generate L5I code ([2]) ------------------------------------------------------
-def gen_code_L5I(prn):
-    if prn < 1 and prn > 210:
-        return [], 0.0, 0.0
-    
-    N, T = 10230, 1e-3
-    
-    if prn not in L5I:
-        global L5_XA, L5_XB
-        if len(L5_XA) == 0:
-            L5_XA = gen_code_L5_XA(N)
-            L5_XB = gen_code_L5_XB(N)
-        L5I[prn] = -L5_XA * np.roll(L5_XB, -L5I_XB_adv[prn-1])
-    return L5I[prn], T, T / N
-
-# generate L5Q code ([2]) ------------------------------------------------------
-def gen_code_L5Q(prn):
-    if prn < 1 and prn > 210:
-        return [], 0.0, 0.0
-    
-    N, T = 10230, 1e-3
-
-    if prn not in L5Q:
-        global L5_XA, L5_XB
-        if len(L5_XA) == 0:
-            L5_XA = gen_code_L5_XA(N)
-            L5_XB = gen_code_L5_XB(N)
-        L5Q[prn] = -L5_XA * np.roll(L5_XB, -L5Q_XB_adv[prn-1])
-    return L5Q[prn], T, T / N
-
-# generate L6 code -------------------------------------------------------------
-def gen_code_L6(N, R):
-    R = rev_reg(R, 20)
-    code1 = LFSR(N, 0b1111111111, 0b0011110011, 10)
-    code2 = LFSR(N, R, 0b00000000000001010011, 20)
-    return -code1 * code2
-
-# generate L6D code ([4]) ------------------------------------------------------
-def gen_code_L6D(prn):
-    if prn < 193 or prn > 201:
-        return [], 0.0, 0.0
-    
-    N, T = 10230, 4e-3
-    
-    if prn not in L6D:
-        code = gen_code_L6(N, L6D_R_init[prn-193])
-        L6D[prn] = mod_code(code, [1, 0]) # TDM
-    return L6D[prn], T, T / N
-
-# generate L6E code ([4]) ------------------------------------------------------
-def gen_code_L6E(prn):
-    if prn < 203 or prn > 211:
-        return [], 0.0, 0.0
-    
-    N, T = 10230, 4e-3
-    
-    if prn not in L6E:
-        code = gen_code_L6(N, L6E_R_init[prn-203])
-        L6E[prn] = mod_code(code, [0, 1]) # TDM
-    return L6E[prn], T, T / N
-
-# generate GLONASS C/A code ----------------------------------------------------
-def gen_code_GLO_CA(N):
-    R = 0b111111111
-    code = np.zeros(N, dtype='int8')
-    for i in range(N):
-        code[i] = CHIP[(R >> 2) & 1]
-        R = (xor_reg(R & 0b000010001) << 8) | (R >> 1)
-    return code
-
-# generate G1CA code ([14]) ----------------------------------------------------
-def gen_code_G1CA(prn):
-    if prn < -7 or prn > 6: # FCN
-        return [], 0.0, 0.0
-    
-    N, T = 511, 1e-3
-    
-    if 1 not in G1CA:
-        G1CA[1] = gen_code_GLO_CA(N)
-    return G1CA[1], T, T / N
-
-# generate G2CA code ([14]) ----------------------------------------------------
-def gen_code_G2CA(prn):
-    return gen_code_G1CA(prn)
-
-# generate E1B code ([5]) ------------------------------------------------------
-def gen_code_E1B(prn):
-    if prn < 1 or prn > 50:
-        return [], 0.0, 0.0
-    
-    N, T = 4092, 4e-3
-    
-    if prn not in E1B:
-        code = read_code_hex(sdr_code_gal.E1B[prn-1], N)
-        E1B[prn] = mod_code(code, [1, -1]) # BOC(1,1) instead of CBOC(6,1,1/11)
-    return E1B[prn], T, T / N
-
-# generate E1C code ([5]) ------------------------------------------------------
-def gen_code_E1C(prn):
-    if prn < 1 or prn > 50:
-        return [], 0.0, 0.0
-    
-    N, T = 4092, 4e-3
-    
-    if prn not in E1C:
-        code = read_code_hex(sdr_code_gal.E1C[prn-1], N)
-        E1C[prn] = mod_code(code, [1, -1]) # BOC(1,1) instead of CBOC(6,1,1/11)
-    return E1C[prn], T, T / N
-
-# generate E5 code X1 ----------------------------------------------------------
-def gen_code_E5_X1(N, tap):
-    return LFSR(N, 0b11111111111111, rev_reg(tap >> 1, 14), 14)
-
-# generate E5 code X2 ----------------------------------------------------------
-def gen_code_E5_X2(N, tap, R):
-    return LFSR(N, rev_reg(R, 14), rev_reg(tap >> 1, 14), 14)
-
-# generate E5AI code ([5]) -----------------------------------------------------
-def gen_code_E5AI(prn):
-    if prn < 1 or prn > 50:
-        return [], 0.0, 0.0
-
-    N, T = 10230, 1e-3
-    
-    if prn not in E5AI:
-        code1 = gen_code_E5_X1(N, 0o40503)
-        code2 = gen_code_E5_X2(N, 0o50661, E5AI_X2_init[prn-1])
-        E5AI[prn] = -code1 * code2
-    return E5AI[prn], T, T / N
-
-# generate E5AQ code ([5]) -----------------------------------------------------
-def gen_code_E5AQ(prn):
-    if prn < 1 or prn > 50:
-        return [], 0.0, 0.0
-
-    N, T = 10230, 1e-3
-    
-    if prn not in E5AQ:
-        code1 = gen_code_E5_X1(N, 0o40503)
-        code2 = gen_code_E5_X2(N, 0o50661, E5AQ_X2_init[prn-1])
-        E5AQ[prn] = -code1 * code2
-    return E5AQ[prn], T, T / N
-
-# generate E5BI code ([5]) -----------------------------------------------------
-def gen_code_E5BI(prn):
-    if prn < 1 or prn > 50:
-        return [], 0.0, 0.0
-    
-    N, T = 10230, 1e-3
-    
-    if prn not in E5BI:
-        code1 = gen_code_E5_X1(N, 0o64021)
-        code2 = gen_code_E5_X2(N, 0o51445, E5BI_X2_init[prn-1])
-        E5BI[prn] = -code1 * code2
-    return E5BI[prn], T, T / N
-
-# generate E5BQ code ([5]) -----------------------------------------------------
-def gen_code_E5BQ(prn):
-    if prn < 1 or prn > 50:
-        return [], 0.0, 0.0
-
-    N, T = 10230, 1e-3
-
-    if prn not in E5BQ:
-        code1 = gen_code_E5_X1(N, 0o64021)
-        code2 = gen_code_E5_X2(N, 0o43143, E5BQ_X2_init[prn-1])
-        E5BQ[prn] = -code1 * code2
-    return E5BQ[prn], T, T / N
-
-# generate E6B code ([6]) -------------------------------------------------------
-def gen_code_E6B(prn):
-    if prn < 1 or prn > 50:
-        return [], 0.0, 0.0
-    
-    N, T = 5115, 1e-3
-    
-    if prn not in E6B:
-        E6B[prn] = read_code_hex(sdr_code_gal.E6B[prn-1], N)
-    return E6B[prn], T, T / N
-
-# generate E6C code ([6]) -------------------------------------------------------
-def gen_code_E6C(prn):
-    if prn < 1 or prn > 50:
-        return [], 0.0, 0.0
-    
-    N, T = 5115, 1e-3
-    
-    if prn not in E6C:
-        E6C[prn] = read_code_hex(sdr_code_gal.E6C[prn-1], N)
-    return E6C[prn], T, T / N
-
-# generate B1I G1 ---------------------------------------------------------------
-def gen_code_B1I_G1(N):
-    return LFSR(N, 0b01010101010, 0b10000011111, 11)
-
-# generate B1I G2 ---------------------------------------------------------------
-def gen_code_B1I_G2(N, ph_sel):
-    tap = 0
-    for p in ph_sel:
-        tap |= 1 << (11 - p)
-    R = 0b01010101010
-    code = np.zeros(N, dtype='int8')
-    for i in range(N):
-        code[i] = CHIP[xor_reg(R & tap)]
-        R = (xor_reg(R & 0b11111001101) << 10) | (R >> 1)
-    return code
-
-# generate B1I code ([12]) -----------------------------------------------------
-def gen_code_B1I(prn):
-    if prn < 1 or prn > 63:
-        return [], 0.0, 0.0
-    
-    N, T = 2046, 1e-3
-    
-    if prn not in B1I:
-        code1 = gen_code_B1I_G1(N)
-        code2 = gen_code_B1I_G2(N, B1I_ph_sel[prn-1])
-        B1I[prn] = -code1 * code2
-    return B1I[prn], T, T / N
-
-# B1C Weil-code ([8]) ----------------------------------------------------------
-def B1C_weil_code(k, w):
-    global B1C_L_SEQ
-    if len(B1C_L_SEQ) == 0:
-        B1C_L_SEQ = gen_legendre_seq(10243)
-    return -B1C_L_SEQ[k] * B1C_L_SEQ[(k + w) % 10243]
-
-# generate B1CD code ([8]) -----------------------------------------------------
-def gen_code_B1CD(prn):
-    if prn < 1 or prn > 63:
-        return [], 0.0, 0.0
-    
-    N, T = 10230, 10e-3
-    
-    if prn not in B1CD:
-        code = np.zeros(N, dtype='int8')
-        for i in range(N):
-            j = (i + B1CD_trunc_pnt[prn-1] - 1) % 10243
-            code[i] = B1C_weil_code(j, B1CD_ph_diff[prn-1])
-        B1CD[prn] = mod_code(code, [1, -1]) # BOC(1,1)
-    return B1CD[prn], T, T / N
-
-# generate B1CP code ([8]) -----------------------------------------------------
-def gen_code_B1CP(prn):
-    if prn < 1 or prn > 63:
-        return [], 0.0, 0.0
-    
-    N, T = 10230, 10e-3
-    
-    if prn not in B1CP:
-        code = np.zeros(N, dtype='int8')
-        for i in range(N):
-            j = (i + B1CP_trunc_pnt[prn-1] - 1) % 10243
-            code[i] = B1C_weil_code(j, B1CP_ph_diff[prn-1])
-        B1CP[prn] = mod_code(code, [1, -1]) # BOC(1,1) instead of QMBOC(6,1,4/33)
-    return B1CP[prn], T, T / N
-
-# generate B2I code ------------------------------------------------------------
-def gen_code_B2I(prn):
-    return gen_code_B1I(prn)
-
-# generate B2AD G1 code --------------------------------------------------------
-def gen_code_B2AD_G1(N):
-    code = LFSR(8190, 0b1111111111111, 0b1000100000101, 13)
-    return np.hstack([code, code[:N-8190]])
-
-# generate B2AD G2 code --------------------------------------------------------
-def gen_code_B2AD_G2(N, R):
-    return LFSR(N, R, 0b0010100010111, 13)
-
-# generate B2AD code ([9]) -----------------------------------------------------
-def gen_code_B2AD(prn):
-    if prn < 1 or prn > 63:
-        return [], 0.0, 0.0
-    
-    N, T = 10230, 1e-3
-    
-    if prn not in B2AD:
-        global B2AD_G1
-        if len(B2AD_G1) == 0:
-            B2AD_G1 = gen_code_B2AD_G1(N)
-        B2AD[prn] = -B2AD_G1 * gen_code_B2AD_G2(N, B2AD_G2_init[prn-1])
-    return B2AD[prn], T, T / N
-
-# generate B2AP G1 code --------------------------------------------------------
-def gen_code_B2AP_G1(N):
-    code = LFSR(8190, 0b1111111111111, 0b0010011000001, 13)
-    return np.hstack([code, code[:N-8190]])
-
-# generate B2AP G2 code --------------------------------------------------------
-def gen_code_B2AP_G2(N, R):
-    return LFSR(N, R, 0b1000101100011, 13)
-
-# generate B2AP code ([9]) -----------------------------------------------------
-def gen_code_B2AP(prn):
-    if prn < 1 or prn > 63:
-        return [], 0.0, 0.0
-    
-    N, T = 10230, 1e-3
-    
-    if prn not in B2AP:
-        global B2AP_G1
-        if len(B2AP_G1) == 0:
-            B2AP_G1 = gen_code_B2AP_G1(N)
-        B2AP[prn] = -B2AP_G1 * gen_code_B2AP_G2(N, B2AP_G2_init[prn-1])
-    return B2AP[prn], T, T / N
-
-# generate B2BI G1 code --------------------------------------------------------
-def gen_code_B2BI_G1(N):
-    code = LFSR(8190, 0b1111111111111, 0b1000000011001, 13)
-    return np.hstack([code, code[:N-8190]])
-
-# generate B2BI G2 code --------------------------------------------------------
-def gen_code_B2BI_G2(N, R):
-    return LFSR(N, R, 0b0011010010011, 13)
-
-# generate B2BI code ([10],[11]) -----------------------------------------------
-def gen_code_B2BI(prn):
-    if prn < 1 or prn > 63:
-        return [], 0.0, 0.0
-    
-    N, T = 10230, 1e-3
-    
-    if prn not in B2BI:
-        global B2BI_G1
-        if len(B2BI_G1) == 0:
-            B2BI_G1 = gen_code_B2BI_G1(N)
-        B2BI[prn] = -B2BI_G1 * gen_code_B2BI_G2(N, B2BI_G2_init[prn-1])
-    return B2BI[prn], T, T / N
-
-# generate B3I G1 code ---------------------------------------------------------
-def gen_code_B3I_G1(N):
-    code = LFSR(8190, 0b1111111111111, 0b1011000000001, 13)
-    return np.hstack([code, code[:N-8190]])
-
-# generate B3I G2 code ---------------------------------------------------------
-def gen_code_B3I_G2(N, R_init):
-    return LFSR(N, R_init, 0b1000111011011, 13)
-
-# generate B3I code ([13]) -----------------------------------------------------
-def gen_code_B3I(prn):
-    if prn < 1 or prn > 63:
-        return [], 0.0, 0.0
-    
-    N, T = 10230, 1e-3
-    
-    if prn not in B3I:
-        global B3I_G1
-        if len(B3I_G1) == 0:
-            B3I_G1 = gen_code_B3I_G1(N)
-        B3I[prn] = -B3I_G1 * gen_code_B3I_G2(N, B3I_G2_init[prn-1])
-    return B3I[prn], T, T / N
-
-# generate code ----------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#  Generate primary code.
+#
+#  args:
+#      sig      (I) Signal type as string ('L1CA', 'L1CB', 'L1CP', ....)
+#      prn      (I) PRN number
+#
+#  returns:
+#      code     Primary code as int8 ndarray (-1 or 1)
+#               (sub-carrier modulated for BOC or zero-padded for TDM)
+#
 def gen_code(sig, prn):
     sig = sig.upper()
     if sig == 'L1CA':
@@ -938,10 +580,105 @@ def gen_code(sig, prn):
     elif sig == 'B3I':
         return gen_code_B3I(prn)
     else:
-        return [], 0.0, 0.0 # code, code period (s), chip period (s)
+        return NONE
 
-# code cycle (s) ---------------------------------------------------------------
-def cyc_code(sig):
+#-------------------------------------------------------------------------------
+#  Generate secondary (overlay) code.
+#
+#  args:
+#      sig      (I) Signal type as string ('L1CA', 'L1CB', 'L1CP', ....)
+#      prn      (I) PRN number
+#
+#  returns:
+#      code     Secondary code as int8 ndarray (-1 or 1)
+#
+def sec_code(sig, prn):
+    sig = sig.upper()
+    if sig == 'L1CA' or sig == 'L1CB' or sig == 'L1CD' or sig == 'L2CM' or \
+       sig == 'G1CA' or sig == 'G2CA' or sig == 'L6D'  or sig == 'L6E'  or \
+       sig == 'E1B'  or sig == 'E6B'  or sig == 'B1CD' or sig == 'B2BI' or \
+       sig == 'B3I':
+        return np.array([1], dtype='int8') # no secondary code
+    elif sig == 'L1CP':
+        return sec_code_L1CP(prn)
+    elif sig == 'L5I':
+        return sec_code_L5I(prn)
+    elif sig == 'L5Q':
+        return sec_code_L5Q(prn)
+    elif sig == 'E1C':
+        return sec_code_E1C(prn)
+    elif sig == 'E5AI':
+        return sec_code_E5AI(prn)
+    elif sig == 'E5AQ':
+        return sec_code_E5AQ(prn)
+    elif sig == 'E5BI':
+        return sec_code_E5BI(prn)
+    elif sig == 'E5BQ':
+        return sec_code_E5BQ(prn)
+    elif sig == 'E6C':
+        return sec_code_E6C(prn)
+    elif sig == 'B1I':
+        return sec_code_B1I(prn)
+    elif sig == 'B1CP':
+        return sec_code_B1CP(prn)
+    elif sig == 'B2I':
+        return sec_code_B2I(prn)
+    elif sig == 'B2AD':
+        return sec_code_B2AD(prn)
+    elif sig == 'B2AP':
+        return sec_code_B2AP(prn)
+    else:
+        return NONE
+
+#-------------------------------------------------------------------------------
+#  Generate resampled and zero-padded code.
+#
+#  args:
+#      code     (I) Code as int8 ndarray (-1 or 1)
+#      T        (I) Code cycle (period) (s)
+#      coff     (I) Code offset (s)
+#      fs       (I) Sampling frequency (Hz)
+#      N        (I) Number of samples
+#      Nz=0     (I) Number of zero-padding (optional)
+#
+#  returns:
+#      code     Resampled and zero-padded code as complex64 ndarray (-1 or 1)
+#
+def res_code(code, T, coff, fs, N, Nz=0):
+    dx = len(code) / T / fs
+    ix = ((coff * fs + np.arange(N)) * dx).astype('int')
+    code = np.array(code[ix % len(code)], dtype='complex64')
+    if Nz > 0:
+        code = np.hstack([code, np.zeros(Nz, dtype='complex64')])
+    return code
+
+#-------------------------------------------------------------------------------
+#  Generate resampled and zero-padded code DFT.
+#
+#  args:
+#      code     (I) Code as int8 ndarray (-1 or 1)
+#      T        (I) Code cycle (period) (s)
+#      fs       (I) Sampling frequency (Hz)
+#      N        (I) Number of samples
+#      Nz=0     (I) Number of zero-padding (optional)
+#
+#  returns:
+#      code_fft Resampled and zero-padded code DFT as complex64 ndarray
+#
+def gen_code_fft(code, T, fs, N, Nz=0):
+    code_res = res_code(code, T, 0.0, fs, N, Nz)
+    return np.conj(fft.fft(code_res))
+
+#-------------------------------------------------------------------------------
+#  Get primary code cycle (period).
+#
+#  args:
+#      sig      (I) Signal type as string ('L1CA', 'L1CB', 'L1CP', ....)
+#
+#  returns:
+#      cyc      Primary code cycle (period) (s) (0.0: error)
+#
+def code_cyc(sig):
     sig = sig.upper()
     if sig == 'L1CA' or sig == 'L1CB' or sig == 'L5I'  or sig == 'L5Q'  or \
        sig == 'G1CA' or sig == 'G2CA' or sig == 'E5AI' or sig == 'E5AQ' or \
@@ -958,7 +695,45 @@ def cyc_code(sig):
     else:
         return 0.0
 
-# signal frequency (Hz) --------------------------------------------------------
+#-------------------------------------------------------------------------------
+#  Get primary code length.
+#
+#  args:
+#      sig      (I) Signal type as string ('L1CA', 'L1CB', 'L1CP', ....)
+#
+#  returns:
+#      N        Primary code legth (chips) (0: error)
+#
+def code_len(sig):
+    sig = sig.upper()
+    if sig == 'L1CA' or sig == 'L1CB':
+        return 1023
+    elif sig == 'L1CP' or sig == 'L1CD' or sig == 'L2CM' or sig == 'L5I'  or \
+         sig == 'L5Q'  or sig == 'L6D'  or sig == 'L6E'  or sig == 'E5AI' or \
+         sig == 'E5AQ' or sig == 'E5BI' or sig == 'E5BQ' or sig == 'B1CD' or \
+         sig == 'B1CP' or sig == 'B2AD' or sig == 'B2AP' or sig == 'B2BI' or \
+         sig == 'B3I':
+        return 10230
+    elif sig == 'E6B'  or sig == 'E6C':
+        return 5115
+    elif sig == 'E1B' or sig == 'E1C':
+        return 4092
+    elif sig == 'G1CA' or sig == 'G2CA':
+        return 511
+    elif sig == 'B1I'  or sig == 'B2I':
+        return 2046
+    else:
+        return 0
+
+#-------------------------------------------------------------------------------
+#  Get signal carrier frequency.
+#
+#  args:
+#      sig      (I) Signal type as string ('L1CA', 'L1CB', 'L1CP', ....)
+#
+#  returns:
+#      freq     Signal carrier frequency (Hz) (0.0: error)
+#
 def sig_freq(sig):
     sig = sig.upper()
     if sig == 'L1CA' or sig == 'L1CB' or sig == 'E1B' or sig == 'E1C' or \
@@ -984,12 +759,547 @@ def sig_freq(sig):
     else:
         return 0.0
 
-# resample code ----------------------------------------------------------------
-def res_code(code, T, toff, fs, N, Nz):
-    dx = len(code) / T / fs
-    ix = ((toff * fs + np.arange(N)) * dx).astype('int')
-    code = np.array(code[ix % len(code)], dtype='complex64')
-    if Nz > 0:
-        code = np.hstack([code, np.zeros(Nz, dtype='complex64')])
+# generate L1C/A code ([1]) ----------------------------------------------------
+def gen_code_L1CA(prn):
+    if prn < 1 or prn > 210:
+        return NONE
+    N = 1023
+    if prn not in L1CA:
+        global L1CA_G1, L1CA_G2
+        if len(L1CA_G1) == 0:
+            L1CA_G1 = gen_code_L1CA_G1(N)
+            L1CA_G2 = gen_code_L1CA_G2(N)
+        L1CA[prn] = -L1CA_G1 * np.roll(L1CA_G2, L1CA_G2_delay[prn-1])
+    return L1CA[prn]
+
+# generate L1C/A G1 code -------------------------------------------------------
+def gen_code_L1CA_G1(N):
+    return LFSR(N, 0b1111111111, 0b0010000001, 10)
+
+# generate L1C/A G2 code -------------------------------------------------------
+def gen_code_L1CA_G2(N):
+    return LFSR(N, 0b1111111111, 0b0110010111, 10)
+
+# generate L1C/B code ([3]) ----------------------------------------------------
+def gen_code_L1CB(prn):
+    if prn < 203 or prn > 206:
+        return NONE
+    code = gen_code_L1CA(prn)
+    return mod_code(code, [1, -1]) # BOC(1,1)
+
+# generate L1CP code -----------------------------------------------------------
+def gen_code_L1CP(prn):
+    if prn < 1 or prn > 210:
+        return NONE
+    N = 10230
+    if prn not in L1CP:
+        code = gen_code_L1CPD(N, L1CP_weil_idx[prn-1], L1CP_ins_idx[prn-1])
+        L1CP[prn] = mod_code(code, [1, -1]) # BOC(1,1) instead of TMBOC(6,1,4/33)
+    return L1CP[prn]
+
+# generate L1CD code -----------------------------------------------------------
+def gen_code_L1CD(prn):
+    if prn < 1 or prn > 210:
+        return NONE
+    N = 10230
+    if prn not in L1CD:
+        code = gen_code_L1CPD(N, L1CD_weil_idx[prn-1], L1CD_ins_idx[prn-1])
+        L1CD[prn] = mod_code(code, [1, -1]) # BOC(1,1)
+    return L1CD[prn]
+
+# generate L1CP/D code ([7]) ---------------------------------------------------
+def gen_code_L1CPD(N, w, p):
+    global L1C_L_SEQ
+    if len(L1C_L_SEQ) == 0:
+        L1C_L_SEQ = gen_legendre_seq(10223)
+    ins_code = [-1, 1, 1, -1, 1, -1, -1]
+    code = np.zeros(N, dtype='int8')
+    for t in range(0, p - 1):
+        code[t] = -L1C_L_SEQ[t] * L1C_L_SEQ[(t + w) % 10223]
+    for t in range(p - 1, p + 6):
+        code[t] = ins_code[t - p + 1]
+    for t in range(p + 6, N):
+        code[t] = -L1C_L_SEQ[t - 7] * L1C_L_SEQ[(t - 7 + w) % 10223]
+    return code
+
+# generate Legendre sequence ---------------------------------------------------
+def gen_legendre_seq(N):
+    L = np.full(N, -1, dtype='int8')
+    for i in range(1, N):
+        L[(i * i) % N] = 1
+    return L
+
+# generate L1CP secondary code ([7]) -------------------------------------------
+def sec_code_L1CP(prn):
+    if prn < 1 or prn > 210:
+        return NONE
+    N = 1800
+    if prn not in L1CO:
+        tap1 = rev_reg(L1CO_S1_poly[prn-1] >> 1, 11)
+        code1 = LFSR(N, rev_reg(L1CO_S1_init[prn-1], 11), tap1, 11)
+        if prn >= 64:
+            tap2 = 0b00000000101
+            code2 = LFSR(N, rev_reg(L1CO_S2_init[prn-64], 11), tap2, 11)
+            code1 = -code1 * code2
+        L1CO[prn] = code1
+    return L1CO[prn]
+
+# generate L2CM code ([1]) -----------------------------------------------------
+def gen_code_L2CM(prn):
+    if (prn < 1 or prn > 63) and (prn < 159 or prn > 210):
+        return NONE
+    N = 10230
+    if prn not in L2CM:
+        code = np.zeros(N, dtype='int8')
+        R = L2CM_R_init_1[prn-1] if prn <= 63 else L2CM_R_init_2[prn-159]
+        for i in range(N):
+            code[i] = CHIP[R & 1]
+            R = (R >> 1) ^ (0b100100101001001010100111100 * (R & 1))
+        L2CM[prn] = mod_code(code, [1, 0]) # TDM
+    return L2CM[prn]
+
+# generate L5I code ([2]) ------------------------------------------------------
+def gen_code_L5I(prn):
+    if prn < 1 and prn > 210:
+        return NONE
+    N = 10230
+    if prn not in L5I:
+        global L5_XA, L5_XB
+        if len(L5_XA) == 0:
+            L5_XA = gen_code_L5_XA(N)
+            L5_XB = gen_code_L5_XB(N)
+        L5I[prn] = -L5_XA * np.roll(L5_XB, -L5I_XB_adv[prn-1])
+    return L5I[prn]
+
+# generate L5Q code ([2]) ------------------------------------------------------
+def gen_code_L5Q(prn):
+    if prn < 1 and prn > 210:
+        return NONE
+    N = 10230
+    if prn not in L5Q:
+        global L5_XA, L5_XB
+        if len(L5_XA) == 0:
+            L5_XA = gen_code_L5_XA(N)
+            L5_XB = gen_code_L5_XB(N)
+        L5Q[prn] = -L5_XA * np.roll(L5_XB, -L5Q_XB_adv[prn-1])
+    return L5Q[prn]
+
+# generate L5 XA code ----------------------------------------------------------
+def gen_code_L5_XA(N):
+    code = LFSR(8190, 0b1111111111111, 0b0000000011011, 13)
+    return np.hstack([code, code[:N-8190]])
+
+# generate L5 XB code ----------------------------------------------------------
+def gen_code_L5_XB(N):
+    return LFSR(N, 0b1111111111111, 0b1011011100011, 13)
+
+# generate L5I secondary code ([2]) --------------------------------------------
+def sec_code_L5I(prn):
+    return np.array(NH10, dtype='int8')
+
+# generate L5Q secondary code ([2]) --------------------------------------------
+def sec_code_L5Q(prn):
+    return np.array(NH20, dtype='int8')
+
+# generate L6D code ([4]) ------------------------------------------------------
+def gen_code_L6D(prn):
+    if prn < 193 or prn > 201:
+        return NONE
+    N = 10230
+    if prn not in L6D:
+        code = gen_code_L6(N, L6D_R_init[prn-193])
+        L6D[prn] = mod_code(code, [1, 0]) # TDM
+    return L6D[prn]
+
+# generate L6E code ([4]) ------------------------------------------------------
+def gen_code_L6E(prn):
+    if prn < 203 or prn > 211:
+        return NONE
+    N = 10230
+    if prn not in L6E:
+        code = gen_code_L6(N, L6E_R_init[prn-203])
+        L6E[prn] = mod_code(code, [0, 1]) # TDM
+    return L6E[prn]
+
+# generate L6 code -------------------------------------------------------------
+def gen_code_L6(N, R):
+    R = rev_reg(R, 20)
+    code1 = LFSR(N, 0b1111111111, 0b0011110011, 10)
+    code2 = LFSR(N, R, 0b00000000000001010011, 20)
+    return -code1 * code2
+
+# generate GLONASS C/A code ----------------------------------------------------
+def gen_code_GLO_CA(N):
+    R = 0b111111111
+    code = np.zeros(N, dtype='int8')
+    for i in range(N):
+        code[i] = CHIP[(R >> 2) & 1]
+        R = (sdr_func.xor_bits(R & 0b000010001) << 8) | (R >> 1)
+    return code
+
+# generate G1CA code ([14]) ----------------------------------------------------
+def gen_code_G1CA(prn):
+    if prn < -7 or prn > 6: # FCN
+        return NONE
+    N = 511
+    if 1 not in G1CA:
+        G1CA[1] = gen_code_GLO_CA(N)
+    return G1CA[1]
+
+# generate G2CA code ([14]) ----------------------------------------------------
+def gen_code_G2CA(prn):
+    return gen_code_G1CA(prn)
+
+# generate E1B code ([5]) ------------------------------------------------------
+def gen_code_E1B(prn):
+    if prn < 1 or prn > 50:
+        return NONE
+    N = 4092
+    if prn not in E1B:
+        code = read_code_hex(sdr_code_gal.E1B[prn-1], N)
+        E1B[prn] = mod_code(code, [1, -1]) # BOC(1,1) instead of CBOC(6,1,1/11)
+    return E1B[prn]
+
+# generate E1C code ([5]) ------------------------------------------------------
+def gen_code_E1C(prn):
+    if prn < 1 or prn > 50:
+        return NONE
+    N = 4092
+    if prn not in E1C:
+        code = read_code_hex(sdr_code_gal.E1C[prn-1], N)
+        E1C[prn] = mod_code(code, [1, -1]) # BOC(1,1) instead of CBOC(6,1,1/11)
+    return E1C[prn]
+
+# generate E1C secondary code ([5]) -------------------------------------------
+def sec_code_E1C(prn):
+    return read_code_hex(sdr_code_gal.CS25, 25)
+
+# generate E5AI code ([5]) -----------------------------------------------------
+def gen_code_E5AI(prn):
+    if prn < 1 or prn > 50:
+        return NONE
+    N = 10230
+    if prn not in E5AI:
+        code1 = gen_code_E5_X1(N, 0o40503)
+        code2 = gen_code_E5_X2(N, 0o50661, E5AI_X2_init[prn-1])
+        E5AI[prn] = -code1 * code2
+    return E5AI[prn]
+
+# generate E5AI secondary code ([5]) -------------------------------------------
+def sec_code_E5AI(prn):
+    return read_code_hex(sdr_code_gal.CS20, 20)
+
+# generate E5AQ code ([5]) -----------------------------------------------------
+def gen_code_E5AQ(prn):
+    if prn < 1 or prn > 50:
+        return NONE
+    N = 10230
+    if prn not in E5AQ:
+        code1 = gen_code_E5_X1(N, 0o40503)
+        code2 = gen_code_E5_X2(N, 0o50661, E5AQ_X2_init[prn-1])
+        E5AQ[prn] = -code1 * code2
+    return E5AQ[prn]
+
+# generate E5AQ secondary code ([5]) -------------------------------------------
+def sec_code_E5AQ(prn):
+    if prn < 1 or prn > 50:
+       return NONE
+    return read_code_hex(sdr_code_gal.CS100[prn-1], 100)
+
+# generate E5BI code ([5]) -----------------------------------------------------
+def gen_code_E5BI(prn):
+    if prn < 1 or prn > 50:
+        return NONE
+    N = 10230
+    if prn not in E5BI:
+        code1 = gen_code_E5_X1(N, 0o64021)
+        code2 = gen_code_E5_X2(N, 0o51445, E5BI_X2_init[prn-1])
+        E5BI[prn] = -code1 * code2
+    return E5BI[prn]
+
+# generate E5BI secondary code ([5]) -------------------------------------------
+def sec_code_E5BI(prn):
+    return read_code_hex(sdr_code_gal.CS4, 4)
+
+# generate E5BQ code ([5]) -----------------------------------------------------
+def gen_code_E5BQ(prn):
+    if prn < 1 or prn > 50:
+        return NONE
+    N = 10230
+    if prn not in E5BQ:
+        code1 = gen_code_E5_X1(N, 0o64021)
+        code2 = gen_code_E5_X2(N, 0o43143, E5BQ_X2_init[prn-1])
+        E5BQ[prn] = -code1 * code2
+    return E5BQ[prn]
+
+# generate E5BQ secondary code ([5]) -------------------------------------------
+def sec_code_E5BQ(prn):
+    if prn < 1 or prn > 50:
+       return NONE
+    return read_code_hex(sdr_code_gal.CS100[prn+49], 100)
+
+# generate E5 code X1 ----------------------------------------------------------
+def gen_code_E5_X1(N, tap):
+    return LFSR(N, 0b11111111111111, rev_reg(tap >> 1, 14), 14)
+
+# generate E5 code X2 ----------------------------------------------------------
+def gen_code_E5_X2(N, tap, R):
+    return LFSR(N, rev_reg(R, 14), rev_reg(tap >> 1, 14), 14)
+
+# generate E6B code ([6]) ------------------------------------------------------
+def gen_code_E6B(prn):
+    if prn < 1 or prn > 50:
+        return NONE
+    N = 5115
+    if prn not in E6B:
+        E6B[prn] = read_code_hex(sdr_code_gal.E6B[prn-1], N)
+    return E6B[prn]
+
+# generate E6C code ([6]) ------------------------------------------------------
+def gen_code_E6C(prn):
+    if prn < 1 or prn > 50:
+        return NONE
+    N = 5115
+    if prn not in E6C:
+        E6C[prn] = read_code_hex(sdr_code_gal.E6C[prn-1], N)
+    return E6C[prn]
+
+# generate E6C secondary code ([5]) --------------------------------------------
+def sec_code_E6C(prn):
+    if prn < 1 or prn > 50:
+       return NONE
+    return read_code_hex(sdr_code_gal.CS100[prn-1], 100)
+
+# generate B1I code ([12]) -----------------------------------------------------
+def gen_code_B1I(prn):
+    if prn < 1 or prn > 63:
+        return NONE
+    N = 2046
+    if prn not in B1I:
+        code1 = gen_code_B1I_G1(N)
+        code2 = gen_code_B1I_G2(N, B1I_ph_sel[prn-1])
+        B1I[prn] = -code1 * code2
+    return B1I[prn]
+
+# generate B1I G1 --------------------------------------------------------------
+def gen_code_B1I_G1(N):
+    return LFSR(N, 0b01010101010, 0b10000011111, 11)
+
+# generate B1I G2 --------------------------------------------------------------
+def gen_code_B1I_G2(N, ph_sel):
+    tap = 0
+    for p in ph_sel:
+        tap |= 1 << (11 - p)
+    R = 0b01010101010
+    code = np.zeros(N, dtype='int8')
+    for i in range(N):
+        code[i] = CHIP[sdr_func.xor_bits(R & tap)]
+        R = (sdr_func.xor_bits(R & 0b11111001101) << 10) | (R >> 1)
+    return code
+
+# generate B1I secondary code ([12]) -------------------------------------------
+def sec_code_B1I(prn):
+    if (prn >= 1 and prn <= 5) or (prn >=59 and prn <= 63): # D2 (GEO)
+       return np.array([1], dtype='int8')
+    elif prn >= 6 and prn <= 58: # D1 (MEO/IGSO)
+       return np.array(NH20, dtype='int8')
+    else:
+       return NONE
+
+# generate B1CD code ([8]) -----------------------------------------------------
+def gen_code_B1CD(prn):
+    if prn < 1 or prn > 63:
+        return NONE
+    N = 10230
+    if prn not in B1CD:
+        code = np.zeros(N, dtype='int8')
+        for i in range(N):
+            j = (i + B1CD_trunc_pnt[prn-1] - 1) % 10243
+            code[i] = B1C_weil_code(j, B1CD_ph_diff[prn-1])
+        B1CD[prn] = mod_code(code, [1, -1]) # BOC(1,1)
+    return B1CD[prn]
+
+# generate B1CP code ([8]) -----------------------------------------------------
+def gen_code_B1CP(prn):
+    if prn < 1 or prn > 63:
+        return NONE
+    N = 10230
+    if prn not in B1CP:
+        code = np.zeros(N, dtype='int8')
+        for i in range(N):
+            j = (i + B1CP_trunc_pnt[prn-1] - 1) % 10243
+            code[i] = B1C_weil_code(j, B1CP_ph_diff[prn-1])
+        B1CP[prn] = mod_code(code, [1, -1]) # BOC(1,1) instead of QMBOC(6,1,4/33)
+    return B1CP[prn]
+
+# B1C Weil-code 10243 chips ----------------------------------------------------
+def B1C_weil_code(k, w):
+    global B1C_L_SEQ
+    if len(B1C_L_SEQ) == 0:
+        B1C_L_SEQ = gen_legendre_seq(10243)
+    return -B1C_L_SEQ[k] * B1C_L_SEQ[(k + w) % 10243]
+
+# generate B1CP secondary code ([8]) -------------------------------------------
+def sec_code_B1CP(prn):
+    if prn < 1 or prn > 63:
+        return NONE
+    N = 1800
+    if prn not in B1CS:
+        code = np.zeros(N, dtype='int8')
+        for i in range(N):
+            j = (i + B1CS_trunc_pnt[prn-1] - 1) % 3607
+            code[i] = B1C_weil_code_s(j, B1CS_ph_diff[prn-1])
+        B1CS[prn] = code
+    return B1CS[prn]
+
+# B1C Weil-code 3607 chip ------------------------------------------------------
+def B1C_weil_code_s(k, w):
+    global B1C_L_SEQ_S
+    if len(B1C_L_SEQ_S) == 0:
+        B1C_L_SEQ_S = gen_legendre_seq(3607)
+    return -B1C_L_SEQ_S[k] * B1C_L_SEQ_S[(k + w) % 3607]
+
+# generate B2I code ------------------------------------------------------------
+def gen_code_B2I(prn):
+    return gen_code_B1I(prn)
+
+# generate B2I secondary code --------------------------------------------------
+def sec_code_B2I(prn):
+    return sec_code_B1I(prn)
+
+# generate B2AD code ([9]) -----------------------------------------------------
+def gen_code_B2AD(prn):
+    if prn < 1 or prn > 63:
+        return NONE
+    N = 10230
+    if prn not in B2AD:
+        global B2AD_G1
+        if len(B2AD_G1) == 0:
+            B2AD_G1 = gen_code_B2AD_G1(N)
+        B2AD[prn] = -B2AD_G1 * gen_code_B2AD_G2(N, B2AD_G2_init[prn-1])
+    return B2AD[prn]
+
+# generate B2AD G1 code --------------------------------------------------------
+def gen_code_B2AD_G1(N):
+    code = LFSR(8190, 0b1111111111111, 0b1000100000101, 13)
+    return np.hstack([code, code[:N-8190]])
+
+# generate B2AD G2 code --------------------------------------------------------
+def gen_code_B2AD_G2(N, R):
+    return LFSR(N, R, 0b0010100010111, 13)
+
+# generate B2AD secodary code ([9]) --------------------------------------------
+def sec_code_B2AD(prn):
+    code = (-1, -1, -1, 1, -1)
+    return np.array(code, dtype='int8')
+
+# generate B2AP code ([9]) -----------------------------------------------------
+def gen_code_B2AP(prn):
+    if prn < 1 or prn > 63:
+        return NONE
+    N = 10230
+    if prn not in B2AP:
+        global B2AP_G1
+        if len(B2AP_G1) == 0:
+            B2AP_G1 = gen_code_B2AP_G1(N)
+        B2AP[prn] = -B2AP_G1 * gen_code_B2AP_G2(N, B2AP_G2_init[prn-1])
+    return B2AP[prn]
+
+# generate B2AP G1 code --------------------------------------------------------
+def gen_code_B2AP_G1(N):
+    code = LFSR(8190, 0b1111111111111, 0b0010011000001, 13)
+    return np.hstack([code, code[:N-8190]])
+
+# generate B2AP G2 code --------------------------------------------------------
+def gen_code_B2AP_G2(N, R):
+    return LFSR(N, R, 0b1000101100011, 13)
+
+# generate B2AP secondary code ([9]) -------------------------------------------
+def sec_code_B2AP(prn):
+    if prn < 1 or prn > 63:
+        return NONE
+    N = 100
+    if prn not in B2AS:
+        code = np.zeros(N, dtype='int8')
+        for i in range(N):
+            j = (i + B2AS_trunc_pnt[prn-1] - 1) % 1021
+            code[i] = B2A_weil_code(j, B2AS_ph_diff[prn-1])
+        B2AS[prn] = code
+    return B2AS[prn]
+
+# B2A Weil-code 1021 chip ------------------------------------------------------
+def B2A_weil_code(k, w):
+    global B2A_L_SEQ
+    if len(B2A_L_SEQ) == 0:
+        B2A_L_SEQ = gen_legendre_seq(1021)
+    return -B2A_L_SEQ[k] * B2A_L_SEQ[(k + w) % 1021]
+
+# generate B2BI code ([10],[11]) -----------------------------------------------
+def gen_code_B2BI(prn):
+    if prn < 1 or prn > 63:
+        return NONE
+    N = 10230
+    if prn not in B2BI:
+        global B2BI_G1
+        if len(B2BI_G1) == 0:
+            B2BI_G1 = gen_code_B2BI_G1(N)
+        B2BI[prn] = -B2BI_G1 * gen_code_B2BI_G2(N, B2BI_G2_init[prn-1])
+    return B2BI[prn]
+
+# generate B2BI G1 code --------------------------------------------------------
+def gen_code_B2BI_G1(N):
+    code = LFSR(8190, 0b1111111111111, 0b1000000011001, 13)
+    return np.hstack([code, code[:N-8190]])
+
+# generate B2BI G2 code --------------------------------------------------------
+def gen_code_B2BI_G2(N, R):
+    return LFSR(N, R, 0b0011010010011, 13)
+
+# generate B3I code ([13]) -----------------------------------------------------
+def gen_code_B3I(prn):
+    if prn < 1 or prn > 63:
+        return NONE
+    N = 10230
+    if prn not in B3I:
+        global B3I_G1
+        if len(B3I_G1) == 0:
+            B3I_G1 = gen_code_B3I_G1(N)
+        B3I[prn] = -B3I_G1 * gen_code_B3I_G2(N, B3I_G2_init[prn-1])
+    return B3I[prn]
+
+# generate B3I G1 code ---------------------------------------------------------
+def gen_code_B3I_G1(N):
+    code = LFSR(8190, 0b1111111111111, 0b1011000000001, 13)
+    return np.hstack([code, code[:N-8190]])
+
+# generate B3I G2 code ---------------------------------------------------------
+def gen_code_B3I_G2(N, R_init):
+    return LFSR(N, R_init, 0b1000111011011, 13)
+
+# modulation of code by sub-carrier --------------------------------------------
+def mod_code(code, sub_carr):
+    ix = np.arange(len(code) * len(sub_carr)) // len(sub_carr)
+    return -code[ix] * np.array(sub_carr * len(code), dtype='int8')
+
+# read code HEX strings --------------------------------------------------------
+def read_code_hex(str, N):
+    code = np.zeros(N, dtype='int8')
+    for i in range(N):
+        code[i] = CHIP[(int(str[i // 4], 16) >> (3 - i % 4)) & 1]
+    return code
+
+# reverse bits in shift register -----------------------------------------------
+def rev_reg(R, N):
+    RR = 0
+    for i in range(N):
+        RR = (RR << 1) | ((R >> i) & 1)
+    return RR
+
+# generate code by LFSR  -------------------------------------------------------
+def LFSR(N, R, tap, n):
+    code = np.zeros(N, dtype='int8')
+    for i in range(N):
+        code[i] = CHIP[R & 1]
+        R = (sdr_func.xor_bits(R & tap) << (n - 1)) | (R >> 1)
     return code
 
