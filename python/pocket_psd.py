@@ -11,7 +11,7 @@
 #                   add option -h
 #  2021-12-10  1.1  improve plotting time
 #
-import sys, math
+import sys
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
