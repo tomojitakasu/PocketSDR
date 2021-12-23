@@ -9,8 +9,9 @@
 #  2021-12-01  1.0  new
 #  2021-12-05  1.1  add signals: G1CA, G2CA, B1I, B2I, B1CD, B1CP, B2AD, B2AP,
 #                   B2BI, B3I
+#  2021-12-15  1.2  add option: -d, -nz, -np
 #
-import sys, math, time
+import sys, time
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -22,7 +23,8 @@ mpl.rcParams['font.size'] = 9
 # show usage -------------------------------------------------------------------
 def show_usage():
     print('Usage: pocket_acq.py [-sig sig] [-prn prn[,...]] [-tint tint]')
-    print('           [-toff toff] [-f freq] [-fi freq] [-p] [-3d] file')
+    print('       [-toff toff] [-f freq] [-fi freq] [-d freq] [-nz] [-np]')
+    print('       [-p] [-3d] file')
     exit()
 
 # plot C/N0 --------------------------------------------------------------------
@@ -30,8 +32,8 @@ def plot_cn0(ax, cn0, prns, fc):
     thres = 40.0
     x = np.arange(len(cn0))
     y = cn0
-    plt.bar(x[y <  thres], y[y <  thres], color='gray', width=0.6)
-    plt.bar(x[y >= thres], y[y >= thres], color=fc    , width=0.6)
+    ax.bar(x[y <  thres], y[y <  thres], color='gray', width=0.6)
+    ax.bar(x[y >= thres], y[y >= thres], color=fc    , width=0.6)
     ax.grid(True, lw=0.4)
     ax.set_xlim([x[0] - 0.5, x[-1] + 0.5])
     plt.xticks(x, ['%d' % (prn) for prn in prns])
@@ -64,8 +66,8 @@ def plot_corr_3d(ax, P, dops, coffs, ix, fc):
 def plot_corr_pow(ax, P, f, fc):
     x = np.arange(len(P)) / f
     y = P
-    plt.plot(x, y, '-', color='grey', lw=0.5)
-    plt.plot(x, y, '.', color=fc, ms=3)
+    ax.plot(x, y, '-', color='grey', lw=0.5)
+    ax.plot(x, y, '.', color=fc, ms=3)
     ax.grid(True, lw=0.4)
     ax.set_xlim([x[0], x[-1]])
     ax.set_ylim([0, 1])
@@ -75,29 +77,12 @@ def plot_corr_pow(ax, P, f, fc):
 def plot_corr_peak(ax, P, ix, f, fc):
     x = (np.arange(len(P)) - ix) / f
     y = P
-    plt.plot(x, y, '-', color='gray', lw=0.5)
-    plt.plot(x, y, '.', color=fc, ms=3)
+    ax.plot(x, y, '-', color='gray', lw=0.5)
+    ax.plot(x, y, '.', color=fc, ms=3)
     ax.grid(True, lw=0.4)
     ax.set_xlim([-4.5, 4.5])
     ax.set_ylim([0, 1])
     ax.set_ylabel('Correlation Power')
-
-# parse PRN numbers ------------------------------------------------------------
-def parse_prns(argv):
-    prns = []
-    for str in argv.split(','):
-        s = str.split('-')
-        if len(s) >= 4 and s[0] == '' and s[2] == '': # -n--m
-            prns += range(-int(s[1]), -int(s[3]) + 1)
-        elif len(s) >= 3 and s[0] == '': # -n-m
-            prns += range(-int(s[1]), int(s[2]) + 1)
-        elif len(s) >= 2 and s[0] == '': # -n
-            prns += [-int(s[1])]
-        elif len(s) >= 2: # n-m
-            prns += range(int(s[0]), int(s[1]) + 1)
-        else: # n
-            prns += [int(s[0])]
-    return prns
 
 # add text annotation in plot --------------------------------------------------
 def add_text(ax, x, y, text, color='k'):
@@ -107,8 +92,8 @@ def add_text(ax, x, y, text, color='k'):
 #
 #   Synopsis
 # 
-#     pocket_sig.py [-sig sig] [-prn prn] [-tint tint] [-toff toff] [-f freq]
-#         [-fi freq] [-p] [-3d] file
+#     pocket_aqc.py [-sig sig] [-prn prn] [-tint tint] [-toff toff] [-f freq]
+#         [-fi freq] [-d freq] [-nz] [-np] [-p] [-3d] file
 # 
 #   Description
 # 
@@ -143,6 +128,16 @@ def add_text(ax, x, y, text, color='k'):
 #         IF frequency of digital IF data in MHz. The IF frequency equals 0, the
 #         IF data is treated as IQ-sampling (zero-IF). [0.0]
 #
+#     -d freq
+#         Max Doppler frequency to search the signal in Hz. [5000.0]
+#
+#     -nz
+#         Disalbe zero-padding for circular colleration to search the signal.
+#         [enabled]
+#
+#     -np
+#         Disable plot even with single PRN number. [enabled]
+#
 #     -p
 #         Plot correlation powers with correlation peak graph.
 #
@@ -160,8 +155,8 @@ if __name__ == '__main__':
     size = (9, 6)
     sig, prns = 'L1CA', [1]
     fs, fi, T, toff = 12e6, 0.0, 4e-3, 0.0
-    dfact = 1
-    opt = [False, False, True]
+    max_dop = 5000.0
+    opt = [False, False, True, False]
     fc, bc = 'darkblue', 'w'
     rect0 = [0.08, 0.09, 0.84, 0.85]
     rect1 = [0.08, 0.53, 0.84, 0.41]
@@ -177,7 +172,7 @@ if __name__ == '__main__':
             sig = sys.argv[i]
         elif sys.argv[i] == '-prn':
             i += 1
-            prns = parse_prns(sys.argv[i])
+            prns = sdr_func.parse_nums(sys.argv[i])
         elif sys.argv[i] == '-tint':
             i += 1
             T = float(sys.argv[i]) * 1e-3
@@ -190,12 +185,17 @@ if __name__ == '__main__':
         elif sys.argv[i] == '-fi':
             i += 1
             fi = float(sys.argv[i]) * 1e6
+        elif sys.argv[i] == '-d':
+            i += 1
+            max_dop = float(sys.argv[i])
         elif sys.argv[i] == '-p':
             opt[0] = True
         elif sys.argv[i] == '-3d':
             opt[1] = True
         elif sys.argv[i] == '-nz':
             opt[2] = False
+        elif sys.argv[i] == '-np':
+            opt[3] = True
         elif sys.argv[i][0] == '-':
             show_usage()
         else:
@@ -222,31 +222,37 @@ if __name__ == '__main__':
         # read IF data
         data = sdr_func.read_data(file, fs, 1 if fi > 0 else 2, T + Tcode, toff)
         
-        fig = plt.figure(window, figsize=size)
-        ax0 = fig.add_axes(rect0)
-        ax0.axis('off')
+        if not opt[3]:
+            fig = plt.figure(window, figsize=size)
+            ax0 = fig.add_axes(rect0)
+            ax0.axis('off')
         t = time.time()
         
         if len(prns) > 1:
             cn0 = np.zeros(len(prns))
             for i in range(len(prns)):
-                P, dops, coffs, ix, cn0[i], Tc = \
-                    sdr_func.search_sig(sig, prns[i], data, fs, fi, zero_pad=opt[2])
+                P, dops, coffs, ix, cn0[i], Tc = sdr_func.search_sig(sig,
+                    prns[i], data, fs, fi, max_dop=max_dop, zero_pad=opt[2])
                 
                 print('SIG= %-4s, %s= %3d, COFF= %8.5f ms, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz' % \
                     (sig, label, prns[i], coffs[ix[1]] * 1e3, dops[ix[0]], cn0[i]))
             
-            print('TIME = %.1f ms' % ((time.time() - t) * 1e3))
+            t = time.time() - t
             ax1 = fig.add_axes(rect0, facecolor=bc)
             plot_cn0(ax1, cn0, prns, fc)
             ax0.set_title('SIG = %s, FILE = %s' % (sig, file), fontsize=10)
         else:
             P, dops, coffs, ix, cn0, Tc = \
-                sdr_func.search_sig(sig, prns[0], data, fs, fi, zero_pad=opt[2])
-            print('TIME = %.1f ms' % ((time.time() - t) * 1e3))
+                sdr_func.search_sig(sig, prns[0], data, fs, fi, max_dop=max_dop,
+                    zero_pad=opt[2])
+            t = time.time() - t
             text = 'COFF=%.5fms, DOP=%.0fHz, C/N0=%.1fdB-Hz' % \
                    (coffs[ix[1]] * 1e3, dops[ix[0]], cn0)
-            if opt[1]: # plot 3D
+            if opt[3]: # text
+                print('SIG= %-4s, %s= %3d, COFF= %8.5f ms, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz' % \
+                    (sig, label, prns[0], coffs[ix[1]] * 1e3, dops[ix[0]], cn0))
+                exit()
+            elif opt[1]: # plot 3D
                 ax1 = fig.add_axes(rect3, projection='3d', facecolor='None')
                 plot_corr_3d(ax1, P, dops, coffs, ix, fc)
                 add_text(ax0, 0.98, 0.96, text, color=fc)
@@ -267,6 +273,7 @@ if __name__ == '__main__':
             ax0.set_title('SIG = %s, %s = %d, FILE = %s' % \
                 (sig, label, prns[0], file), fontsize=10)
         
+        print('TIME = %.1f ms' % (t * 1e3))
         plt.show()
     
     except KeyboardInterrupt:

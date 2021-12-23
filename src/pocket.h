@@ -34,7 +34,8 @@
 
 #define SDR_MAX_CH      2       /* number of channels in a SDR device */
 #define SDR_MAX_REG     11      /* number of registers in a SDR device */
-#define SDR_MAX_BUFF    16      /* number of digital IF data buffer */
+//#define SDR_MAX_BUFF    16      /* number of digital IF data buffer */
+#define SDR_MAX_BUFF    32      /* number of digital IF data buffer */
 #define SDR_SIZE_BUFF   (1<<20) /* size of digital IF data buffer (bytes) */
 
 #define SDR_CODE_L1CA   1       /* spreading (PRN) code L1C/A */

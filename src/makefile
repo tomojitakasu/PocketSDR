@@ -12,8 +12,8 @@ OPTIONS =
 
 CFLAGS = -O3 $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
 
-LIBUSB = -L/mingw64/lib -llibusb-1.0
-#LIBUSB = -lusb-1.0
+#LIBUSB = -L/mingw64/lib -llibusb-1.0
+LIBUSB = -lusb-1.0
 
 LDLIBS = $(LIBUSB)
 

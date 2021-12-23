@@ -9,6 +9,7 @@
 #  2021-10-20  0.1  new
 #  2021-12-01  1.0  rename pocket_plot.py -> pocket_psd.py
 #                   add option -h
+#  2021-12-10  1.1  improve plotting time
 #
 import sys, math
 import numpy as np
@@ -22,36 +23,38 @@ def show_usage():
     exit()
 
 # plot PSD ---------------------------------------------------------------------
-def plot_psd(fig, rect, data, IQ, fs, time, N, fc, bc):
+def plot_psd(fig, rect, IQ, fs, fc, bc):
     yl = [-80, -45]
-    
     if IQ == 1: # I
         xl = [0, fs * 0.5]
     else: # IQ
         xl = [-fs * 0.5, fs * 0.5]
-        N = int(N / 2)
-    
     ax = fig.add_axes(rect, facecolor=bc)
-    plt.psd(data, Fs=fs, NFFT=N, c=fc, lw=0.3)
     xi = 1e6 if xl[1] - xl[0] < 15e6 else 2e6
     xt = np.arange(np.floor(xl[0] / xi) * xi, xl[1] + xi, xi)
     yt = np.arange(yl[0], yl[1] + 5, 5)
     plt.xticks(xt, ("%.0f" % (x * 1e-6) for x in xt))
     plt.yticks(yt)
-    plt.xlim(xl)
-    plt.ylim(yl)
-    ax.set_xlabel('Frequency (MHz)')
+    ax.set_xlim(xl)
+    ax.set_ylim(yl)
     ax.grid(True, lw=0.4)
-    ax.text(0.97, 0.97, 'Fs = %6.3f MHz\nT= %7.3f s' % (fs / 1e6, time),
-        ha='right', va='top', color=fc, transform=ax.transAxes)
-    return ax
+    p = ax.text(0.97, 0.97, '', ha='right', va='top', color=fc, transform=ax.transAxes)
+    return ax, p
+
+# update PSD -------------------------------------------------------------------
+def update_psd(ax, p, data, IQ, fs, time, N, fc):
+    for line in ax.get_lines():
+        line.remove()
+    if IQ == 2: # IQ
+        N = int(N / 2)
+    plt.sca(ax)
+    plt.psd(data, Fs=fs, NFFT=N, c=fc, lw=0.3)
+    p.set_text('Fs = %6.3f MHz\nT= %7.3f s' % (fs / 1e6, time))
+    ax.set_xlabel('Frequency (MHz)')
 
 # plot histgram ----------------------------------------------------------------
-def plot_hist_d(fig, rect, data, text, fc, bc):
-    bins = np.arange(-5.5, 6.5, 1)
+def plot_hist_d(fig, rect, text, fc, bc):
     ax = fig.add_axes(rect, facecolor=bc)
-    if len(data) > 0:
-        plt.hist(data, bins=bins, density=True, rwidth=0.7, color=fc)
     ax.set_xticks(np.arange(-5, 6, 1))
     ax.set_xlim([-5, 5])
     ax.set_ylim([0, 0.5])
@@ -64,19 +67,32 @@ def plot_hist_d(fig, rect, data, text, fc, bc):
     return ax
 
 # plot histgrams ---------------------------------------------------------------
-def plot_hist(fig, rect, data, IQ, fc, bc):
+def plot_hist(fig, rect, fc, bc):
     h = rect[3] / 2 - 0.02
     rect1 = [rect[0], rect[1] + h + 0.04, rect[2], h]
     rect2 = [rect[0], rect[1], rect[2], h]
-    
-    if IQ == 1: # I
-        ax1 = plot_hist_d(fig, rect1, data, 'I', fc, bc)
-        ax2 = plot_hist_d(fig, rect2, []  , 'Q', fc, bc)
-    else: # IQ
-        ax1 = plot_hist_d(fig, rect1, np.real(data), 'I', fc, bc)
-        ax2 = plot_hist_d(fig, rect2, np.imag(data), 'Q', fc, bc)
-    
+    ax1 = plot_hist_d(fig, rect1, 'I', fc, bc)
+    ax2 = plot_hist_d(fig, rect2, 'Q', fc, bc)
     ax2.set_xlabel('Quantized Value')
+    return (ax1, ax2)
+
+# update histgram --------------------------------------------------------------
+def update_hist_d(ax, data, fc):
+    for p in ax.patches:
+        p.remove()
+    if len(data) > 0:
+        bins = np.arange(-5.5, 6.5, 1)
+        plt.sca(ax)
+        plt.hist(data, bins=bins, density=True, rwidth=0.7, color=fc)
+
+# update histgrams -------------------------------------------------------------
+def update_hist(ax, data, IQ, fc):
+    if IQ == 1: # I
+        update_hist_d(ax[0], data, fc)
+        update_hist_d(ax[1], [], fc)
+    else: # IQ
+        update_hist_d(ax[0], data.real, fc)
+        update_hist_d(ax[1], data.imag, fc)
 
 #-------------------------------------------------------------------------------
 #
@@ -149,6 +165,14 @@ if __name__ == '__main__':
     mpl.rcParams['toolbar'] = 'None';
     mpl.rcParams['font.size'] = 9
     fig = plt.figure(window, figsize=size)
+    ax0 = fig.add_axes(rect0)
+    ax0.axis('off')
+    ax0.set_title('Digital IF data: FILE = ' + file, fontsize=10)
+    if hist:
+        ax1, p1 = plot_psd(fig, rect1, IQ, fs, fc, bc)
+        ax2 = plot_hist(fig, rect2, fc, bc)
+    else:
+        ax1, p1 = plot_psd(fig, rect0, IQ, fs, fc, bc)
     
     try:
         for i in range(0, 10000000):
@@ -158,15 +182,11 @@ if __name__ == '__main__':
                 exit()
             
             if len(data) >= int(fs * tint):
-                fig.clear() 
-                ax1 = fig.add_axes(rect0)
-                ax1.axis('off')
-                ax1.set_title('Digital IF data: FILE = ' + file, fontsize=10)
                 if hist:
-                    ax2 = plot_psd(fig, rect1, data, IQ, fs, tint * i, N, fc, bc)
-                    ax3 = plot_hist(fig, rect2, data, IQ, fc, bc)
+                    update_psd(ax1, p1, data, IQ, fs, tint * i, N, fc)
+                    update_hist(ax2, data, IQ, fc)
                 else:
-                    ax2 = plot_psd(fig, rect0, data, IQ, fs, tint * i, N, fc, bc)
+                    update_psd(ax1, p1, data, IQ, fs, tint * i, N, fc)
             plt.pause(1e-3) 
     
     except KeyboardInterrupt:

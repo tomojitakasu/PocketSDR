@@ -55,7 +55,12 @@ static int read_sample_type(sdr_dev_t *dev)
 static void transfer_cb(struct libusb_transfer *transfer)
 {
     sdr_dev_t *dev = (sdr_dev_t *)transfer->user_data;
+    static uint32_t tick, tick_p, tt;
     
+    tick = sdr_get_tick();
+    tt = tick - tick_p;
+    tick_p = tick;
+
     if (transfer->status != LIBUSB_TRANSFER_COMPLETED) {
         fprintf(stderr, "USB bulk transfer error (%d)\n", transfer->status);
     }

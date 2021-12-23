@@ -15,7 +15,7 @@
 #define USB_VR          (LIBUSB_RECIPIENT_DEVICE | LIBUSB_REQUEST_TYPE_VENDOR)
 #define USB_VR_IN       (USB_VR | LIBUSB_ENDPOINT_IN)
 #define USB_VR_OUT      (USB_VR | LIBUSB_ENDPOINT_OUT)
-#define TO_TRANSFER     3000    /* USB transfer timeout (ms) */
+#define TO_TRANSFER     15000    /* USB transfer timeout (ms) */
 
 /*----------------------------------------------------------------------------*/
 /**
