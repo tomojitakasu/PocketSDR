@@ -6,7 +6,7 @@
 #
 #  History:
 #  2021-12-01  1.0  new
-#  2021-12-21  1.1  
+#  2021-12-21  1.1  fix several problems
 #
 from math import *
 import time
@@ -15,7 +15,9 @@ import scipy.fftpack as fft
 import sdr_code
 
 # constants --------------------------------------------------------------------
-DOP_STEP = 0.5     # Doppler frequency search step (* 1 / code cycle)
+MAX_DOP  = 5000.0  # default max Doppler frequncy to search signals (Hz)
+#DOP_STEP = 0.5     # Doppler frequency search step (* 1 / code cycle)
+DOP_STEP = 0.4     # Doppler frequency search step (* 1 / code cycle)
 
 # global variable --------------------------------------------------------------
 carr_tbl = []      # carrier lookup table 
@@ -61,8 +63,8 @@ def read_data(file, fs, IQ, T, toff=0.0):
 #      data     (I) Digitized IF data as complex64 ndarray
 #      fs       (I) Sampling frequnecy (Hz)
 #      fi       (I) IF frequency (Hz)
-#      max_dop=5000  (I) Max Doppler frequency for signal search (Hz) (optional)
-#      zero_pad=True (I) Zero-padding option for singal search (optional)
+#      max_dop  (I) Max Doppler frequency for signal search (Hz) (optional)
+#      zero_pad (I) Zero-padding option for singal search (optional)
 #
 #  returns:
 #      P        Normalized correlation powers in the Doppler frequencies - Code
@@ -71,11 +73,11 @@ def read_data(file, fs, IQ, T, toff=0.0):
 #      coffs    Code offsets for signal search as ndarray (s)
 #      ix       Index of position with max correlation power in the search space
 #               (ix[0]: in Doppler frequencies, ix[1]: in Code offsets)
-#      cn0      Approx C/N0 of max correlation power (dB-Hz)
+#      cn0      C/N0 of max correlation power (dB-Hz)
 #
-def search_sig(sig, prn, data, fs, fi, max_dop=5000.0, zero_pad=True):
+def search_sig(sig, prn, data, fs, fi, max_dop=MAX_DOP, zero_pad=True):
     # generate code
-    code, T, Tc = sdr_code.gen_code(sig, prn)
+    code = sdr_code.gen_code(sig, prn)
     
     if len(code) == 0:
         return [], [0.0], [0.0], (0, 0), 0.0, 0.0
@@ -84,6 +86,7 @@ def search_sig(sig, prn, data, fs, fi, max_dop=5000.0, zero_pad=True):
     fi = shift_freq(sig, prn, fi)
     
     # generate code FFT
+    T = sdr_code.code_cyc(sig)
     N = int(fs * T)
     code_fft = sdr_code.gen_code_fft(code, T, fs, N, N if zero_pad else 0)
     
@@ -106,7 +109,7 @@ def search_sig(sig, prn, data, fs, fi, max_dop=5000.0, zero_pad=True):
 #  Parallel code search in digitized IF data.
 #
 #  args:
-#      code_fft (I) Code DFT
+#      code_fft (I) Code DFT (with or w/o zero-padding)
 #      T        (I) Code cycle (period) (s)
 #      data     (I) Digitized IF data as complex64 ndarray
 #      fs       (I) Sampling frequnecy (Hz)
@@ -221,23 +224,24 @@ def parse_nums(str):
             nums += [int(s[0])]
     return nums
 
-# shift and update array -------------------------------------------------------
-def update_array(array, item):
-    array[:-1], array[-1] = array[1:], item
+# add item to buffer -----------------------------------------------------------
+def add_buff(buff, item):
+    buff[:-1], buff[-1] = buff[1:], item
 
 # pack bits --------------------------------------------------------------------
-def pack_bits(data, align=''):
+def pack_bits(data, nz=0):
+    if nz > 0:
+        data = np.hstack([[0] * nz, data])
     N = len(data)
     buff = np.zeros((N + 7) // 8, dtype='uint8')
-    j = (N % 8) if align == 'right' else 0
-    for i in range(j, j + N):
+    for i in range(N):
         buff[i // 8] |= (data[i] << (7 - i % 8))
     return buff
 
 # unpack bits ------------------------------------------------------------------
 def unpack_bits(data, N):
     buff = np.zeros(N, dtype='uint8')
-    for i in range(np.min(N, len(data) * 8)):
+    for i in range(np.min([N, len(data) * 8])):
         buff[i] = (data[i // 8] >> (7 - i % 8)) & 1
     return buff
 
