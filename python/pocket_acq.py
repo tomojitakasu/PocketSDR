@@ -206,7 +206,7 @@ if __name__ == '__main__':
         print('Specify input file.')
         exit()
     
-    Tcode = sdr_code.cyc_code(sig) # code cycle (s)
+    Tcode = sdr_code.code_cyc(sig) # code cycle (s)
     if Tcode <= 0:
         print('Invalid signal %s.' % (sig))
         exit()
@@ -231,7 +231,7 @@ if __name__ == '__main__':
         if len(prns) > 1:
             cn0 = np.zeros(len(prns))
             for i in range(len(prns)):
-                P, dops, coffs, ix, cn0[i], Tc = sdr_func.search_sig(sig,
+                P, dops, coffs, ix, cn0[i] = sdr_func.search_sig(sig,
                     prns[i], data, fs, fi, max_dop=max_dop, zero_pad=opt[2])
                 
                 print('SIG= %-4s, %s= %3d, COFF= %8.5f ms, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz' % \
@@ -242,7 +242,7 @@ if __name__ == '__main__':
             plot_cn0(ax1, cn0, prns, fc)
             ax0.set_title('SIG = %s, FILE = %s' % (sig, file), fontsize=10)
         else:
-            P, dops, coffs, ix, cn0, Tc = \
+            P, dops, coffs, ix, cn0 = \
                 sdr_func.search_sig(sig, prns[0], data, fs, fi, max_dop=max_dop,
                     zero_pad=opt[2])
             t = time.time() - t
@@ -262,7 +262,8 @@ if __name__ == '__main__':
                 add_text(ax1, 1.04, -0.04, '(ms)')
                 add_text(ax1, 0.98, 0.94, text, color=fc)
                 ax2 = fig.add_axes(rect2, facecolor=bc)
-                plot_corr_peak(ax2, P[ix[0]], ix[1], fs * Tc, fc)
+                f = fs * Tcode / sdr_code.code_len(sig)
+                plot_corr_peak(ax2, P[ix[0]], ix[1], f, fc)
                 add_text(ax2, 1.04, -0.04, '(chip)')
             else: # plot power
                 ax1 = fig.add_axes(rect0, facecolor=bc)
