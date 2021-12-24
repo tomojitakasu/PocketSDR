@@ -55,7 +55,7 @@ def encode_conv(data):
     return enc_data
 
 #-------------------------------------------------------------------------------
-#  Dncode convolutional code (K=7, R=1/2, Poly=G1:0x4F,G2:0x6D).
+#  Decode convolutional code (K=7, R=1/2, Poly=G1:0x4F,G2:0x6D).
 #
 #  args:
 #      data     (I) Data as uint8 ndarray (0 or 1).
