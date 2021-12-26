@@ -1,4 +1,4 @@
-# **PocketSDR - An Open-Source GNSS SDR Front-end Device, ver. 0.3**
+# **PocketSDR - An Open-Source GNSS SDR Front-end Device, ver. 0.4**
 
 ## **Overview**
 
@@ -27,6 +27,7 @@ Linux and other environments.
 PocketSDR --+-- bin     PocketSDR utility binary programs for Windows
             +-- src     PocketSDR utility source programs
             +-- python  PocketSDR utility Python scripts
+            +-- lib     External shared library for Python scripts
             +-- conf    Configuration files for device settings
             +-- util    Windows driver installation utility (ref [3])
             +-- doc     Documents (ref {1], [2])
@@ -107,11 +108,14 @@ PocketSDR contains the following utility programs.
 - **pocket_scan**: Scan and list USB Devices
 - **pocket_dump**: Capture and dump digital IF data of SDR device
 - **pocket_psd.py**: Plot PSD and histgrams of digital IF data
-- **pocket_acq.py**: GNSS signal acquition of digital IF data
+- **pocket_acq.py**: GNSS signal acquisition of digital IF data
+- **pocket_trk.py**: GNSS signal tracking of digital IF data
 
 For details, refer comment lines in src/pocket_conf.c, src/pocket_scan.c, 
 src/pocket_dump.c, python/pocket_psd.py and python/pocket_acq.py. You need
-Python 3, Numpy, Scipy and matplotlib to execute Python scripts.
+Python 3, Numpy, Scipy and matplotlib to execute Python scripts. pocket_trk.py
+uses external shared libraries of LIBFEC [5] and RTKLIB [6] in lib/ directory.
+These were built for Windows (64bit) and Linux for x86_64 CPU.
 
 --------------------------------------------------------------------------------
 
@@ -127,18 +131,45 @@ Python 3, Numpy, Scipy and matplotlib to execute Python scripts.
       TIME(s)    T   CH1(Bytes)   T   CH2(Bytes)   RATE(Ks/s)
           5.0    I     59768832  IQ    119537664      11922.8
     
-    $ pocket_psd.py ch1.bin -f 12 -h &
-    $ pocket_acq.py ch1.bin -f 12 -fi 3 -sig L1CA -prn 1-32,193-199 &
-    $ pocket_acq.py ch1.bin -f 12 -fi 3 -sig L1CA -prn 26 &
-    $ pocket_acq.py ch1.bin -f 12 -fi 3 -sig L1CA -prn 26 -3d &
-    $ pocket_acq.py ch2.bin -f 12 -sig L6D -prn 194 -p &
+    $ pocket_psd.py ch1.bin -f 12 -h
+    $ pocket_acq.py ch1.bin -f 12 -fi 3 -sig L1CA -prn 1-32,193-199
+    PRN   1: SIG= L1CA, COFF=  0.12817 ms, DOP=  3500 Hz, C/N0= 37.4 dB-Hz
+    PRN   2: SIG= L1CA, COFF=  0.85242 ms, DOP= -3500 Hz, C/N0= 36.8 dB-Hz
+    PRN   3: SIG= L1CA, COFF=  0.39400 ms, DOP= -2000 Hz, C/N0= 37.0 dB-Hz
+    PRN   4: SIG= L1CA, COFF=  0.96692 ms, DOP=  2000 Hz, C/N0= 44.7 dB-Hz
+    ...
+    $ pocket_acq.py ch1.bin -f 12 -fi 3 -sig L1CA -prn 26
+
+    $ pocket_acq.py ch1.bin -f 12 -fi 3 -sig L1CA -prn 26 -3d
+
+    $ pocket_acq.py ch2.bin -f 12 -sig L6D -prn 194 -p
+    
+    $ pocket_trk.py L1_24M.bin -prn 1-32 -f 24 -fi 6
+	  TIME(s)   SIG  PRN  STATE   LOCK(s)  C/N0 (dB-Hz)        COFF(ms)   DOP(Hz)   ADR(cyc)  SYNC #NAV #ERR
+	    1.550  L1CA    1   LOCK     1.539  42.5 ||||||||      0.8017699    3218.8     4949.3  ---     0    0
+	    0.011  L1CA    2   IDLE     0.000   0.0               0.0000000       0.0        0.0  ---     0    0
+	    0.011  L1CA    3   IDLE     0.000   0.0               0.0000000       0.0        0.0  ---     0    0
+	    0.011  L1CA    4   IDLE     0.000   0.0               0.0000000       0.0        0.0  ---     0    0
+	    0.011  L1CA    5   IDLE     0.000   0.0               0.0000000       0.0        0.0  ---     0    0
+	    0.011  L1CA    6   IDLE     0.000   0.0               0.0000000       0.0        0.0  ---     0    0
+	    1.550  L1CA    7   LOCK     1.539  45.7 ||||||||||    0.6995059     582.8      901.5  ---     0    0
+	    1.550  L1CA    8   LOCK     1.539  47.6 |||||||||||   0.0733506    -777.2    -1196.8  ---     0    0
+	    0.011  L1CA    9   IDLE     0.000   0.0               0.0000000       0.0        0.0  ---     0    0
+	    1.550  L1CA   10   LOCK     1.539  38.6 |||||         0.8658548      -6.2       -9.4  ---     0    0
+	...
+    $ pocket_trk.py L1_24M.bin -prn 194 -sig L1CA -f 24 -fi 6 -log trk.log  -p
+    ...
+    $ pocket_trk.py L5_24M.bin -prn 13 -sig E5AI -f 24 -log trk.log -p -ts 0.2
+    ...
 ``` 
 
-<img src="image/image001.jpg" width=45%>
-<img src="image/image002.jpg" width=45%>
-<img src="image/image003.jpg" width=45%>
-<img src="image/image004.jpg" width=45%>
-<img src="image/image005.jpg" width=45%>
+<img src="image/image001.jpg" width=49%>
+<img src="image/image002.jpg" width=49%>
+<img src="image/image003.jpg" width=49%>
+<img src="image/image004.jpg" width=49%>
+<img src="image/image005.jpg" width=49%>
+<img src="image/image006.jpg" width=49%>
+<img src="image/image007.jpg" width=49%>
 
 --------------------------------------------------------------------------------
 
@@ -189,6 +220,10 @@ PocketSDR. Refer "Installation for Windows" above.
 [4] Cypress, CY3684 EZ-USB FX2LP Development Kit
     (https://www.cypress.com/documentation/development-kitsboards/cy3684-ez-usb-fx2lp-development-kit)
 
+[5] https://github.com/quiet/libfec
+
+[6] https://github.com/tomojitakasu/RTKLIB
+
 --------------------------------------------------------------------------------
 
 ## **History**
@@ -196,4 +231,5 @@ PocketSDR. Refer "Installation for Windows" above.
 - 2021-10-20  0.1  1st draft version
 - 2021-10-25  0.2  Add Rebuild F/W and Write F/W Image to PocketSDR
 - 2021-12-01  0.3  Add and modify Python scripts
+- 2021-12-25  0.4  Add and modify Python scripts
 
