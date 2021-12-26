@@ -5,30 +5,26 @@
 #  T.TAKASU
 #
 #  History:
-#  2021-12-08  1.0  new
+#  2021-12-24  1.0  new
 #
 from math import *
 import numpy as np
-import scipy.fftpack as fft
 from sdr_func import *
-import sdr_code
-import sdr_nav
+import sdr_code, sdr_nav
 
 # constants --------------------------------------------------------------------
 T_SRCH     = 30.0            # average of signal search interval (s)
 T_ACQ      = 0.010           # non-coherent integration time for acquisition (s)
 T_DLL      = 0.001           # non-coherent integration time for DLL (s)
 T_CN0      = 1.0             # averaging time for C/N0 (s)
-T_FPULLIN  = 1.5             # frequency pullin time (s)
-T_NPULLIN  = 2.0             # navigation data pullin time (s)
-#B_DLL      = 8.0             # band-width of DLL (Hz)
-#B_DLL      = 80.0             # band-width of DLL (Hz)
-B_DLL      = 20.0             # band-width of DLL (Hz)
+T_FPULLIN  = 1.0             # frequency pullin time (s)
+T_NPULLIN  = 1.5             # navigation data pullin time (s)
+B_DLL      = 5.0             # band-width of DLL (Hz) (wide, narrow)
 B_PLL      = 20.0            # band-width of PLL (Hz)
-B_FLL      = (100.0, 20.0)   # band-width of FLL (Hz) (wide, narrow)
+B_FLL      = (20.0, 5.0)     # band-width of FLL (Hz) (wide, narrow)
 SP_CORR    = 0.5             # default correlator spacing (chip)
-MAX_DOP    = 5000.0          # default max Doppler search for acquisition (Hz)
-THRES_CN0  = (35.0, 31.0)    # C/N0 threshold (dB-Hz) (lock, lost)
+MAX_DOP    = 5000.0          # default max Doppler for acquisition (Hz)
+THRES_CN0  = (35.0, 32.0)    # C/N0 threshold (dB-Hz) (lock, lost)
 
 # general object classes -------------------------------------------------------
 class Obj: pass
@@ -42,8 +38,8 @@ class Obj: pass
 #      fs       (I) Sampling frequency (Hz)
 #      fi       (I) IF frequency (Hz)
 #      max_dop  (I) Max Doppler frequency for acquisition (Hz) (optional)
-#      sp_corr  (I) Correlor spacing (chips) (optional)
-#      add_corr (I) Flag for additional correlators for plot (optional)
+#      sp_corr  (I) Correlator spacing (chips) (optional)
+#      add_corr (I) Flag for additional correlator for plot (optional)
 #      nav_opt  (I) Navigation data options (optional)
 #
 #  returns:
@@ -53,21 +49,19 @@ def ch_new(sig, prn, fs, fi, max_dop=MAX_DOP, sp_corr=SP_CORR, add_corr=False,
     nav_opt=''):
     ch = Obj()
     ch.state = 'SRCH'               # channel state
-    ch.time = ch.T0 = 0.0           # receiver time
+    ch.time = 0.0                   # receiver time
     ch.sig = sig.upper()            # signal type
     ch.prn = prn                    # PRN number
     ch.code = sdr_code.gen_code(sig, prn) # primary code
     ch.sec_code = sdr_code.sec_code(sig, prn) # secondary code
-    freq = sdr_code.sig_freq(sig)
-    ch.freq = shift_freq(sig, prn, freq) # carrier freqency (Hz)
+    ch.fc = sdr_code.sig_freq(sig)  # carrier frequency (Hz)
     ch.fs = fs                      # sampling freqency (Hz)
     ch.fi = shift_freq(sig, prn, fi) # IF frequency (Hz)
     ch.T = sdr_code.code_cyc(sig)   # code cycle (period) (s)
     ch.N = int(fs * ch.T)           # number of samples in a code cycle
-    ch.phi = 0.0                    # carrier phase (cyc)
     ch.fd = 0.0                     # Doppler frequency (Hz)
-    ch.coff = 0.0                   # Code offset (s)
-    ch.adr = 0.0                    # Accumulated Doppler (cyc)
+    ch.coff = 0.0                   # code offset (s)
+    ch.adr = 0.0                    # accumulated Doppler (cyc)
     ch.cn0 = 0.0                    # C/N0 (dB-Hz)
     ch.lock = 0                     # lock count
     ch.acq = acq_new(ch.code, ch.T, ch.fs, ch.N, max_dop)
@@ -76,18 +70,24 @@ def ch_new(sig, prn, fs, fi, max_dop=MAX_DOP, sp_corr=SP_CORR, add_corr=False,
     return ch
 
 #-------------------------------------------------------------------------------
-#  Update a receiver channel. A receiver channel is a state machine having the
-#  following internal states indicated as ch.state.
+#  Update a receiver channel. A receiver channel is a state machine which has
+#  the following internal states indicated as ch.state. By calling the function,
+#  the receiver channel search and track GNSS signals and decode navigation
+#  data in the signals. The results of the signal acquisition, trackingare and
+#  navigation data decoding are output as log messages. The internal status are
+#  also accessed as object instance variables of the receiver channel after
+#  calling the function. The function should be called in the cycle of GNSS
+#  signal code with 2-cycle samples of digitized IF data (which are overlapped
+#  bettween previous and current). 
 #
-#    state  : description
-#    'SRCH' : searching signal
-#    'LOCK' : tracking signal
-#    'IDLE' : waiting for next signal search cycle
+#    'SRCH' : signal acquisition state
+#    'LOCK' : signal tracking state
+#    'IDLE' : waiting for a next signal acquisition cycle
 #
 #  args:
 #      ch       (I) Receiver channel
 #      time     (I) Sampling time of the end of digitized IF data (s)
-#      data     (I) 2 cycle samples of digitized IF data as complex64 ndarray
+#      data     (I) 2-cycle samples of digitized IF data as complex64 ndarray
 #
 #  returns:
 #      None
@@ -106,26 +106,25 @@ def acq_new(code, T, fs, N, max_dop):
     acq.code_fft = sdr_code.gen_code_fft(code, T, fs, N, N) # (code + ZP) DFT
     acq.fds = dop_bins(T, max_dop)  # Doppler search bins
     acq.P_sum = np.zeros((len(acq.fds), N)) # non-coherent sum of correlations
-    acq.n_sum = 0                   # numberof non-coherent sum
+    acq.n_sum = 0                   # number of non-coherent sum
     return acq
 
 # new signal tracking ----------------------------------------------------------
 def trk_new(code, T, fs, sp_corr, add_corr):
     trk = Obj()
     pos = int(sp_corr * T / len(code) * fs) + 1
-    trk.pos = [0, -pos, pos, -80]   # correlator position {P,E,L,N} (samples)
+    trk.pos = [0, -pos, pos, -80]   # correlator positions {P,E,L,N} (samples)
     if add_corr:
         trk.pos += range(-40, 41)   # additional correlator positions
-    trk.err_phas = 0.0              # carrier phase error (cyc)
-    trk.err_code = 0.0              # code offset error (s)
-    trk.C = np.zeros(len(trk.pos), dtype='complex64') # correlator output
+    trk.C = np.zeros(len(trk.pos), dtype='complex64') # correlator outputs
     trk.P = np.zeros(2000, dtype='complex64') # history of P correlator outputs
+    trk.err_phas = 0.0              # carrier phase error (cyc)
     trk.sumP = trk.sumE = trk.sumL = trk.sumN = 0.0 # sum of correlator outputs
     return trk
 
 # initialize signal tracking ---------------------------------------------------
 def trk_init(trk):
-    trk.err_phas = trk.err_code = 0.0
+    trk.err_phas = 0.0
     trk.sumP = trk.sumE = trk.sumL = trk.sumN = 0.0
     trk.C[:] = 0.0
     trk.P[:] = 0.0
@@ -171,13 +170,12 @@ def start_track(ch, fd, coff, cn0):
 # track signal -----------------------------------------------------------------
 def track_sig(ch, time, data):
     tau = time - ch.time   # time interval (s)
-    ch.time = time
-    fc = ch.fi + ch.fd     # IF frequency (Hz)
+    fc = ch.fi + ch.fd     # IF carrier frequency with Doppler (Hz)
     ch.adr += ch.fd * tau  # accumulated Doppler (cyc)
+    ch.coff = np.mod(ch.coff - ch.fd / ch.fc * tau, ch.T)
+    ch.time = time
     
-    #ch.coff += 0.01 * ch.fd / ch.freq * tau
-    
-    # advance code offset
+    # advance code position and carrier phase
     i = int(ch.coff * ch.fs)
     phi = ch.fi * tau + ch.adr + fc * i / ch.fs
     coff = ch.coff - i / ch.fs
@@ -189,7 +187,7 @@ def track_sig(ch, time, data):
     # correlator outputs
     ch.trk.C = corr_std(data_carr, code, ch.trk.pos)
     
-    # add correction outputs to histroy
+    # add P correlator outputs to histroy
     add_buff(ch.trk.P, ch.trk.C[0])
     ch.lock += 1
     
@@ -201,14 +199,11 @@ def track_sig(ch, time, data):
     DLL(ch)
     CN0(ch)
     
-    ch.coff = np.mod(ch.coff, ch.T)
-    
     # decode navigation data
     if ch.lock * ch.T >= T_NPULLIN:
         sdr_nav.nav_decode(ch)
     
-    # test signal lost
-    if ch.cn0 < THRES_CN0[1]:
+    if ch.cn0 < THRES_CN0[1]: # signal lost
         ch.state = 'IDLE'
         log(3, '$LOG,%.3f,%s,%d,SIGNAL LOST (%s, %.1f)' % (ch.time, ch.sig,
             ch.prn, ch.sig, ch.cn0))
@@ -223,18 +218,18 @@ def FLL(ch):
         dot   = IP1 * IP2 + QP1 * QP2
         cross = IP1 * QP2 - QP1 * IP2
         if dot != 0.0:
-            err_freq = atan(cross / dot) / 2.0 / pi / ch.T
             B = B_FLL[0] if ch.lock * ch.T < T_FPULLIN / 2 else B_FLL[1]
-            ch.fd -= B * ch.T * err_freq
+            err_freq = atan(cross / dot) / 2.0 / pi / ch.T
+            ch.fd -= B / 0.25 * err_freq * ch.T
 
 # PLL --------------------------------------------------------------------------
 def PLL(ch):
     IP = ch.trk.C[0].real
     QP = ch.trk.C[0].imag
     if IP != 0.0:
-        err_phas = -atan(QP / IP) / 2.0 / pi
-        err_freq = (err_phas - ch.trk.err_phas) / ch.T
-        ch.fd -= B_PLL * ch.T * err_phas + B_PLL * ch.T * err_freq # 2nd-order
+        err_phas = atan(QP / IP) / 2.0 / pi
+        W = B_PLL / 0.53
+        ch.fd += 1.4 * W * (err_phas - ch.trk.err_phas) + W * W * err_phas * ch.T
         ch.trk.err_phas = err_phas
 
 # DLL --------------------------------------------------------------------------
@@ -245,8 +240,8 @@ def DLL(ch):
     if ch.lock % N == 0:
         E = np.abs(ch.trk.sumE)
         L = np.abs(ch.trk.sumL)
-        err_code = (E - L) / (E + L) * ch.trk.pos[2] / ch.fs
-        ch.coff -= err_code * B_DLL / 0.25 * ch.T * N # 1st-order
+        err_code = (E - L) / (E + L) / 2.0 * ch.T / len(ch.code) # (s)
+        ch.coff -= B_DLL / 0.25 * err_code * ch.T * N
         ch.trk.sumE = ch.trk.sumL = 0.0
 
 # update C/N0 ------------------------------------------------------------------
