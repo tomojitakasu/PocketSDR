@@ -10,7 +10,7 @@
 #  T.TAKASU
 #
 #  History:
-#  2021-12-19  0.1  new
+#  2021-12-24  1.0  new
 #
 import os
 from ctypes import *
