@@ -49,6 +49,7 @@ import sdr_func, sdr_code_gal
 
 # constants --------------------------------------------------------------------
 NONE = np.array([], dtype='int8')
+CHIP = (-1, 1)
 
 # code caches ------------------------------------------------------------------
 L1CA       = {}
@@ -70,7 +71,6 @@ B2AS       = {}
 B2BI       = {}
 B3I        = {}
 
-CHIP = (-1, 1)
 L1CA_G1, L1CA_G2 = [], []
 L1C_L_SEQ = []
 L5_XA, L5_XB = [], []
@@ -666,7 +666,7 @@ def res_code(code, T, coff, fs, N, Nz=0):
     return code
 
 #-------------------------------------------------------------------------------
-#  Generate resampled and zero-padded code DFT.
+#  Generate resampled and zero-padded code FFT (DFT).
 #
 #  args:
 #      code     (I) Code as int8 ndarray (-1 or 1)
@@ -753,24 +753,24 @@ def sig_freq(sig):
     if sig == 'L1CA' or sig == 'L1CB' or sig == 'L1S'  or sig == 'E1B'  or \
        sig == 'E1C'  or sig == 'L1CP' or sig == 'L1CD' or sig == 'B1CD' or \
        sig == 'B1CP':
-        return 1575.42e3
+        return 1575.42e6
     elif sig == 'L2CM':
-        return 1227.60e3
+        return 1227.60e6
     elif sig == 'L5I'  or sig == 'L5Q'  or sig == 'L5SI' or sig == 'L5SQ' or \
          sig == 'E5AI' or sig == 'E5AQ' or sig == 'B2AD' or sig == 'B2AP':
-        return 1176.45e3
+        return 1176.45e6
     elif sig == 'E5BI' or sig == 'E5BQ' or sig == 'B2I' or sig == 'B2BI':
-        return 1207.14e3
+        return 1207.14e6
     elif sig == 'L6D' or sig == 'L6E' or sig == 'E6B'  or sig == 'E6C':
-        return 1278.75e3
+        return 1278.75e6
     elif sig == 'B1I':
-        return 1561.098
+        return 1561.098e6
     elif sig == 'B3I':
-        return 1268.52e3
+        return 1268.52e6
     elif sig == 'G1CA':
-        return 1602.0e3
+        return 1602.0e6
     elif sig == 'G2CA':
-        return 1246.0e3
+        return 1246.0e6
     else:
         return 0.0
 
