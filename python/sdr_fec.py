@@ -10,7 +10,7 @@
 #  T.TAKASU
 #
 #  History:
-#  2021-12-19  0.1  new
+#  2021-12-24  1.0  new
 #
 import os
 from ctypes import *
@@ -18,7 +18,7 @@ import numpy as np
 import sdr_func
 
 # constants --------------------------------------------------------------------
-POLY_CONV = (0x4F, 0x6D)  # convolutional code polynomials (G1, G2)
+POLY_CONV = (0x4F, 0x6D)  # convolution code polynomials (G1, G2)
 NONE = np.array([], dtype='uint8')
 
 # load LIBFEC ([1]) ------------------------------------------------------------
@@ -29,10 +29,10 @@ except:
     libfec = cdll.LoadLibrary(dir + '/../lib/linux/libfec.so')
 
 #-------------------------------------------------------------------------------
-#  Encode convolutional code (K=7, R=1/2, Poly=G1:0x4F,G2:0x6D).
+#  Encode convolution code (K=7, R=1/2, Poly=G1:0x4F,G2:0x6D).
 #
 #  args:
-#      data     (I) Data as uint8 ndarray (0 to 255 for soft-decision).
+#      data     (I) Data as uint8 ndarray (0 or 1).
 #
 #  returns:
 #      enc_data Encoded data as uint8 ndarray (0 or 1).
@@ -55,10 +55,10 @@ def encode_conv(data):
     return enc_data
 
 #-------------------------------------------------------------------------------
-#  Decode convolutional code (K=7, R=1/2, Poly=G1:0x4F,G2:0x6D).
+#  Decode convolution code (K=7, R=1/2, Poly=G1:0x4F,G2:0x6D).
 #
 #  args:
-#      data     (I) Data as uint8 ndarray (0 or 1).
+#      data     (I) Data as uint8 ndarray (0 to 255 for soft-decision).
 #
 #  returns:
 #      dec_data Decoded data as uint8 ndarray (0 or 1).
@@ -110,7 +110,7 @@ def decode_conv(data):
 #  args:
 #      syms     (IO) Data symbols as uint8 ndarray (length = 255).
 #                    syms[0:223] should be set by input data. syms[223:255] are
-#                    set by RS parity after returning the function.
+#                    set by RS parity before returning the function.
 #
 #  returns:
 #      None
@@ -134,7 +134,7 @@ def encode_rs(syms):
 #
 #  args:
 #      syms     (IO) RS-encoded data symbols as uint8 ndarray (length = 255).
-#                    Symbol errors are corrected after returning the function.
+#                    Symbol errors are corrected before returning the function.
 #
 #  returns:
 #      nerr     Number of error symbols corrected. (-1: too many erros)
