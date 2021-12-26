@@ -6,7 +6,7 @@
 #
 #  History:
 #  2021-12-01  1.0  new
-#  2021-12-21  1.1  fix several problems
+#  2021-12-24  1.1  fix several problems
 #
 from math import *
 import time
@@ -15,9 +15,10 @@ import scipy.fftpack as fft
 import sdr_code
 
 # constants --------------------------------------------------------------------
-MAX_DOP  = 5000.0  # default max Doppler frequncy to search signals (Hz)
+MAX_DOP  = 5000.0  # default max Doppler frequency to search signals (Hz)
 #DOP_STEP = 0.5     # Doppler frequency search step (* 1 / code cycle)
-DOP_STEP = 0.4     # Doppler frequency search step (* 1 / code cycle)
+#DOP_STEP = 0.4     # Doppler frequency search step (* 1 / code cycle)
+DOP_STEP = 0.25    # Doppler frequency search step (* 1 / code cycle)
 
 # global variable --------------------------------------------------------------
 carr_tbl = []      # carrier lookup table 
@@ -31,7 +32,7 @@ log_fp = None      # log file pointer
 #
 #  args:
 #      file     (I) Digitalized IF data file path
-#      fs       (I) Sampling frequnecy (Hz)
+#      fs       (I) Sampling frequency (Hz)
 #      IQ       (I) Sampling type (1: I-sampling, 2: IQ-sampling)
 #      T        (I) Sample period (s)
 #      toff=0.0 (I) Time offset from the beginning (s) (optional)
@@ -50,18 +51,18 @@ def read_data(file, fs, IQ, T, toff=0.0):
     elif IQ == 1: # I-sampling
         return np.array(raw, dtype='complex64')
     else: # IQ-sampling
-        return np.array(raw[0::2] + raw[1::2] * 1j, dtype='complex64')
+        return np.array(raw[0::2] - raw[1::2] * 1j, dtype='complex64')
 
 #-------------------------------------------------------------------------------
-#  Search signals in digitized IF data. The signals are searched by parrallel
-#  code search algorithm in the Doppler frequncies - code offset space with or
+#  Search signals in digitized IF data. The signals are searched by parallel
+#  code search algorithm in the Doppler frequencies - code offset space with or
 #  w/o zero-padding option.
 #
 #  args:
 #      sig      (I) Signal type as string ('L1CA', 'L1CB', 'L1CP', ....)
 #      prn      (I) PRN number
 #      data     (I) Digitized IF data as complex64 ndarray
-#      fs       (I) Sampling frequnecy (Hz)
+#      fs       (I) Sampling frequency (Hz)
 #      fi       (I) IF frequency (Hz)
 #      max_dop  (I) Max Doppler frequency for signal search (Hz) (optional)
 #      zero_pad (I) Zero-padding option for singal search (optional)
@@ -69,7 +70,7 @@ def read_data(file, fs, IQ, T, toff=0.0):
 #  returns:
 #      P        Normalized correlation powers in the Doppler frequencies - Code
 #               offset space as float32 2D-ndarray
-#      fds      Doppler frequncies for signal earch as ndarray (Hz)
+#      fds      Doppler frequencies for signal search as ndarray (Hz)
 #      coffs    Code offsets for signal search as ndarray (s)
 #      ix       Index of position with max correlation power in the search space
 #               (ix[0]: in Doppler frequencies, ix[1]: in Code offsets)
