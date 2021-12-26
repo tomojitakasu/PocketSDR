@@ -16,12 +16,17 @@ from sdr_func import *
 import sdr_code, sdr_ch
 
 # plot settings ----------------------------------------------------------------
-mpl.rcParams['toolbar'] = 'None';
-mpl.rcParams['font.size'] = 9
 window = 'PocketSDR - GNSS SIGNAL TRACKING'
 size   = (9, 6)
 ylim   = 0.3
-fc, bc = 'darkblue', 'w'
+fc, bc, lc, gc = 'darkblue', 'w', 'k', 'grey'
+#fc, bc, lc, gc = 'darkgreen', 'w', '#404040', 'grey'
+#fc, bc, lc, gc = 'yellow', '#000040', 'silver', 'grey'
+mpl.rcParams['toolbar'] = 'None'
+mpl.rcParams['font.size'] = 9
+mpl.rcParams['text.color'] = lc
+mpl.rcParams['axes.facecolor'] = bc
+mpl.rcParams['axes.edgecolor'] = lc
 rect0  = [0.080, 0.040, 0.840, 0.910]
 rect1  = [0.080, 0.568, 0.490, 0.380]
 rect2  = [0.650, 0.568, 0.280, 0.380]
@@ -37,7 +42,8 @@ def read_data(fp, fs, IQ, T):
     if IQ == 1: # I
         return np.array(raw, dtype='complex64')
     else: # IQ
-        return np.array(raw[0::2] + raw[1::2] * 1j, dtype='complex64')
+        #return np.array(raw[0::2] + raw[1::2] * 1j, dtype='complex64')
+        return np.array(raw[0::2] - raw[1::2] * 1j, dtype='complex64')
 
 # print receiver channel status header -----------------------------------------
 def print_head():
@@ -67,7 +73,7 @@ def cn0_bar(cn0):
 
 # initialize plot --------------------------------------------------------------
 def init_plot(sig, prn, ch, file):
-    fig = plt.figure(window, figsize=size)
+    fig = plt.figure(window, figsize=size, facecolor=bc)
     ax0 = fig.add_axes(rect0)
     ax0.axis('off')
     ax0.set_title('SIG = %s, PRN = %3d, FILE = %s' % (sig, prn, file),
@@ -81,26 +87,27 @@ def init_plot(sig, prn, ch, file):
     return fig, (ax0, ax1, ax2, ax3, ax4), ([], p1, p2, p3, p4)
 
 # update plot -----------------------------------------------------------------
-def update_plot(fig, ax, p, ch, tspan):
+def update_plot(fig, ax, p, ch, toff, tspan):
     update_corr_env (ax[1], p[1], ch)
     update_corr_IQ  (ax[2], p[2], ch, tspan)
-    update_corr_time(ax[3], p[3], ch, tspan)
+    update_corr_time(ax[3], p[3], ch, toff, tspan)
     update_nav_data (ax[4], p[4], ch)
     plt.pause(1e-3)
 
 # plot correlation envelope ---------------------------------------------------
 def plot_corr_env(fig, rect, pos):
     ax = fig.add_axes(rect)
-    p0 = ax.plot([], [], '-', color='grey', lw=0.4)
-    p1 = ax.plot([], [], '.', color='grey', ms=2)
+    p0 = ax.plot([], [], '-', color=gc, lw=0.4)
+    p1 = ax.plot([], [], '.', color=gc, ms=2)
     p2 = ax.plot([], [], '.', color=fc, ms=10)
     ax.set_xlim(pos[4], pos[-1])
     ax.set_ylim(0, ylim)
     ax.grid(True, lw=0.4)
-    ax.text(0.02, 0.95, 'SQRT(I^2+Q^2)', ha='left', va='top',
+    set_axcolor(ax, lc)
+    ax.text(0.03, 0.95, 'SQRT(I^2+Q^2)', ha='left', va='top',
         transform=ax.transAxes)
     ax.text(1.00, -0.04, '(chip)', ha='left', va='top', transform=ax.transAxes)
-    p3 = ax.text(0.98, 0.95, '', color=fc, ha='right', va='top',
+    p3 = ax.text(0.97, 0.95, '', color=fc, ha='right', va='top',
         transform=ax.transAxes)
     return ax, (p0, p1, p2, p3)
 
@@ -118,48 +125,51 @@ def update_corr_env(ax, p, ch):
 # plot correlation I-Q ---------------------------------------------------------
 def plot_corr_IQ(fig, rect):
     ax = fig.add_axes(rect)
-    p0 = ax.plot([], [], '.', color='grey', ms=2)
+    p0 = ax.plot([], [], '.', color=gc, ms=1)
     p1 = ax.plot([], [], '.', color=fc, ms=10)
     ax.grid(True, lw=0.4)
     ax.grid(True, lw=0.4)
-    ax.vlines(0.0, -ylim, ylim, color='grey', lw=0.6)
-    ax.hlines(0.0, -ylim, ylim, color='grey', lw=0.6)
-    ax.plot(0.0, 0.0, '.', color='grey', ms=6)
+    ax.vlines(0.0, -ylim, ylim, color=lc, lw=0.4)
+    ax.hlines(0.0, -ylim, ylim, color=lc, lw=0.4)
+    ax.plot(0.0, 0.0, '.', color=lc, ms=6)
     ax.set_xlim([-ylim, ylim])
     ax.set_ylim([-ylim, ylim])
     ax.set_aspect('equal')
+    set_axcolor(ax, lc)
     ax.text(0.05, 0.95, 'IP - QP', ha='left', va='top', transform=ax.transAxes)
     p2 = ax.text(0.95, 0.95, '', ha='right', va='top', color=fc,
         transform=ax.transAxes)
-    p3 = ax.text(0.95, 0.88, '', ha='right', va='top', color='grey',
-        transform=ax.transAxes)
-    return ax, (p0, p1, p2, p3)
+    return ax, (p0, p1, p2)
 
 # update correlation I-Q -------------------------------------------------------
 def update_corr_IQ(ax, p, ch, tspan):
     N = np.min([int(tspan / ch.T), len(ch.trk.P)])
     p[0][0].set_data(ch.trk.P[-N:].real, ch.trk.P[-N:].imag)
     p[1][0].set_data(ch.trk.P[-1].real, ch.trk.P[-1].imag)
-    p[2].set_text('IP=%6.3f' % (ch.trk.P[-1].real))
-    p[3].set_text('QP=%6.3f' % (ch.trk.P[-1].imag))
+    p[2].set_text('IP=%6.3f\nQP=%6.3f' % (ch.trk.P[-1].real, ch.trk.P[-1].imag))
 
 # plot correlation to time ------------------------------------------------------
 def plot_corr_time(fig, rect):
     ax = fig.add_axes(rect)
-    p0 = ax.plot([], [], '-', color='grey', lw=0.3, ms=2)
-    p1 = ax.plot([], [], '.-', color=fc, lw=0.3, ms=2)
-    p2 = ax.plot([], [], '.', color='grey', ms=10)
+    p0 = ax.plot([], [], '-', color=gc, lw=0.3, ms=2)
+    p1 = ax.plot([], [], '-', color=fc, lw=0.5, ms=2)
+    p2 = ax.plot([], [], '.', color=gc, ms=10)
     p3 = ax.plot([], [], '.', color=fc, ms=10)
     p4 = ax.plot([], [], '.', color='r', ms=3)
-    ax.set_ylim(-ylim, ylim)
     ax.grid(True, lw=0.4)
+    ax.set_ylim(-ylim, ylim)
+    set_axcolor(ax, lc)
+    ax.text(0.955, 0.95, 'IP', ha='right', va='top', color=fc,
+        transform=ax.transAxes)
+    ax.text(0.985, 0.95, 'QP', ha='right', va='top', color=gc,
+        transform=ax.transAxes)
     ax.text(1.03, -0.04, '(s)', ha='center', va='top', transform=ax.transAxes)
     p5 = ax.text(0.015, 0.95, '', ha='left', va='top', transform=ax.transAxes)
     p6 = ax.text(0.015, 0.05, '', ha='left', va='bottom', transform=ax.transAxes)
     return ax, (p0, p1, p2, p3, p4, p5, p6)
 
 # update correlation to time ----------------------------------------------------
-def update_corr_time(ax, p, ch, tspan):
+def update_corr_time(ax, p, ch, toff, tspan):
     N = np.min([int(tspan / ch.T), len(ch.trk.P)])
     time = ch.time + np.arange(-N+1, 1) * ch.T
     P = ch.trk.P[-N:]
@@ -167,14 +177,14 @@ def update_corr_time(ax, p, ch, tspan):
     p[1][0].set_data(time, P.real)
     p[2][0].set_data(ch.time, P[-1].imag)
     p[3][0].set_data(ch.time, P[-1].real)
-    p[4][0].set_data(ch.nav.tsyms, np.zeros(len(ch.nav.tsyms)))
+    #p[4][0].set_data(ch.nav.tsyms, np.zeros(len(ch.nav.tsyms))) # for debug
     p[5].set_text(('T=%7.3f s COFF=%10.7f ms DOP=%8.1f Hz ADR=%10.1f cyc ' +
         'C/N0=%5.1f dB-Hz') % (ch.time, ch.coff * 1e3, ch.fd, ch.adr, ch.cn0))
     nav_sync = ('B' if ch.nav.ssync > 0 else '-') + \
         ('F' if ch.nav.fsync > 0 else '-') + ('R' if ch.nav.rev else '-')
     p[6].set_text('SYNC=%s #NAV=%3d #ERR=%3d' % (nav_sync, ch.nav.count[0],
         ch.nav.count[1]))
-    t0 = 0.0 if ch.lock < N else ch.time - N * ch.T
+    t0 = toff if ch.lock < N else ch.time - N * ch.T
     ax.set_xlim(t0, t0 + N * ch.T * 1.008)
 
 # plot nav data ----------------------------------------------------------------
@@ -202,6 +212,12 @@ def update_nav_data(ax, p, ch):
                 break
         text += '\n'
     p[1].set_text(text)
+
+# set axes colors ---------------------------------------------------------------
+def set_axcolor(ax, color):
+    ax.tick_params(color=color)
+    plt.setp(ax.get_xticklabels(), color=color)
+    plt.setp(ax.get_yticklabels(), color=color)
 
 # show usage -------------------------------------------------------------------
 def show_usage():
@@ -345,7 +361,7 @@ if __name__ == '__main__':
     
     try:
         for i in range(2, 1000000):
-            time_rcv = toff * 1e-3 + T * i # receiver time
+            time_rcv = toff + T * i # receiver time
             
             # read IF data
             data = read_data(fp, fs, IQ, T)
@@ -365,7 +381,7 @@ if __name__ == '__main__':
             
             # update plots
             if plot:
-                update_plot(fig, ax, p, ch[0], tspan)
+                update_plot(fig, ax, p, ch[0], toff, tspan)
             
             # update log
             for j in range(len(prns)):
@@ -388,5 +404,5 @@ if __name__ == '__main__':
     if log_file != '':
         log_close()
     
-    if plot in prns and plt.figure(window) == fig:
+    if plot and plt.figure(window) == fig:
         plt.show()
