@@ -313,8 +313,6 @@ def decode_gal_INAV(ch, syms, rev):
     bits1 = decode_gal_syms(syms[ 10:250], 30, 8)
     bits2 = decode_gal_syms(syms[260:500], 30, 8)
     
-    log(3, '$LOG,even-odd = %d %d' % (bits1[0], bits2[0]))
-    
     # test even and odd pages
     if bits1[0] != 0 or bits2[0] != 1:
         ch.nav.fsync = ch.nav.rev = 0
