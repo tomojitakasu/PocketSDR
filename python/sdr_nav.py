@@ -466,7 +466,6 @@ def sync_symb(ch, N):
         P = np.mean(ch.trk.P[-N:].real)
         if abs(P) >= THRES_LOST:
             add_buff(ch.nav.syms, 1 if P >= 0.0 else 0)
-            log(4, 'T=%.3f P=%.3f BIT=%d' % (ch.time, P, ch.nav.syms[-1]))
             add_buff(ch.nav.tsyms, ch.time)
             return True
         else:
