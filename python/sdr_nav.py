@@ -178,8 +178,6 @@ def search_SBAS_msgs(ch):
     
     # decode 1/2 FEC (1028 syms -> 508 bits)
     bits = sdr_fec.decode_conv(ch.nav.syms[-1028:] * 255)
-    log(3, 'T=%.3f SYM=%s %s' % (ch.time, list(map(str, ch.nav.syms[-258:-250])), list(map(str, ch.nav.syms[-8:]))))
-    log(3, 'T=%.3f BIT=%s %s' % (ch.time, list(map(str, bits[-258:-250])), list(map(str, bits[-8:]))))
     
     # search and decode SBAS message
     for i in range(250):
