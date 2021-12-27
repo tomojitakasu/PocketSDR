@@ -178,6 +178,8 @@ def search_SBAS_msgs(ch):
     
     # decode 1/2 FEC (1028 syms -> 508 bits)
     bits = sdr_fec.decode_conv(ch.nav.syms[-1028:] * 255)
+    log(3, 'T=%.3f SYM=%s %s' % (ch.time, list(map(str, ch.nav.syms[-258:-250])), list(map(str, ch.nav.syms[-8:]))))
+    log(3, 'T=%.3f BIT=%s %s' % (ch.time, list(map(str, bits[-258:-250])), list(map(str, bits[-8:]))))
     
     # search and decode SBAS message
     for i in range(250):
@@ -466,6 +468,7 @@ def sync_symb(ch, N):
         P = np.mean(ch.trk.P[-N:].real)
         if abs(P) >= THRES_LOST:
             add_buff(ch.nav.syms, 1 if P >= 0.0 else 0)
+            log(4, 'T=%.3f P=%.3f BIT=%d' % (ch.time, P, ch.nav.syms[-1]))
             add_buff(ch.nav.tsyms, ch.time)
             return True
         else:

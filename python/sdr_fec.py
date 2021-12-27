@@ -27,6 +27,7 @@ try:
     libfec = cdll.LoadLibrary(dir + '/../lib/win32/libfec.so')
 except:
     libfec = cdll.LoadLibrary(dir + '/../lib/linux/libfec.so')
+#libfec = cdll.LoadLibrary('libfec.so')
 
 #-------------------------------------------------------------------------------
 #  Encode convolution code (K=7, R=1/2, Poly=G1:0x4F,G2:0x6D).
