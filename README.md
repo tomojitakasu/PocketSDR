@@ -1,22 +1,34 @@
-# **PocketSDR - An Open-Source GNSS SDR Front-end Device, ver. 0.4**
+# **PocketSDR - An Open-Source GNSS SDR, ver. 0.4**
 
 ## **Overview**
 
-PocketSDR is an open-source SDR (software defined radio) based GNSS (Global 
-Navigation Satellite System) RF front-end device. It supports almost all signal
-bands for GPS, GLONASS, Galileo, QZSS, BeiDou, NavIC and SBAS.
+PocketSDR is an open-source GNSS (Global Navigation Satellite System) receiver
+based on SDR (software defined radio) technology. It consists of a RF front-end
+device, some utilities for the device and GNSS-SDR APs (application programs)
+written in Python. It supports almost all signals for GPS, GLONASS, Galileo,
+QZSS, BeiDou and SBAS.
 
-PocketSDR consists of 2 CH Maxim MAX2771 GNSS RF front-end IC (LNA, mixer, filter,
-ADC, frequency synthesizer) and Cypress EZ-USB FX2LP USB 2.0 controller.
-The front-end CH1 is dedicated for GNSS L1 band (1525 - 1610 MHz) and CH2 is for
-GNSS L2/L5/L6 band (1160 - 1290 MHz).
-
+The RF front-end device consists of 2 CH Maxim MAX2771 GNSS RF front-end IC
+(LNA, mixer, filter, ADC, frequency synthesizer) and Cypress EZ-USB FX2LP USB
+2.0 controller to connect to host PCs. The front-end CH1 is dedicated for GNSS
+L1 band (1525 - 1610 MHz) and CH2 is for GNSS L2/L5/L6 band (1160 - 1290 MHz).
 The frequency of the reference oscillator (TCXO) is 24.000 MHz and ADC sampling
 frequency can be configured up to 24 MHz.
 
-PocketSDR contains also some utility programs to configure the device, capture
-and dump the digitized IF (inter-frequency) data. These supports Windows,
-Linux and other environments.
+PocketSDR contains some utility programs for the RF front-end device to
+configure the device, capture and dump the digitized IF (inter-frequency) data.
+These supports Windows, Linux and other environments.
+
+PocketSDR also provides GNSS-SDR APs to show the PSD (power spectrum density)
+of captured IF data, search the GNSS signals, track these signals and decode
+navigation data in them. The supported GNSS signals are as follows. These APs
+are written in Python by very compact way. They are easily modified by users
+to add user's unique algorithms. 
+
+GPS: L1C/A, L1CP, L1CD, L2CM, L5I, L5Q, GLONASS: L1C/A, L2C/A, Galileo: E1B,
+E1C, E5aI, E5aQ, E5bI, E5bQ, E6B, E6C, QZSS: L1C/A, L1C/B, L1CP, L1CD, L1S,
+L2CM, L5I, L5Q, L5SI, L5SQ, L6D, L6E, BeiDou: B1I, B1CP, B1CD, B2I, B2aD, B2aP,
+B2bI, B3I, SBAS: L1C/A, L5I, L5Q
 
 <img src="image/pocket_sdr_image.jpg" width=80%>
 
@@ -100,26 +112,36 @@ sudo to execute pocket_conf, pocket_dump like:
 
 --------------------------------------------------------------------------------
 
-## **Utility Programs**
+## **Utility Programs for RF frontend**
 
 PocketSDR contains the following utility programs.
 
 - **pocket_conf**: SDR device configurator
 - **pocket_scan**: Scan and list USB Devices
 - **pocket_dump**: Capture and dump digital IF data of SDR device
-- **pocket_psd.py**: Plot PSD and histgrams of digital IF data
-- **pocket_acq.py**: GNSS signal acquisition of digital IF data
-- **pocket_trk.py**: GNSS signal tracking of digital IF data
 
 For details, refer comment lines in src/pocket_conf.c, src/pocket_scan.c, 
-src/pocket_dump.c, python/pocket_psd.py and python/pocket_acq.py. You need
-Python 3, Numpy, Scipy and matplotlib to execute Python scripts. pocket_trk.py
-uses external shared libraries of LIBFEC [5] and RTKLIB [6] in lib/ directory.
-These were built for Windows (64bit) and Linux for x86_64 CPU.
+src/pocket_dump.c.
 
 --------------------------------------------------------------------------------
 
-## **Execution Examples of Utility Programs**
+## **GNSS-SDR APs (Application Programs)**
+
+PocketSDR contains the following application programs for GNSS-SDR.
+
+- **pocket_psd.py**: Plot PSD and histgrams of digital IF data
+- **pocket_acq.py**: GNSS signal acquisition in digital IF data
+- **pocket_trk.py**: GNSS signal tracking and navigation data decoding in digital IF data
+
+For details, refer comment lines in python/pocket_psd.py, python/pocket_acq.py
+and python/pocket_trk.py. You need Python 3, Numpy, Scipy and matplotlib to
+execute Python scripts. pocket_trk.py uses external shared libraries of
+LIBFEC [5] and RTKLIB [6] in lib/ directory.  These were built for Windows
+(64bit) and Linux for x86_64 CPU.
+
+--------------------------------------------------------------------------------
+
+## **Execution Examples of Utility Programs and GNSS-SDR APs**
 
 ```
     $ pocket_conf
