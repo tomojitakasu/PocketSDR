@@ -2,29 +2,34 @@
 #  makefile for Pocket SDR APs
 #
 
-CC = gcc
+CC = g++
+#CC = gcc
 
 BIN = ../bin
 
-INCLUDE = -I/mingw64/include
+INCLUDE = -I../lib/cyusb
+OPTIONS = -DCYUSB
+
 WARNOPT = -Wall -Wextra -Wno-missing-field-initializers -Wno-unused-parameter
-OPTIONS =
 
 CFLAGS = -O3 $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
 
-#LIBUSB = -L/mingw64/lib -llibusb-1.0
-LIBUSB = -lusb-1.0
+LDLIBS = ../lib/cyusb/CyAPI.a -lsetupapi -lwinmm
+#LDLIBS = -lusb-1.0
 
-LDLIBS = $(LIBUSB)
+LDFLAGS = -static
 
 TARGET = pocket_conf pocket_dump pocket_scan
-SCRIPT =
 
 all: $(TARGET)
 
 pocket_conf: pocket_conf.o sdr_conf.o sdr_usb.o sdr_cmn.o
 pocket_dump: pocket_dump.o sdr_conf.o sdr_dev.o sdr_usb.o sdr_cmn.o
 pocket_scan: pocket_scan.o
+	$(CC) -o $@ pocket_scan.o -lusb-1.0 -static
+
+pocket_scan.o: pocket_scan.c
+	$(CC) -c -o $@ pocket_scan.c -g
 
 pocket_conf.o: pocket.h
 pocket_dump.o: pocket.h
