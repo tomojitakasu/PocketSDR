@@ -19,6 +19,7 @@
 #
 #  History:
 #  2021-12-24  1.0  new
+#  2022-01-04  1.1  support sync to secondary code for pilot signals
 #
 from math import *
 import numpy as np
@@ -60,28 +61,42 @@ def nav_decode(ch):
         decode_L1CB(ch)
     elif ch.sig == 'L1CD':
         decode_L1CD(ch)
+    elif ch.sig == 'L1CP':
+        decode_L1CP(ch)
     elif ch.sig == 'L2CM':
         decode_L2CM(ch)
     elif ch.sig == 'L5I':
         decode_L5I(ch)
+    elif ch.sig == 'L5Q':
+        decode_L5Q(ch)
     elif ch.sig == 'L6D':
         decode_L6D(ch)
     elif ch.sig == 'L6E':
         decode_L6E(ch)
     elif ch.sig == 'L5SI':
         decode_L5SI(ch)
+    elif ch.sig == 'L5SQ':
+        decode_L5SQ(ch)
     elif ch.sig == 'G1CA':
         decode_G1CA(ch)
     elif ch.sig == 'G2CA':
         decode_G2CA(ch)
     elif ch.sig == 'E1B':
         decode_E1B(ch)
+    elif ch.sig == 'E1C':
+        decode_E1C(ch)
     elif ch.sig == 'E5AI':
         decode_E5AI(ch)
+    elif ch.sig == 'E5AQ':
+        decode_E5AQ(ch)
     elif ch.sig == 'E5BI':
         decode_E5BI(ch)
+    elif ch.sig == 'E5BQ':
+        decode_E5BQ(ch)
     elif ch.sig == 'E6B':
         decode_E6B(ch)
+    elif ch.sig == 'E6C':
+        decode_E6C(ch)
     elif ch.sig == 'B1I':
         decode_B1I(ch)
     elif ch.sig == 'B1CD':
@@ -158,7 +173,11 @@ def decode_L1CB(ch):
 
 # decode L1CD nav data ---------------------------------------------------------
 def decode_L1CD(ch):
-    pass # unsupported
+    sync_sec_code(ch)
+
+# decode L1CP nav data ---------------------------------------------------------
+def decode_L1CD(ch):
+    sync_sec_code(ch)
 
 # decode SBAS nav data ---------------------------------------------------------
 def decode_SBAS(ch):
@@ -269,9 +288,17 @@ def decode_CNAV(ch, bits, rev):
         ch.nav.count[1] += 1
         log(3, '$LOG,%.3f,%s,%d,CNAV FRAME ERROR' % (time, ch.sig, ch.prn))
 
+# decode L5Q nav data ----------------------------------------------------------
+def decode_L5Q(ch):
+    sync_sec_code(ch)
+
 # decode L5SI nav data ([6]) ---------------------------------------------------
 def decode_L5SI(ch):
     decode_SBAS(ch)
+
+# decode L5SQ nav data ---------------------------------------------------------
+def decode_L5SI(ch):
+    sync_sec_code(ch)
 
 # decode L6D nav data ----------------------------------------------------------
 def decode_L6D(ch):
@@ -331,6 +358,10 @@ def decode_gal_INAV(ch, syms, rev):
         ch.nav.count[1] += 1
         log(3, '$LOG,%.3f,%s,%d,INAV FRAME ERROR' % (time, ch.sig, ch.prn))
 
+# decode E1C nav data ----------------------------------------------------------
+def decode_E1C(ch):
+    sync_sec_code(ch)
+
 # decode E5AI nav data ([2]) ---------------------------------------------------
 def decode_E5AI(ch):
     preamb = (1, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0)
@@ -366,6 +397,10 @@ def decode_gal_FNAV(ch, syms, rev):
         ch.nav.count[1] += 1
         log(3, '$LOG,%.3f,%s,%d,FNAV FRAME ERROR' % (time, ch.sig, ch.prn))
 
+# decode E5AQ nav data ---------------------------------------------------------
+def decode_E5AQ(ch):
+    sync_sec_code(ch)
+
 # decode E5BI nav data ---------------------------------------------------------
 def decode_E5BI(ch):
     preamb = (0, 1, 0, 1, 1, 0, 0, 0, 0, 0)
@@ -381,6 +416,10 @@ def decode_E5BI(ch):
         rev = sync_frame(ch, preamb, ch.nav.syms[-510:])
         if rev >= 0:
             decode_gal_INAV(ch, ch.nav.syms[-510:-10] ^ rev, rev)
+
+# decode E5BQ nav data ---------------------------------------------------------
+def decode_E5BQ(ch):
+    sync_sec_code(ch)
 
 # decode E6B nav data ([3]) ----------------------------------------------------
 def decode_E6B(ch):
@@ -426,6 +465,10 @@ def decode_gal_syms(syms, ncol, nrow):
     # decode 1/2 FEC
     syms[1::2] ^= 1 # invert G2
     return sdr_fec.decode_conv(syms * 255)
+
+# decode E6C nav data ----------------------------------------------------------
+def decode_E6C(ch):
+    sync_sec_code(ch)
 
 # decode B1I nav data ----------------------------------------------------------
 def decode_B1I(ch):
@@ -489,6 +532,7 @@ def sync_sec_code(ch):
         if abs(P) >= THRES_LOST:
             add_buff(ch.nav.syms, (1 if P >= 0.0 else 0))
             add_buff(ch.nav.tsyms, ch.time)
+            ch.trk.P[-N:] *= ch.sec_code # delete sec-code
             return True
         else:
             ch.nav.ssync = ch.nav.rev = 0
