@@ -7,14 +7,18 @@
  *
  *  History:
  *  2021-10-20  0.1  new
+ *  2022-01-04  0.2  support CyUSB on Windows
  *
  */
 #include "pocket.h"
 
 /* constants and macros ------------------------------------------------------*/
+#ifndef CYUSB
 #define USB_VR          (LIBUSB_RECIPIENT_DEVICE | LIBUSB_REQUEST_TYPE_VENDOR)
 #define USB_VR_IN       (USB_VR | LIBUSB_ENDPOINT_IN)
 #define USB_VR_OUT      (USB_VR | LIBUSB_ENDPOINT_OUT)
+#endif
+
 #define TO_TRANSFER     15000    /* USB transfer timeout (ms) */
 
 /*----------------------------------------------------------------------------*/
@@ -32,6 +36,24 @@
  */
 sdr_usb_t *sdr_usb_open(int bus, int port, uint16_t vid, uint16_t pid)
 {
+#ifdef CYUSB
+    sdr_usb_t *usb = new CCyUSBDevice();
+    int i;
+    
+    for (i = 0; i < usb->DeviceCount(); i++) {
+        usb->Open(i);
+        if (usb->VendorID == vid && usb->ProductID == pid &&
+            (bus < 0 || usb->USBAddress == bus)) {
+            return usb;
+        }
+        usb->Close();
+    }
+    delete usb;
+    
+    fprintf(stderr, "No device found. BUS=%d PORT=%d ID=%04X:%04X\n", bus,
+        port, vid, pid);
+    return NULL;
+#else
     libusb_device **devs;
     struct libusb_device_descriptor desc;
     sdr_usb_t *usb;
@@ -66,6 +88,7 @@ sdr_usb_t *sdr_usb_open(int bus, int port, uint16_t vid, uint16_t pid)
     libusb_free_device_list(devs, 0);
     libusb_claim_interface(usb, SDR_DEV_IF);
     return usb;
+#endif /* CYUSB */
 }
 
 /*----------------------------------------------------------------------------*/
@@ -80,9 +103,14 @@ sdr_usb_t *sdr_usb_open(int bus, int port, uint16_t vid, uint16_t pid)
  */
 void sdr_usb_close(sdr_usb_t *usb)
 {
+#ifdef CYUSB
+    usb->Close();
+    delete usb;
+#else
     libusb_release_interface(usb, SDR_DEV_IF);
     libusb_close(usb);
     libusb_exit(NULL);
+#endif /* CYUSB */
 }
 
 /*----------------------------------------------------------------------------*/
@@ -105,9 +133,22 @@ int sdr_usb_req(sdr_usb_t *usb, int mode, uint8_t req, uint16_t val,
 {
     if (size > 64) return 0;
     
+#ifdef CYUSB
+    CCyControlEndPoint *ep = usb->ControlEndPt;
+    long len = size;
+    
+    ep->Target    = TGT_DEVICE;
+    ep->ReqType   = REQ_VENDOR;
+    ep->Direction = mode ? DIR_TO_DEVICE : DIR_FROM_DEVICE;
+    ep->ReqCode   = req;
+    ep->Value     = val;
+    ep->Index     = 0;
+    return ep->XferData(data, len);
+#else
     if (libusb_control_transfer(usb, mode ? USB_VR_OUT : USB_VR_IN, req, val,
             0, data, size, TO_TRANSFER) < size) {
         return 0;
     }
     return 1;
+#endif /* CYUSB */
 }
