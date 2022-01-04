@@ -7,18 +7,16 @@
  *  History:
  *  2021-10-08  0.1  new
  *  2021-12-01  1.0  add default output file paths
+ *  2022-01-04  1.1  data capture cycle: 1 -> 50 (ms)
  *
  **/
-#include <stdio.h>
-#include <stdlib.h>
 #include <signal.h>
 #include <time.h>
-#include <sys/time.h>
 #include "pocket.h"
 
 /* constants and macros ------------------------------------------------------*/
 #define PROG_NAME       "pocket_dump" /* program name */
-#define DATA_CYC        1       /* data capture cycle (ms) */
+#define DATA_CYC        50      /* data capture cycle (ms) */
 #define RATE_CYC        1000    /* data rate update cycle (ms) */
 
 /* interrupt flag ------------------------------------------------------------*/
@@ -48,7 +46,7 @@ static void dump_data(int bus, int port, double tsec, int raw, FILE **fp)
     double rate = 0.0, byte[SDR_MAX_CH] = {0};
     uint32_t tick;
     int8_t *buff[SDR_MAX_CH];
-    int i, size, n[SDR_MAX_CH];
+    int i, j, size, n[SDR_MAX_CH];
     
     if (!(dev = sdr_dev_open(bus, port))) {
         return;
@@ -60,19 +58,19 @@ static void dump_data(int bus, int port, double tsec, int raw, FILE **fp)
         size = SDR_SIZE_BUFF * SDR_MAX_BUFF * (dev->IQ[i] == 2 ? 2 : 1);
         buff[i] = (int8_t *)sdr_malloc(size);
     }
-    fprintf(stderr, "%9s  %3s %12s %3s %12s %12s\n", "TIME(s)", "T",
-        "CH1(Bytes)", "T", "CH2(Bytes)", "RATE(Ks/s)");
+    printf("%9s  %3s %12s %3s %12s %12s\n", "TIME(s)", "T", "CH1(Bytes)", "T",
+        "CH2(Bytes)", "RATE(Ks/s)");
     
     tick = sdr_get_tick();
     
-    while (!intr && (tsec <= 0.0 || time < tsec)) {
+    for (i = 0; !intr && (tsec <= 0.0 || time < tsec); i++) {
         time = (sdr_get_tick() - tick) * 1e-3;
         
         if ((size = sdr_dev_data(dev, buff, n)) > 0) {
-            for (i = 0; i < SDR_MAX_CH; i++) {
-                if (!fp[i]) continue;
-                fwrite(buff[i], n[i], 1, fp[i]);
-                byte[i] += n[i];
+            for (j = 0; j < SDR_MAX_CH; j++) {
+                if (!fp[j]) continue;
+                fwrite(buff[j], n[j], 1, fp[j]);
+                byte[j] += n[j];
             }
             sample += size;
         }
@@ -81,13 +79,15 @@ static void dump_data(int bus, int port, double tsec, int raw, FILE **fp)
             time_p = time;
             sample_p = sample;
         }
-        fprintf(stderr, "%9.1f  %3s %12.0f %3s %12.0f %12.1f\r", time,
-            str_IQ[dev->IQ[0]], byte[0], str_IQ[dev->IQ[1]], byte[1], rate * 1e-3);
+        printf("%9.1f  %3s %12.0f %3s %12.0f %12.1f\r", time, str_IQ[dev->IQ[0]],
+            byte[0], str_IQ[dev->IQ[1]], byte[1], rate * 1e-3);
+        fflush(stdout);
+        
         sdr_sleep_msec(DATA_CYC);
     }
     rate = time > 0.0 ? sample / time : 0.0;
-    fprintf(stderr, "%9.1f  %3s %12.0f %3s %12.0f %12.1f\n", time,
-        str_IQ[dev->IQ[0]], byte[0], str_IQ[dev->IQ[1]], byte[1], rate * 1e-3);
+    printf("%9.1f  %3s %12.0f %3s %12.0f %12.1f\n", time, str_IQ[dev->IQ[0]],
+        byte[0], str_IQ[dev->IQ[1]], byte[1], rate * 1e-3);
     
     for (i = 0; i < SDR_MAX_CH; i++) {
         free(buff[i]);
@@ -136,7 +136,8 @@ static void dump_data(int bus, int port, double tsec, int raw, FILE **fp)
 int main(int argc, char **argv)
 {
     FILE *fp[SDR_MAX_CH] = {0};
-    char *files[SDR_MAX_CH], *conf_file = "", path[2][32];
+    char *files[SDR_MAX_CH], path[2][32];
+    const char *conf_file = "";
     time_t dump_time;
     double tsec = 0.0;
     int i, n = 0, bus = -1, port = -1, raw = 0;
