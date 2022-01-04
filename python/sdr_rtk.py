@@ -23,7 +23,7 @@ try:
 except:
     librtk = cdll.LoadLibrary(dir + '/../lib/linux/librtk.so')
 
-# extract unsinged bits --------------------------------------------------------
+# extract unsigned bits --------------------------------------------------------
 def getbitu(data, pos, len):
     if data.dtype != 'uint8':
         return 0
@@ -31,7 +31,7 @@ def getbitu(data, pos, len):
     p = data.ctypes.data_as(POINTER(c_uint8))
     return librtk.getbitu(p, c_int(pos), c_int(len))
 
-# extract singed bits ----------------------------------------------------------
+# extract signed bits ----------------------------------------------------------
 def getbits(data, pos, len):
     if data.dtype != 'uint8':
         return 0
@@ -39,14 +39,14 @@ def getbits(data, pos, len):
     p = data.ctypes.data_as(POINTER(c_uint8))
     return librtk.getbits(p, c_int(pos), c_int(len))
 
-# set unsinged bits ------------------------------------------------------------
+# set unsigned bits ------------------------------------------------------------
 def setbitu(data, pos, len, val):
     if data.dtype != 'uint8':
         return
     p = data.ctypes.data_as(POINTER(c_uint8))
     librtk.setbitu(p, c_int(pos), c_int(len), c_uint32(val))
 
-# set singed bits --------------------------------------------------------------
+# set signed bits --------------------------------------------------------------
 def setbits(data, pos, len, val):
     if data.dtype != 'uint8':
         return
