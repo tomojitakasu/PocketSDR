@@ -119,7 +119,7 @@ static void dump_data(int bus, int port, double tsec, int raw, FILE **fp)
  *        command selects the SDR device firstly found.
  *
  *    -c conf_file
- *        Configure the SDR deive with a device configuration file before 
+ *        Configure the SDR device with a device configuration file before 
  *        capturing.
  *
  *    [file [file]]
