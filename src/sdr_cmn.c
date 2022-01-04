@@ -6,7 +6,8 @@
  *  T.TAKASU
  *
  *  History:
- *  2021/10/03  0.1  new
+ *  2021-10-03  0.1  new
+ *  2022-01-04  1.0  support Windows API.
  *
  */
 
@@ -28,7 +29,7 @@ void *sdr_malloc(size_t size)
     void *p;
     
     if (!(p = calloc(size, 1))) {
-        fprintf(stderr, "memory allocation error size=%lu\n", size);
+        fprintf(stderr, "memory allocation error size=%d\n", (int)size);
         exit(-1);
     }
     return p;
@@ -61,10 +62,14 @@ void sdr_free(void *p)
  */
 uint32_t sdr_get_tick(void)
 {
+#ifdef CYUSB
+    return (uint32_t)timeGetTime();
+#else
     struct timeval tv = {0};
     
     gettimeofday(&tv, NULL);
     return tv.tv_sec * 1000u + tv.tv_usec / 1000u;
+#endif
 }
 
 /*---------------------------------------------------------------------------*/
@@ -79,10 +84,14 @@ uint32_t sdr_get_tick(void)
  */
 void sdr_sleep_msec(int msec)
 {
+#ifdef CYUSB
+    Sleep(msec < 5 ? 1 : msec);
+#else
     struct timespec ts = {0};
     
     if (msec <= 0) return;
     ts.tv_nsec = (long)(msec * 1000000);
     nanosleep(&ts, NULL);
+#endif
 }
 
