@@ -7,6 +7,7 @@
  *
  *  History:
  *  2021-10-20  0.1  new
+ *  2022-01-04  1.0  support CyUSB on Windows
  *
  */
 #ifndef POCKET_H
@@ -16,7 +17,18 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+
+#ifdef CYUSB
+#include <windows.h>
+#include <CyAPI.h>
+#else
+#include <pthread.h>
 #include <libusb-1.0/libusb.h>
+#endif /* CYUSB */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* constants and macro -------------------------------------------------------*/
 #define SDR_DEV_NAME    "Pocket SDR" /* SDR device name */
@@ -34,9 +46,14 @@
 
 #define SDR_MAX_CH      2       /* number of channels in a SDR device */
 #define SDR_MAX_REG     11      /* number of registers in a SDR device */
-//#define SDR_MAX_BUFF    16      /* number of digital IF data buffer */
-#define SDR_MAX_BUFF    32      /* number of digital IF data buffer */
-#define SDR_SIZE_BUFF   (1<<20) /* size of digital IF data buffer (bytes) */
+
+#ifdef CYUSB
+#define SDR_MAX_BUFF    4096    /* number of digital IF data buffer */
+#define SDR_SIZE_BUFF   (1<<12) /* size of digital IF data buffer (bytes) */
+#else
+#define SDR_MAX_BUFF    4       /* number of digital IF data buffer */
+#define SDR_SIZE_BUFF   (1<<22) /* size of digital IF data buffer (bytes) */
+#endif /* CYUSB */
 
 #define SDR_CODE_L1CA   1       /* spreading (PRN) code L1C/A */
 #define SDR_CODE_L2CM   2       /* spreading (PRN) code L2CM */
@@ -51,17 +68,38 @@
 #define SDR_CODE_E6C   11       /* spreading (PRN) code E6C */
 
 /* type definitions ----------------------------------------------------------*/
+#ifdef CYUSB
+
+typedef CCyUSBDevice sdr_usb_t;  /* USB device type */
+typedef CCyBulkEndPoint sdr_ep_t;  /* USB bulk endpoint type */
+
+typedef struct {                /* SDR device type */
+    sdr_usb_t *usb;             /* USB device */
+    sdr_ep_t *ep;               /* bulk endpoint */
+    uint8_t *buff[SDR_MAX_BUFF]; /* data buffers */
+    int IQ[SDR_MAX_CH];         /* sampling types */
+    int rp, wp;                 /* read/write pointer of data buffers */
+    int state;                  /* state of event handler */
+    HANDLE thread;              /* event handler thread */
+} sdr_dev_t;
+
+#else
+
 typedef libusb_device_handle sdr_usb_t; /* USB device type */
 typedef struct libusb_transfer sdr_transfer_t; /* USB transfer type */
 
 typedef struct {                /* SDR device type */
     sdr_usb_t *usb;             /* USB device */
     sdr_transfer_t *transfer[SDR_MAX_BUFF]; /* USB transfers */
-    uint8_t *buff[SDR_MAX_BUFF]; /* USB bulk transfer buffers */
-    uint8_t *data[SDR_MAX_BUFF]; /* received data */
-    int n;                      /* number of received data */
+    uint8_t *data[SDR_MAX_BUFF]; /* USB transfer data */
     int IQ[SDR_MAX_CH];         /* sampling types */
+    pthread_t thread;           /* USB event handler thread */
+    int state;                  /* state of USB event handler */
+    int rp, wp;                 /* read/write pointer of ring-buffer */
+    uint8_t *buff[SDR_MAX_BUFF]; /* ring-buffer */
 } sdr_dev_t;
+
+#endif /* CYUSB */
 
 typedef struct {                /* PRN code type */
     int len, len_s;             /* primary/secondary code length (chips) */
@@ -70,6 +108,7 @@ typedef struct {                /* PRN code type */
 } sdr_code_t;
 
 /* function prototypes -------------------------------------------------------*/
+
 void *sdr_malloc(size_t size);
 void sdr_free(void *p);
 uint32_t sdr_get_tick(void);
@@ -87,4 +126,7 @@ sdr_dev_t *sdr_dev_open(int bus, int port);
 void sdr_dev_close(sdr_dev_t *dev);
 int sdr_dev_data(sdr_dev_t *dev, int8_t **buff, int *n);
 
+#ifdef __cplusplus
+}
+#endif
 #endif /* POCKET_H */
