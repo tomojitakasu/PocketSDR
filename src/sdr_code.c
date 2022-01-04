@@ -7,9 +7,9 @@
  *      Interfaces, May 19, 2019
  *  [2] IS-GPS-705A, Navstar GPS Space Segment / User Segment L5 Interfaces,
  *      June 8, 2010
- *  [3] IS-QZSS-PNT-003, Quasi-Zenith Satellite System Interfacec Specification
+ *  [3] IS-QZSS-PNT-003, Quasi-Zenith Satellite System Interface Specification
  *      Satellite Positioning, Navigation and Timing Service, Novmenber 5, 2018
- *  [4] IS-QZSS-L6-001, Quasi-Zenith Satellite System Interfacec Specification
+ *  [4] IS-QZSS-L6-001, Quasi-Zenith Satellite System Interface Specification
  *      Centimeter Level Augmentation Service, November 5, 2018
  *  [5] Galileo Open Service Signal In Space Interface Control Document -
  *      Issue 1, February 2010
