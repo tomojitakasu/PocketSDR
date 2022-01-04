@@ -13,7 +13,7 @@ from sdr_func import *
 import sdr_code, sdr_nav
 
 # constants --------------------------------------------------------------------
-T_SRCH     = 30.0            # average of signal search interval (s)
+T_SRCH     = 3000.0          # average of signal search interval (s)
 T_ACQ      = 0.010           # non-coherent integration time for acquisition (s)
 T_DLL      = 0.001           # non-coherent integration time for DLL (s)
 T_CN0      = 1.0             # averaging time for C/N0 (s)
@@ -78,7 +78,7 @@ def ch_new(sig, prn, fs, fi, max_dop=MAX_DOP, sp_corr=SP_CORR, add_corr=False,
 #  also accessed as object instance variables of the receiver channel after
 #  calling the function. The function should be called in the cycle of GNSS
 #  signal code with 2-cycle samples of digitized IF data (which are overlapped
-#  bettween previous and current). 
+#  between previous and current). 
 #
 #    'SRCH' : signal acquisition state
 #    'LOCK' : signal tracking state
@@ -172,13 +172,14 @@ def track_sig(ch, time, data):
     tau = time - ch.time   # time interval (s)
     fc = ch.fi + ch.fd     # IF carrier frequency with Doppler (Hz)
     ch.adr += ch.fd * tau  # accumulated Doppler (cyc)
-    ch.coff = np.mod(ch.coff - ch.fd / ch.fc * tau, ch.T)
+    ch.coff -= ch.fd / ch.fc * tau # carrier-aided code offset (s)
     ch.time = time
     
     # advance code position and carrier phase
-    i = int(ch.coff * ch.fs)
+    coff = np.mod(ch.coff, ch.T)
+    i = int(coff * ch.fs)
     phi = ch.fi * tau + ch.adr + fc * i / ch.fs
-    coff = ch.coff - i / ch.fs
+    coff -= i / ch.fs
     
     # mix carrier and resample code
     data_carr = mix_carr(data[i:i+ch.N], ch.fs, fc, phi)
@@ -220,6 +221,7 @@ def FLL(ch):
         if dot != 0.0:
             B = B_FLL[0] if ch.lock * ch.T < T_FPULLIN / 2 else B_FLL[1]
             err_freq = atan(cross / dot) / 2.0 / pi / ch.T
+            #err_freq = atan2(cross, dot) / 2.0 / pi / ch.T
             ch.fd -= B / 0.25 * err_freq * ch.T
 
 # PLL --------------------------------------------------------------------------
@@ -246,11 +248,11 @@ def DLL(ch):
 
 # update C/N0 ------------------------------------------------------------------
 def CN0(ch):
-    ch.trk.sumP += abs(ch.trk.C[0]) ** 2
-    ch.trk.sumN += abs(ch.trk.C[3]) ** 2
+    ch.trk.sumP += np.abs(ch.trk.C[0]) ** 2
+    ch.trk.sumN += np.abs(ch.trk.C[3]) ** 2
     if ch.lock % int(T_CN0 / ch.T) == 0:
         if ch.trk.sumN > 0.0:
             cn0 = 10.0 * log10(ch.trk.sumP / ch.trk.sumN / ch.T)
-            ch.cn0 += 0.3 * (cn0 - ch.cn0)
+            ch.cn0 += 0.5 * (cn0 - ch.cn0)
         ch.trk.sumP = ch.trk.sumN = 0.0
 

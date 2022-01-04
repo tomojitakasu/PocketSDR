@@ -113,7 +113,7 @@ def search_sig(sig, prn, data, fs, fi, max_dop=MAX_DOP, zero_pad=True):
 #      code_fft (I) Code DFT (with or w/o zero-padding)
 #      T        (I) Code cycle (period) (s)
 #      data     (I) Digitized IF data as complex64 ndarray
-#      fs       (I) Sampling frequnecy (Hz)
+#      fs       (I) Sampling frequency (Hz)
 #      fi       (I) IF frequency (Hz)
 #      fds      (I) Doppler frequency bins as ndarray (Hz)
 #
