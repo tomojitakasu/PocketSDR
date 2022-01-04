@@ -7,9 +7,9 @@
  *
  *  History:
  *  2021-10-20  0.1  new
+ *  2022-01-04  0.2  support CyUSB on Windows
  *
  */
-#include <sys/time.h>
 #include "pocket.h"
 
 /* constants and macros ------------------------------------------------------*/
@@ -51,27 +51,125 @@ static int read_sample_type(sdr_dev_t *dev)
     return 1;
 }
 
+#ifdef CYUSB
+
+/* get bulk transfer endpoint ------------------------------------------------*/
+static sdr_ep_t *get_bulk_ep(sdr_usb_t *usb, int ep)
+{
+    int i;
+    
+    for (i = 0; i < usb->EndPointCount(); i++) {
+        if (usb->EndPoints[i]->Attributes == 2 &&
+            usb->EndPoints[i]->Address == ep) {
+            return (sdr_ep_t *)usb->EndPoints[i];
+        }
+    }
+    fprintf(stderr, "No bulk end point ep=%02X\n", ep);
+    return NULL;
+}
+
+/* read buffer ---------------------------------------------------------------*/
+static uint8_t *read_buff(sdr_dev_t *dev)
+{
+    int rp = dev->rp;
+    
+    if (rp == dev->wp) {
+        return NULL;
+    }
+    if (rp == (dev->wp + 1) % SDR_MAX_BUFF) {
+        fprintf(stderr, "bulk transfer buffer overflow\n");
+    }
+    dev->rp = (rp + 1) % SDR_MAX_BUFF;
+    return dev->buff[rp];
+}
+
+/* event handler thread ------------------------------------------------------*/
+static DWORD WINAPI event_handler(void *arg)
+{
+    sdr_dev_t *dev = (sdr_dev_t *)arg;
+    uint8_t *ctx[SDR_MAX_BUFF] = {0};
+    OVERLAPPED ov[SDR_MAX_BUFF] = {0};
+    long len = SDR_SIZE_BUFF;
+    int i;
+    
+    for (i = 0; i < SDR_MAX_BUFF; i++) {
+        ov[i].hEvent = CreateEvent(NULL, false, false, NULL);
+        ctx[i] = dev->ep->BeginDataXfer(dev->buff[i], len, &ov[i]); 
+        
+        if (dev->ep->NtStatus || dev->ep->UsbdStatus) {
+            fprintf(stderr, "transfer request rejected (%d)\n",
+                (int)dev->ep->NtStatus);
+        }
+    }
+    for (i = 0; dev->state; i = (i + 1) % SDR_MAX_BUFF) {
+        if (!dev->ep->WaitForXfer(&ov[i], TO_TRANSFER)) {
+            fprintf(stderr, "bulk transfer timeout\n");
+        }
+        else if (!dev->ep->FinishDataXfer(dev->buff[i], len, &ov[i], ctx[i])) {
+            fprintf(stderr, "bulk transfer error\n");
+        }
+        ctx[i] = dev->ep->BeginDataXfer(dev->buff[i], len, &ov[i]);
+        dev->wp = i;
+    }
+    for (i = 0; i < SDR_MAX_BUFF; i++) {
+        CloseHandle(ov[i].hEvent);
+    }
+    return 0;
+}
+
+#else /* CYUSB */
+
+/* write ring-buffer ---------------------------------------------------------*/
+static int write_buff(sdr_dev_t *dev, uint8_t *data)
+{
+    int wp = (dev->wp + 1) % SDR_MAX_BUFF;
+    if (wp == dev->rp) {
+        return 0;
+    }
+    dev->buff[wp] = data;
+    dev->wp = wp;
+    return 1;
+}
+
+/* read ring-buffer ----------------------------------------------------------*/
+static uint8_t *read_buff(sdr_dev_t *dev)
+{
+    uint8_t *data;
+    
+    if (dev->rp == dev->wp) {
+        return NULL;
+    }
+    data = dev->buff[dev->rp];
+    dev->rp = (dev->rp + 1) % SDR_MAX_BUFF;
+    return data;
+}
+
 /* USB bulk transfer callback ------------------------------------------------*/
 static void transfer_cb(struct libusb_transfer *transfer)
 {
     sdr_dev_t *dev = (sdr_dev_t *)transfer->user_data;
-    static uint32_t tick, tick_p, tt;
     
-    tick = sdr_get_tick();
-    tt = tick - tick_p;
-    tick_p = tick;
-
     if (transfer->status != LIBUSB_TRANSFER_COMPLETED) {
         fprintf(stderr, "USB bulk transfer error (%d)\n", transfer->status);
     }
-    else if (dev->n < SDR_MAX_BUFF) {
-        dev->data[dev->n++] = transfer->buffer;
-    }
-    else {
+    else if (!write_buff(dev, transfer->buffer)) {
         fprintf(stderr, "USB bulk transfer buffer overflow\n");
     }
     libusb_submit_transfer(transfer);
 }
+
+/* USB event handler thread --------------------------------------------------*/
+static void *event_handler_thread(void *arg)
+{
+    sdr_dev_t *dev = (sdr_dev_t *)arg;
+    
+    while (dev->state) {
+        libusb_handle_events(NULL);
+    }
+    return NULL;
+}
+
+#endif /* CYUSB */
 
 /*----------------------------------------------------------------------------*/
 /**
@@ -86,8 +184,43 @@ static void transfer_cb(struct libusb_transfer *transfer)
  */
 sdr_dev_t *sdr_dev_open(int bus, int port)
 {
-    sdr_dev_t *dev;
     int i;
+#ifdef CYUSB
+    sdr_dev_t *dev = new sdr_dev_t;
+    
+    if (!(dev->usb = sdr_usb_open(bus, port, SDR_DEV_VID, SDR_DEV_PID))) {
+        delete dev;
+        return NULL;
+    }
+    if (!(dev->ep = get_bulk_ep(dev->usb, SDR_DEV_EP))) {
+        sdr_usb_close(dev->usb);
+        delete dev;
+        return NULL;
+    }
+    if (!read_sample_type(dev)) {
+        sdr_usb_close(dev->usb);
+        delete dev;
+        fprintf(stderr, "Read sampling type error\n");
+        return NULL;
+    }
+    for (i = 0; i < SDR_MAX_BUFF; i++) {
+        dev->buff[i] = new uint8_t[SDR_SIZE_BUFF];
+    }
+    dev->ep->SetXferSize(SDR_SIZE_BUFF);
+    gen_LUT();
+    
+    dev->state = 1;
+    dev->rp = dev->wp = 0;
+    dev->thread = CreateThread(NULL, 0, event_handler, dev, 0, NULL);
+    
+    /* set thread priority time-critical */
+    if (!SetThreadPriority(dev->thread, THREAD_PRIORITY_TIME_CRITICAL)) {
+        fprintf(stderr, "set thread priority error\n");
+    }
+    return dev;
+#else /* CYUSB */
+    sdr_dev_t *dev;
+    struct sched_param param = {99};
     
     dev = (sdr_dev_t *)sdr_malloc(sizeof(sdr_dev_t));
     
@@ -102,21 +235,35 @@ sdr_dev_t *sdr_dev_open(int bus, int port)
         return NULL;
     }
     for (i = 0; i < SDR_MAX_BUFF; i++) {
-        dev->buff[i] = (uint8_t *)sdr_malloc(SDR_SIZE_BUFF);
+#if 0
+        dev->data[i] = libusb_dev_mem_alloc(dev->usb, SDR_SIZE_BUFF);
+#else
+        dev->data[i] = (uint8_t *)sdr_malloc(SDR_SIZE_BUFF);
+#endif
         if (!(dev->transfer[i] = libusb_alloc_transfer(0))) {
             sdr_usb_close(dev->usb);
             sdr_free(dev);
             return NULL;
         }
         libusb_fill_bulk_transfer(dev->transfer[i], dev->usb, SDR_DEV_EP,
-            dev->buff[i], SDR_SIZE_BUFF, transfer_cb, dev, TO_TRANSFER);
+            dev->data[i], SDR_SIZE_BUFF, transfer_cb, dev, TO_TRANSFER);
+    }
+    gen_LUT();
+    
+    dev->state = 1;
+    dev->rp = dev->wp = 0;
+    pthread_create(&dev->thread, NULL, event_handler_thread, dev);
+    
+    /* set thread scheduling real-time */
+    if (pthread_setschedparam(dev->thread, SCHED_RR, &param)) {
+        fprintf(stderr, "set thread scheduling error\n");
     }
     for (i = 0; i < SDR_MAX_BUFF; i++) {
         libusb_submit_transfer(dev->transfer[i]);
     }
-    gen_LUT();
-    
     return dev;
+
+#endif /* CYUSB */
 }
 
 /*----------------------------------------------------------------------------*/
@@ -132,6 +279,20 @@ sdr_dev_t *sdr_dev_open(int bus, int port)
 void sdr_dev_close(sdr_dev_t *dev)
 {
     int i;
+
+#ifdef CYUSB
+    dev->state = 0;
+    WaitForSingleObject(dev->thread, 10000);
+    CloseHandle(dev->thread);
+    
+    for (i = 0; i < SDR_MAX_BUFF; i++) {
+        delete [] dev->buff[i];
+    }
+    sdr_usb_close(dev->usb);
+    delete dev;
+#else
+    dev->state = 0;
+    pthread_join(dev->thread, NULL);
     
     for (i = 0; i < SDR_MAX_BUFF; i++) {
         libusb_cancel_transfer(dev->transfer[i]);
@@ -141,9 +302,14 @@ void sdr_dev_close(sdr_dev_t *dev)
     
     for (i = 0; i < SDR_MAX_BUFF; i++) {
         libusb_free_transfer(dev->transfer[i]);
-        sdr_free(dev->buff[i]);
+#if 0
+        libusb_dev_mem_free(dev->usb, dev->data[i], SDR_SIZE_BUFF);
+#else
+        sdr_free(dev->data[i]);
+#endif
     }
     sdr_free(dev);
+#endif /* CYUSB */
 }
 
 /* copy digital IF data ------------------------------------------------------*/
@@ -156,18 +322,24 @@ static int copy_data(const uint8_t *data, int ch, int IQ, int8_t *buff)
         memcpy(buff, data, size);
     }
     else if (IQ == 1) { /* I sampling */
-        for (i = 0; i < size; i += 2) {
+        for (i = 0; i < size; i += 4) {
             buff[i  ] = LUT[ch][0][data[i  ]];
             buff[i+1] = LUT[ch][0][data[i+1]];
+            buff[i+2] = LUT[ch][0][data[i+2]];
+            buff[i+3] = LUT[ch][0][data[i+3]];
         }
     }
     else if (IQ == 2) { /* I/Q sampling */
         size *= 2;
-        for (i = j = 0; i < size; i += 4, j += 2) {
+        for (i = j = 0; i < size; i += 8, j += 4) {
             buff[i  ] = LUT[ch][0][data[j  ]];
             buff[i+1] = LUT[ch][1][data[j  ]];
             buff[i+2] = LUT[ch][0][data[j+1]];
             buff[i+3] = LUT[ch][1][data[j+1]];
+            buff[i+4] = LUT[ch][0][data[j+2]];
+            buff[i+5] = LUT[ch][1][data[j+2]];
+            buff[i+6] = LUT[ch][0][data[j+3]];
+            buff[i+7] = LUT[ch][1][data[j+3]];
         }
     }
     return size;
@@ -176,19 +348,15 @@ static int copy_data(const uint8_t *data, int ch, int IQ, int8_t *buff)
 /* get digital IF data -------------------------------------------------------*/
 int sdr_dev_data(sdr_dev_t *dev, int8_t **buff, int *n)
 {
-    struct timeval to = {0, TO_TRANSFER * 1000};
-    int i, size = 0;
+    uint8_t *data;
+    int size = 0;
     
     n[0] = n[1] = 0;
     
-    if (libusb_handle_events_timeout(NULL, &to)) {
-        return 0;
-    }
-    for (i = 0; i < dev->n; i++) {
-        n[0] += copy_data(dev->data[i], 0, dev->IQ[0], buff[0] + n[0]);
-        n[1] += copy_data(dev->data[i], 1, dev->IQ[1], buff[1] + n[1]);
+    while ((data = read_buff(dev))) {
+        n[0] += copy_data(data, 0, dev->IQ[0], buff[0] + n[0]);
+        n[1] += copy_data(data, 1, dev->IQ[1], buff[1] + n[1]);
         size += SDR_SIZE_BUFF;
     }
-    dev->n = 0;
     return size;
 }
