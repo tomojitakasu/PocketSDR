@@ -6,7 +6,8 @@
  *  T.TAKASU
  *
  *  History:
- *  2021/10/03  0.1  new
+ *  2021-10-03  0.1  new
+ *  2022-01-04  1.0  support C++
  *
  */
 
@@ -14,13 +15,13 @@
 
 /* type definitions ----------------------------------------------------------*/
 typedef struct {     /* register field definition type */
-    char *field;     /* field name */
+    const char *field; /* field name */
     uint8_t addr;    /* register address */
     uint8_t nbit;    /* number of bits */
     uint8_t pos;     /* bit position (0:LSB,31:MSB) */
     uint8_t fix[SDR_MAX_CH]; /* fixed setting (0:free,1:fixed) */
     uint32_t val[SDR_MAX_CH]; /* value for fixed setting */
-    char *desc;      /* description */
+    const char *desc; /* description */
 } reg_t;
 
 /* device register definitions -----------------------------------------------*/
