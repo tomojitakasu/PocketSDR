@@ -7,6 +7,7 @@
  *
  *  History:
  *  2021-10-20  0.1  new
+ *  2022-01-04  1.0  support C++.
  *
  */
 #include "pocket.h"
@@ -81,7 +82,7 @@ static void show_usage(void)
  */
 int main(int argc, char **argv)
 {
-    char *file = "";
+    const char *file = "";
     int i, bus = -1, port = -1, opt1 = 0, opt2 = 0;
     
     for (i = 1; i < argc; i++) {
