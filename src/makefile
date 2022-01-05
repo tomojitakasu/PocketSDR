@@ -26,7 +26,7 @@ all: $(TARGET)
 pocket_conf: pocket_conf.o sdr_conf.o sdr_usb.o sdr_cmn.o
 pocket_dump: pocket_dump.o sdr_conf.o sdr_dev.o sdr_usb.o sdr_cmn.o
 pocket_scan: pocket_scan.o
-	$(CC) -o $@ pocket_scan.o -lusb-1.0 -static
+	$(CC) -o $@ pocket_scan.o -lusb-1.0
 
 pocket_scan.o: pocket_scan.c
 	$(CC) -c -o $@ pocket_scan.c -g
