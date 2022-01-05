@@ -196,7 +196,7 @@ def plot_nav_data(fig, rect):
     p0 = ax.text(-0.035, 0.48, 'NAV\nDATA', ha='center', va='center',
         transform=ax.transAxes)
     p1 = ax.text(0.01, 0.92, '', ha='left', va='top', color=fc,
-        transform=ax.transAxes, fontfamily='monospace')
+        transform=ax.transAxes, fontname='monospace')
     return ax, (p0, p1)
 
 # update nav data --------------------------------------------------------------
