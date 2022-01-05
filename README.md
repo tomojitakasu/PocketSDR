@@ -1,4 +1,4 @@
-# **PocketSDR - An Open-Source GNSS SDR, ver. 0.4**
+# **PocketSDR - An Open-Source GNSS SDR, ver. 0.5**
 
 ## **Overview**
 
@@ -41,7 +41,7 @@ PocketSDR --+-- bin     PocketSDR utility binary programs for Windows
             +-- python  PocketSDR utility Python scripts
             +-- lib     External shared library for Python scripts
             +-- conf    Configuration files for device settings
-            +-- util    Windows driver installation utility (ref [3])
+            +-- driver  Windows driver for EZ-USB FX2LP/FX3 (cyusb3.sys) ([4])
             +-- doc     Documents (ref {1], [2])
             +-- FW      Firmware source programs and images
             |   +-- cypress  Cypress libraries for EZ-USB firmware development
@@ -60,12 +60,13 @@ PocketSDR --+-- bin     PocketSDR utility binary programs for Windows
 
 * Attach PocketSDR to PC via USB cable.
 
-* Install USB driver (WinUSB) for PocketSDR.
-    * Execute zadig-2.6.exe in <install_dir>\PocketSDR\util.
-    * Execute menu Options - List All Devices and select "EZ-USB" (USBID 04B4
-      1004). 
-    * Select WinUSB (v6.1.xxxx.xxxxx) and Push "Replace Driver" or  "Reinstall
-      Driver".
+* Install USB driver (CYUSB) for PocketSDR.
+    
+    * Open Windows Device Manager, select "EZ-USB" as "Universal Serial Bus Device"
+    * Select right-button menu Update Driver, select "Browse your computer for driver software"
+      and input the CyUSB driver path (PocketSDR\driver\).
+    * After the driver installation , you find "Cypress FX2LP Sample Device" as 
+      "Universal Serial Bus Controller" in Windows Device Manager.
     
     <br>
 * Add the PocketSDR binary programs path (<install_dir>\PocketSDR\bin) to 
@@ -94,8 +95,11 @@ PocketSDR --+-- bin     PocketSDR utility binary programs for Windows
     $ cd <install_dir>/src
     $ vi makefile
     ...
-    #LIBUSB = -L/mingw64/lib -llibusb-1.0
-    LIBUSB = -lusb-1.0
+    #INCLUDE = -I../lib/cyusb
+    #OPTIONS = -DCYUSB
+    ...
+    #LDLIBS = ../lib/cyusb/CyAPI.a -lsetupapi -lwinmm
+    LDLIBS = -lusb-1.0
     ...
     $ make
     $ make install
@@ -210,12 +214,6 @@ as <install_dir>\PocketSDR\FW\pocket_fw.iic.
 
 * Attach PocketSDR via USB cable to the PC.
 
-* Open Windows Device Manager, select "EZ-USB" as "Universal Serial Bus Device",
-select right-button menu Update Driver, select "Browse your computer for driver software"
-and input the CyUSB driver path (C:\Cypress\USB\CY3684_EZ-USB_FX2LP_DVK\1.1\Drivers).
-After the driver installation , you find "Cypress FX2LP Sample Device" as 
-"Universal Serial Bus Controller" in Windows Device Manager.
-
 * Execute USB Control Center (C:\Cypress\USB\CY3684_EZ-USB_FX2LP_DVK\1.1\Windows Applications\
 c_sharp\controlcenter\bin\Release\CyControl.exe).
 
@@ -237,7 +235,7 @@ PocketSDR. Refer "Installation for Windows" above.
 [2] Cypress, EZ-USB FX2LP USB Microcontroller High-Speed USB Peripheral 
   Controller, Rev. AB, December 6, 2018
 
-[3] Zadig USB driver installation made easy (https://zadig.akeo.ie/)
+[3] (deleted)
 
 [4] Cypress, CY3684 EZ-USB FX2LP Development Kit
     (https://www.cypress.com/documentation/development-kitsboards/cy3684-ez-usb-fx2lp-development-kit)
@@ -254,4 +252,5 @@ PocketSDR. Refer "Installation for Windows" above.
 - 2021-10-25  0.2  Add Rebuild F/W and Write F/W Image to PocketSDR
 - 2021-12-01  0.3  Add and modify Python scripts
 - 2021-12-25  0.4  Add and modify Python scripts
+- 2022-01-05  0.5  Fix several problems.
 
