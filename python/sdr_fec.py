@@ -11,6 +11,7 @@
 #
 #  History:
 #  2021-12-24  1.0  new
+#  2022-01-04  1.1  fix bug to call set_viterbi27_polynomial() by python 3.8
 #
 import os
 from ctypes import *
@@ -27,7 +28,6 @@ try:
     libfec = cdll.LoadLibrary(dir + '/../lib/win32/libfec.so')
 except:
     libfec = cdll.LoadLibrary(dir + '/../lib/linux/libfec.so')
-#libfec = cdll.LoadLibrary('libfec.so')
 
 #-------------------------------------------------------------------------------
 #  Encode convolution code (K=7, R=1/2, Poly=G1:0x4F,G2:0x6D).
@@ -80,7 +80,7 @@ def decode_conv(data):
         return NONE
     
     # set polynomial
-    p = np.array(POLY_CONV, dtype='int').ctypes.data_as(POINTER(c_int))
+    p = np.array(POLY_CONV, dtype='int32').ctypes.data_as(POINTER(c_int32))
     libfec.set_viterbi27_polynomial(p)
     
     # update decoder with demodulated symbols
