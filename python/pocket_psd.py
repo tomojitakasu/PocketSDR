@@ -10,6 +10,7 @@
 #  2021-12-01  1.0  rename pocket_plot.py -> pocket_psd.py
 #                   add option -h
 #  2021-12-10  1.1  improve plotting time
+#  2022-01-10  1.2  add OFFSET and SIGMA in histgram plot
 #
 import sys
 import numpy as np
@@ -64,35 +65,38 @@ def plot_hist_d(fig, rect, text, fc, bc):
     ax.grid(True, lw=0.4)
     ax.text(0.07, 0.935, text, ha='center', va='top', color=fc,
         transform=ax.transAxes)
-    return ax
+    p = ax.text(0.95, 0.935, '', ha='right', va='top', color=fc,
+        transform=ax.transAxes)
+    return ax, p
 
 # plot histgrams ---------------------------------------------------------------
 def plot_hist(fig, rect, fc, bc):
     h = rect[3] / 2 - 0.02
     rect1 = [rect[0], rect[1] + h + 0.04, rect[2], h]
     rect2 = [rect[0], rect[1], rect[2], h]
-    ax1 = plot_hist_d(fig, rect1, 'I', fc, bc)
-    ax2 = plot_hist_d(fig, rect2, 'Q', fc, bc)
+    ax1, p1 = plot_hist_d(fig, rect1, 'I', fc, bc)
+    ax2, p2 = plot_hist_d(fig, rect2, 'Q', fc, bc)
     ax2.set_xlabel('Quantized Value')
-    return (ax1, ax2)
+    return (ax1, ax2), (p1, p2)
 
 # update histgram --------------------------------------------------------------
-def update_hist_d(ax, data, fc):
-    for p in ax.patches:
-        p.remove()
+def update_hist_d(ax, p, data, fc):
+    for q in ax.patches:
+        q.remove()
     if len(data) > 0:
         bins = np.arange(-5.5, 6.5, 1)
         plt.sca(ax)
         plt.hist(data, bins=bins, density=True, rwidth=0.7, color=fc)
+        p.set_text('OFFSET = %.3f\nSIGMA = %.3f' % (np.mean(data), np.std(data)))
 
 # update histgrams -------------------------------------------------------------
-def update_hist(ax, data, IQ, fc):
+def update_hist(ax, p, data, IQ, fc):
     if IQ == 1: # I
-        update_hist_d(ax[0], data, fc)
-        update_hist_d(ax[1], [], fc)
+        update_hist_d(ax[0], p[0], data.real, fc)
+        update_hist_d(ax[1], p[1], [], fc)
     else: # IQ
-        update_hist_d(ax[0], data.real, fc)
-        update_hist_d(ax[1], data.imag, fc)
+        update_hist_d(ax[0], p[0], data.real, fc)
+        update_hist_d(ax[1], p[1], data.imag, fc)
 
 #-------------------------------------------------------------------------------
 #
@@ -170,7 +174,7 @@ if __name__ == '__main__':
     ax0.set_title('Digital IF data: FILE = ' + file, fontsize=10)
     if hist:
         ax1, p1 = plot_psd(fig, rect1, IQ, fs, fc, bc)
-        ax2 = plot_hist(fig, rect2, fc, bc)
+        ax2, p2 = plot_hist(fig, rect2, fc, bc)
     else:
         ax1, p1 = plot_psd(fig, rect0, IQ, fs, fc, bc)
     
@@ -184,7 +188,7 @@ if __name__ == '__main__':
             if len(data) >= int(fs * tint):
                 if hist:
                     update_psd(ax1, p1, data, IQ, fs, tint * i, N, fc)
-                    update_hist(ax2, data, IQ, fc)
+                    update_hist(ax2, p2, data, IQ, fc)
                 else:
                     update_psd(ax1, p1, data, IQ, fs, tint * i, N, fc)
             plt.pause(1e-3) 
