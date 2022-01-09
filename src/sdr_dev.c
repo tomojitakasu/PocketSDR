@@ -8,6 +8,7 @@
  *  History:
  *  2021-10-20  0.1  new
  *  2022-01-04  0.2  support CyUSB on Windows
+ *  2022-01-09  0.3  set process priority real-time for Windows
  *
  */
 #include "pocket.h"
@@ -213,6 +214,10 @@ sdr_dev_t *sdr_dev_open(int bus, int port)
     dev->rp = dev->wp = 0;
     dev->thread = CreateThread(NULL, 0, event_handler, dev, 0, NULL);
     
+    /* set process priority real-time */
+    if (!SetPriorityClass(GetCurrentProcess(), REALTIME_PRIORITY_CLASS)) {
+        fprintf(stderr, "set priority class error\n");
+    }
     /* set thread priority time-critical */
     if (!SetThreadPriority(dev->thread, THREAD_PRIORITY_TIME_CRITICAL)) {
         fprintf(stderr, "set thread priority error\n");
