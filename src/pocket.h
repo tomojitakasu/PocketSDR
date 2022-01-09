@@ -8,6 +8,7 @@
  *  History:
  *  2021-10-20  0.1  new
  *  2022-01-04  1.0  support CyUSB on Windows
+ *  2022-01-10  1.1  SDR_SIZE_BUFF: (1<<12) -> (1<<14)
  *
  */
 #ifndef POCKET_H
@@ -48,8 +49,8 @@ extern "C" {
 #define SDR_MAX_REG     11      /* number of registers in a SDR device */
 
 #ifdef CYUSB
-#define SDR_MAX_BUFF    4096    /* number of digital IF data buffer */
-#define SDR_SIZE_BUFF   (1<<12) /* size of digital IF data buffer (bytes) */
+#define SDR_MAX_BUFF    1024    /* number of digital IF data buffer */
+#define SDR_SIZE_BUFF   (1<<14) /* size of digital IF data buffer (bytes) */
 #else
 #define SDR_MAX_BUFF    4       /* number of digital IF data buffer */
 #define SDR_SIZE_BUFF   (1<<22) /* size of digital IF data buffer (bytes) */
