@@ -8,6 +8,8 @@
  *  2021-10-08  0.1  new
  *  2021-12-01  1.0  add default output file paths
  *  2022-01-04  1.1  data capture cycle: 1 -> 50 (ms)
+ *  2022-01-06  1.2  add output to stdout with "-" as file path
+ *                   add option -q to suppress output of status
  *
  **/
 #include <signal.h>
@@ -32,13 +34,14 @@ static void sig_func(int sig)
 /* print usage ---------------------------------------------------------------*/
 static void print_usage(void)
 {
-    printf("Usage: %s [-t tsec] [-r] [-p bus[,port]] [-c conf_file] [file [file]]\n",
+    printf("Usage: %s [-t tsec] [-r] [-p bus[,port]] [-c conf_file] [-q] [file [file]]\n",
         PROG_NAME);
     exit(0);
 }
 
 /* dump digital IF data ------------------------------------------------------*/
-static void dump_data(int bus, int port, double tsec, int raw, FILE **fp)
+static void dump_data(int bus, int port, double tsec, int raw, int quiet,
+    FILE **fp)
 {
     static const char *str_IQ[] = {"-", "I", "IQ"};
     sdr_dev_t *dev;
@@ -58,9 +61,10 @@ static void dump_data(int bus, int port, double tsec, int raw, FILE **fp)
         size = SDR_SIZE_BUFF * SDR_MAX_BUFF * (dev->IQ[i] == 2 ? 2 : 1);
         buff[i] = (int8_t *)sdr_malloc(size);
     }
-    printf("%9s  %3s %12s %3s %12s %12s\n", "TIME(s)", "T", "CH1(Bytes)", "T",
-        "CH2(Bytes)", "RATE(Ks/s)");
-    
+    if (!quiet) {
+        fprintf(stderr, "%9s  %3s %12s %3s %12s %12s\n", "TIME(s)", "T",
+            "CH1(Bytes)", "T", "CH2(Bytes)", "RATE(Ks/s)");
+    }
     tick = sdr_get_tick();
     
     for (i = 0; !intr && (tsec <= 0.0 || time < tsec); i++) {
@@ -70,6 +74,7 @@ static void dump_data(int bus, int port, double tsec, int raw, FILE **fp)
             for (j = 0; j < SDR_MAX_CH; j++) {
                 if (!fp[j]) continue;
                 fwrite(buff[j], n[j], 1, fp[j]);
+                fflush(fp[j]);
                 byte[j] += n[j];
             }
             sample += size;
@@ -79,16 +84,20 @@ static void dump_data(int bus, int port, double tsec, int raw, FILE **fp)
             time_p = time;
             sample_p = sample;
         }
-        printf("%9.1f  %3s %12.0f %3s %12.0f %12.1f\r", time, str_IQ[dev->IQ[0]],
-            byte[0], str_IQ[dev->IQ[1]], byte[1], rate * 1e-3);
-        fflush(stdout);
-        
+        if (!quiet) {
+            fprintf(stderr, "%9.1f  %3s %12.0f %3s %12.0f %12.1f\r", time,
+                str_IQ[dev->IQ[0]], byte[0], str_IQ[dev->IQ[1]], byte[1],
+                rate * 1e-3);
+            fflush(stderr);
+        }
         sdr_sleep_msec(DATA_CYC);
     }
-    rate = time > 0.0 ? sample / time : 0.0;
-    printf("%9.1f  %3s %12.0f %3s %12.0f %12.1f\n", time, str_IQ[dev->IQ[0]],
-        byte[0], str_IQ[dev->IQ[1]], byte[1], rate * 1e-3);
-    
+    if (!quiet) {
+        rate = time > 0.0 ? sample / time : 0.0;
+        fprintf(stderr, "%9.1f  %3s %12.0f %3s %12.0f %12.1f\n", time,
+            str_IQ[dev->IQ[0]], byte[0], str_IQ[dev->IQ[1]], byte[1],
+            rate * 1e-3);
+    }
     for (i = 0; i < SDR_MAX_CH; i++) {
         free(buff[i]);
     }
@@ -99,7 +108,8 @@ static void dump_data(int bus, int port, double tsec, int raw, FILE **fp)
 /**
  *  Synopsis
  *
- *    pocket_dump [-t tsec] [-r] [-p bus[,port]] [-c conf_file] [file [file]]
+ *    pocket_dump [-t tsec] [-r] [-p bus[,port]] [-c conf_file] [-q]
+ *                [file [file]]
  *
  *  Description
  *
@@ -122,11 +132,16 @@ static void dump_data(int bus, int port, double tsec, int raw, FILE **fp)
  *        Configure the SDR device with a device configuration file before 
  *        capturing.
  *
+ *    -q 
+ *        Suppress showing data dump status.
+ *
  *    [file [file]]
  *        Output digital IF data file paths. The first path is for CH1 and
  *        the second one is for CH2. The second one can be omitted. With
- *        option -r, only the first path is used. If the file paths omitted,
- *        default output file paths are used as follows:
+ *        option -r, only the first path is used. If the file path is "",
+ *        data are not output to anywhere. If the file path is "-", data are
+ *        output to stdout. If all of the file paths omitted, the following
+ *        default file paths are used.
  *        
  *        CH1: ch1_YYYYMMDD_hhmmss.bin
  *        CH2: ch2_YYYYMMDD_hhmmss.bin
@@ -140,7 +155,7 @@ int main(int argc, char **argv)
     const char *conf_file = "";
     time_t dump_time;
     double tsec = 0.0;
-    int i, n = 0, bus = -1, port = -1, raw = 0;
+    int i, n = 0, bus = -1, port = -1, raw = 0, quiet = 0;
     
     for (i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-t") && i + 1 < argc) {
@@ -155,7 +170,10 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "-c") && i + 1 < argc) {
             conf_file = argv[++i];
         }
-        else if (!strncmp(argv[i], "-", 1)) {
+        else if (!strcmp(argv[i], "-q")) {
+            quiet = 1;
+        }
+        else if (argv[i][0] == '-' && argv[i][1] != '\0') {
             print_usage();
         }
         else if (n < SDR_MAX_CH) {
@@ -171,7 +189,10 @@ int main(int argc, char **argv)
     }
     for (i = 0; i < n; i++) {
         if (raw && i > 0) continue;
-        if (!(fp[i] = fopen(files[i], "wb"))) {
+        if (!strcmp(files[i], "-")) {
+            fp[i] = stdout;
+        }
+        else if (*files[i] && !(fp[i] = fopen(files[i], "wb"))) {
             fprintf(stderr, "file open error %s\n", files[i]);
             return -1;
         }
@@ -182,7 +203,7 @@ int main(int argc, char **argv)
     if (*conf_file) {
         sdr_write_settings(conf_file, bus, port, 0);
     }
-    dump_data(bus, port, tsec, raw, fp);
+    dump_data(bus, port, tsec, raw, quiet, fp);
     
     for (i = 0; i < n; i++) {
         if (fp[i]) fclose(fp[i]);
