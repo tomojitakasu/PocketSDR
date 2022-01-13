@@ -1,4 +1,4 @@
-# **PocketSDR - An Open-Source GNSS SDR, ver. 0.5**
+# **PocketSDR - An Open-Source GNSS SDR, ver. 0.6**
 
 ## **Overview**
 
@@ -253,4 +253,5 @@ PocketSDR. Refer "Installation for Windows" above.
 - 2021-12-01  0.3  Add and modify Python scripts
 - 2021-12-25  0.4  Add and modify Python scripts
 - 2022-01-05  0.5  Fix several problems.
+- 2022-01-13  0.6  Add and modify Python scripts
 
