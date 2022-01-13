@@ -7,6 +7,8 @@
 #  History:
 #  2021-12-01  1.0  new
 #  2021-12-24  1.1  fix several problems
+#  2022-01-13  1.2  add API unpack_data()
+#                   DOP_STEP: 0.25 -> 0.5
 #
 from math import *
 import time
@@ -16,9 +18,8 @@ import sdr_code
 
 # constants --------------------------------------------------------------------
 MAX_DOP  = 5000.0  # default max Doppler frequency to search signals (Hz)
-#DOP_STEP = 0.5     # Doppler frequency search step (* 1 / code cycle)
-#DOP_STEP = 0.4     # Doppler frequency search step (* 1 / code cycle)
-DOP_STEP = 0.25    # Doppler frequency search step (* 1 / code cycle)
+DOP_STEP = 0.5     # Doppler frequency search step (* 1 / code cycle)
+#DOP_STEP = 0.25    # Doppler frequency search step (* 1 / code cycle)
 
 # global variable --------------------------------------------------------------
 carr_tbl = []      # carrier lookup table 
@@ -89,7 +90,7 @@ def search_sig(sig, prn, data, fs, fi, max_dop=MAX_DOP, zero_pad=True):
     # generate code FFT
     T = sdr_code.code_cyc(sig)
     N = int(fs * T)
-    code_fft = sdr_code.gen_code_fft(code, T, fs, N, N if zero_pad else 0)
+    code_fft = sdr_code.gen_code_fft(code, T, 0.0, fs, N, N if zero_pad else 0)
     
     # doppler search bins
     fds = dop_bins(T, max_dop)
@@ -229,7 +230,7 @@ def parse_nums(str):
 def add_buff(buff, item):
     buff[:-1], buff[-1] = buff[1:], item
 
-# pack bits --------------------------------------------------------------------
+# pack bits to uint8 ndarray ---------------------------------------------------
 def pack_bits(data, nz=0):
     if nz > 0:
         data = np.hstack([[0] * nz, data])
@@ -239,11 +240,18 @@ def pack_bits(data, nz=0):
         buff[i // 8] |= (data[i] << (7 - i % 8))
     return buff
 
-# unpack bits ------------------------------------------------------------------
+# unpack uint8 ndarray to bits ------------------------------------------------
 def unpack_bits(data, N):
     buff = np.zeros(N, dtype='uint8')
     for i in range(np.min([N, len(data) * 8])):
         buff[i] = (data[i // 8] >> (7 - i % 8)) & 1
+    return buff
+
+# unpack data to bits ----------------------------------------------------------
+def unpack_data(data, N):
+    buff = np.zeros(N, dtype='uint8')
+    for i in range(N):
+        buff[i] = (data >> (N - 1 - i)) & 1
     return buff
 
 # exclusive-or of all bits ------------------------------------------------------
