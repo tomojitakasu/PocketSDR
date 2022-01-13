@@ -9,10 +9,26 @@
 #  [3] Galileo E6-B/C Codes Technical Note - Issue 1, January 2019
 #  [4] IS-QZSS-PNT-004, Quasi-Zenith Satellite System Interface Specification
 #      Satellite Positioning, Navigation and Timing Service, November 5, 2018
-#  [5] IS-QZSS-L6-001, Quasi-Zenith Satellite System Interface Specification
-#      Centimeter Level Augmentation Service, November 5, 2018
+#  [5] IS-QZSS-L6-003, Quasi-Zenith Satellite System Interface Specification
+#      Centimeter Level Augmentation Service, August 20, 2020
 #  [6] IS-QZSS-TV-003, Quasi-Zenith Satellite System Interface Specification
 #      Positioning Technology Verification Service, December 27, 2019
+#  [7] BeiDou Navigation Satellite System Signal In Space Interface Control
+#      Document - Open Service Signal B1I (Version 3.0), February, 2019
+#  [8] BeiDou Navigation Satellite System Signal In Space Interface Control
+#      Document - Open Service Signal B1C (Version 1.0), December, 2017
+#  [9] BeiDou Navigation Satellite System Signal In Space Interface Control
+#      Document - Open Service Signal B2a (Version 1.0), December, 2017
+#  [10] BeiDou Navigation Satellite System Signal In Space Interface Control
+#      Document - Open Service Signal B2b (Version 1.0), July, 2020
+#  [11] BeiDou Navigation Satellite System Signal In Space Interface Control
+#      Document - Open Service Signal B3I (Version 1.0), February, 2018
+#  [12] IS-GPS-800F, Navstar GPS Space Segment / User Segment L1C Interfaces,
+#      March 4, 2019
+#  [13] IS-GPS-705A, Navstar GPS Space Segment / User Segment L5 Interfaces,
+#      June 8, 2010
+#  [14] Global Navigation Satellite System GLONASS Interface Control Document
+#      Navigational radiosignal In bands L1, L2 (Edition 5.1), 2008
 #
 #  Author:
 #  T.TAKASU
@@ -20,15 +36,27 @@
 #  History:
 #  2021-12-24  1.0  new
 #  2022-01-04  1.1  support sync to secondary code for pilot signals
+#  2022-01-13  1.2  support L1CD, L6D, L6E, G1CA, G2CA, B1I, B2I, B3I
 #
 from math import *
 import numpy as np
 from sdr_func import *
-import sdr_fec, sdr_rtk
+import sdr_fec, sdr_rtk, sdr_code, sdr_ldpc
 
 # constants --------------------------------------------------------------------
-THRES_SYNC  = 0.03      # threshold for symbol/sec-code sync
-THRES_LOST  = 0.003     # threshold for symbol/sec-code lost
+THRES_SYNC  = 0.05      # threshold for symbol/sec-code sync
+THRES_LOST  = 0.005     # threshold for symbol/sec-code lost
+
+BCH_CORR_TBL = ( # BCH(15,11,1) error correction table ([7] Table 5-2)
+    0b000000000000000, 0b000000000000001, 0b000000000000010, 0b000000000010000,
+    0b000000000000100, 0b000000100000000, 0b000000000100000, 0b000010000000000,
+    0b000000000001000, 0b100000000000000, 0b000001000000000, 0b000000010000000,
+    0b000000001000000, 0b010000000000000, 0b000100000000000, 0b001000000000000)
+
+# code caches ------------------------------------------------------------------
+CNV2_SF1   = {}
+BCNV1_SF1A = {}
+BCNV1_SF1B = {}
 
 # nav data class ---------------------------------------------------------------
 class Nav: pass
@@ -39,6 +67,8 @@ def nav_new(nav_opt):
     nav.ssync = 0       # symbol sync time as lock count (0: no-sync)
     nav.fsync = 0       # nav frame sync time as lock count (0: no-sync)
     nav.rev = 0         # code polarity (0: normal, 1: reversed)
+    nav.seq = 0         # sequence number (TOW, TOI, ...)
+    nav.nerr = 0        # number of error corrected
     nav.syms = np.zeros(18000, dtype='uint8') # nav symbols buffer
     nav.tsyms = np.zeros(18000) # nav symbols time (for debug)
     nav.data = []       # navigation data buffer
@@ -47,7 +77,7 @@ def nav_new(nav_opt):
 
 # initialize nav data ----------------------------------------------------------
 def nav_init(nav):
-    nav.ssync = nav.fsync = nav.rev = 0
+    nav.ssync = nav.fsync = nav.rev = nav.seq = 0
     nav.syms[:] = 0
     nav.tsyms[:] = 0.0
 
@@ -101,10 +131,14 @@ def nav_decode(ch):
         decode_B1I(ch)
     elif ch.sig == 'B1CD':
         decode_B1CD(ch)
+    elif ch.sig == 'B1CP':
+        decode_B1CP(ch)
     elif ch.sig == 'B2I':
         decode_B2I(ch)
     elif ch.sig == 'B2AD':
         decode_B2AD(ch)
+    elif ch.sig == 'B2AP':
+        decode_B2AP(ch)
     elif ch.sig == 'B2BI':
         decode_B2BI(ch)
     elif ch.sig == 'B3I':
@@ -125,14 +159,19 @@ def decode_L1CA(ch):
     
     if ch.nav.fsync > 0: # sync LNAV subframe
         if ch.lock == ch.nav.fsync + 6000:
-            decode_LNAV(ch, ch.nav.syms[-308:-8] ^ ch.nav.rev, ch.nav.rev)
-    else:
+            rev = sync_frame(ch, preamb, ch.nav.syms[-308:])
+            if rev == ch.nav.rev:
+                decode_LNAV(ch, ch.nav.syms[-308:-8] ^ rev, rev)
+            else:
+                ch.nav.fsync = ch.nav.rev = 0
+    
+    elif ch.lock >= 20 * 308:
         # sync and decode LNAV subframe
         rev = sync_frame(ch, preamb, ch.nav.syms[-308:])
         if rev >= 0:
             decode_LNAV(ch, ch.nav.syms[-308:-8] ^ rev, rev)
 
-# decode LNAV ------------------------------------------------------------------
+# decode LNAV ([1]) ------------------------------------------------------------
 def decode_LNAV(ch, syms, rev):
     time = ch.time + ch.coff - 20e-3 * 308
     
@@ -140,6 +179,7 @@ def decode_LNAV(ch, syms, rev):
         ch.nav.fsync = ch.lock
         ch.nav.rev = rev
         data = pack_bits(syms) # LNAV subframe (300 bits)
+        ch.nav.seq = sdr_rtk.getbitu(data, 30, 17) # tow (x 6s)
         ch.nav.data.append((time, data))
         ch.nav.count[0] += 1
         log(3, '$LNAV,%.3f,%s,%d,%s' % (time, ch.sig, ch.prn, hex_str(data)))
@@ -148,7 +188,7 @@ def decode_LNAV(ch, syms, rev):
         ch.nav.count[1] += 1
         log(3, '$LOG,%.3f,%s,%d,LNAV PARITY ERROR' % (time, ch.sig, ch.prn))
 
-# test LNAV parity -------------------------------------------------------------
+# test LNAV parity ([1]) -------------------------------------------------------
 def test_LNAV_parity(syms):
     mask = (0x2EC7CD2, 0x1763E69, 0x2BB1F34, 0x15D8F9A, 0x1AEC7CD, 0x22DEA27)
     
@@ -171,12 +211,56 @@ def decode_L1S(ch):
 def decode_L1CB(ch):
     decode_L1CA(ch)
 
-# decode L1CD nav data ---------------------------------------------------------
+# decode L1CD nav data ([12]) --------------------------------------------------
 def decode_L1CD(ch):
-    sync_sec_code(ch)
+    
+    # add symbol buffer
+    add_buff(ch.nav.syms, 1 if ch.trk.P[-1].real >= 0.0 else 0)
+    
+    if ch.nav.fsync > 0: # sync CNAV-2 frame
+        if ch.lock == ch.nav.fsync + 1800:
+            toi = (ch.nav.seq + 1) % 400
+            rev = sync_CNV2_frame(ch, ch.nav.syms[-1852:], toi)
+            if rev == ch.nav.rev:
+                decode_CNV2(ch, ch.nav.syms[-1852:-52] ^ rev, rev, toi)
+            else:
+                ch.nav.ssync = ch.nav.fsync = ch.nav.rev = 0
+    
+    elif ch.lock >= 1852:
+        # search and decode CNAV-2 frame
+        for toi in range(400):
+            rev = sync_CNV2_frame(ch, ch.nav.syms[-1852:], toi)
+            if rev >= 0:
+                decode_CNV2(ch, ch.nav.syms[-1852:-52] ^ rev, rev, toi)
+                break
 
+# decode CNAV-2 frame ([12]) ---------------------------------------------------
+def decode_CNV2(ch, syms, rev, toi):
+    time = ch.time - 18.52
+    
+    # decode block-interleave (38 x 46 = 1748 syms)
+    syms_d = syms[52:].reshape(46, 38).T.ravel()
+    
+    # decode LDPC (1200 + 548 syms -> 600 + 274 bits)
+    SF2 = sdr_ldpc.decode_LDPC('CNV2_SF2', syms_d[:1200])
+    SF3 = sdr_ldpc.decode_LDPC('CNV2_SF3', syms_d[1200:])
+    
+    if test_CRC(SF2) and test_CRC(SF3):
+        bits = np.hstack([unpack_data(toi, 9), SF2, SF3])
+        ch.nav.ssync = ch.nav.fsync = ch.lock
+        ch.nav.rev = rev
+        ch.nav.seq = toi
+        data = pack_bits(bits) # CNAV-2 frame (9 + 600 + 274 bits)
+        ch.nav.data.append((time, data))
+        ch.nav.count[0] += 1
+        log(3, '$CNV2,%.3f,%s,%d,%s' % (time, ch.sig, ch.prn, hex_str(data)))
+    else:
+        ch.nav.ssync = ch.nav.fsync = 0
+        ch.nav.count[1] += 1
+        log(3, '$LOG,%.3f,%s,%d,CNV2 FRAME ERROR' % (time, ch.sig, ch.prn))
+ 
 # decode L1CP nav data ---------------------------------------------------------
-def decode_L1CD(ch):
+def decode_L1CP(ch):
     sync_sec_code(ch)
 
 # decode SBAS nav data ---------------------------------------------------------
@@ -202,28 +286,25 @@ def search_SBAS_msgs(ch):
     for i in range(250):
         rev = sync_SBAS_msgs(bits[i:i+258])
         if rev >= 0:
-            decode_SBAS_msgs(ch, bits[i:i+250] ^ rev, rev)
+            decode_SBAS_msgs(ch, bits[i:i+250] ^ rev, rev, i * 2)
             break
 
 # sync SBAS message ------------------------------------------------------------
 def sync_SBAS_msgs(bits):
-    preamb_A = (0, 1, 0, 1, 0, 0, 1, 1)
-    preamb_B = (1, 0, 0, 1, 1, 0, 1, 0)
-    preamb_C = (1, 1, 0, 0, 0, 1, 1, 0)
+    preamb = (
+        (0, 1, 0, 1, 0, 0, 1, 1), (1, 0, 0, 1, 1, 0, 1, 0), (1, 1, 0, 0, 0, 1, 1, 0))
     
-    if (np.all(bits[0:8] == preamb_A) and np.all(bits[250:258] == preamb_B)) or \
-       (np.all(bits[0:8] == preamb_B) and np.all(bits[250:258] == preamb_C)) or \
-       (np.all(bits[0:8] == preamb_C) and np.all(bits[250:258] == preamb_A)):
-        return 0
-    if (np.all(bits[0:8] != preamb_A) and np.all(bits[250:258] != preamb_B)) or \
-       (np.all(bits[0:8] != preamb_B) and np.all(bits[250:258] != preamb_C)) or \
-       (np.all(bits[0:8] != preamb_C) and np.all(bits[250:258] != preamb_A)):
-        return 1
+    for i in range(3):
+        j = (i + 1) % 3
+        if np.all(bits[0:8] == preamb[i]) and np.all(bits[250:258] == preamb[j]):
+            return 0
+        if np.all(bits[0:8] != preamb[i]) and np.all(bits[250:258] != preamb[j]):
+            return 1
     return -1
 
 # decode SBAS message ----------------------------------------------------------
-def decode_SBAS_msgs(ch, bits, rev):
-    time = ch.time
+def decode_SBAS_msgs(ch, bits, rev, off):
+    time = ch.time - 1e-3 * (1028 - off)
     
     if test_CRC(bits):
         ch.nav.fsync = ch.lock
@@ -239,9 +320,18 @@ def decode_SBAS_msgs(ch, bits, rev):
 
 # decode L2CM nav data ---------------------------------------------------------
 def decode_L2CM(ch):
-    pass # unsupported
+    
+    # add symbol buffer
+    add_buff(ch.nav.syms, 1 if ch.trk.P[-1].real >= 0.0 else 0)
+    
+    if ch.nav.fsync > 0: # sync CNAV subframe
+        if ch.lock == ch.nav.fsync + 600:
+            search_CNAV_frame(ch)
+    
+    elif (ch.lock - ch.nav.ssync) % 150 == 0:
+        search_CNAV_frame(ch)
 
-# decode L5I nav data ----------------------------------------------------------
+# decode L5I nav data ([13]) ---------------------------------------------------
 def decode_L5I(ch):
     
     if (ch.prn >= 120 and ch.prn <= 158): # L5 SBAS
@@ -252,13 +342,13 @@ def decode_L5I(ch):
         return
     
     if ch.nav.fsync > 0: # sync CNAV subframe
-        if ch.lock == ch.nav.fsync + 3000:
+        if ch.lock == ch.nav.fsync + 6000:
             search_CNAV_frame(ch)
     
     elif (ch.lock - ch.nav.ssync) % 1000 == 0:
         search_CNAV_frame(ch)
     
-# search CNAV subframe ---------------------------------------------------------
+# search CNAV subframe ([13]) --------------------------------------------------
 def search_CNAV_frame(ch):
     preamb = (1, 0, 0, 0, 1, 0, 1, 1)
     
@@ -269,17 +359,18 @@ def search_CNAV_frame(ch):
     for i in range(300):
         rev = sync_frame(ch, preamb, bits[i:i+308])
         if rev >= 0:
-            decode_CNAV(ch, bits[i:i+300] ^ rev, rev)
+            decode_CNAV(ch, bits[i:i+300] ^ rev, rev, i * 2)
             break
 
-# decode CNAV subframe ---------------------------------------------------------
-def decode_CNAV(ch, bits, rev):
-    time = ch.time + ch.coff - 4e-3 * 270
+# decode CNAV subframe ([13]) --------------------------------------------------
+def decode_CNAV(ch, bits, rev, off):
+    time = ch.time - 10e-3 * (1228 - off)
     
     if test_CRC(bits):
         ch.nav.fsync = ch.lock
         ch.nav.rev = rev
         data = pack_bits(bits) # CNAV subframe (300 bits)
+        ch.nav.seq = sdr_rtk.getbitu(data, 20, 17) # tow count
         ch.nav.data.append((time, data))
         ch.nav.count[0] += 1
         log(3, '$CNAV,%.3f,%s,%d,%s' % (time, ch.sig, ch.prn, hex_str(data)))
@@ -297,24 +388,97 @@ def decode_L5SI(ch):
     decode_SBAS(ch)
 
 # decode L5SQ nav data ---------------------------------------------------------
-def decode_L5SI(ch):
+def decode_L5SQ(ch):
     sync_sec_code(ch)
 
-# decode L6D nav data ----------------------------------------------------------
+# decode L6D nav data ([5]) ----------------------------------------------------
 def decode_L6D(ch):
-    pass # unsupported
+    if ch.nav.fsync > 0: # sync L6 frame
+        if ch.lock == ch.nav.fsync + 250:
+            decode_L6_frame(ch, ch.nav.syms[-255:])
+     
+    elif ch.lock >= 255:
+        # sync and decode L6 frame
+        decode_L6_frame(ch, ch.nav.syms[-255:])
+
+# sync and decode L6 frame ([5]) -----------------------------------------------
+def decode_L6_frame(ch, syms):
+    preamb = np.array([0x1A, 0xCF, 0xFC, 0x1D, ch.prn], dtype='uint8')
+    
+    # sync 2 premable differences
+    dpreamb = preamb[1:] - preamb[0]
+    dsyms1 = syms[1:5] - syms[0]
+    dsyms2 = syms[-4:] - syms[-5]
+    if not np.all(dsyms1 == dpreamb) or not np.all(dsyms2 == dpreamb):
+        ch.nav.ssync = ch.nav.fsync = 0
+        return
+    
+    # restore symbols
+    time = ch.time - 4e-3 * 255
+    syms = np.array(syms[:250] + (int(preamb[0]) - syms[0]), dtype='uint8')
+    
+    # decode RS(255,223) and correct errors
+    buff = np.hstack([np.zeros(9, dtype='uint8'), syms[4:250]])
+    ch.nerr = sdr_fec.decode_rs(buff)
+    
+    if ch.nerr >= 0:
+        ch.nav.ssync = ch.nav.fsync = ch.lock
+        data = np.hstack([syms[:4], buff[9:]]) # L6 frame (250 syms)
+        ch.nav.data.append((time, data))
+        ch.nav.count[0] += 1
+        log(3, '$L6FRM,%.3f,%s,%d,%d,%s' % (time, ch.sig, ch.prn, ch.nerr, hex_str(data)))
+    else:
+        ch.nav.ssync = ch.nav.fsync = 0
+        ch.nav.count[1] += 1
+        log(3, '$LOG,%.3f,%s,%d,L6FRM RS ERROR' % (time, ch.sig, ch.prn))
 
 # decode L6E nav data ----------------------------------------------------------
 def decode_L6E(ch):
-    pass # unsupported
+    decode_L6D(ch)
 
-# decode G1CA nav data ---------------------------------------------------------
+# decode G1CA nav data ([14]) --------------------------------------------------
 def decode_G1CA(ch):
-    pass # unsupported
+    time_mark = (
+        1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0,
+        0, 1, 0, 1, 1, 0)
+    
+    if not sync_sec_code(ch): # sync secondary code
+        return
+    
+    if ch.nav.fsync > 0: # sync GLONASS nav string
+        if ch.lock == ch.nav.fsync + 2000:
+            rev = sync_frame(ch, time_mark, ch.nav.syms[-230:])
+            if rev == ch.nav.rev:
+                decode_glo_str(ch, ch.nav.syms[-200:] ^ rev, rev)
+            else:
+                ch.nav.fsync = ch.nav.rev = 0
+     
+    elif ch.lock >= 2300:
+        # sync and decode GLONASS nav string
+        rev = sync_frame(ch, time_mark, ch.nav.syms[-230:])
+        if rev >= 0:
+            decode_glo_str(ch, ch.nav.syms[-200:] ^ rev, rev)
+
+# decode GLONASS nav string ([14]) ---------------------------------------------
+def decode_glo_str(ch, syms, rev):
+    time = ch.time - 2.3
+    
+    data = pack_bits(syms[0:170:2]) # GLONASS string (85 bits, packed)
+    
+    if sdr_rtk.test_glostr(data):
+        ch.nav.fsync = ch.lock
+        ch.nav.rev = rev
+        ch.nav.data.append((time, data))
+        ch.nav.count[0] += 1
+        log(3, '$GSTR,%.3f,%s,%d,%s' % (time, ch.sig, ch.prn, hex_str(data)))
+    else:
+        ch.nav.fsync = ch.nav.rev = 0
+        ch.nav.count[1] += 1
+        log(3, '$LOG,%.3f,%s,%d,GSTR HAMMING ERROR' % (time, ch.sig, ch.prn))
 
 # decode G2CA nav data ---------------------------------------------------------
 def decode_G2CA(ch):
-    pass # unsupported
+    decode_G1CA(ch)
 
 # decode E1B nav data ([2]) ----------------------------------------------------
 def decode_E1B(ch):
@@ -325,8 +489,13 @@ def decode_E1B(ch):
     
     if ch.nav.fsync > 0: # sync frame
         if ch.lock == ch.nav.fsync + 500:
-            decode_gal_INAV(ch, ch.nav.syms[-510:-10] ^ ch.nav.rev, ch.nav.rev)
-    else:
+            rev = sync_frame(ch, preamb, ch.nav.syms[-510:])
+            if rev == ch.nav.rev:
+                decode_gal_INAV(ch, ch.nav.syms[-510:-10] ^ rev, rev)
+            else:
+                ch.nav.fsync = ch.nav.rev = 0
+    
+    elif ch.lock >= 510:
         # sync and decode Galileo I/NAV pages
         rev = sync_frame(ch, preamb, ch.nav.syms[-510:])
         if rev >= 0:
@@ -334,7 +503,7 @@ def decode_E1B(ch):
 
 # decode Galileo I/NAV pages ([2]) ---------------------------------------------
 def decode_gal_INAV(ch, syms, rev):
-    time = ch.time + ch.coff - 4e-3 * 270
+    time = ch.time + ch.coff - 4e-3 * 510
     
     # decode Galileo symbols (240 syms x 2 -> 114 bits x 2)
     bits1 = decode_gal_syms(syms[ 10:250], 30, 8)
@@ -342,19 +511,19 @@ def decode_gal_INAV(ch, syms, rev):
     
     # test even and odd pages
     if bits1[0] != 0 or bits2[0] != 1:
-        ch.nav.fsync = ch.nav.rev = 0
+        ch.nav.ssync = ch.nav.fsync = ch.nav.rev = 0
         return
     
     bits = np.hstack([bits1, bits2[:106]])
     if test_CRC(bits):
-        ch.nav.fsync = ch.lock
+        ch.nav.ssync = ch.nav.fsync = ch.lock
         ch.nav.rev = rev
         data = pack_bits(bits) # Galileo I/NAV 2 pages (220 bits)
         ch.nav.data.append((time, data))
         ch.nav.count[0] += 1
         log(3, '$INAV,%.3f,%s,%d,%s' % (time, ch.sig, ch.prn, hex_str(data)))
     else:
-        ch.nav.fsync = ch.nav.rev = 0
+        ch.nav.ssync = ch.nav.fsync = ch.nav.rev = 0
         ch.nav.count[1] += 1
         log(3, '$LOG,%.3f,%s,%d,INAV FRAME ERROR' % (time, ch.sig, ch.prn))
 
@@ -371,8 +540,13 @@ def decode_E5AI(ch):
 
     if ch.nav.fsync > 0: # sync Galileo F/NAV page
         if ch.lock == ch.nav.fsync + 10000:
-            decode_gal_FNAV(ch, ch.nav.syms[-512:-12] ^ ch.nav.rev, ch.nav.rev)
-    else:
+            rev = sync_frame(ch, preamb, ch.nav.syms[-512:])
+            if rev == ch.nav.rev:
+                decode_gal_FNAV(ch, ch.nav.syms[-512:-12] ^ rev, rev)
+            else:
+                ch.nav.fsync = ch.nav.rev = 0
+    
+    elif ch.lock >= len(ch.sec_code) * 512:
         # sync and decode Galileo F/NAV page
         rev = sync_frame(ch, preamb, ch.nav.syms[-512:])
         if rev >= 0:
@@ -401,7 +575,7 @@ def decode_gal_FNAV(ch, syms, rev):
 def decode_E5AQ(ch):
     sync_sec_code(ch)
 
-# decode E5BI nav data ---------------------------------------------------------
+# decode E5BI nav data ([2]) ---------------------------------------------------
 def decode_E5BI(ch):
     preamb = (0, 1, 0, 1, 1, 0, 0, 0, 0, 0)
     
@@ -410,8 +584,13 @@ def decode_E5BI(ch):
 
     if ch.nav.fsync > 0: # sync frame
         if ch.lock == ch.nav.fsync + 2000:
-            decode_gal_INAV(ch, ch.nav.syms[-510:-10] ^ ch.nav.rev, ch.nav.rev)
-    else:
+            rev = sync_frame(ch, preamb, ch.nav.syms[-510:])
+            if rev == ch.nav.rev:
+                decode_gal_INAV(ch, ch.nav.syms[-510:-10] ^ rev, rev)
+            else:
+                ch.nav.fsync = ch.nav.rev = 0
+    
+    elif ch.lock >= len(ch.sec_code) * 510:
         # sync and decode Galileo I/NAV pages
         rev = sync_frame(ch, preamb, ch.nav.syms[-510:])
         if rev >= 0:
@@ -430,8 +609,13 @@ def decode_E6B(ch):
     
     if ch.nav.fsync > 0: # sync Galileo C/NAV page
         if ch.lock == ch.nav.fsync + 1000:
-            decode_gal_CNAV(ch, ch.nav.syms[-1016:-16] ^ ch.nav.rev, ch.nav.rev)
-    else:
+            rev = sync_frame(ch, preamb, ch.nav.syms[-1016:])
+            if rev == ch.nav.rev:
+                decode_gal_CNAV(ch, ch.nav.syms[-1016:-16] ^ rev, rev)
+            else:
+                ch.nav.ssync = ch.nav.fsync = ch.nav.rev = 0
+    
+    elif ch.lock >= 1016:
         # sync and decode Galileo C/NAV page
         rev = sync_frame(ch, preamb, ch.nav.syms[-1016:])
         if rev >= 0:
@@ -439,24 +623,24 @@ def decode_E6B(ch):
 
 # decode Galileo C/NAV page ([3]) ----------------------------------------------
 def decode_gal_CNAV(ch, syms, rev):
-    time = ch.time + ch.coff - 1e-3 * 1016
+    time = ch.time + ch.coff - ch.T * 1016
     
     # decode Galileo symbols (984 syms -> 486 bits)
     bits = decode_gal_syms(syms[16:], 123, 8)
     
     if test_CRC(bits):
-        ch.nav.fsync = ch.lock
+        ch.nav.ssync = ch.nav.fsync = ch.lock
         ch.nav.rev = rev
         data = pack_bits(bits) # C/NAV frame (486 bits)
         ch.nav.data.append((time, data))
         ch.nav.count[0] += 1
         log(3, '$CNAV,%.3f,%s,%d,%s' % (time, ch.sig, ch.prn, hex_str(data)))
     else:
-        ch.nav.fsync = ch.nav.rev = 0
+        ch.nav.ssync = ch.nav.fsync = ch.nav.rev = 0
         ch.nav.count[1] += 1
         log(3, '$LOG,%.3f,%s,%d,CNAV FRAME ERROR' % (time, ch.sig, ch.prn))
 
-# decode Galileo symbols--------------------------------------------------------
+# decode Galileo symbols ([2]) -------------------------------------------------
 def decode_gal_syms(syms, ncol, nrow):
     
     # decode block-interleave
@@ -470,29 +654,217 @@ def decode_gal_syms(syms, ncol, nrow):
 def decode_E6C(ch):
     sync_sec_code(ch)
 
-# decode B1I nav data ----------------------------------------------------------
+# decode B1I nav data ([7]) ----------------------------------------------------
 def decode_B1I(ch):
-    pass # unsupported (D1, D2)
+    if ch.prn >= 6 and ch.prn <= 58:
+       return decode_B1I_D1(ch)
+    else:
+       return decode_B1I_D2(ch)
 
-# decode B1CD nav data ---------------------------------------------------------
+# decode B1I D1 nav data ([7]) -------------------------------------------------
+def decode_B1I_D1(ch):
+    preamb = (1, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0)
+    
+    if not sync_sec_code(ch): # sync secondary code
+        return
+
+    if ch.nav.fsync > 0: # sync frame
+        if ch.lock == ch.nav.fsync + 6000:
+            rev = sync_frame(ch, preamb, ch.nav.syms[-311:])
+            if rev == ch.nav.rev:
+                decode_D1D2NAV(ch, 1, ch.nav.syms[-311:-11] ^ rev, rev)
+            else:
+                ch.nav.fsync = ch.nav.rev = 0
+    
+    elif ch.lock >= len(ch.sec_code) * 311:
+        # sync and decode BDS D1 NAV subframe
+        rev = sync_frame(ch, preamb, ch.nav.syms[-311:])
+        if rev >= 0:
+            decode_D1D2NAV(ch, 1, ch.nav.syms[-311:-11] ^ rev, rev)
+
+# decode BDS D1/D2 NAV subframe ([7]) ------------------------------------------
+def decode_D1D2NAV(ch, type, syms, rev):
+    time = ch.time - ch.T * len(ch.sec_code) * 311
+    
+    syms[15:30] = decode_D1D2_BCH(syms[15:30])
+    for i in range(30, 300, 30):
+        s1 = decode_D1D2_BCH(syms[i  :i+30:2])
+        s2 = decode_D1D2_BCH(syms[i+1:i+31:2])
+        syms[i:i+30] = np.hstack([s1[:11], s2[:11], s1[11:], s2[11:]])
+    
+    ch.nav.fsync = ch.lock
+    ch.nav.rev = rev
+    data = pack_bits(syms) # D1/D2 NAV subframe (300 bits)
+    ch.nav.data.append((time, data))
+    ch.nav.count[0] += 1
+    log(3, '$D%dNAV,%.3f,%s,%d,%s' % (time, type, ch.sig, ch.prn, hex_str(data)))
+
+# decode symbols by BCH(15,11,1) ([7] Figure 5-4) ------------------------------
+def decode_D1D2_BCH(syms):
+    R = 0
+    for i in range(15):
+        R = (syms[i] << 3) ^ ((R & 1) * 0b1100) ^ (R >> 1)
+    return syms ^ unpack_data(BCH_CORR_TBL[R], 15) # correct error
+
+# decode B1I D2 nav data ([7]) -------------------------------------------------
+def decode_B1I_D2(ch):
+    preamb = (1, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0)
+    
+    if not sync_symb(ch, 2): # sync symbol
+        return
+    
+    if ch.nav.fsync > 0: # sync frame
+        if ch.lock == ch.nav.fsync + 600:
+            rev = sync_frame(ch, preamb, ch.nav.syms[-311:])
+            if rev == ch.nav.rev:
+                decode_D1D2NAV(ch, 2, ch.nav.syms[-311:-11] ^ rev, rev)
+            else:
+                ch.nav.fsync = ch.nav.rev = 0
+    
+    elif ch.lock >= 2 * 311:
+        # sync and decode BDS D2 NAV subframe
+        rev = sync_frame(ch, preamb, ch.nav.syms[-311:])
+        if rev >= 0:
+            decode_D1D2NAV(ch, 2, ch.nav.syms[-311:-11] ^ rev, rev)
+
+# decode B1CD nav data ([8]) ---------------------------------------------------
 def decode_B1CD(ch):
-    pass # unsupported (CNV1)
+    
+    # add symbol buffer
+    add_buff(ch.nav.syms, 1 if ch.trk.P[-1].real >= 0.0 else 0)
+    
+    if ch.nav.fsync > 0: # sync B-CNAV1 frame
+        if ch.lock == ch.nav.fsync + 1800:
+            soh = (ch.nav.seq + 1) % 200
+            rev = sync_BCNV1_frame(ch, ch.nav.syms[-1872:], soh)
+            if rev == ch.nav.rev:
+                decode_BCNV1(ch, ch.nav.syms[-1872:-72] ^ rev, rev, soh)
+            else:
+                ch.nav.fsync = ch.nav.rev = 0
+    
+    elif ch.lock >= 1872:
+        # search and decode B-CNAV1 frame
+        for soh in range(200):
+            rev = sync_BCNV1_frame(ch, ch.nav.syms[-1872:], soh)
+            if rev >= 0:
+                decode_BCNV1(ch, ch.nav.syms[-1872:-72] ^ rev, rev, soh)
+                break
 
-# decode B2I nav data ----------------------------------------------------------
+# decode B-CNAV1 frame ([8]) ---------------------------------------------------
+def decode_BCNV1(ch, syms, rev, soh):
+    time = ch.time - 18.72
+    
+    # decode LDPC (1200 + 528 syms -> 600 + 264 bits)
+    SF2 = sdr_ldpc.decode_LDPC('BCNV1_SF2', syms[72:1272])
+    SF3 = sdr_ldpc.decode_LDPC('BCNV1_SF3', syms[1272:])
+    bits = np.hstack([unpack_data(ch.prn, 6), unpack_data(soh, 8), SF2, SF3])
+     
+    if test_CRC(SF2) and test_CRC(SF3):
+        ch.nav.fsync = ch.lock
+        ch.nav.rev = rev
+        ch.nav.seq = soh
+        data = pack_bits(bits) # CNAV-2 frame (14 + 600 + 264 bits)
+        ch.nav.data.append((time, data))
+        ch.nav.count[0] += 1
+        log(3, '$BCNV1,%.3f,%s,%d,%s' % (time, ch.sig, ch.prn, hex_str(data)))
+    else:
+        ch.nav.fsync = ch.nav.rev = 0
+        ch.nav.count[1] += 1
+        log(3, '$LOG,%.3f,%s,%d,BCNV1 FRAME ERROR' % (time, ch.sig, ch.prn))
+
+# decode B1CP nav data ---------------------------------------------------------
+def decode_B1CP(ch):
+    sync_sec_code(ch)
+
+# decode B2I nav data ([7]) ----------------------------------------------------
 def decode_B2I(ch):
-    decode_B1I
+    decode_B1I(ch)
 
-# decode B2AD nav data ---------------------------------------------------------
+# decode B2AD nav data ([9]) ---------------------------------------------------
 def decode_B2AD(ch):
-    pass # unsupported (CNV2)
+    preamb = (
+        1, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0)
+    
+    if not sync_sec_code(ch): # sync secondary code
+        return
 
-# decode B2BI nav data ---------------------------------------------------------
+    if ch.nav.fsync > 0: # sync frame
+        if ch.lock == ch.nav.fsync + 3000:
+            decode_BCNV2(ch, ch.nav.syms[-624:-24] ^ ch.nav.rev, ch.nav.rev)
+    
+    elif ch.lock >= len(ch.sec_code) * 624:
+        # sync and decode B-CNAV2 frame
+        rev = sync_frame(ch, preamb, ch.nav.syms[-624:])
+        if rev >= 0:
+            decode_BCNV2(ch, ch.nav.syms[-624:-24] ^ rev, rev)
+
+# decode B2AP nav data ---------------------------------------------------------
+def decode_B2AP(ch):
+    sync_sec_code(ch)
+
+# decode B-CNAV2 frame ([9]) ---------------------------------------------------
+def decode_BCNV2(ch, syms, rev):
+    time = ch.time - 3.12
+    
+    # decode LDPC (576 syms -> 288 bits)
+    bits = sdr_ldpc.decode_LDPC('BCNV2', syms[24:])
+     
+    if test_CRC(bits):
+        ch.nav.fsync = ch.lock
+        ch.nav.rev = rev
+        data = pack_bits(bits) # B-CNAV2 frame (288 bits)
+        ch.nav.data.append((time, data))
+        ch.nav.count[0] += 1
+        log(3, '$BCNV2,%.3f,%s,%d,%s' % (time, ch.sig, ch.prn, hex_str(data)))
+    else:
+        ch.nav.fsync = ch.nav.rev = 0
+        ch.nav.count[1] += 1
+        log(3, '$LOG,%.3f,%s,%d,BCNV2 FRAME ERROR' % (time, ch.sig, ch.prn))
+
+# decode B2BI nav data ([10]) --------------------------------------------------
 def decode_B2BI(ch):
-    pass # unsupported (CNV3)
+    preamb = (1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0)
+    preamb = np.hstack([preamb, unpack_data(ch.prn, 6)])
+    
+    # add symbol buffer
+    add_buff(ch.nav.syms, 1 if ch.trk.P[-1].real >= 0.0 else 0)
 
-# decode B3I nav data ----------------------------------------------------------
+    if ch.nav.fsync > 0: # sync frame
+        if ch.lock == ch.nav.fsync + 1000:
+            rev = sync_frame(ch, preamb, ch.nav.syms[-1028:])
+            if rev == ch.nav.rev:
+                decode_BCNV2(ch, ch.nav.syms[-1022:-22] ^ rev, rev)
+            else:
+                ch.nav.fsync = ch.nav.rev = 0
+    
+    elif ch.lock >= 1022:
+        # sync and decode B-CNAV3 frame
+        rev = sync_frame(ch, preamb, ch.nav.syms[-1028:])
+        if rev >= 0:
+            decode_BCNV3(ch, ch.nav.syms[-1022:-22] ^ rev, rev)
+
+# decode B-CNAV3 frame ([10]) --------------------------------------------------
+def decode_BCNV3(ch, syms, rev):
+    time = ch.time - 1.22
+    
+    # decode LDPC (972 syms -> 486 bits)
+    bits = sdr_ldpc.decode_LDPC('BCNV3', syms[28:])
+     
+    if test_CRC(bits):
+        ch.nav.fsync = ch.lock
+        ch.nav.rev = rev
+        data = pack_bits(bits) # B-CNAV3 frame (486 bits)
+        ch.nav.data.append((time, data))
+        ch.nav.count[0] += 1
+        log(3, '$BCNV3,%.3f,%s,%d,%s' % (time, ch.sig, ch.prn, hex_str(data)))
+    else:
+        ch.nav.fsync = ch.nav.rev = 0
+        ch.nav.count[1] += 1
+        log(3, '$LOG,%.3f,%s,%d,BCNV3 FRAME ERROR' % (time, ch.sig, ch.prn))
+
+# decode B3I nav data ([11]) ---------------------------------------------------
 def decode_B3I(ch):
-    decode_B1I
+    decode_B1I(ch)
 
 # sync nav symbols by bit transition -------------------------------------------
 def sync_symb(ch, N):
@@ -509,7 +881,7 @@ def sync_symb(ch, N):
         P = np.mean(ch.trk.P[-N:].real)
         if abs(P) >= THRES_LOST:
             add_buff(ch.nav.syms, 1 if P >= 0.0 else 0)
-            add_buff(ch.nav.tsyms, ch.time)
+            #add_buff(ch.nav.tsyms, ch.time) # for debug
             return True
         else:
             ch.nav.ssync = ch.nav.rev = 0
@@ -520,19 +892,25 @@ def sync_symb(ch, N):
 def sync_sec_code(ch):
     N = len(ch.sec_code)
     
+    if ch.lock < N:
+        return
+    
     if ch.nav.ssync == 0:
         P = np.dot(ch.trk.P[-N:].real, ch.sec_code) / N
         if abs(P) >= THRES_SYNC:
             ch.nav.ssync = ch.lock
             ch.nav.rev = 1 if P < 0.0 else 0 # code polarity
             log(4, '$LOG,%.3f,%s,%d,SECCODE SYNC (%.3f)' % (ch.time, ch.sig, ch.prn, P))
+        return
     
-    elif (ch.lock - ch.nav.ssync) % N == 0:
-        P = np.dot(ch.trk.P[-N:].real, ch.sec_code) / N
+    # delete sec-code
+    ch.trk.P[-1] *= ch.sec_code[(ch.lock - ch.nav.ssync - 1) % N]
+    
+    if (ch.lock - ch.nav.ssync) % N == 0:
+        P = np.mean(ch.trk.P[-N:].real)
         if abs(P) >= THRES_LOST:
             add_buff(ch.nav.syms, (1 if P >= 0.0 else 0))
-            add_buff(ch.nav.tsyms, ch.time)
-            ch.trk.P[-N:] *= ch.sec_code # delete sec-code
+            #add_buff(ch.nav.tsyms, ch.time) # for debug
             return True
         else:
             ch.nav.ssync = ch.nav.rev = 0
@@ -550,7 +928,54 @@ def sync_frame(ch, preamb, bits):
     if np.all(bits[:N] != preamb) and np.all(bits[-N:] != preamb):
         log(4, '$LOG,%.3f,%s,%d,FRAME SYNC (R)' % (ch.time, ch.sig, ch.prn))
         return 1 # reversed
+    return -1
+
+# sync CNAV-2 frame by subframe 1 symbols --------------------------------------
+def sync_CNV2_frame(ch, syms, toi):
     
+    # generate CNAV-2 subframe 1 symbols
+    global CNV2_SF1
+    if len(CNV2_SF1) == 0:
+        for toi in range(400):
+            code = sdr_code.LFSR(51, sdr_code.rev_reg(toi, 8), 0b10011111, 8)
+            bit0 = (toi >> 8) & 1
+            CNV2_SF1[toi] = np.hstack([bit0, ((code + 1) // 2) ^ bit0])
+    
+    SF1 = CNV2_SF1[toi]
+    SFn = CNV2_SF1[(toi + 1) % 400]
+    
+    if np.all(syms[:52] == SF1) and np.all(syms[-52:] == SFn):
+        log(4, '$LOG,%.3f,%s,%d,FRAME SYNC (N) TOI=%d' % (ch.time, ch.sig, ch.prn, toi))
+        return 1 # normal
+    
+    if np.all(syms[:52] != SF1) and np.all(syms[-52:] != SFn):
+        log(4, '$LOG,%.3f,%s,%d,FRAME SYNC (R) TOI=%d' % (ch.time, ch.sig, ch.prn, toi))
+        return 0 # reversed
+    return -1
+
+# sync B-CNAV1 frame by subframe 1 symbols -------------------------------------
+def sync_BCNV1_frame(ch, syms, soh):
+    
+    # generate CNAV-1 subframe 1 symbols
+    global BCNV1_SF1A, BCNV1_SF1B
+    if not ch.prn in BCNV1_SF1A:
+        R = sdr_code.rev_reg(ch.prn, 6)
+        BCNV1_SF1A[ch.prn] = sdr_code.LFSR(21, R, 0b010111, 6)
+    if len(BCNV1_SF1B) == 0:
+        for soh in range(200):
+            R = sdr_code.rev_reg(soh, 8)
+            BCNV1_SF1B[soh] = sdr_code.LFSR(51, R, 0b10011111, 8)
+    
+    SF1 = np.hstack([BCNV1_SF1A[ch.prn], BCNV1_SF1B[soh]])
+    SFn = np.hstack([BCNV1_SF1A[ch.prn], BCNV1_SF1B[(soh + 1) % 200]])
+    
+    if np.all(syms[:72] == SF1) and np.all(syms[-72:] == SFn):
+        log(4, '$LOG,%.3f,%s,%d,FRAME SYNC (N) SOH=%d' % (ch.time, ch.sig, ch.prn, soh))
+        return 1 # normal
+    
+    if np.all(syms[:72] != SF1) and np.all(syms[-72:] != SFn):
+        log(4, '$LOG,%.3f,%s,%d,FRAME SYNC (R) SOH=%d' % (ch.time, ch.sig, ch.prn, soh))
+        return 0 # reversed
     return -1
 
 # test CRC (CRC24Q) ------------------------------------------------------------
