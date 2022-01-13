@@ -14,7 +14,7 @@ WARNOPT = -Wall -Wextra -Wno-missing-field-initializers -Wno-unused-parameter
 
 CFLAGS = -O3 $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
 
-LDLIBS = ../lib/cyusb/CyAPI.a -lsetupapi -lwinmm
+LDLIBS = ../lib/cyusb/CyAPI.a -lsetupapi -lwinmm -lavrt
 #LDLIBS = -lusb-1.0
 
 LDFLAGS = -static
