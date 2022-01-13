@@ -8,10 +8,13 @@
  *  History:
  *  2021-10-20  0.1  new
  *  2022-01-04  0.2  support CyUSB on Windows
- *  2022-01-09  0.3  set process priority real-time for Windows
+ *  2022-01-13  1.0  rise process/thread priority for Windows
  *
  */
 #include "pocket.h"
+#ifdef CYUSB
+#include "avrt.h"
+#endif
 
 /* constants and macros ------------------------------------------------------*/
 #define TO_TRANSFER     3000    /* USB transfer timeout (ms) */
@@ -84,6 +87,28 @@ static uint8_t *read_buff(sdr_dev_t *dev)
     return dev->buff[rp];
 }
 
+/* rise process/thread priority ----------------------------------------------*/
+static void rise_pri(void)
+{
+    if (!SetPriorityClass(GetCurrentProcess(), REALTIME_PRIORITY_CLASS)) {
+        fprintf(stderr, "SetPriorityClass error (%d)\n", (int)GetLastError());
+    }
+    if (!SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL)) {
+        fprintf(stderr, "SetThreadPriority error (%d)\n", (int)GetLastError());
+    }
+    DWORD task = 0;
+    HANDLE h = AvSetMmThreadCharacteristicsA("Capture", &task);
+    
+    if (h == 0) {
+        fprintf(stderr, "AvSetMmThreadCharacteristicsA error (%d)\n",
+            (int)GetLastError());
+    }
+    else if (!AvSetMmThreadPriority(h, AVRT_PRIORITY_CRITICAL)) {
+        fprintf(stderr, "AvSetMmThreadPriority error (%d)\n",
+            (int)GetLastError());
+    }
+}
+
 /* event handler thread ------------------------------------------------------*/
 static DWORD WINAPI event_handler(void *arg)
 {
@@ -93,26 +118,28 @@ static DWORD WINAPI event_handler(void *arg)
     long len = SDR_SIZE_BUFF;
     int i;
     
+    /* rise process/thread priority */
+    rise_pri();
+    
     for (i = 0; i < SDR_MAX_BUFF; i++) {
         ov[i].hEvent = CreateEvent(NULL, false, false, NULL);
         ctx[i] = dev->ep->BeginDataXfer(dev->buff[i], len, &ov[i]); 
-        
-        if (dev->ep->NtStatus || dev->ep->UsbdStatus) {
-            fprintf(stderr, "transfer request rejected (%d)\n",
-                (int)dev->ep->NtStatus);
-        }
     }
-    for (i = 0; dev->state; i = (i + 1) % SDR_MAX_BUFF) {
+    for (i = 0; dev->state; ) {
         if (!dev->ep->WaitForXfer(&ov[i], TO_TRANSFER)) {
             fprintf(stderr, "bulk transfer timeout\n");
+            continue;
         }
-        else if (!dev->ep->FinishDataXfer(dev->buff[i], len, &ov[i], ctx[i])) {
+        if (!dev->ep->FinishDataXfer(dev->buff[i], len, &ov[i], ctx[i])) {
             fprintf(stderr, "bulk transfer error\n");
+            break;
         }
         ctx[i] = dev->ep->BeginDataXfer(dev->buff[i], len, &ov[i]);
         dev->wp = i;
+        i = (i + 1) % SDR_MAX_BUFF;
     }
     for (i = 0; i < SDR_MAX_BUFF; i++) {
+        dev->ep->FinishDataXfer(dev->buff[i], len, &ov[i], ctx[i]);
         CloseHandle(ov[i].hEvent);
     }
     return 0;
@@ -214,14 +241,6 @@ sdr_dev_t *sdr_dev_open(int bus, int port)
     dev->rp = dev->wp = 0;
     dev->thread = CreateThread(NULL, 0, event_handler, dev, 0, NULL);
     
-    /* set process priority real-time */
-    if (!SetPriorityClass(GetCurrentProcess(), REALTIME_PRIORITY_CLASS)) {
-        fprintf(stderr, "set priority class error\n");
-    }
-    /* set thread priority time-critical */
-    if (!SetThreadPriority(dev->thread, THREAD_PRIORITY_TIME_CRITICAL)) {
-        fprintf(stderr, "set thread priority error\n");
-    }
     return dev;
 #else /* CYUSB */
     sdr_dev_t *dev;
@@ -240,7 +259,7 @@ sdr_dev_t *sdr_dev_open(int bus, int port)
         return NULL;
     }
     for (i = 0; i < SDR_MAX_BUFF; i++) {
-#if 0
+#if 1
         dev->data[i] = libusb_dev_mem_alloc(dev->usb, SDR_SIZE_BUFF);
 #else
         dev->data[i] = (uint8_t *)sdr_malloc(SDR_SIZE_BUFF);
@@ -307,7 +326,7 @@ void sdr_dev_close(sdr_dev_t *dev)
     
     for (i = 0; i < SDR_MAX_BUFF; i++) {
         libusb_free_transfer(dev->transfer[i]);
-#if 0
+#if 1
         libusb_dev_mem_free(dev->usb, dev->data[i], SDR_SIZE_BUFF);
 #else
         sdr_free(dev->data[i]);
