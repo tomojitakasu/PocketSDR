@@ -11,6 +11,7 @@
 #
 #  History:
 #  2021-12-24  1.0  new
+#  2022-01-13  1.1  add API test_glostr()
 #
 import os
 from ctypes import *
@@ -76,4 +77,12 @@ def crc32(data, len):
     librtk.rtk_crc32.restype = c_uint32
     p = data.ctypes.data_as(POINTER(c_uint8))
     return librtk.rtk_crc32(p, c_int(len))
-    
+
+# test GLONASS string ----------------------------------------------------------
+def test_glostr(data):
+    if data.dtype != 'uint8':
+        return 0
+    librtk.test_glostr.restype = c_int32
+    p = data.ctypes.data_as(POINTER(c_uint8))
+    return librtk.test_glostr(p)
+
