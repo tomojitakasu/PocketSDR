@@ -92,8 +92,8 @@ def add_text(ax, x, y, text, color='k'):
 #
 #   Synopsis
 # 
-#     pocket_aqc.py [-sig sig] [-prn prn] [-tint tint] [-toff toff] [-f freq]
-#         [-fi freq] [-d freq] [-nz] [-np] [-p] [-3d] file
+#     pocket_aqc.py [-sig sig] [-prn prn[,...]] [-tint tint] [-toff toff]
+#         [-f freq] [-fi freq] [-d freq] [-nz] [-np] [-p] [-3d] file
 # 
 #   Description
 # 
@@ -105,9 +105,9 @@ def add_text(ax, x, y, text, color='k'):
 #   Options ([]: default)
 #  
 #     -sig sig
-#         GNSS signal type (L1CA, L1CB, L1CP, L1CD, L2CM, L5I, L5Q, L6D, L6E,
-#         G1CA, G2CA, E1B, E1C, E5AI, E5AQ, E5BI, E5BQ, E6B, E6C, B1I, B1CD,
-#         B1CP, B2I, B2AD, B2AP, B2BI, B3I). [L1CA]
+#         GNSS signal type (L1CA, L1CB, L1CP, L1CD, L2CM, L5I, L5Q, L5SI, L5SQ,
+#         L6D, L6E, G1CA, G2CA, E1B, E1C, E5AI, E5AQ, E5BI, E5BQ, E6B, E6C, B1I,
+#         B1CD, B1CP, B2I, B2AD, B2AP, B2BI, B3I). [L1CA]
 # 
 #     -prn prn[,...]
 #         PRN numbers of the GNSS signal separated by ','. A PRN number can be a
