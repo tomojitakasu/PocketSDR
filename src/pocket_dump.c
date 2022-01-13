@@ -200,8 +200,11 @@ int main(int argc, char **argv)
     signal(SIGTERM, sig_func);
     signal(SIGINT, sig_func);
     
-    if (*conf_file) {
-        sdr_write_settings(conf_file, bus, port, 0);
+    if (*conf_file && !sdr_write_settings(conf_file, bus, port, 0)) {
+        for (i = 0; i < n; i++) {
+            if (fp[i]) fclose(fp[i]);
+        }
+        return -1;
     }
     dump_data(bus, port, tsec, raw, quiet, fp);
     
