@@ -42,6 +42,8 @@
 #                   B2BI, B3I
 #  2021-12-22  1.2  add secondary code generation
 #  2021-12-24  1.3  add L1S, L5SI, L5SQ
+#  2022-01-13  1.4  change API gen_code_fft()
+#                   add support of G1CA, G2CA and B3I in sec_code()
 #
 import numpy as np
 import scipy.fftpack as fft
@@ -604,9 +606,8 @@ def gen_code(sig, prn):
 def sec_code(sig, prn):
     sig = sig.upper()
     if sig == 'L1CA' or sig == 'L1S'  or sig == 'L1CB' or sig == 'L1CD' or \
-       sig == 'L2CM' or sig == 'G1CA' or sig == 'G2CA' or sig == 'L6D'  or \
-       sig == 'L6E'  or sig == 'E1B'  or sig == 'E6B'  or sig == 'B1CD' or \
-       sig == 'B2BI' or sig == 'B3I':
+       sig == 'L2CM' or sig == 'L6D'  or sig == 'L6E'  or sig == 'E1B'  or \
+       sig == 'E6B'  or sig == 'B1CD' or sig == 'B2BI':
         return np.array([1], dtype='int8') # no secondary code
     elif sig == 'L1CP':
         return sec_code_L1CP(prn)
@@ -618,6 +619,10 @@ def sec_code(sig, prn):
         return sec_code_L5SI(prn)
     elif sig == 'L5SQ':
         return sec_code_L5SQ(prn)
+    elif sig == 'G1CA':
+        return sec_code_G1CA(prn)
+    elif sig == 'G2CA':
+        return sec_code_G2CA(prn)
     elif sig == 'E1C':
         return sec_code_E1C(prn)
     elif sig == 'E5AI':
@@ -640,6 +645,8 @@ def sec_code(sig, prn):
         return sec_code_B2AD(prn)
     elif sig == 'B2AP':
         return sec_code_B2AP(prn)
+    elif sig == 'B3I':
+        return sec_code_B3I(prn)
     else:
         return NONE
 
@@ -671,6 +678,7 @@ def res_code(code, T, coff, fs, N, Nz=0):
 #  args:
 #      code     (I) Code as int8 ndarray (-1 or 1)
 #      T        (I) Code cycle (period) (s)
+#      coff     (I) Code offset (s)
 #      fs       (I) Sampling frequency (Hz)
 #      N        (I) Number of samples
 #      Nz=0     (I) Number of zero-padding (optional)
@@ -678,8 +686,8 @@ def res_code(code, T, coff, fs, N, Nz=0):
 #  returns:
 #      code_fft Resampled and zero-padded code DFT as complex64 ndarray
 #
-def gen_code_fft(code, T, fs, N, Nz=0):
-    code_res = res_code(code, T, 0.0, fs, N, Nz)
+def gen_code_fft(code, T, coff, fs, N, Nz=0):
+    code_res = res_code(code, T, coff, fs, N, Nz)
     return np.conj(fft.fft(code_res))
 
 #-------------------------------------------------------------------------------
@@ -994,6 +1002,16 @@ def gen_code_G1CA(prn):
 # generate G2CA code ([14]) ----------------------------------------------------
 def gen_code_G2CA(prn):
     return gen_code_G1CA(prn)
+
+# generate G1CA secondary code -------------------------------------------------
+def sec_code_G1CA(prn):
+    if prn < -7 or prn > 6: # FCN
+        return NONE
+    return np.array([1, -1] * 5, dtype='int8')
+
+# generate G2CA code -----------------------------------------------------------
+def sec_code_G2CA(prn):
+    return sec_code_G1CA(prn)
 
 # generate E1B code ([5]) ------------------------------------------------------
 def gen_code_E1B(prn):
@@ -1320,6 +1338,10 @@ def gen_code_B3I_G1(N):
 # generate B3I G2 code ---------------------------------------------------------
 def gen_code_B3I_G2(N, R_init):
     return LFSR(N, R_init, 0b1000111011011, 13)
+
+# generate B3I secondary code --------------------------------------------------
+def sec_code_B3I(prn):
+    return sec_code_B1I(prn)
 
 # modulation of code by sub-carrier --------------------------------------------
 def mod_code(code, sub_carr):
