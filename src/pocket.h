@@ -1,6 +1,6 @@
 /*----------------------------------------------------------------------------*/
 /**
- *  Pocket SDR - Header file for SDR Functions.
+ *  Pocket SDR C Library - Header file for GNSS SDR Functions.
  *
  *  Author:
  *  T.TAKASU
@@ -9,6 +9,7 @@
  *  2021-10-20  0.1  new
  *  2022-01-04  1.0  support CyUSB on Windows
  *  2022-01-10  1.1  SDR_SIZE_BUFF: (1<<12) -> (1<<14)
+ *  2022-01-20  1.2  add API mix_carr(), corr_std(), corr_fft()
  *
  */
 #ifndef POCKET_H
@@ -56,19 +57,10 @@ extern "C" {
 #define SDR_SIZE_BUFF   (1<<22) /* size of digital IF data buffer (bytes) */
 #endif /* CYUSB */
 
-#define SDR_CODE_L1CA   1       /* spreading (PRN) code L1C/A */
-#define SDR_CODE_L2CM   2       /* spreading (PRN) code L2CM */
-#define SDR_CODE_L5I    3       /* spreading (PRN) code L5I */
-#define SDR_CODE_L5Q    4       /* spreading (PRN) code L5Q */
-#define SDR_CODE_L6     5       /* spreading (PRN) code L6 */
-#define SDR_CODE_E1B    6       /* spreading (PRN) code E1B */
-#define SDR_CODE_E1C    7       /* spreading (PRN) code E1C */
-#define SDR_CODE_E5AI   8       /* spreading (PRN) code E5AI */
-#define SDR_CODE_E5AQ   9       /* spreading (PRN) code E5AQ */
-#define SDR_CODE_E6B   10       /* spreading (PRN) code E6B */
-#define SDR_CODE_E6C   11       /* spreading (PRN) code E6C */
+#define PI  3.1415926535897932  /* pi */
 
 /* type definitions ----------------------------------------------------------*/
+
 #ifdef CYUSB
 
 typedef CCyUSBDevice sdr_usb_t;  /* USB device type */
@@ -108,12 +100,19 @@ typedef struct {                /* PRN code type */
     int8_t *code, *code_s;      /* primary/secondary code {-1|0|1} */
 } sdr_code_t;
 
+
 /* function prototypes -------------------------------------------------------*/
 
 void *sdr_malloc(size_t size);
 void sdr_free(void *p);
 uint32_t sdr_get_tick(void);
 void sdr_sleep_msec(int msec);
+
+void mix_carr(const float *data, int ix, int N, double fs, double fc,
+              double phi, float *data_carr);
+void corr_std(const float *data, const float *code, int N, const int *pos,
+              int n, float *corr);
+void corr_fft(const float *data, const float *code_fft, int N, float *corr);
 
 sdr_usb_t *sdr_usb_open(int bus, int port, uint16_t vid, uint16_t pid);
 void sdr_usb_close(sdr_usb_t *usb);
