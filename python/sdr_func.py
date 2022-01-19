@@ -82,7 +82,7 @@ def search_sig(sig, prn, data, fs, fi, max_dop=MAX_DOP, zero_pad=True):
     code = sdr_code.gen_code(sig, prn)
     
     if len(code) == 0:
-        return [], [0.0], [0.0], (0, 0), 0.0, 0.0
+        return [], [0.0], [0.0], (0, 0), 0.0
     
     # shift IF frequency for GLONASS FDMA
     fi = shift_freq(sig, prn, fi)
