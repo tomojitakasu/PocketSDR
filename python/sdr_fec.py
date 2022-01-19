@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 #  PocketSDR Python Library - Forward Error Correction (FEC) Functions
 #
