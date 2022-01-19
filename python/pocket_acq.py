@@ -20,6 +20,8 @@ import sdr_func, sdr_code
 mpl.rcParams['toolbar'] = 'None';
 mpl.rcParams['font.size'] = 9
 
+THRES_CN0 = 40.0  # threshold to lock (dB-Hz)
+
 # show usage -------------------------------------------------------------------
 def show_usage():
     print('Usage: pocket_acq.py [-sig sig] [-prn prn[,...]] [-tint tint]')
@@ -29,7 +31,7 @@ def show_usage():
 
 # plot C/N0 --------------------------------------------------------------------
 def plot_cn0(ax, cn0, prns, fc):
-    thres = 40.0
+    thres = THRES_CN0
     x = np.arange(len(cn0))
     y = cn0
     ax.bar(x[y <  thres], y[y <  thres], color='gray', width=0.6)
@@ -234,13 +236,16 @@ if __name__ == '__main__':
                 P, dops, coffs, ix, cn0[i] = sdr_func.search_sig(sig,
                     prns[i], data, fs, fi, max_dop=max_dop, zero_pad=opt[2])
                 
-                print('SIG= %-4s, %s= %3d, COFF= %8.5f ms, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz' % \
-                    (sig, label, prns[i], coffs[ix[1]] * 1e3, dops[ix[0]], cn0[i]))
+                print('%sSIG= %-4s, %s= %3d, COFF= %8.5f ms, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz%s' % \
+                    ('\033[32m' if cn0[i] >= THRES_CN0 else '',
+                     sig, label, prns[i], coffs[ix[1]] * 1e3, dops[ix[0]], cn0[i],
+                     '\033[0m' if cn0[i] >= THRES_CN0 else ''))
             
             t = time.time() - t
-            ax1 = fig.add_axes(rect0, facecolor=bc)
-            plot_cn0(ax1, cn0, prns, fc)
-            ax0.set_title('SIG = %s, FILE = %s' % (sig, file), fontsize=10)
+            if not opt[3]:
+                ax1 = fig.add_axes(rect0, facecolor=bc)
+                plot_cn0(ax1, cn0, prns, fc)
+                ax0.set_title('SIG = %s, FILE = %s' % (sig, file), fontsize=10)
         else:
             P, dops, coffs, ix, cn0 = \
                 sdr_func.search_sig(sig, prns[0], data, fs, fi, max_dop=max_dop,
@@ -249,8 +254,10 @@ if __name__ == '__main__':
             text = 'COFF=%.5fms, DOP=%.0fHz, C/N0=%.1fdB-Hz' % \
                    (coffs[ix[1]] * 1e3, dops[ix[0]], cn0)
             if opt[3]: # text
-                print('SIG= %-4s, %s= %3d, COFF= %8.5f ms, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz' % \
-                    (sig, label, prns[0], coffs[ix[1]] * 1e3, dops[ix[0]], cn0))
+                print('%sSIG= %-4s, %s= %3d, COFF= %8.5f ms, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz%s' % \
+                    ('\033[32m' if cn0 >= THRES_CN0 else '',
+                     sig, label, prns[0], coffs[ix[1]] * 1e3, dops[ix[0]], cn0,
+                     '\033[0m' if cn0 >= THRES_CN0 else ''))
                 exit()
             elif opt[1]: # plot 3D
                 ax1 = fig.add_axes(rect3, projection='3d', facecolor='None')
