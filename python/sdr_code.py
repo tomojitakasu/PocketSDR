@@ -32,6 +32,8 @@
 #      Navigation radiosignal in bands L1, L2 (Version 5.1), 2008
 #  [15] IS-QZSS-TV-003, Quasi-Zenith Satellite System Interface Specification
 #      Positioning Technology Verification Service, December 27, 2019
+#  [16] IRNSS SIS ICD for Standard Positioning Service version 1.1, August,
+#      2017
 #
 #  Author:
 #  T.TAKASU
@@ -44,6 +46,7 @@
 #  2021-12-24  1.3  add L1S, L5SI, L5SQ
 #  2022-01-13  1.4  change API gen_code_fft()
 #                   add support of G1CA, G2CA and B3I in sec_code()
+#  2022-01-17  1.5  add signals: L2CL, I5S, ISS
 #
 import numpy as np
 import scipy.fftpack as fft
@@ -57,7 +60,7 @@ CHIP = (-1, 1)
 L1CA       = {}
 L1CP, L1CD = {}, {}
 L1CO       = {}
-L2CM       = {}
+L2CM, L2CL = {}, {}
 L5I , L5Q  = {}, {}
 L6D,  L6E  = {}, {}
 G1CA       = {}
@@ -72,6 +75,7 @@ B2AD, B2AP = {}, {}
 B2AS       = {}
 B2BI       = {}
 B3I        = {}
+I5S, ISS   = {}, {}
 
 L1CA_G1, L1CA_G2 = [], []
 L1C_L_SEQ = []
@@ -277,7 +281,35 @@ L2CM_R_init_2 = ( # PRN 159 - 210
     0o607275514, 0o045413633, 0o212645405, 0o613700455, 0o706202440,
     0o705056276, 0o020373522, 0o746013617, 0o132720621, 0o434015513,
     0o566721727, 0o140633660)
-        
+
+L2CL_R_init_1 = ( # PRN 1 - 63
+    0o624145772, 0o506610362, 0o220360016, 0o710406104, 0o001143345,
+    0o053023326, 0o652521276, 0o206124777, 0o015563374, 0o561522076,
+    0o023163525, 0o117776450, 0o606516355, 0o003037343, 0o046515565,
+    0o671511621, 0o605402220, 0o002576207, 0o525163451, 0o266527765,
+    0o006760703, 0o501474556, 0o743747443, 0o615534726, 0o763621420,
+    0o720727474, 0o700521043, 0o222567263, 0o132765304, 0o746332245,
+    0o102300466, 0o255231716, 0o437661701, 0o717047302, 0o222614207,
+    0o561123307, 0o240713073, 0o101232630, 0o132525726, 0o315216367,
+    0o377046065, 0o655351360, 0o435776513, 0o744242321, 0o024346717,
+    0o562646415, 0o731455342, 0o723352536, 0o000013134, 0o011566642,
+    0o475432222, 0o463506741, 0o617127534, 0o026050332, 0o733774235,
+    0o751477772, 0o417631550, 0o052247456, 0o560404163, 0o417751005,
+    0o004302173, 0o715005045, 0o001154457)
+
+L2CL_R_init_2 = ( # PRN 159 - 210
+    0o605253024, 0o063314262, 0o066073422, 0o737276117, 0o737243704,
+    0o067557532, 0o227354537, 0o704765502, 0o044746712, 0o720535263,
+    0o733541364, 0o270060042, 0o737176640, 0o133776704, 0o005645427,
+    0o704321074, 0o137740372, 0o056375464, 0o704374004, 0o216320123,
+    0o011322115, 0o761050112, 0o725304036, 0o721320336, 0o443462103,
+    0o510466244, 0o745522652, 0o373417061, 0o225526762, 0o047614504,
+    0o034730440, 0o453073141, 0o533654510, 0o377016461, 0o235525312,
+    0o507056307, 0o221720061, 0o520470122, 0o603764120, 0o145604016,
+    0o051237167, 0o033326347, 0o534627074, 0o645230164, 0o000171400,
+    0o022715417, 0o135471311, 0o137422057, 0o714426456, 0o640724672,
+    0o501254540, 0o513322453)
+
 L5I_XB_adv = ( # PRN 1 - 210
      266,  365,  804, 1138, 1509, 1559, 1756, 2084, 2170, 2303, 2527, 2687,
     2930, 3471, 3940, 4132, 4332, 4924, 5343, 5443, 5641, 5816, 5898, 5918,
@@ -511,6 +543,16 @@ B3I_G2_init = ( # PRN 1 - 63
     0b0111001111000, 0b0010111001010, 0b1100111110110, 0b1001001000101,
     0b0111000100000, 0b0011001000010, 0b0010001001110)
 
+I5S_G2_init = ( # PRN 1 - 14
+    0b1110100111, 0b0000100110, 0b1000110100, 0b0101110010, 0b1110110000,
+    0b0001101011, 0b0000010100, 0b0100110000, 0b0010011000, 0b1101100100,
+    0b0001001100, 0b1101111100, 0b1011010010, 0b0111101010)
+
+ISS_G2_init = ( # PRN 1 - 14
+    0b0011101111, 0b0101111101, 0b1000110001, 0b0010101011, 0b1010010001,
+    0b0100101100, 0b0010001110, 0b0100100110, 0b1100001110, 0b1010111110,
+    0b1110010001, 0b1101101001, 0b0101000101, 0b0100001101)
+
 NH10 = ( # 10 bits Neuman-Hofman code
     -1, -1, -1, -1, 1, 1, -1, 1, -1, 1)
  
@@ -542,6 +584,8 @@ def gen_code(sig, prn):
         return gen_code_L1CD(prn)
     elif sig == 'L2CM':
         return gen_code_L2CM(prn)
+    elif sig == 'L2CL':
+        return gen_code_L2CL(prn)
     elif sig == 'L5I':
         return gen_code_L5I(prn)
     elif sig == 'L5Q':
@@ -590,6 +634,10 @@ def gen_code(sig, prn):
         return gen_code_B2BI(prn)
     elif sig == 'B3I':
         return gen_code_B3I(prn)
+    elif sig == 'I5S':
+        return gen_code_I5S(prn)
+    elif sig == 'ISS':
+        return gen_code_ISS(prn)
     else:
         return NONE
 
@@ -605,9 +653,8 @@ def gen_code(sig, prn):
 #
 def sec_code(sig, prn):
     sig = sig.upper()
-    if sig == 'L1CA' or sig == 'L1S'  or sig == 'L1CB' or sig == 'L1CD' or \
-       sig == 'L2CM' or sig == 'L6D'  or sig == 'L6E'  or sig == 'E1B'  or \
-       sig == 'E6B'  or sig == 'B1CD' or sig == 'B2BI':
+    if sig in ('L1CA', 'L1S', 'L1CB','L1CD', 'L2CM', 'L2CL', 'L6D', 'L6E', 'E1B',
+       'E6B', 'B1CD', 'B2BI', 'I5S', 'ISS'):
         return np.array([1], dtype='int8') # no secondary code
     elif sig == 'L1CP':
         return sec_code_L1CP(prn)
@@ -701,19 +748,18 @@ def gen_code_fft(code, T, coff, fs, N, Nz=0):
 #
 def code_cyc(sig):
     sig = sig.upper()
-    if sig == 'L1CA' or sig == 'L1CB' or sig == 'L1S'  or sig == 'L5I'  or \
-       sig == 'L5Q'  or sig == 'L5SI' or sig == 'L5SQ' or sig == 'G1CA' or \
-       sig == 'G2CA' or sig == 'E5AI' or sig == 'E5AQ' or sig == 'E5BI' or \
-       sig == 'E5BQ' or sig == 'E6B'  or sig == 'E6C'  or sig == 'B1I'  or \
-       sig == 'B2I'  or sig == 'B2AD' or sig == 'B2AP' or sig == 'B2BI' or \
-       sig == 'B3I':
+    if sig in ('L1CA', 'L1CB', 'L1S', 'L5I', 'L5Q', 'L5SI', 'L5SQ', 'G1CA',
+       'G2CA', 'E5AI', 'E5AQ', 'E5BI', 'E5BQ', 'E6B', 'E6C', 'B1I', 'B2I',
+       'B2AD', 'B2AP', 'B2BI', 'B3I', 'I5S', 'ISS'):
         return 1e-3
-    elif sig == 'L6D' or sig == 'L6E' or sig == 'E1B' or sig == 'E1C':
+    elif sig in ('L6D', 'L6E', 'E1B', 'E1C'):
         return 4e-3
-    elif sig == 'L1CP' or sig == 'L1CD' or sig == 'B1CD' or sig == 'B1CP':
+    elif sig in ('L1CP', 'L1CD', 'B1CD', 'B1CP'):
         return 10e-3
     elif sig == 'L2CM':
         return 20e-3
+    elif sig == 'L2CL':
+        return 1500e-3
     else:
         return 0.0
 
@@ -728,21 +774,21 @@ def code_cyc(sig):
 #
 def code_len(sig):
     sig = sig.upper()
-    if sig == 'L1CA' or sig == 'L1S' or sig == 'L1CB':
+    if sig in ('L1CA', 'L1S', 'L1CB', 'I5S', 'ISS'):
         return 1023
-    elif sig == 'L1CP' or sig == 'L1CD' or sig == 'L2CM' or sig == 'L5I'  or \
-         sig == 'L5Q'  or sig == 'L5SI' or sig == 'L5SQ' or sig == 'L6D'  or \
-         sig == 'L6E'  or sig == 'E5AI' or sig == 'E5AQ' or sig == 'E5BI' or \
-         sig == 'E5BQ' or sig == 'B1CD' or sig == 'B1CP' or sig == 'B2AD' or \
-         sig == 'B2AP' or sig == 'B2BI' or sig == 'B3I':
+    elif sig in ('L1CP', 'L1CD', 'L2CM', 'L5I', 'L5Q', 'L5SI', 'L5SQ', 'L6D',
+         'L6E', 'E5AI', 'E5AQ', 'E5BI', 'E5BQ', 'B1CD', 'B1CP', 'B2AD', 'B2AP',
+         'B2BI', 'B3I'):
         return 10230
-    elif sig == 'E6B'  or sig == 'E6C':
+    elif sig == 'L2CL':
+        return 767250
+    elif sig in ('E6B', 'E6C'):
         return 5115
-    elif sig == 'E1B' or sig == 'E1C':
+    elif sig in ('E1B', 'E1C'):
         return 4092
-    elif sig == 'G1CA' or sig == 'G2CA':
+    elif sig in ('G1CA', 'G2CA'):
         return 511
-    elif sig == 'B1I'  or sig == 'B2I':
+    elif sig in ('B1I', 'B2I'):
         return 2046
     else:
         return 0
@@ -758,18 +804,17 @@ def code_len(sig):
 #
 def sig_freq(sig):
     sig = sig.upper()
-    if sig == 'L1CA' or sig == 'L1CB' or sig == 'L1S'  or sig == 'E1B'  or \
-       sig == 'E1C'  or sig == 'L1CP' or sig == 'L1CD' or sig == 'B1CD' or \
-       sig == 'B1CP':
+    if sig in ('L1CA', 'L1CB', 'L1S' , 'E1B', 'E1C', 'L1CP', 'L1CD', 'B1CD',
+       'B1CP'):
         return 1575.42e6
-    elif sig == 'L2CM':
+    elif sig in ('L2CM', 'L2CL'):
         return 1227.60e6
-    elif sig == 'L5I'  or sig == 'L5Q'  or sig == 'L5SI' or sig == 'L5SQ' or \
-         sig == 'E5AI' or sig == 'E5AQ' or sig == 'B2AD' or sig == 'B2AP':
+    elif sig in ('L5I', 'L5Q', 'L5SI', 'L5SQ', 'E5AI', 'E5AQ', 'B2AD', 'B2AP',
+        'I5S'):
         return 1176.45e6
-    elif sig == 'E5BI' or sig == 'E5BQ' or sig == 'B2I' or sig == 'B2BI':
+    elif sig in ('E5BI', 'E5BQ', 'B2I', 'B2BI'):
         return 1207.14e6
-    elif sig == 'L6D' or sig == 'L6E' or sig == 'E6B'  or sig == 'E6C':
+    elif sig in ('L6D', 'L6E', 'E6B' , 'E6C'):
         return 1278.75e6
     elif sig == 'B1I':
         return 1561.098e6
@@ -779,6 +824,8 @@ def sig_freq(sig):
         return 1602.0e6
     elif sig == 'G2CA':
         return 1246.0e6
+    elif sig == 'ISS':
+        return 2492.028e6
     else:
         return 0.0
 
@@ -879,13 +926,29 @@ def gen_code_L2CM(prn):
         return NONE
     N = 10230
     if prn not in L2CM:
-        code = np.zeros(N, dtype='int8')
         R = L2CM_R_init_1[prn-1] if prn <= 63 else L2CM_R_init_2[prn-159]
-        for i in range(N):
-            code[i] = CHIP[R & 1]
-            R = (R >> 1) ^ (0b100100101001001010100111100 * (R & 1))
-        L2CM[prn] = mod_code(code, [1, 0]) # TDM
+        code = gen_code_L2C(N, R)
+        L2CM[prn] = mod_code(code, [-1, 0]) # TDM
     return L2CM[prn]
+
+# generate L2CL code ([1]) -----------------------------------------------------
+def gen_code_L2CL(prn):
+    if (prn < 1 or prn > 63) and (prn < 159 or prn > 210):
+        return NONE
+    N = 767250
+    if prn not in L2CL:
+        R = L2CL_R_init_1[prn-1] if prn <= 63 else L2CL_R_init_2[prn-159]
+        code = gen_code_L2C(N, R)
+        L2CL[prn] = mod_code(code, [0, 1]) # TDM
+    return L2CL[prn]
+
+# generate L2C code ([1]) ------------------------------------------------------
+def gen_code_L2C(N, R):
+    code = np.zeros(N, dtype='int8')
+    for i in range(N):
+        code[i] = CHIP[R & 1]
+        R = (R >> 1) ^ (0b100100101001001010100111100 * (R & 1))
+    return code
 
 # generate L5I code ([2]) ------------------------------------------------------
 def gen_code_L5I(prn):
@@ -1342,6 +1405,30 @@ def gen_code_B3I_G2(N, R_init):
 # generate B3I secondary code --------------------------------------------------
 def sec_code_B3I(prn):
     return sec_code_B1I(prn)
+
+# generate I5S code ([16]) -----------------------------------------------------
+def gen_code_I5S(prn):
+    if prn < 1 or prn > 14:
+        return NONE
+    N = 1023
+    global I5S
+    if prn not in I5S:
+        I5S_G1 = LFSR(N, 0b1111111111, 0b0010000001, 10)
+        I5S_G2 = LFSR(N, rev_reg(I5S_G2_init[prn-1], 10), 0b0110010111, 10)
+        I5S[prn] = -I5S_G1 * I5S_G2
+    return I5S[prn]
+
+# generate ISS code ([16]) -----------------------------------------------------
+def gen_code_ISS(prn):
+    if prn < 1 or prn > 14:
+        return NONE
+    N = 1023
+    global ISS
+    if prn not in ISS:
+        ISS_G1 = LFSR(N, 0b1111111111, 0b0010000001, 10)
+        ISS_G2 = LFSR(N, rev_reg(ISS_G2_init[prn-1], 10), 0b0110010111, 10)
+        ISS[prn] = -ISS_G1 * ISS_G2
+    return I5S[prn]
 
 # modulation of code by sub-carrier --------------------------------------------
 def mod_code(code, sub_carr):
