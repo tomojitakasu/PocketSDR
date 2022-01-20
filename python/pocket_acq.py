@@ -31,7 +31,7 @@ ESC_RES = '\033[0m'  # ANSI escape reset
 def show_usage():
     print('Usage: pocket_acq.py [-sig sig] [-prn prn[,...]] [-tint tint]')
     print('       [-toff toff] [-f freq] [-fi freq] [-d freq] [-nz] [-np]')
-    print('       [-p] [-3d] file')
+    print('       [-p] [-l] [-3d] file')
     exit()
 
 # plot C/N0 --------------------------------------------------------------------
@@ -98,7 +98,7 @@ def add_text(ax, x, y, text, color='k'):
 #   Synopsis
 # 
 #     pocket_aqc.py [-sig sig] [-prn prn[,...]] [-tint tint] [-toff toff]
-#         [-f freq] [-fi freq] [-d freq] [-nz] [-np] [-p] [-3d] file
+#         [-f freq] [-fi freq] [-d freq] [-nz] [-np] [-p] [-l] [-3d] file
 # 
 #   Description
 # 
@@ -143,6 +143,9 @@ def add_text(ax, x, y, text, color='k'):
 #
 #     -p
 #         Plot correlation powers with correlation peak graph.
+#
+#     -l
+#         Plot correlation powers along Doppler frequencies.
 #
 #     -3d
 #         Plot correlation powers in a 3D-plot.
