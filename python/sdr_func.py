@@ -10,6 +10,7 @@
 #  2022-01-13  1.2  add API unpack_data()
 #                   DOP_STEP: 0.25 -> 0.5
 #  2022-01-20  1.3  use external library for mix_carr(), corr_std(), corr_fft()
+#                   modify API search_sig(), search_code(), mix_carr() 
 #
 from math import *
 from ctypes import *
@@ -93,13 +94,14 @@ def read_data(file, fs, IQ, T, toff=0.0):
 #      ix       Index of position with max correlation power in the search space
 #               (ix[0]: in Doppler frequencies, ix[1]: in Code offsets)
 #      cn0      C/N0 of max correlation power (dB-Hz)
+#      dop      Fine Doppler frequnecy estimated (Hz)
 #
 def search_sig(sig, prn, data, fs, fi, max_dop=MAX_DOP, zero_pad=True):
     # generate code
     code = sdr_code.gen_code(sig, prn)
     
     if len(code) == 0:
-        return [], [0.0], [0.0], (0, 0), 0.0
+        return [], [0.0], [0.0], (0, 0), 0.0, 0.0
     
     # shift IF frequency for GLONASS FDMA
     fi = shift_freq(sig, prn, fi)
@@ -115,14 +117,14 @@ def search_sig(sig, prn, data, fs, fi, max_dop=MAX_DOP, zero_pad=True):
     # parallel code search and non-coherent integration
     P = np.zeros((len(fds), N), dtype='float32')
     for i in range(0, len(data) - len(code_fft) + 1, N):
-        P += search_code(code_fft, T, data[i:i+len(code_fft)], fs, fi, fds)
+        P += search_code(code_fft, T, data, i, fs, fi, fds)
     
     # max correlation power and C/N0
     P_max, ix, cn0 = corr_max(P, T)
     
     coffs = np.arange(0, T, 1.0 / fs, dtype='float32')
     
-    return P / P_max, fds, coffs, ix, cn0
+    return P / P_max, fds, coffs, ix, cn0, fine_dop(P.T[ix[1]], fds, ix[0])
 
 #-------------------------------------------------------------------------------
 #  Parallel code search in digitized IF data.
@@ -130,7 +132,8 @@ def search_sig(sig, prn, data, fs, fi, max_dop=MAX_DOP, zero_pad=True):
 #  args:
 #      code_fft (I) Code DFT (with or w/o zero-padding)
 #      T        (I) Code cycle (period) (s)
-#      data     (I) Digitized IF data as complex64 ndarray
+#      buff     (I) Buffer of IF data as complex64 ndarray
+#      ix       (I) index of buffer
 #      fs       (I) Sampling frequency (Hz)
 #      fi       (I) IF frequency (Hz)
 #      fds      (I) Doppler frequency bins as ndarray (Hz)
@@ -139,12 +142,12 @@ def search_sig(sig, prn, data, fs, fi, max_dop=MAX_DOP, zero_pad=True):
 #      P        Correlation powers in the Doppler frequencies - Code offset
 #               space as float32 2D-ndarray
 #
-def search_code(code_fft, T, data, fs, fi, fds):
+def search_code(code_fft, T, buff, ix, fs, fi, fds):
     N = int(fs * T)
     P = np.zeros((len(fds), N), dtype='float32')
     
     for i in range(len(fds)):
-        data_carr = mix_carr(data, fs, fi + fds[i], 0.0)
+        data_carr = mix_carr(buff, ix, len(code_fft), fs, fi + fds[i], 0.0)
         P[i] = np.abs(corr_fft(data_carr, code_fft)[0:N]) ** 2
     return P
 
@@ -155,6 +158,13 @@ def corr_max(P, T):
     P_ave = np.mean(P)
     cn0 = 10.0 * log10((P_max - P_ave) / P_ave / T) if P_ave > 0.0 else 0.0
     return P_max, ix, cn0
+
+# fine Doppler frequency by quadratic fitting ----------------------------------
+def fine_dop(P, fds, ix):
+    if ix == 0 or ix == len(fds) - 1:
+        return fds[ix]
+    p = np.polyfit(fds[ix-1:ix+2], P[ix-1:ix+2], 2)
+    return -p[1] / (2.0 * p[0])
 
 # shift IF frequency for GLONASS FDMA ------------------------------------------
 def shift_freq(sig, fcn, fi):
@@ -169,24 +179,23 @@ def dop_bins(T, max_dop):
     return np.arange(-max_dop, max_dop + DOP_STEP / T, DOP_STEP / T)
 
 # mix carrier ------------------------------------------------------------------
-def mix_carr(data, fs, fc, phi):
+def mix_carr(buff, ix, N, fs, fc, phi):
     if libsdr and LIBSDR_ENA:
-        N = len(data)
         data_carr = np.empty(N, dtype='complex64')
         libsdr.mix_carr.argtypes = [
             ctypeslib.ndpointer('complex64', flags='C'), c_int32, c_int32,
             c_double, c_double, c_double,
             ctypeslib.ndpointer('complex64', flags='C')]
-        libsdr.mix_carr(data, 0, N, fs, fc, phi, data_carr)
+        libsdr.mix_carr(buff, ix, N, fs, fc, phi, data_carr)
         return data_carr
     else:
-        N = 256 # carrier lookup table size
+        n = 256 # carrier lookup table size
         global carr_tbl
         if len(carr_tbl) == 0:
-            carr_tbl = np.array(np.exp(-2j * np.pi * np.arange(N) / N),
+            carr_tbl = np.array(np.exp(-2j * np.pi * np.arange(n) / n),
                            dtype='complex64')
-        ix = ((fc / fs * np.arange(len(data)) + phi) * N).astype('int')
-        return data * carr_tbl[ix % N]
+        i = ((fc / fs * np.arange(N) + phi) * n).astype('int')
+        return buff[ix:ix+N] * carr_tbl[i % n]
 
 # standard correlator ----------------------------------------------------------
 def corr_std(data, code, pos):
