@@ -17,34 +17,25 @@
 #include <immintrin.h>
 #endif
 
-/* constants ----------------------------------------------------------------*/
+/* constants -----------------------------------------------------------------*/
 #define NTBL     256        /* carrier lookup table size */
-
-/* global variables ---------------------------------------------------------*/
-static float cos_tbl[NTBL] = {0};
-static float sin_tbl[NTBL] = {0};
-static fftwf_plan plan[2] = {0};
-static int N_plan = 0;
-
-/* initialize library --------------------------------------------------------*/
-void init_sdr_func(void)
-{
-    int i;
-    
-    for (i = 0; i < NTBL; i++) {
-        cos_tbl[i] = cosf(-2.0f * (float)PI * i / NTBL);
-        sin_tbl[i] = sinf(-2.0f * (float)PI * i / NTBL);
-    }
-}
 
 /* mix carrier (N = 2 * n) ---------------------------------------------------*/
 void mix_carr(const float *data, int ix, int N, double fs, double fc,
               double phi, float *data_carr)
 {
-    double p, step = fc / fs / 2.0 * NTBL;
+    static float cos_tbl[NTBL] = {0}, sin_tbl[NTBL] = {0};
+    double p, step;
     int i, j, k, m;
     
+    if (cos_tbl[0] == 0.0) {
+        for (i = 0; i < NTBL; i++) {
+            cos_tbl[i] = cosf(-2.0f * (float)PI * i / NTBL);
+            sin_tbl[i] = sinf(-2.0f * (float)PI * i / NTBL);
+        }
+    }
     phi = fmod(phi, 1.0) * NTBL;
+    step = fc / fs / 2.0 * NTBL;
     
     for (i = 0, j = ix * 2; i < N * 2; i += 4, j += 4) {
         p = phi + step * i;
@@ -139,6 +130,8 @@ void mul_cpx(const float *a, const float *b, int N, float s, float *c)
 /* FFT correlator (N = 2 * n) -----------------------------------------------*/
 void corr_fft(const float *data, const float *code_fft, int N, float *corr)
 {
+    static fftwf_plan plan[2] = {0};
+    static int N_plan = 0;
     fftwf_complex *c1, *c2;
     
     c1 = (fftwf_complex *)fftwf_malloc(sizeof(fftwf_complex) * N);
