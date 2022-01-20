@@ -90,16 +90,17 @@ def ch_new(sig, prn, fs, fi, max_dop=MAX_DOP, sp_corr=SP_CORR, add_corr=False,
 #  args:
 #      ch       (I) Receiver channel
 #      time     (I) Sampling time of the end of digitized IF data (s)
-#      data     (I) 2-cycle samples of digitized IF data as complex64 ndarray
+#      buff     (I) buffer of digitized IF data as complex64 ndarray
+#      ix       (I) index of IF data
 #
 #  returns:
 #      None
 #
-def ch_update(ch, time, data):
+def ch_update(ch, time, buff, ix):
     if ch.state == 'SRCH':
-        search_sig(ch, time, data)
+        search_sig(ch, time, buff, ix)
     elif ch.state == 'LOCK':
-        track_sig(ch, time, data)
+        track_sig(ch, time, buff, ix)
     elif np.random.rand() * T_SRCH / ch.T < 1.0: # IDLE
         ch.state = 'SRCH'
 
@@ -137,11 +138,11 @@ def trk_init(trk):
     trk.P[:] = 0.0
 
 # search signal ----------------------------------------------------------------
-def search_sig(ch, time, data):
+def search_sig(ch, time, buff, ix):
     ch.time = time
     
     # parallel code search and non-coherent integration
-    ch.acq.P_sum += search_code(ch.acq.code_fft, ch.T, data, ch.fs, ch.fi,
+    ch.acq.P_sum += search_code(ch.acq.code_fft, ch.T, buff, ix, ch.fs, ch.fi,
         ch.acq.fds)
     ch.acq.n_sum += 1
     
@@ -175,7 +176,7 @@ def start_track(ch, fd, coff, cn0):
     sdr_nav.nav_init(ch.nav)
 
 # track signal -----------------------------------------------------------------
-def track_sig(ch, time, data):
+def track_sig(ch, time, buff, ix):
     tau = time - ch.time   # time interval (s)
     fc = ch.fi + ch.fd     # IF carrier frequency with Doppler (Hz)
     ch.adr += ch.fd * tau  # accumulated Doppler (cyc)
@@ -187,14 +188,11 @@ def track_sig(ch, time, data):
     phi = ch.fi * tau + ch.adr + fc * i / ch.fs
     
     # mix carrier
-    data_carr = mix_carr(data[i:i+ch.N], ch.fs, fc, phi)
+    data_carr = mix_carr(buff, ix + i, ch.N, ch.fs, fc, phi)
     
     if ch.sig == 'L6D' or ch.sig == 'L6E':
-        # FFT correlator
-        C = corr_fft(data_carr, ch.trk.code) / ch.N
-        
-        # decode L6 CSK
-        ch.trk.C = CSK(ch, C)
+        # FFT correlator and decode L6 CSK
+        ch.trk.C = CSK(ch, corr_fft(data_carr, ch.trk.code))
     else:
         # standard correlator
         ch.trk.C = corr_std(data_carr, ch.trk.code, ch.trk.pos)
