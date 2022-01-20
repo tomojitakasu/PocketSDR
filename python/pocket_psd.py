@@ -1,6 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
-#  PocketSDR Python AP - Plot PSD and histgrams of digital IF data
+#  Pocket SDR Python AP - Plot PSD and histgrams of digital IF data
 #
 #  Author:
 #  T.TAKASU
