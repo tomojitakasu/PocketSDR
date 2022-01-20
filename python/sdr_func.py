@@ -9,17 +9,34 @@
 #  2021-12-24  1.1  fix several problems
 #  2022-01-13  1.2  add API unpack_data()
 #                   DOP_STEP: 0.25 -> 0.5
+#  2022-01-20  1.3  use external library for mix_carr(), corr_std(), corr_fft()
 #
 from math import *
-import time
+from ctypes import *
+import time, os, platform
 import numpy as np
+from numpy import ctypeslib
 import scipy.fftpack as fft
 import sdr_code
+
+# load external library --------------------------------------------------------
+env = platform.platform()
+dir = os.path.dirname(__file__)
+try:
+    if 'Windows' in env:
+        libsdr = cdll.LoadLibrary(dir + '/../lib/win32/libsdr.so')
+    elif 'Linux' in env:
+        libsdr = cdll.LoadLibrary(dir + '/../lib/linux/libsdr.so')
+    else:
+        libsdr = None
+except:
+    libsdr = None
 
 # constants --------------------------------------------------------------------
 MAX_DOP  = 5000.0  # default max Doppler frequency to search signals (Hz)
 DOP_STEP = 0.5     # Doppler frequency search step (* 1 / code cycle)
 #DOP_STEP = 0.25    # Doppler frequency search step (* 1 / code cycle)
+LIBSDR_ENA = True  # enable flag of LIBSDR
 
 # global variable --------------------------------------------------------------
 carr_tbl = []      # carrier lookup table 
@@ -153,30 +170,60 @@ def dop_bins(T, max_dop):
 
 # mix carrier ------------------------------------------------------------------
 def mix_carr(data, fs, fc, phi):
-    N = 256 # carrier lookup table size
-    global carr_tbl
-    if len(carr_tbl) == 0:
-        carr_tbl = np.array(np.exp(-2j * np.pi * np.arange(N) / N),
-                       dtype='complex64')
-    ix = ((fc / fs * np.arange(len(data)) + phi) * N).astype('int')
-    return data * carr_tbl[ix % N]
-    
+    if libsdr and LIBSDR_ENA:
+        N = len(data)
+        data_carr = np.empty(N, dtype='complex64')
+        libsdr.mix_carr.argtypes = [
+            ctypeslib.ndpointer('complex64', flags='C'), c_int32, c_int32,
+            c_double, c_double, c_double,
+            ctypeslib.ndpointer('complex64', flags='C')]
+        libsdr.mix_carr(data, 0, N, fs, fc, phi, data_carr)
+        return data_carr
+    else:
+        N = 256 # carrier lookup table size
+        global carr_tbl
+        if len(carr_tbl) == 0:
+            carr_tbl = np.array(np.exp(-2j * np.pi * np.arange(N) / N),
+                           dtype='complex64')
+        ix = ((fc / fs * np.arange(len(data)) + phi) * N).astype('int')
+        return data * carr_tbl[ix % N]
+
 # standard correlator ----------------------------------------------------------
 def corr_std(data, code, pos):
-    N = len(data)
-    corr = np.zeros(len(pos), dtype='complex64')
-    for i in range(len(pos)):
-        if pos[i] > 0:
-            corr[i] = np.dot(data[pos[i]:], code[:-pos[i]]) / (N - pos[i])
-        elif pos[i] < 0:
-            corr[i] = np.dot(data[:pos[i]], code[-pos[i]:]) / (N + pos[i])
-        else:
-            corr[i] = np.dot(data, code) / N
-    return corr
+    if libsdr and LIBSDR_ENA:
+        corr = np.empty(len(pos), dtype='complex64')
+        pos = np.array(pos, dtype='int32')
+        libsdr.corr_std.argtypes = [
+            ctypeslib.ndpointer('complex64', flags='C'),
+            ctypeslib.ndpointer('complex64', flags='C'), c_int32,
+            ctypeslib.ndpointer('int32', flags='C'), c_int32,
+            ctypeslib.ndpointer('complex64', flags='C')]
+        libsdr.corr_std(data, code, len(data), pos, len(pos), corr)
+        return corr
+    else:
+        N = len(data)
+        corr = np.zeros(len(pos), dtype='complex64')
+        for i in range(len(pos)):
+            if pos[i] > 0:
+                corr[i] = np.dot(data[pos[i]:], code[:-pos[i]]) / (N - pos[i])
+            elif pos[i] < 0:
+                corr[i] = np.dot(data[:pos[i]], code[-pos[i]:]) / (N + pos[i])
+            else:
+                corr[i] = np.dot(data, code) / N
+        return corr
 
 # FFT correlator ---------------------------------------------------------------
 def corr_fft(data, code_fft):
-    return fft.ifft(fft.fft(data) * code_fft)
+    if libsdr and LIBSDR_ENA:
+        corr = np.empty(len(data), dtype='complex64')
+        libsdr.corr_fft.argtypes = [
+            ctypeslib.ndpointer('complex64', flags='C'),
+            ctypeslib.ndpointer('complex64', flags='C'), c_int32,
+            ctypeslib.ndpointer('complex64', flags='C')]
+        libsdr.corr_fft(data, code_fft, len(data), corr)
+        return corr
+    else:
+        return fft.ifft(fft.fft(data) * code_fft) / len(data)
 
 # open log ---------------------------------------------------------------------
 def log_open(file):
@@ -264,4 +311,3 @@ def hex_str(data):
     for i in range(len(data)):
         str += '%02X' % (data[i])
     return str
-
