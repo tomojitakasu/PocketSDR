@@ -12,16 +12,20 @@
 #  2021-12-24  1.0  new
 #  2022-01-13  1.1  add API test_glostr()
 #
-import os
+import os, platform
 from ctypes import *
 import numpy as np
 
 # load RTKLIB ([1]) ------------------------------------------------------------
+env = platform.platform()
 dir = os.path.dirname(__file__)
-try:
+if 'Windows' in env:
     librtk = cdll.LoadLibrary(dir + '/../lib/win32/librtk.so')
-except:
+elif 'Linux' in env:
     librtk = cdll.LoadLibrary(dir + '/../lib/linux/librtk.so')
+else:
+    printf('load librtk.so error for %s' % (env))
+    exit()
 
 # extract unsigned bits --------------------------------------------------------
 def getbitu(data, pos, len):

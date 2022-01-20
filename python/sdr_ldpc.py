@@ -20,16 +20,20 @@
 #  History:
 #  2022-01-06  0.1  new
 #
-import os
+import os, platform
 from ctypes import *
 import numpy as np
 
 # load library of LDPC-codes ([1],[2]) -----------------------------------------
+env = platform.platform()
 dir = os.path.dirname(__file__)
-try:
+if 'Windows' in env:
     libldpc = cdll.LoadLibrary(dir + '/../lib/win32/libldpc.so')
-except:
+elif 'Linux' in env:
     libldpc = cdll.LoadLibrary(dir + '/../lib/linux/libldpc.so')
+else:
+    printf('load libldpc.so error for %s' % (env))
+    exit()
 
 # constants --------------------------------------------------------------------
 ERR_PROB = 1e-5
