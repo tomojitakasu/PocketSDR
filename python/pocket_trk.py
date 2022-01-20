@@ -9,6 +9,7 @@
 #  2021-12-01  1.0  new
 #  2022-01-13  1.1  add input from stdout
 #                   add options -IQ, -e, -yl, -q
+#  2022-01-20  1.2  improve performance
 #
 import sys, math, time
 import numpy as np
@@ -16,6 +17,12 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from sdr_func import *
 import sdr_code, sdr_ch
+
+# constants --------------------------------------------------------------------
+MAX_BUFF = 32        # max number of IF data buffer
+ESC_UP  = '\033[%dF' # ANSI escape cursor up
+ESC_COL = '\033[34m' # ANSI escape color = blue
+ESC_RES = '\033[0m'  # ANSI escape reset
 
 # plot settings ----------------------------------------------------------------
 window = 'PocketSDR - GNSS SIGNAL TRACKING'
@@ -36,19 +43,19 @@ rect3  = [0.080, 0.198, 0.840, 0.320]
 rect4  = [0.080, 0.040, 0.840, 0.110]
 
 # read IF data -----------------------------------------------------------------
-def read_data(fp, fs, IQ, T):
-    cnt = int(fs * T * IQ)
-    
+def read_data(fp, N, IQ, buff, ix):
     if fp == None:
-        raw = np.frombuffer(sys.stdin.buffer.read(cnt), dtype='int8')
+        raw = np.frombuffer(sys.stdin.buffer.read(N * IQ), dtype='int8')
     else:
-        raw = np.frombuffer(fp.read(cnt), dtype='int8')
+        raw = np.frombuffer(fp.read(N * IQ), dtype='int8')
     
-    if IQ == 1: # I
-        return np.array(raw, dtype='complex64')
-    else: # IQ
-        #return np.array(raw[0::2] + raw[1::2] * 1j, dtype='complex64')
-        return np.array(raw[0::2] - raw[1::2] * 1j, dtype='complex64')
+    if len(raw) < N * IQ:
+        return False
+    elif IQ == 1: # I
+        buff[ix:ix+N] = np.array(raw, dtype='complex64')
+    else: # IQ (Q sign inverted in MAX2771)
+        buff[ix:ix+N] = np.array(raw[0::2] - raw[1::2] * 1j, dtype='complex64')
+    return True
 
 # print receiver channel status header -----------------------------------------
 def print_head():
@@ -59,18 +66,18 @@ def print_head():
 # update receiver channel status -----------------------------------------------
 def update_stat(prns, ch, ncol):
     if ncol > 0: # cursor up
-        print('\033[%dF' % (ncol), end='')
+        print(ESC_UP % (ncol), end='')
     ncol = 0
     for i in range(len(prns)):
         nav_sync = ('B' if ch[i].nav.ssync > 0 else '-') + \
             ('F' if ch[i].nav.fsync > 0 else '-') + \
             ('R' if ch[i].nav.rev else '-')
         print('%s%9.2f %5s %4d %5s %9.2f %5.1f %-13s %10.7f %8.1f %11.1f  %s %4d %4d %4d %3d%s' %
-            ('\033[32m' if ch[i].state == 'LOCK' else '',
+            (ESC_COL if ch[i].state == 'LOCK' else '',
             ch[i].time, ch[i].sig, prns[i], ch[i].state, ch[i].lock * ch[i].T,
             ch[i].cn0, cn0_bar(ch[i].cn0), ch[i].coff * 1e3, ch[i].fd, ch[i].adr,
             nav_sync, ch[i].nav.count[0], ch[i].nav.count[1], ch[i].lost,
-            ch[i].nav.nerr, '\033[0m' if ch[i].state == 'LOCK' else ''))
+            ch[i].nav.nerr, ESC_RES if ch[i].state == 'LOCK' else ''))
         ncol += 1
     return ncol
 
@@ -264,9 +271,8 @@ def show_usage():
 #   Options ([]: default)
 #  
 #     -sig sig
-#         GNSS signal type (L1CA, L1CB, L1CP, L1CD, L2CM, L5I, L5Q, L5SI, L5SQ,
-#         L6D, L6E, G1CA, G2CA, E1B, E1C, E5AI, E5AQ, E5BI, E5BQ, E6B, E6C, B1I,
-#         B1CD, B1CP, B2I, B2AD, B2AP, B2BI, B3I). [L1CA]
+#         GNSS signal type ID (L1CA, L2CM, ...). Refer pocket_acq.py manual for
+#         details. [L1CA]
 # 
 #     -prn prn[,...]
 #         PRN numbers of the GNSS signal separated by ','. A PRN number can be a
@@ -309,7 +315,7 @@ def show_usage():
 #
 #     -log file
 #         Log file path to output signal tracking status. The log includes decoded
-#         navigation data and code offset,  including navigation data decoded.
+#         navigation data and code offset, including navigation data decoded.
 #
 #     -q
 #         Suppress showing signal tracking status.
@@ -401,27 +407,28 @@ if __name__ == '__main__':
         log_level(log_lvl)
     
     N = int(T * fs)
-    buff = np.zeros(N * 2, dtype='complex64')
+    buff = np.zeros(N * (MAX_BUFF + 1), dtype='complex64')
     ncol = 0
     tt = time.time()
     log(3, '$LOG,%.3f,%s,%d,START FILE=%s FS=%.3f FI=%.3f IQ=%d TOFF=%.3f' %
         (0.0, '', 0, file, fs * 1e-6, fi * 1e-6, IQ, toff))
     
     try:
-        for i in range(1, 1000000000):
-            time_rcv = toff + T * i # receiver time
+        for i in range(0, 1000000000):
+            time_rcv = toff + T * (i - 1) # receiver time
             
-            # read IF data
-            data = read_data(fp, fs, IQ, T)
-            if len(data) < N:
+            # read IF data to buffer
+            if not read_data(fp, N, IQ, buff, N * (i % MAX_BUFF)):
                 break;
-            buff[:N], buff[N:] = buff[N:], data
-            if i == 1:
+            
+            if i == 0:
                 continue
+            elif i % MAX_BUFF == 0:
+                buff[-N:] = buff[:N]
             
             # update receiver channel
             for j in range(len(prns)):
-                sdr_ch.ch_update(ch[j], time_rcv, buff)
+                sdr_ch.ch_update(ch[j], time_rcv, buff, N * ((i - 1) % MAX_BUFF))
             
             if i % int(tint / T) != 0:
                 continue
