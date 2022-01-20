@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 #  Pocket SDR Python AP - GNSS Signal Acquisition
 #
@@ -10,6 +10,8 @@
 #  2021-12-05  1.1  add signals: G1CA, G2CA, B1I, B2I, B1CD, B1CP, B2AD, B2AP,
 #                   B2BI, B3I
 #  2021-12-15  1.2  add option: -d, -nz, -np
+#  2022-01-20  1.3  add signals: I5S
+#                   add option: -l
 #
 import sys, time
 import numpy as np
@@ -20,7 +22,10 @@ import sdr_func, sdr_code
 mpl.rcParams['toolbar'] = 'None';
 mpl.rcParams['font.size'] = 9
 
-THRES_CN0 = 40.0  # threshold to lock (dB-Hz)
+# constants --------------------------------------------------------------------
+THRES_CN0 = 40.0     # threshold to lock (dB-Hz)
+ESC_COL = '\033[34m' # ANSI escape color = blue
+ESC_RES = '\033[0m'  # ANSI escape reset
 
 # show usage -------------------------------------------------------------------
 def show_usage():
@@ -76,13 +81,11 @@ def plot_corr_pow(ax, P, f, fc):
     ax.set_ylabel('Correlation Power')
 
 # plot correlation peak ---------------------------------------------------------
-def plot_corr_peak(ax, P, ix, f, fc):
-    x = (np.arange(len(P)) - ix) / f
-    y = P
+def plot_corr_peak(ax, x, y, xl, fc):
     ax.plot(x, y, '-', color='gray', lw=0.5)
     ax.plot(x, y, '.', color=fc, ms=3)
     ax.grid(True, lw=0.4)
-    ax.set_xlim([-4.5, 4.5])
+    ax.set_xlim(xl)
     ax.set_ylim([0, 1])
     ax.set_ylabel('Correlation Power')
 
@@ -107,9 +110,7 @@ def add_text(ax, x, y, text, color='k'):
 #   Options ([]: default)
 #  
 #     -sig sig
-#         GNSS signal type (L1CA, L1CB, L1CP, L1CD, L2CM, L5I, L5Q, L5SI, L5SQ,
-#         L6D, L6E, G1CA, G2CA, E1B, E1C, E5AI, E5AQ, E5BI, E5BQ, E6B, E6C, B1I,
-#         B1CD, B1CP, B2I, B2AD, B2AP, B2BI, B3I). [L1CA]
+#         GNSS signal type ID (L1CA, L2CM, ...). See below for details. [L1CA]
 # 
 #     -prn prn[,...]
 #         PRN numbers of the GNSS signal separated by ','. A PRN number can be a
@@ -152,13 +153,48 @@ def add_text(ax, x, y, text, color='k'):
 #         for complex-sampling (IQ-sampling). PocketSDR and AP pocket_dump can be
 #         used to capture such digital IF data.
 #
+#   GNSS signal type IDs
+#
+#         L1CA:  GPS, QZSS, SBAS L1C/A
+#         L1CB:  QZSS L1C/B
+#         L1CP:  GPS, QZSS L1Cp
+#         L1CD:  GPS, QZSS L1Cd
+#         L2CM:  GPS, QZSS L2CM
+#         L2CL:  GPS, QZSS L2CL
+#         L5I :  GPS, QZSS, SBAS L5I
+#         L5Q :  GPS, QZSS, SBAS L5Q
+#         L5SI:  QZSS L5SI
+#         L5SQ:  QZSS L5SQ
+#         L6D :  QZSS L6D
+#         L6E :  QZSS L6E
+#         G1CA:  GLONASS L1C/A
+#         G2CA:  GLONASS L2C/A
+#         E1B :  Galileo E1B
+#         E1C :  Galileo E1C
+#         E5AI:  Galileo E5aI
+#         E5AQ:  Galileo E5aQ
+#         E5BI:  Galileo E5bI
+#         E5BQ:  Galileo E5bQ
+#         E6B :  Galileo E6B
+#         E6C :  Galileo E6C
+#         B1I :  BDS B1I
+#         B1CD:  BDS B1CD
+#         B1CP:  BDS B1CP
+#         B2I :  BDS B2I
+#         B2AD:  BDS B2aD
+#         B2AP:  BDS B2aP
+#         B2BI:  BDS B2bI
+#         B3I :  BDS B3I
+#         I5S :  NavIC (IRNSS) L5 SPS
+#         ISS :  NavIC (IRNSS) S SPS
+#
 if __name__ == '__main__':
     window = 'PocketSDR - GNSS SIGNAL ACQUISITION'
     size = (9, 6)
     sig, prns = 'L1CA', [1]
     fs, fi, T, toff = 12e6, 0.0, 4e-3, 0.0
     max_dop = 5000.0
-    opt = [False, False, True, False]
+    opt = [0, False, True, False]
     fc, bc = 'darkblue', 'w'
     rect0 = [0.08, 0.09, 0.84, 0.85]
     rect1 = [0.08, 0.53, 0.84, 0.41]
@@ -191,7 +227,9 @@ if __name__ == '__main__':
             i += 1
             max_dop = float(sys.argv[i])
         elif sys.argv[i] == '-p':
-            opt[0] = True
+            opt[0] = 1
+        elif sys.argv[i] == '-l':
+            opt[0] = 2
         elif sys.argv[i] == '-3d':
             opt[1] = True
         elif sys.argv[i] == '-nz':
@@ -233,13 +271,13 @@ if __name__ == '__main__':
         if len(prns) > 1:
             cn0 = np.zeros(len(prns))
             for i in range(len(prns)):
-                P, dops, coffs, ix, cn0[i] = sdr_func.search_sig(sig,
+                P, dops, coffs, ix, cn0[i], dop = sdr_func.search_sig(sig,
                     prns[i], data, fs, fi, max_dop=max_dop, zero_pad=opt[2])
                 
                 print('%sSIG= %-4s, %s= %3d, COFF= %8.5f ms, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz%s' % \
-                    ('\033[32m' if cn0[i] >= THRES_CN0 else '',
-                     sig, label, prns[i], coffs[ix[1]] * 1e3, dops[ix[0]], cn0[i],
-                     '\033[0m' if cn0[i] >= THRES_CN0 else ''))
+                    (ESC_COL if cn0[i] >= THRES_CN0 else '',
+                     sig, label, prns[i], coffs[ix[1]] * 1e3, dop, cn0[i],
+                     ESC_RES if cn0[i] >= THRES_CN0 else ''))
             
             t = time.time() - t
             if not opt[3]:
@@ -247,31 +285,40 @@ if __name__ == '__main__':
                 plot_cn0(ax1, cn0, prns, fc)
                 ax0.set_title('SIG = %s, FILE = %s' % (sig, file), fontsize=10)
         else:
-            P, dops, coffs, ix, cn0 = \
+            P, dops, coffs, ix, cn0, dop = \
                 sdr_func.search_sig(sig, prns[0], data, fs, fi, max_dop=max_dop,
                     zero_pad=opt[2])
             t = time.time() - t
             text = 'COFF=%.5fms, DOP=%.0fHz, C/N0=%.1fdB-Hz' % \
-                   (coffs[ix[1]] * 1e3, dops[ix[0]], cn0)
+                   (coffs[ix[1]] * 1e3, dop, cn0)
             if opt[3]: # text
                 print('%sSIG= %-4s, %s= %3d, COFF= %8.5f ms, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz%s' % \
-                    ('\033[32m' if cn0 >= THRES_CN0 else '',
-                     sig, label, prns[0], coffs[ix[1]] * 1e3, dops[ix[0]], cn0,
-                     '\033[0m' if cn0 >= THRES_CN0 else ''))
+                    (ESC_COL if cn0 >= THRES_CN0 else '',
+                     sig, label, prns[0], coffs[ix[1]] * 1e3, dop, cn0,
+                     ESC_RES if cn0 >= THRES_CN0 else ''))
                 exit()
             elif opt[1]: # plot 3D
                 ax1 = fig.add_axes(rect3, projection='3d', facecolor='None')
                 plot_corr_3d(ax1, P, dops, coffs, ix, fc)
                 add_text(ax0, 0.98, 0.96, text, color=fc)
-            elif opt[0]: # plot power + peak
+            elif opt[0]: # plot power + peak/doppler
                 ax1 = fig.add_axes(rect1, facecolor=bc)
                 plot_corr_pow(ax1, P[ix[0]], fs / 1e3, fc)
                 add_text(ax1, 1.04, -0.04, '(ms)')
                 add_text(ax1, 0.98, 0.94, text, color=fc)
                 ax2 = fig.add_axes(rect2, facecolor=bc)
                 f = fs * Tcode / sdr_code.code_len(sig)
-                plot_corr_peak(ax2, P[ix[0]], ix[1], f, fc)
-                add_text(ax2, 1.04, -0.04, '(chip)')
+                if opt[0] == 1:
+                    coff = (np.arange(len(coffs)) - ix[1]) / f
+                    plot_corr_peak(ax2, coff, P[ix[0]], [-4.5, 4.5], fc)
+                    ax2.vlines(0.0, 0.0, 1.0, color=fc, lw=0.4)
+                    add_text(ax2, 0.98, 0.94, 'Code Offset')
+                    add_text(ax2, 1.04, -0.04, '(chip)')
+                else:
+                    plot_corr_peak(ax2, dops, P.T[ix[1]], [dops[0], dops[-1]], fc)
+                    ax2.vlines(dop, 0.0, 1.0, color=fc, lw=0.4)
+                    add_text(ax2, 0.98, 0.94, 'Doppler Frequency')
+                    add_text(ax2, 1.04, -0.04, '(Hz)')
             else: # plot power
                 ax1 = fig.add_axes(rect0, facecolor=bc)
                 plot_corr_pow(ax1, P[ix[0]], fs / 1e3, fc)
