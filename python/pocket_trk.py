@@ -10,6 +10,7 @@
 #  2022-01-13  1.1  add input from stdout
 #                   add options -IQ, -e, -yl, -q
 #  2022-01-20  1.2  improve performance
+#                   add option -3d
 #
 import sys, math, time
 import numpy as np
@@ -23,6 +24,11 @@ MAX_BUFF = 32        # max number of IF data buffer
 ESC_UP  = '\033[%dF' # ANSI escape cursor up
 ESC_COL = '\033[34m' # ANSI escape color = blue
 ESC_RES = '\033[0m'  # ANSI escape reset
+
+# global variable --------------------------------------------------------------
+Xp = np.zeros(1)
+Yp = np.zeros(1) * np.nan
+Zp = np.zeros(1) * np.nan
 
 # plot settings ----------------------------------------------------------------
 window = 'PocketSDR - GNSS SIGNAL TRACKING'
@@ -41,6 +47,7 @@ rect1  = [0.080, 0.568, 0.490, 0.380]
 rect2  = [0.650, 0.568, 0.280, 0.380]
 rect3  = [0.080, 0.198, 0.840, 0.320]
 rect4  = [0.080, 0.040, 0.840, 0.110]
+rect5  = [-.430, 0.000, 1.800, 1.160]
 
 # read IF data -----------------------------------------------------------------
 def read_data(fp, N, IQ, buff, ix):
@@ -63,20 +70,24 @@ def print_head():
         ('TIME(s)', 'SIG', 'PRN', 'STATE', 'LOCK(s)', 'C/N0', '(dB-Hz)',
         'COFF(ms)', 'DOP(Hz)', 'ADR(cyc)', 'SYNC', '#NAV', '#ERR', '#LOL', 'NER'))
 
+# receiver channel sync status -------------------------------------------------
+def sync_stat(ch):
+    return ('S' if ch.trk.ssync > 0 else '-') + \
+        ('B' if ch.nav.ssync > 0 else '-') + \
+        ('F' if ch.nav.fsync > 0 else '-') + \
+        ('R' if ch.nav.rev else '-')
+
 # update receiver channel status -----------------------------------------------
 def update_stat(prns, ch, ncol):
     if ncol > 0: # cursor up
         print(ESC_UP % (ncol), end='')
     ncol = 0
     for i in range(len(prns)):
-        nav_sync = ('B' if ch[i].nav.ssync > 0 else '-') + \
-            ('F' if ch[i].nav.fsync > 0 else '-') + \
-            ('R' if ch[i].nav.rev else '-')
-        print('%s%9.2f %5s %4d %5s %9.2f %5.1f %-13s %10.7f %8.1f %11.1f  %s %4d %4d %4d %3d%s' %
+        print('%s%9.2f %5s %4d %5s %9.2f %5.1f %-13s %10.7f %8.1f %11.1f %s %4d %4d %4d %3d%s' %
             (ESC_COL if ch[i].state == 'LOCK' else '',
             ch[i].time, ch[i].sig, prns[i], ch[i].state, ch[i].lock * ch[i].T,
             ch[i].cn0, cn0_bar(ch[i].cn0), ch[i].coff * 1e3, ch[i].fd, ch[i].adr,
-            nav_sync, ch[i].nav.count[0], ch[i].nav.count[1], ch[i].lost,
+            sync_stat(ch[i]), ch[i].nav.count[0], ch[i].nav.count[1], ch[i].lost,
             ch[i].nav.nerr, ESC_RES if ch[i].state == 'LOCK' else ''))
         ncol += 1
     return ncol
@@ -86,35 +97,47 @@ def cn0_bar(cn0):
     return '|' * np.min([int((cn0 - 30.0) / 1.5), 13])
 
 # initialize plot --------------------------------------------------------------
-def init_plot(sig, prn, ch, env, file):
+def init_plot(sig, prn, ch, env, p3d, file):
     fig = plt.figure(window, figsize=size, facecolor=bc)
     ax0 = fig.add_axes(rect0)
     ax0.axis('off')
     ax0.set_title('SIG = %s, PRN = %3d, FILE = %s' % (sig, prn, file),
         fontsize=10)
     Tc = ch.T / sdr_code.code_len(sig)
-    pos = np.array(ch.trk.pos) / ch.fs / Tc
-    ax1, p1 = plot_corr_env (fig, rect1, env, pos)
-    ax2, p2 = plot_corr_IQ  (fig, rect2)
-    ax3, p3 = plot_corr_time(fig, rect3)
-    ax4, p4 = plot_nav_data (fig, rect4)
+    pos = np.array(ch.trk.pos) / ch.fs
+    if p3d:
+        ax1, p1 = plot_corr_3d(fig, rect5, env, pos)
+        ax2 = ax3 = ax4 = p2 = p3 = p4 = None
+        text = 'SQRT(I^2+Q^2)' if env else 'I * sign(IP)'
+        ax0.text(0.97, 0.85, text, color=fc, ha='right', va='top')
+        p1 = (ax0.text(0.03, 0.95, '', ha='left', va='top'),
+              ax0.text(0.03, 0.05, '', ha='left', va='bottom'),
+              ax0.text(0.97, 0.10, '', color=fc, ha='right', va='bottom'))
+    else:
+        ax1, p1 = plot_corr_env (fig, rect1, env, pos, pos / Tc)
+        ax2, p2 = plot_corr_IQ  (fig, rect2)
+        ax3, p3 = plot_corr_time(fig, rect3)
+        ax4, p4 = plot_nav_data (fig, rect4)
     return fig, (ax0, ax1, ax2, ax3, ax4), ([], p1, p2, p3, p4)
 
 # update plot -----------------------------------------------------------------
-def update_plot(fig, ax, p, ch, env, toff, tspan):
-    update_corr_env (ax[1], p[1], ch, env)
-    update_corr_IQ  (ax[2], p[2], ch, tspan)
-    update_corr_time(ax[3], p[3], ch, toff, tspan)
-    update_nav_data (ax[4], p[4], ch)
+def update_plot(fig, ax, p, ch, env, p3d, toff, tspan):
+    if p3d:
+        update_corr_3d(ax[1], p[1], ch, env, toff, tspan)
+    else:
+        update_corr_env (ax[1], p[1], ch, env)
+        update_corr_IQ  (ax[2], p[2], ch, tspan)
+        update_corr_time(ax[3], p[3], ch, toff, tspan)
+        update_nav_data (ax[4], p[4], ch)
     plt.pause(1e-3)
 
 # plot correlation envelope ---------------------------------------------------
-def plot_corr_env(fig, rect, env, pos):
+def plot_corr_env(fig, rect, env, pos, chip):
     ax = fig.add_axes(rect)
     p0 = ax.plot([], [], '-', color=gc, lw=0.4)
     p1 = ax.plot([], [], '.', color=gc, ms=2)
     p2 = ax.plot([], [], '.', color=fc, ms=10)
-    xl = [pos[4], pos[-1]]
+    xl = [pos[4] * 1e3, pos[-1] * 1e3]
     if env:
         yl = [0, ylim]
         text = 'SQRT(I^2+Q^2)'
@@ -123,32 +146,94 @@ def plot_corr_env(fig, rect, env, pos):
         text = 'I * sign(IP)'
     ax.set_xlim(xl)
     ax.set_ylim(yl)
-    ax.vlines(0.0, yl[0], yl[1], color=lc, lw=0.4)
-    ax.hlines(0.0, xl[0], xl[1], color=lc, lw=0.4)
     ax.plot(0.0, 0.0, '.', color=lc, ms=6)
     ax.grid(True, lw=0.4)
     set_axcolor(ax, lc)
     ax.text(0.03, 0.95, text, ha='left', va='top', transform=ax.transAxes)
-    ax.text(1.00, -0.04, '(chip)', ha='left', va='top', transform=ax.transAxes)
+    ax.text(0.97, 0.05, '(ms)', ha='right', va='bottom', transform=ax.transAxes)
     p3 = ax.text(0.97, 0.95, '', color=fc, ha='right', va='top',
         transform=ax.transAxes)
+    ax2 = ax.twiny()
+    ax2.xaxis.set_ticklabels([])
+    ax2.xaxis.set_tick_params(direction='in', bottom=True, top=False)
+    xl = [chip[4], chip[-1]]
+    ax2.set_xlim(xl)
+    ax2.plot([0, 0], yl, '-', lw=0.4, color=lc)
+    ax2.plot(xl, [0, 0], '-', lw=0.4, color=lc)
+    ax2.plot(0, 0, '.', ms=6, color=lc)
     return ax, (p0, p1, p2, p3)
 
 # update correlation envelope --------------------------------------------------
 def update_corr_env(ax, p, ch, env):
     Tc = ch.T / sdr_code.code_len(sig)
-    pos = np.array(ch.trk.pos) / ch.fs / Tc
+    #pos = np.array(ch.trk.pos) / ch.fs / Tc
+    x0 = ch.coff * 1e3
+    x = x0 + np.array(ch.trk.pos) / ch.fs * 1e3
     if env:
-        EPL = np.abs(ch.trk.C[:3])
-        COR = np.abs(ch.trk.C[4:])
+        y = np.abs(ch.trk.C.real)
     else:
-        sign = np.sign(ch.trk.C[0].real)
-        EPL = ch.trk.C[:3].real * sign
-        COR = ch.trk.C[4:].real * sign
-    p[0][0].set_data(pos[4:], COR)
-    p[1][0].set_data(pos[4:], COR)
-    p[2][0].set_data(pos[:3], EPL)
-    p[3].set_text('E=%6.3f P=%6.3f L=%6.3f' % (EPL[1], EPL[0], EPL[2]))
+        y = ch.trk.C.real * np.sign(ch.trk.C[0].real)
+    p[0][0].set_data(x[4:], y[4:])
+    p[1][0].set_data(x[4:], y[4:])
+    p[2][0].set_data(x[:3], y[:3])
+    p[3].set_text('E=%6.3f P=%6.3f L=%6.3f' % (y[1], y[0], y[2]))
+    ax.set_xlim(x[4], x[-1])
+
+# plot correlation 3D ---------------------------------------------------------
+def plot_corr_3d(fig, rect, env, pos):
+    ax = fig.add_axes(rect, projection='3d', facecolor='None')
+    yl = [pos[4] * 1e3, pos[-1] * 1e3]
+    zl = [ylim * 0.01, ylim]
+    ax.set_ylim(yl)
+    ax.set_zlim(zl)
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Code Offset (ms)')
+    ax.set_zlabel('Correlation')
+    ax.set_box_aspect((3, 2.5, 0.6))
+    ax.xaxis.set_pane_color((1, 1, 1, 0))
+    ax.yaxis.set_pane_color((1, 1, 1, 0))
+    ax.zaxis.set_pane_color((1, 1, 1, 0))
+    ax.xaxis._axinfo["grid"]['color'] =  (1, 1, 1, 0)
+    ax.yaxis._axinfo["grid"]['color'] =  (1, 1, 1, 0)
+    ax.zaxis._axinfo["grid"]['color'] =  (1, 1, 1, 0)
+    ax.view_init(35, -45)
+    return ax, ()
+
+# update correlation 3D --------------------------------------------------------
+def update_corr_3d(ax, p, ch, env, toff, tspan):
+    global Xp, Yp, Zp
+    
+    for line in ax.lines:
+        line.remove()
+    N = np.min([int(tspan / ch.T), len(ch.trk.P)])
+    time = ch.time + np.arange(-N+1, 1) * ch.T
+    t0 = toff if ch.lock < N else ch.time - N * ch.T
+    xl = [t0, t0 + N * ch.T]
+    Tc = ch.T / sdr_code.code_len(ch.sig)
+    x = np.full(len(ch.trk.pos), ch.time)
+    y0 = ch.coff * 1e3
+    y = y0 + np.array(ch.trk.pos) / ch.fs * 1e3
+    yl = [y0 + ch.trk.pos[4] / ch.fs * 1.5e3, y0 + ch.trk.pos[-1] / ch.fs * 1.5e3]
+    if env:
+        z = np.abs(ch.trk.C)
+    else:
+        z = ch.trk.C.real * np.sign(ch.trk.C[0].real)
+    ix = np.max(np.array(np.where(Xp <= xl[0])))
+    Xp = np.hstack([Xp[ix:], x[4:], np.nan])
+    Yp = np.hstack([Yp[ix:], y[4:], np.nan])
+    Zp = np.hstack([Zp[ix:], z[4:], np.nan])
+    #ax.plot(xl, [y0, y0], [0, 0], color=lc, lw=0.8)
+    ax.plot(Xp, Yp, Zp, '-', color=fc, lw=0.4)
+    ax.plot(x[4:], y[4:], z[4:], '-', color=fc, lw=0.8)
+    ax.plot(x[:3], y[:3], z[:3], '.', color=fc, ms=10)
+    ax.set_xlim(xl)
+    ax.set_ylim(yl)
+    p[0].set_text('T=%7.3f s COFF=%10.7f ms DOP=%8.1f Hz ADR=%10.1f cyc C/N0=%5.1f dB-Hz' % \
+        (ch.time, ch.coff * 1e3, ch.fd, ch.adr, ch.cn0))
+    p[1].set_text('SYNC=%s #NAV=%4d #ERR=%2d #LOL=%2d NER=%2d SEQ=%6d' % \
+        (sync_stat(ch), ch.nav.count[0], ch.nav.count[1], ch.lost, ch.nav.nerr,
+        ch.nav.seq))
+    p[2].set_text('E=%6.3f P=%6.3f L=%6.3f' % (z[1], z[0], z[2]))
 
 # plot correlation I-Q ---------------------------------------------------------
 def plot_corr_IQ(fig, rect):
@@ -208,10 +293,9 @@ def update_corr_time(ax, p, ch, toff, tspan):
     #p[4][0].set_data(ch.nav.tsyms, np.zeros(len(ch.nav.tsyms))) # for debug
     p[5].set_text(('T=%7.3f s COFF=%10.7f ms DOP=%8.1f Hz ADR=%10.1f cyc ' +
         'C/N0=%5.1f dB-Hz') % (ch.time, ch.coff * 1e3, ch.fd, ch.adr, ch.cn0))
-    nav_sync = ('B' if ch.nav.ssync > 0 else '-') + \
-        ('F' if ch.nav.fsync > 0 else '-') + ('R' if ch.nav.rev else '-')
-    p[6].set_text('SYNC=%s #NAV=%4d #ERR=%2d #LOL=%2d NER=%2d SEQ=%6d' % (nav_sync,
-        ch.nav.count[0], ch.nav.count[1], ch.lost, ch.nav.nerr, ch.nav.seq))
+    p[6].set_text('SYNC=%s #NAV=%4d #ERR=%2d #LOL=%2d NER=%2d SEQ=%6d' % (
+         sync_stat(ch), ch.nav.count[0], ch.nav.count[1], ch.lost, ch.nav.nerr,
+         ch.nav.seq))
     t0 = toff if ch.lock < N else ch.time - N * ch.T
     ax.set_xlim(t0, t0 + N * ch.T * 1.008)
 
@@ -289,6 +373,9 @@ def show_usage():
 #
 #     -e
 #         Plot correlation shape as an envelop (SQRT(I^2+Q^2)). [I*sign(IP)]
+#
+#     -3d
+#         3D Plot of correlation shapes. [no]
 # 
 #     -toff toff
 #         Time offset from the start of digital IF data in s. [0.0]
@@ -328,7 +415,7 @@ def show_usage():
 #         is taken from stdin.
 #
 if __name__ == '__main__':
-    sig, prns, plot, env = 'L1CA', [1], False, False
+    sig, prns, plot, env, p3d = 'L1CA', [1], False, False, False
     fs, fi, IQ, toff, tint, tspan = 12e6, 0.0, 1, 0.0, 0.05, 1.0
     ch = {}
     file, log_file, log_lvl, quiet = '', '', 4, 0
@@ -345,6 +432,8 @@ if __name__ == '__main__':
             plot = True
         elif sys.argv[i] == '-e':
             env = True
+        elif sys.argv[i] == '-3d':
+            p3d = True
         elif sys.argv[i] == '-toff':
             i += 1
             toff = float(sys.argv[i])
@@ -400,7 +489,7 @@ if __name__ == '__main__':
         print_head()
     
     if plot:
-        fig, ax, p = init_plot(sig, prns[0], ch[0], env, file)
+        fig, ax, p = init_plot(sig, prns[0], ch[0], env, p3d, file)
     
     if log_file != '':
         log_open(log_file)
@@ -439,7 +528,7 @@ if __name__ == '__main__':
             
             # update plots
             if plot:
-                update_plot(fig, ax, p, ch[0], env, toff, tspan)
+                update_plot(fig, ax, p, ch[0], env, p3d, toff, tspan)
             
             # update log
             for j in range(len(prns)):
