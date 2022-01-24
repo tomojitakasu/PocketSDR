@@ -11,7 +11,7 @@
 #                   B2BI, B3I
 #  2021-12-15  1.2  add option: -d, -nz, -np
 #  2022-01-20  1.3  add signals: I5S
-#                   add option: -l
+#                   add option: -l, -s
 #
 import sys, time
 import numpy as np
@@ -31,7 +31,7 @@ ESC_RES = '\033[0m'  # ANSI escape reset
 def show_usage():
     print('Usage: pocket_acq.py [-sig sig] [-prn prn[,...]] [-tint tint]')
     print('       [-toff toff] [-f freq] [-fi freq] [-d freq] [-nz] [-np]')
-    print('       [-p] [-l] [-3d] file')
+    print('       [-s] [-p] [-l] [-3d] file')
     exit()
 
 # plot C/N0 --------------------------------------------------------------------
@@ -98,7 +98,7 @@ def add_text(ax, x, y, text, color='k'):
 #   Synopsis
 # 
 #     pocket_aqc.py [-sig sig] [-prn prn[,...]] [-tint tint] [-toff toff]
-#         [-f freq] [-fi freq] [-d freq] [-nz] [-np] [-p] [-l] [-3d] file
+#         [-f freq] [-fi freq] [-d freq] [-nz] [-np] [-s] [-p] [-l] [-3d] file
 # 
 #   Description
 # 
@@ -140,6 +140,9 @@ def add_text(ax, x, y, text, color='k'):
 #
 #     -np
 #         Disable plot even with single PRN number. [enabled]
+#
+#     -s
+#         Short output mode. [long output]
 #
 #     -p
 #         Plot correlation powers with correlation peak graph.
@@ -197,7 +200,7 @@ if __name__ == '__main__':
     sig, prns = 'L1CA', [1]
     fs, fi, T, toff = 12e6, 0.0, 4e-3, 0.0
     max_dop = 5000.0
-    opt = [0, False, True, False]
+    opt = [0, False, True, False, False]
     fc, bc = 'darkblue', 'w'
     rect0 = [0.08, 0.09, 0.84, 0.85]
     rect1 = [0.08, 0.53, 0.84, 0.41]
@@ -239,6 +242,8 @@ if __name__ == '__main__':
             opt[2] = False
         elif sys.argv[i] == '-np':
             opt[3] = True
+        elif sys.argv[i] == '-s':
+            opt[4] = True
         elif sys.argv[i][0] == '-':
             show_usage()
         else:
@@ -277,10 +282,13 @@ if __name__ == '__main__':
                 P, dops, coffs, ix, cn0[i], dop = sdr_func.search_sig(sig,
                     prns[i], data, fs, fi, max_dop=max_dop, zero_pad=opt[2])
                 
-                print('%sSIG= %-4s, %s= %3d, COFF= %8.5f ms, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz%s' % \
-                    (ESC_COL if cn0[i] >= THRES_CN0 else '',
-                     sig, label, prns[i], coffs[ix[1]] * 1e3, dop, cn0[i],
-                     ESC_RES if cn0[i] >= THRES_CN0 else ''))
+                if opt[4]: # short output mode
+                    print('%d %.0f' % (prns[i], cn0[i]))
+                else:
+                    print('%sSIG= %-4s, %s= %3d, COFF= %8.5f ms, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz%s' % \
+                        (ESC_COL if cn0[i] >= THRES_CN0 else '',
+                         sig, label, prns[i], coffs[ix[1]] * 1e3, dop, cn0[i],
+                         ESC_RES if cn0[i] >= THRES_CN0 else ''))
             
             t = time.time() - t
             if not opt[3]:
@@ -295,10 +303,13 @@ if __name__ == '__main__':
             text = 'COFF=%.5fms, DOP=%.0fHz, C/N0=%.1fdB-Hz' % \
                    (coffs[ix[1]] * 1e3, dop, cn0)
             if opt[3]: # text
-                print('%sSIG= %-4s, %s= %3d, COFF= %8.5f ms, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz%s' % \
-                    (ESC_COL if cn0 >= THRES_CN0 else '',
-                     sig, label, prns[0], coffs[ix[1]] * 1e3, dop, cn0,
-                     ESC_RES if cn0 >= THRES_CN0 else ''))
+                if opt[4]: # short output mode
+                    print('%d %.0f' % (prns[0], cn0))
+                else:
+                    print('%sSIG= %-4s, %s= %3d, COFF= %8.5f ms, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz%s' % \
+                        (ESC_COL if cn0 >= THRES_CN0 else '',
+                         sig, label, prns[0], coffs[ix[1]] * 1e3, dop, cn0,
+                         ESC_RES if cn0 >= THRES_CN0 else ''))
                 exit()
             elif opt[1]: # plot 3D
                 ax1 = fig.add_axes(rect3, projection='3d', facecolor='None')
@@ -331,7 +342,8 @@ if __name__ == '__main__':
             ax0.set_title('SIG = %s, %s = %d, FILE = %s' % \
                 (sig, label, prns[0], file), fontsize=10)
         
-        print('TIME = %.1f ms' % (t * 1e3))
+        if not opt[4]:
+            print('TIME = %.3f s' % (t))
         plt.show()
     
     except KeyboardInterrupt:
