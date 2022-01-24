@@ -770,7 +770,7 @@ def code_cyc(sig):
 #      sig      (I) Signal type as string ('L1CA', 'L1CB', 'L1CP', ....)
 #
 #  returns:
-#      N        Primary code legth (chips) (0: error)
+#      N        Primary code length (chips) (0: error)
 #
 def code_len(sig):
     sig = sig.upper()
