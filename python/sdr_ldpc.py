@@ -27,12 +27,15 @@ import numpy as np
 # load library of LDPC-codes ([1],[2]) -----------------------------------------
 env = platform.platform()
 dir = os.path.dirname(__file__)
-if 'Windows' in env:
-    libldpc = cdll.LoadLibrary(dir + '/../lib/win32/libldpc.so')
-elif 'Linux' in env:
-    libldpc = cdll.LoadLibrary(dir + '/../lib/linux/libldpc.so')
-else:
-    printf('load libldpc.so error for %s' % (env))
+try:
+    if 'Windows' in env:
+        libldpc = cdll.LoadLibrary(dir + '/../lib/win32/libldpc.so')
+    elif 'Linux' in env:
+        libldpc = cdll.LoadLibrary(dir + '/../lib/linux/libldpc.so')
+    else:
+        raise
+except:
+    print('load libldpc.so error (%s)' % (env))
     exit()
 
 # constants --------------------------------------------------------------------
@@ -1260,19 +1263,19 @@ def decode_LDPC_CNV2_SF3(syms):
 
 # decode LDPC(200,100) of B-CNAV1 subframe 2 -----------------------------------
 def decode_LDPC_BCNV1_SF2(syms):
-    return [] # not yet implemeted
+    return [] # not yet implemented
 
 # decode LDPC(88,44) of B-CNAV1 subframe 3 -------------------------------------
 def decode_LDPC_BCNV1_SF3(syms):
-    return [] # not yet implemeted
+    return [] # not yet implemented
 
 # decode LDPC(96,48) of B-CNAV2 frame ------------------------------------------
 def decode_LDPC_BCNV2(syms):
-    return [] # not yet implemeted
+    return [] # not yet implemented
 
 # decode LDPC(162,81) of B-CNAV3 frame -----------------------------------------
 def decode_LDPC_BCNV3(syms):
-    return [] # not yet implemeted
+    return [] # not yet implemented
 
 # generate LDPC parity check matrix --------------------------------------------
 def gen_LDPC_H(m, n, H_A, H_B, H_C, H_D, H_E, H_T):
@@ -1317,7 +1320,7 @@ def decode_LDPC_H(H, m, n, syms):
     p3 = pchk.ctypes.data_as(POINTER(c_int8))
     p4 = bitpr.ctypes.data_as(POINTER(c_double))
     
-    # decode LDPC by probability prppagation
+    # decode LDPC by probability propagation
     iters = libldpc.prprp_decode(c_void_p(H), p1, p2, p3, p4)
     
     #valid = libldpc.check(c_void_p(H), p2, p3) == 0
