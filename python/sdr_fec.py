@@ -24,12 +24,15 @@ NONE = np.array([], dtype='uint8')
 # load LIBFEC ([1]) ------------------------------------------------------------
 env = platform.platform()
 dir = os.path.dirname(__file__)
-if 'Windows' in env:
-    libfec = cdll.LoadLibrary(dir + '/../lib/win32/libfec.so')
-elif 'Linux' in env:
-    libfec = cdll.LoadLibrary(dir + '/../lib/linux/libfec.so')
-else:
-    printf('load libfec.so error for %s' % (env))
+try:
+    if 'Windows' in env:
+        libfec = cdll.LoadLibrary(dir + '/../lib/win32/libfec.so')
+    elif 'Linux' in env:
+        libfec = cdll.LoadLibrary(dir + '/../lib/linux/libfec.so')
+    else:
+        raise
+except:
+    print('load libfec.so error (%s)' % (env))
     exit()
 
 #-------------------------------------------------------------------------------
