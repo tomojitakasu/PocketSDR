@@ -1,24 +1,28 @@
 #
-# makefile for Pocket SDR shared library (libsdr.so)
+#  makefile for Pocket SDR shared library (libsdr.so)
 #
+#! You need to install libfftw3 as follows.
+#!
+#! $ pacman -S mingw-w64-x86_64-fftw (MINGW64)
+#! $ sudo apt install libfftw3-dev   (Ubuntu)
 
 CC  = gcc
 SRC = ../../src
 
-#INSTALL = ../linux
+#! uncomment for Windows
 INSTALL = ../win32
+
+#! uncomment for Linux
+#INSTALL = ../linux
 
 INCLUDE = -I$(SRC)
 
-#OPTIONS =
-OPTIONS = -march=native -DAVX2
+#! comment out for older CPU without AVX2
+OPTIONS = -DAVX2
 
-CFLAGS = -Ofast $(INCLUDE) $(OPTIONS) -fPIC -g
-#CFLAGS = -O3 $(INCLUDE) $(OPTIONS) -fPIC -g
+CFLAGS = -Ofast -march=native $(INCLUDE) $(OPTIONS) -fPIC -g
 
-#LDLIBS =
 LDLIBS = -lfftw3f
-#LDLIBS = /mingw64/lib/libfftw3f.a
 
 OBJ = sdr_func.o sdr_cmn.o
 

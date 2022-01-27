@@ -1,28 +1,31 @@
 #
-# makefile for RTKLIB shared library (librtk.so)
+#  makefile for RTKLIB shared library (librtk.so)
 #
-# RTKLIB: https://github.com/tomojitakasu/RTKLIB/tree/rtklib_2.4.3
-#
+#! You need to install RTKLIB 2.4.3 source tree as follows.
+#!
+#! $ git clone https://github.com/tomojitakasu/RTKLIB -b rtklib_2.4.3 RTKLIB
 
-CC  = gcc
-SRC = ../../../RTKLIB/src
+CC = gcc
 
-#INSTALL = ../linux
+#! specify directory of RTKLIB source tree
+SRC = ./RTKLIB/src
+
+#! uncomment for Windows
 INSTALL = ../win32
+OPTIONS= -DENAGLO -DENAGAL -DENAQZS -DENACMP -DENAIRN -DNFREQ=5 -DEXOBS=3 -DSVR_REUSEADDR -DTRACE -DWIN32
+LDLIBS = -lwsock32 -lwinmm
+
+#! uncomment for Linuex
+#INSTALL = ../linux
+#OPTIONS= -DENAGLO -DENAGAL -DENAQZS -DENACMP -DENAIRN -DNFREQ=5 -DEXOBS=3 -DSVR_REUSEADDR -DTRACE
+#LDLIBS =
 
 INCLUDE= -I$(SRC)
-
-#OPTIONS= -DENAGLO -DENAGAL -DENAQZS -DENACMP -DENAIRN -DNFREQ=5 -DEXOBS=3 -DSVR_REUSEADDR -DTRACE
-OPTIONS= -DENAGLO -DENAGAL -DENAQZS -DENACMP -DENAIRN -DNFREQ=5 -DEXOBS=3 -DSVR_REUSEADDR -DTRACE -DWIN32
-
 WARNOPTS = -ansi -pedantic -Wall -Wno-unused-but-set-variable -Wno-unused-function -Wno-unused-const-variable
 
 CFLAGS = -O3 $(INCLUDE) $(OPTIONS) $(WARNOPTS) -fPIC -g
 
-#LDLIBS =
-LDLIBS = -lwsock32 -lwinmm
-
-OBS = rtkcmn.o tides.o rtksvr.o rtkpos.o postpos.o geoid.o solution.o lambda.o sbas.o \
+OBJ = rtkcmn.o tides.o rtksvr.o rtkpos.o postpos.o geoid.o solution.o lambda.o sbas.o \
       stream.o rcvraw.o rtcm.o rtcm2.o rtcm3.o rtcm3e.o preceph.o options.o \
       pntpos.o ppp.o ppp_ar.o ephemeris.o rinex.o ionex.o convrnx.o convkml.o \
       convgpx.o streamsvr.o tle.o gis.o datum.o download.o \
@@ -31,8 +34,8 @@ OBS = rtkcmn.o tides.o rtksvr.o rtkpos.o postpos.o geoid.o solution.o lambda.o s
 
 TARGET = librtk.so
 
-$(TARGET) : $(OBS)
-	$(CC) -shared -o $@ $(OBS) $(LDLIBS)
+$(TARGET) : $(OBJ)
+	$(CC) -shared -o $@ $(OBJ) $(LDLIBS)
 
 rtkcmn.o   : $(SRC)/rtkcmn.c
 	$(CC) -c $(CFLAGS) $(SRC)/rtkcmn.c
