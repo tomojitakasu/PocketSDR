@@ -22,13 +22,16 @@ import sdr_code, sdr_ch
 # constants --------------------------------------------------------------------
 MAX_BUFF = 32        # max number of IF data buffer
 ESC_UP  = '\033[%dF' # ANSI escape cursor up
-ESC_COL = '\033[34m' # ANSI escape color = blue
+ESC_COL = '\033[34m' # ANSI escape color blue
 ESC_RES = '\033[0m'  # ANSI escape reset
 
 # global variable --------------------------------------------------------------
 Xp = np.zeros(1)
 Yp = np.zeros(1) * np.nan
 Zp = np.zeros(1) * np.nan
+Xt = np.zeros(1)
+Yt = np.zeros(1) * np.nan
+Zt = np.zeros(1) * np.nan
 
 # plot settings ----------------------------------------------------------------
 window = 'PocketSDR - GNSS SIGNAL TRACKING'
@@ -43,8 +46,8 @@ mpl.rcParams['text.color'] = lc
 mpl.rcParams['axes.facecolor'] = bc
 mpl.rcParams['axes.edgecolor'] = lc
 rect0  = [0.080, 0.040, 0.840, 0.910]
-rect1  = [0.080, 0.568, 0.490, 0.380]
-rect2  = [0.650, 0.568, 0.280, 0.380]
+rect1  = [0.080, 0.568, 0.560, 0.380]
+rect2  = [0.652, 0.568, 0.280, 0.380]
 rect3  = [0.080, 0.198, 0.840, 0.320]
 rect4  = [0.080, 0.040, 0.840, 0.110]
 rect5  = [-.430, 0.000, 1.800, 1.160]
@@ -66,16 +69,16 @@ def read_data(fp, N, IQ, buff, ix):
 
 # print receiver channel status header -----------------------------------------
 def print_head():
-    print('%9s %5s %4s %5s %9s %5s %-13s %10s %8s %11s %4s %4s %4s %4s %3s' %
+    print('%9s %4s %3s %5s %8s %4s %-12s %10s %7s %10s %4s %4s %4s %4s %3s' %
         ('TIME(s)', 'SIG', 'PRN', 'STATE', 'LOCK(s)', 'C/N0', '(dB-Hz)',
         'COFF(ms)', 'DOP(Hz)', 'ADR(cyc)', 'SYNC', '#NAV', '#ERR', '#LOL', 'NER'))
 
 # receiver channel sync status -------------------------------------------------
 def sync_stat(ch):
-    return ('S' if ch.trk.ssync > 0 else '-') + \
-        ('B' if ch.nav.ssync > 0 else '-') + \
-        ('F' if ch.nav.fsync > 0 else '-') + \
-        ('R' if ch.nav.rev else '-')
+    return (('S' if ch.trk.sec_sync > 0 else '-') +
+        ('B' if ch.nav.ssync > 0 else '-') +
+        ('F' if ch.nav.fsync > 0 else '-') +
+        ('R' if ch.nav.rev else '-'))
 
 # update receiver channel status -----------------------------------------------
 def update_stat(prns, ch, ncol):
@@ -83,7 +86,7 @@ def update_stat(prns, ch, ncol):
         print(ESC_UP % (ncol), end='')
     ncol = 0
     for i in range(len(prns)):
-        print('%s%9.2f %5s %4d %5s %9.2f %5.1f %-13s %10.7f %8.1f %11.1f %s %4d %4d %4d %3d%s' %
+        print('%s%9.2f %4s %3d %5s %8.2f %4.1f %-13s%10.7f %7.1f %10.1f %s %4d %4d %4d %3d%s' %
             (ESC_COL if ch[i].state == 'LOCK' else '',
             ch[i].time, ch[i].sig, prns[i], ch[i].state, ch[i].lock * ch[i].T,
             ch[i].cn0, cn0_bar(ch[i].cn0), ch[i].coff * 1e3, ch[i].fd, ch[i].adr,
@@ -103,7 +106,6 @@ def init_plot(sig, prn, ch, env, p3d, file):
     ax0.axis('off')
     ax0.set_title('SIG = %s, PRN = %3d, FILE = %s' % (sig, prn, file),
         fontsize=10)
-    Tc = ch.T / sdr_code.code_len(sig)
     pos = np.array(ch.trk.pos) / ch.fs
     if p3d:
         ax1, p1 = plot_corr_3d(fig, rect5, env, pos)
@@ -114,6 +116,7 @@ def init_plot(sig, prn, ch, env, p3d, file):
               ax0.text(0.03, 0.05, '', ha='left', va='bottom'),
               ax0.text(0.97, 0.10, '', color=fc, ha='right', va='bottom'))
     else:
+        Tc = ch.T / sdr_code.code_len(sig)
         ax1, p1 = plot_corr_env (fig, rect1, env, pos, pos / Tc)
         ax2, p2 = plot_corr_IQ  (fig, rect2)
         ax3, p3 = plot_corr_time(fig, rect3)
@@ -154,6 +157,7 @@ def plot_corr_env(fig, rect, env, pos, chip):
     p3 = ax.text(0.97, 0.95, '', color=fc, ha='right', va='top',
         transform=ax.transAxes)
     ax2 = ax.twiny()
+    ax2.set_xticks(range(-100, 101))
     ax2.xaxis.set_ticklabels([])
     ax2.xaxis.set_tick_params(direction='in', bottom=True, top=False)
     xl = [chip[4], chip[-1]]
@@ -190,18 +194,16 @@ def plot_corr_3d(fig, rect, env, pos):
     ax.set_ylabel('Code Offset (ms)')
     ax.set_zlabel('Correlation')
     ax.set_box_aspect((3, 2.5, 0.6))
-    ax.xaxis.set_pane_color((1, 1, 1, 0))
-    ax.yaxis.set_pane_color((1, 1, 1, 0))
-    ax.zaxis.set_pane_color((1, 1, 1, 0))
-    ax.xaxis._axinfo["grid"]['color'] =  (1, 1, 1, 0)
-    ax.yaxis._axinfo["grid"]['color'] =  (1, 1, 1, 0)
-    ax.zaxis._axinfo["grid"]['color'] =  (1, 1, 1, 0)
-    ax.view_init(35, -45)
+    ax.xaxis.pane.set_visible(False)
+    ax.yaxis.pane.set_visible(False)
+    ax.zaxis.pane.set_visible(False)
+    ax.grid(False)
+    ax.view_init(35, -50)
     return ax, ()
 
 # update correlation 3D --------------------------------------------------------
 def update_corr_3d(ax, p, ch, env, toff, tspan):
-    global Xp, Yp, Zp
+    global Xp, Yp, Zp, Xt, Yt, Zt
     
     for line in ax.lines:
         line.remove()
@@ -213,7 +215,6 @@ def update_corr_3d(ax, p, ch, env, toff, tspan):
     x = np.full(len(ch.trk.pos), ch.time)
     y0 = ch.coff * 1e3
     y = y0 + np.array(ch.trk.pos) / ch.fs * 1e3
-    yl = [y0 + ch.trk.pos[4] / ch.fs * 1.5e3, y0 + ch.trk.pos[-1] / ch.fs * 1.5e3]
     if env:
         z = np.abs(ch.trk.C)
     else:
@@ -222,15 +223,24 @@ def update_corr_3d(ax, p, ch, env, toff, tspan):
     Xp = np.hstack([Xp[ix:], x[4:], np.nan])
     Yp = np.hstack([Yp[ix:], y[4:], np.nan])
     Zp = np.hstack([Zp[ix:], z[4:], np.nan])
-    #ax.plot(xl, [y0, y0], [0, 0], color=lc, lw=0.8)
+    ix = np.where(Xt >= xl[0])
+    Xt = np.hstack([Xt[ix], ch.time])
+    Yt = np.hstack([Yt[ix], y[0]])
+    Zt = np.hstack([Zt[ix], z[0]])
+    y1 = Yt[len(Yt)//2]
+    yl = [y1 + ch.trk.pos[4] / ch.fs * 1.3e3, y1 + ch.trk.pos[-1] / ch.fs * 1.3e3]
+    ax.plot(Xt, Yt, np.zeros(len(Zt)), '.', color=gc, ms=2)
+    ax.plot(Xt, Yt, Zt, '.', color=fc, ms=4)
     ax.plot(Xp, Yp, Zp, '-', color=fc, lw=0.4)
     ax.plot(x[4:], y[4:], z[4:], '-', color=fc, lw=0.8)
     ax.plot(x[:3], y[:3], z[:3], '.', color=fc, ms=10)
     ax.set_xlim(xl)
     ax.set_ylim(yl)
-    p[0].set_text('T=%7.3f s COFF=%10.7f ms DOP=%8.1f Hz ADR=%10.1f cyc C/N0=%5.1f dB-Hz' % \
-        (ch.time, ch.coff * 1e3, ch.fd, ch.adr, ch.cn0))
-    p[1].set_text('SYNC=%s #NAV=%4d #ERR=%2d #LOL=%2d NER=%2d SEQ=%6d' % \
+    ax.set_xbound(xl)
+    ax.set_ybound(yl)
+    p[0].set_text('COFF=%10.7f ms DOP=%8.1f Hz ADR=%10.1f cyc C/N0=%5.1f dB-Hz' %
+        (ch.coff * 1e3, ch.fd, ch.adr, ch.cn0))
+    p[1].set_text('SYNC=%s #NAV=%4d #ERR=%2d #LOL=%2d NER=%2d SEQ=%6d' %
         (sync_stat(ch), ch.nav.count[0], ch.nav.count[1], ch.lost, ch.nav.nerr,
         ch.nav.seq))
     p[2].set_text('E=%6.3f P=%6.3f L=%6.3f' % (z[1], z[0], z[2]))
@@ -248,6 +258,7 @@ def plot_corr_IQ(fig, rect):
     ax.set_xlim([-ylim, ylim])
     ax.set_ylim([-ylim, ylim])
     ax.set_aspect('equal')
+    ax.yaxis.set_ticklabels([])
     set_axcolor(ax, lc)
     ax.text(0.05, 0.95, 'IP - QP', ha='left', va='top', transform=ax.transAxes)
     p2 = ax.text(0.95, 0.95, '', ha='right', va='top', color=fc,
@@ -291,8 +302,8 @@ def update_corr_time(ax, p, ch, toff, tspan):
     p[2][0].set_data(ch.time, P[-1].imag)
     p[3][0].set_data(ch.time, P[-1].real)
     #p[4][0].set_data(ch.nav.tsyms, np.zeros(len(ch.nav.tsyms))) # for debug
-    p[5].set_text(('T=%7.3f s COFF=%10.7f ms DOP=%8.1f Hz ADR=%10.1f cyc ' +
-        'C/N0=%5.1f dB-Hz') % (ch.time, ch.coff * 1e3, ch.fd, ch.adr, ch.cn0))
+    p[5].set_text(('COFF=%10.7f ms DOP=%8.1f Hz ADR=%10.1f cyc ' +
+        'C/N0=%5.1f dB-Hz') % (ch.coff * 1e3, ch.fd, ch.adr, ch.cn0))
     p[6].set_text('SYNC=%s #NAV=%4d #ERR=%2d #LOL=%2d NER=%2d SEQ=%6d' % (
          sync_stat(ch), ch.nav.count[0], ch.nav.count[1], ch.lost, ch.nav.nerr,
          ch.nav.seq))
@@ -333,8 +344,9 @@ def set_axcolor(ax, color):
 
 # show usage -------------------------------------------------------------------
 def show_usage():
-    print('Usage: pocket_trk.py [-sig sig] [-prn prn[,...]] [-p] [-e] [-toff toff] [-f freq]\n' +
-          '           [-fi freq] [-IQ] [-ti tint] [-ts tspan] [-yl ylim] [-log file] [-q] file')
+    print('Usage: pocket_trk.py [-sig sig] [-prn prn[,...]] [-p] [-e] [-toff toff] [-f freq]')
+    print('           [-fi freq] [-IQ] [-ti tint] [-ts tspan] [-yl ylim] [-log path]')
+    print('           [-out path] [-q] [file]')
     exit()
 
 #-------------------------------------------------------------------------------
@@ -342,7 +354,8 @@ def show_usage():
 #   Synopsis
 # 
 #     pocket_trk.py [-sig sig] [-prn prn[,...]] [-p] [-e] [-toff toff] [-f freq]
-#         [-fi freq] [-IQ] [-ti tint] [-ts tspan] [-yl ylim] [-log file] [-q] [file]
+#         [-fi freq] [-IQ] [-ti tint] [-ts tspan] [-yl ylim] [-log path]
+#         [-out path] [-q] [file]
 # 
 #   Description
 # 
@@ -400,9 +413,18 @@ def show_usage():
 #     -yl ylim
 #         Y-axis limit of plots. [0.3]
 #
-#     -log file
-#         Log file path to output signal tracking status. The log includes decoded
-#         navigation data and code offset, including navigation data decoded.
+#     -log path
+#         Log stream path to write signal tracking status. The log includes
+#         decoded navigation data and code offset, including navigation data
+#         decoded. The stream path should be one of the followings.
+#         (1) local file  file path without ':'. The file path can be contain
+#             time keywords (%Y, %m, %d, %h, %M) as same as RTKLIB stream.
+#         (2) TCP server  :port
+#         (3) TCP client  address:port
+#
+#     -out path
+#         Output stream path to write special messages. Currently only UBX-RXM-
+#         QZSSL6 message is supported as a special message,
 #
 #     -q
 #         Suppress showing signal tracking status.
@@ -416,7 +438,7 @@ def show_usage():
 #
 if __name__ == '__main__':
     sig, prns, plot, env, p3d = 'L1CA', [1], False, False, False
-    fs, fi, IQ, toff, tint, tspan = 12e6, 0.0, 1, 0.0, 0.05, 1.0
+    fs, fi, IQ, toff, tint, tspan = 12e6, 0.0, 1, 0.0, 0.1, 1.0
     ch = {}
     file, log_file, log_lvl, quiet = '', '', 4, 0
     
@@ -482,8 +504,8 @@ if __name__ == '__main__':
             exit()
     
     for i in range(len(prns)):
-        flag = (plot and i == 0)
-        ch[i] = sdr_ch.ch_new(sig, prns[i], fs, fi, add_corr=flag)
+        ncorr = 40 if plot and i == 0 else 0
+        ch[i] = sdr_ch.ch_new(sig, prns[i], fs, fi, add_corr=ncorr)
     
     if not quiet:
         print_head()
@@ -519,7 +541,7 @@ if __name__ == '__main__':
             for j in range(len(prns)):
                 sdr_ch.ch_update(ch[j], time_rcv, buff, N * ((i - 1) % MAX_BUFF))
             
-            if i % int(tint / T) != 0:
+            if (i - 1) % int(tint / T) != 0:
                 continue
             
             # update receiver channel status
@@ -528,13 +550,15 @@ if __name__ == '__main__':
             
             # update plots
             if plot:
+                ax[0].set_title('SIG = %s, PRN = %3d, FILE = %s, T = %7.2f s' %
+                    (ch[0].sig, ch[0].prn, file, ch[0].time), fontsize=10)
                 update_plot(fig, ax, p, ch[0], env, p3d, toff, tspan)
             
             # update log
             for j in range(len(prns)):
                 if ch[j].state != 'LOCK':
                     continue
-                log(3, '$STAT,%.3f,%s,%d,%d,%.1f,%.7f,%.1f,%.1f,%d,%d' %
+                log(3, '$CH,%.3f,%s,%d,%d,%.1f,%.9f,%.3f,%.3f,%d,%d' %
                     (ch[j].time, ch[j].sig, ch[j].prn, ch[j].lock, ch[j].cn0,
                     ch[j].coff * 1e3, ch[j].fd, ch[j].adr, ch[j].nav.count[0],
                     ch[j].nav.count[1]))
