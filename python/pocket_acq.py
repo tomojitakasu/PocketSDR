@@ -23,7 +23,8 @@ mpl.rcParams['toolbar'] = 'None';
 mpl.rcParams['font.size'] = 9
 
 # constants --------------------------------------------------------------------
-THRES_CN0 = 40.0     # threshold to lock (dB-Hz)
+T_AQC = 0.010        # non-coherent integration time for acquisition (s)
+THRES_CN0 = 38.0     # threshold to lock (dB-Hz)
 ESC_COL = '\033[34m' # ANSI escape color = blue
 ESC_RES = '\033[0m'  # ANSI escape reset
 
@@ -198,7 +199,7 @@ if __name__ == '__main__':
     window = 'PocketSDR - GNSS SIGNAL ACQUISITION'
     size = (9, 6)
     sig, prns = 'L1CA', [1]
-    fs, fi, T, toff = 12e6, 0.0, 4e-3, 0.0
+    fs, fi, T, toff = 12e6, 0.0, T_AQC, 0.0
     max_dop = 5000.0
     opt = [0, False, True, False, False]
     fc, bc = 'darkblue', 'w'
