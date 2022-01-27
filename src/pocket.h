@@ -102,17 +102,19 @@ typedef struct {                /* PRN code type */
 
 
 /* function prototypes -------------------------------------------------------*/
-
 void *sdr_malloc(size_t size);
 void sdr_free(void *p);
 uint32_t sdr_get_tick(void);
 void sdr_sleep_msec(int msec);
 
-void mix_carr(const float *data, int ix, int N, double fs, double fc,
-              double phi, float *data_carr);
-void corr_std(const float *data, const float *code, int N, const int *pos,
-              int n, float *corr);
-void corr_fft(const float *data, const float *code_fft, int N, float *corr);
+void init_lib(const char *file);
+void mix_carr(const float *buff, int ix, int N, double fs, double fc,
+    double phi, float *data);
+void corr_std(const float *buff, int ix, int N, double fs, double fc,
+    double phi, const float *code, const int *pos, int n, float *corr);
+void corr_fft(const float *buff, int ix, int N, double fs, double fc,
+    double phi, const float *code_fft, float *corr);
+int gen_fftw_wisdom(const char *file, int N);
 
 sdr_usb_t *sdr_usb_open(int bus, int port, uint16_t vid, uint16_t pid);
 void sdr_usb_close(sdr_usb_t *usb);

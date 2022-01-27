@@ -17,6 +17,12 @@ def to_hex(data):
             hex += '\n'
     return hex
 
+# to plot ----------------------------------------------------------------------
+def to_plot(x, y):
+    plt.figure()
+    plt.plot(x, y, '-k', lw=0.4)
+    plt.show()
+
 # generate data ----------------------------------------------------------------
 def gen_data(N):
     return np.array(np.array(np.random.rand(N) * 4, dtype='int8') * 2 - 3,
@@ -53,10 +59,10 @@ def test_02():
         data = gen_data(N)
         
         sdr_func.LIBSDR_ENA = False
-        data_carr1 = sdr_func.mix_carr(data, fs, fc, phi)
+        data_carr1 = sdr_func.mix_carr(data, 0, len(data), fs, fc, phi)
         
         sdr_func.LIBSDR_ENA = True
-        data_carr2 = sdr_func.mix_carr(data, fs, fc, phi)
+        data_carr2 = sdr_func.mix_carr(data, 0, len(data), fs, fc, phi)
         
         d = np.abs(data_carr1.real - data_carr2.real)
         e = np.abs(data_carr1.imag - data_carr2.imag)
@@ -70,6 +76,7 @@ def test_02():
 def test_03():
     fs = 24e6
     fc = 13500.0
+    phi = 123.456
     pos = range(-20, 21)
     coff = 1.345
     
@@ -78,10 +85,10 @@ def test_03():
         code = sdr_code.res_code(sdr_code.gen_code('L6D', 194), 4e-3, coff, fs, N)
         
         sdr_func.LIBSDR_ENA = False
-        C1 = sdr_func.corr_std(data, code, pos)
+        C1 = sdr_func.corr_std(data, 0, N, fs, fc, phi, code, pos)
         
         sdr_func.LIBSDR_ENA = True
-        C2 = sdr_func.corr_std(data, code, pos)
+        C2 = sdr_func.corr_std(data, 0, N, fs, fc, phi, code, pos)
         
         d = np.abs(C1.real - C2.real)
         e = np.abs(C1.imag - C2.imag)
@@ -96,18 +103,19 @@ def test_03():
 def test_04():
     fs = 24e6
     fc = 13500.0
+    phi = 123.456
     pos = range(-40, 41)
     coff = 1.345
     
     for N in (12000, 24000, 36000, 40000, 45000, 46000, 48000, 96000):
-        data = gen_data(N)
+        data = sdr_func.mix_carr(gen_data(N), 0, N, fs, fc, phi)
         code = sdr_code.gen_code_fft(sdr_code.gen_code('L6D', 194), 4e-3, coff, fs, N//2, N//2)
         
         sdr_func.LIBSDR_ENA = False
-        C1 = sdr_func.corr_fft(data, code)
+        C1 = sdr_func.corr_fft(data, 0, N, fs, fc, phi, code)
         
         sdr_func.LIBSDR_ENA = True
-        C2 = sdr_func.corr_fft(data, code)
+        C2 = sdr_func.corr_fft(data, 0, N, fs, fc, phi, code)
         
         d1 = np.abs(C1.real - C2.real)
         d2 = np.abs(C1.imag - C2.imag)
@@ -131,40 +139,45 @@ def test_05():
     print('%6s  %8s %8s %8s   %8s %8s %8s' % (
         'N  ', 'mix_carr', 'corr_std', 'corr_fft', 'mix_carr', 'corr_std', 'corr_fft'))
     
-    for N in (12000, 16000, 24000, 32000, 48000, 96000):
-        data = gen_data(N)
+    for N in (12000, 16000, 24000, 32000, 32768, 48000, 65536, 96000):
+        data = sdr_func.mix_carr(gen_data(N), 0, N, fs, fc, phi)
         code = sdr_code.gen_code('L6D', 194)
         code_res = sdr_code.res_code(code, 4e-3, coff, fs, N)
         code_fft = sdr_code.gen_code_fft(code, 4e-3, coff, fs, N)
         
         sdr_func.LIBSDR_ENA = False
+        
         tt = time.time()
         for i in range(n):
-            data_carr1 = sdr_func.mix_carr(data, fs, fc, phi)
+            data_carr1 = sdr_func.mix_carr(data, 0, N, fs, fc, phi)
         t1 = (time.time() - tt) * 1e3 / n
         
         tt = time.time()
         for i in range(n):
-            C1 = sdr_func.corr_std(data, code_res, pos)
+            C1 = sdr_func.corr_std(data, 0, N, fs, fc, phi, code_res, pos)
         t2 = (time.time() - tt) * 1e3 / n
         
+        tt = time.time()
         for i in range(n):
-            C1 = sdr_func.corr_fft(data, code_fft)
+            C1 = sdr_func.corr_fft(data, 0, N, fs, fc, phi, code_fft)
         t3 = (time.time() - tt) * 1e3 / n
         
         sdr_func.LIBSDR_ENA = True
+        
         tt = time.time()
         for i in range(n):
-            data_carr1 = sdr_func.mix_carr(data, fs, fc, phi)
+            data_carr1 = sdr_func.mix_carr(data, 0, N, fs, fc, phi)
         t4 = (time.time() - tt) * 1e3 / n
         
         tt = time.time()
         for i in range(n):
-            C1 = sdr_func.corr_std(data, code_res, pos)
+            C1 = sdr_func.corr_std(data, 0, N, fs, fc, phi, code_res, pos)
         t5 = (time.time() - tt) * 1e3 / n
         
+        C1 = sdr_func.corr_fft(data, 0, N, fs, fc, phi, code_fft)
+        tt = time.time()
         for i in range(n):
-            C1 = sdr_func.corr_fft(data, code_fft)
+            C1 = sdr_func.corr_fft(data, 0, N, fs, fc, phi, code_fft)
         t6 = (time.time() - tt) * 1e3 / n
         
         print('%6d  %8.4f %8.4f %8.4f   %8.4f %8.4f %8.4f' % (

@@ -6,7 +6,7 @@
  *  T.TAKASU
  *
  *  History:
- *  2022-01-15  1.0  new
+ *  2022-01-25  1.0  new
  *
  */
 #include <math.h>
@@ -18,22 +18,36 @@
 #endif
 
 /* constants -----------------------------------------------------------------*/
-#define NTBL     256        /* carrier lookup table size */
+#define NTBL      256        /* carrier lookup table size */
+#define FFTW_FLAG FFTW_ESTIMATE /* FFTW flag */
+
+/* global variables ----------------------------------------------------------*/
+static float cos_tbl[NTBL] = {0}; /* carrier lookup table */
+static float sin_tbl[NTBL] = {0};
+
+/* initialize library --------------------------------------------------------*/
+void init_lib(const char *file)
+{
+    int i;
+    
+    /* generate carrier lookup table */
+    for (i = 0; i < NTBL; i++) {
+        cos_tbl[i] = cosf(-2.0f * (float)PI * i / NTBL);
+        sin_tbl[i] = sinf(-2.0f * (float)PI * i / NTBL);
+    }
+    /* import FFTW wisdom */
+    if (*file && !fftwf_import_wisdom_from_filename(file)) {
+        fprintf(stderr, "FFTW wisdom import error %s\n", file);
+    }
+}
 
 /* mix carrier (N = 2 * n) ---------------------------------------------------*/
-void mix_carr(const float *data, int ix, int N, double fs, double fc,
-              double phi, float *data_carr)
+void mix_carr(const float *buff, int ix, int N, double fs, double fc,
+    double phi, float *data)
 {
-    static float cos_tbl[NTBL] = {0}, sin_tbl[NTBL] = {0};
     double p, step;
     int i, j, k, m;
     
-    if (cos_tbl[0] == 0.0) {
-        for (i = 0; i < NTBL; i++) {
-            cos_tbl[i] = cosf(-2.0f * (float)PI * i / NTBL);
-            sin_tbl[i] = sinf(-2.0f * (float)PI * i / NTBL);
-        }
-    }
     phi = fmod(phi, 1.0) * NTBL;
     step = fc / fs / 2.0 * NTBL;
     
@@ -41,28 +55,17 @@ void mix_carr(const float *data, int ix, int N, double fs, double fc,
         p = phi + step * i;
         k = (uint8_t)p;
         m = (uint8_t)(p + step * 2.0);
-        data_carr[i  ] = data[j  ] * cos_tbl[k] - data[j+1] * sin_tbl[k];
-        data_carr[i+1] = data[j  ] * sin_tbl[k] + data[j+1] * cos_tbl[k];
-        data_carr[i+2] = data[j+2] * cos_tbl[m] - data[j+3] * sin_tbl[m];
-        data_carr[i+3] = data[j+2] * sin_tbl[m] + data[j+3] * cos_tbl[m];
+        data[i  ] = buff[j  ] * cos_tbl[k] - buff[j+1] * sin_tbl[k];
+        data[i+1] = buff[j  ] * sin_tbl[k] + buff[j+1] * cos_tbl[k];
+        data[i+2] = buff[j+2] * cos_tbl[m] - buff[j+3] * sin_tbl[m];
+        data[i+3] = buff[j+2] * sin_tbl[m] + buff[j+3] * cos_tbl[m];
     }
 }
 
 /* inner product of complex and real -----------------------------------------*/
 void dot_cpx_real(const float *a, const float *b, int N, float s, float *c)
 {
-#ifndef AVX2
-    int i;
-    
-    c[0] = c[1] = 0.0f;
-    
-    for (i = 0; i < N * 2; i += 2) {
-        c[0] += a[i  ] * b[i];
-        c[1] += a[i+1] * b[i];
-    }
-    c[0] *= s;
-    c[1] *= s;
-#else
+#ifdef AVX2
     __m256 ymm1, ymm2, ymm3, ymm4, ymm5, ymm6, ymm7;
     float d[8], e[8];
     int i;
@@ -90,12 +93,24 @@ void dot_cpx_real(const float *a, const float *b, int N, float s, float *c)
         c[0] += a[i  ] * b[i] * s;
         c[1] += a[i+1] * b[i] * s;
     }
+#else
+    int i;
+    
+    c[0] = c[1] = 0.0f;
+    
+    for (i = 0; i < N * 2; i += 2) {
+        c[0] += a[i  ] * b[i];
+        c[1] += a[i+1] * b[i];
+    }
+    c[0] *= s;
+    c[1] *= s;
+
 #endif /* AVX2 */
 }
 
 /* standard correlator ------------------------------------------------------*/
-void corr_std(const float *data, const float *code, int N, const int *pos,
-              int n, float *corr)
+static void corr_std_(const float *data, const float *code, int N,
+    const int *pos, int n, float *corr)
 {
     int i, j, M;
     
@@ -115,7 +130,7 @@ void corr_std(const float *data, const float *code, int N, const int *pos,
 }
 
 /* multiplication of complex64 (N = 2 * n) ----------------------------------*/
-void mul_cpx(const float *a, const float *b, int N, float s, float *c)
+static void mul_cpx(const float *a, const float *b, int N, float s, float *c)
 {
     int i;
     
@@ -128,7 +143,8 @@ void mul_cpx(const float *a, const float *b, int N, float s, float *c)
 }
 
 /* FFT correlator (N = 2 * n) -----------------------------------------------*/
-void corr_fft(const float *data, const float *code_fft, int N, float *corr)
+static void corr_fft_(const float *data, const float *code_fft, int N,
+    float *corr)
 {
     static fftwf_plan plan[2] = {0};
     static int N_plan = 0;
@@ -143,8 +159,8 @@ void corr_fft(const float *data, const float *code_fft, int N, float *corr)
             fftwf_destroy_plan(plan[0]);
             fftwf_destroy_plan(plan[1]);
         }
-        plan[0] = fftwf_plan_dft_1d(N, c1, c2, FFTW_FORWARD,  FFTW_ESTIMATE);
-        plan[1] = fftwf_plan_dft_1d(N, c2, c1, FFTW_BACKWARD, FFTW_ESTIMATE);
+        plan[0] = fftwf_plan_dft_1d(N, c1, c2, FFTW_FORWARD,  FFTW_FLAG);
+        plan[1] = fftwf_plan_dft_1d(N, c2, c1, FFTW_BACKWARD, FFTW_FLAG);
         N_plan = N;
     }
     /* ifft(fft(data) * code_fft) / N^2 */
@@ -156,3 +172,48 @@ void corr_fft(const float *data, const float *code_fft, int N, float *corr)
     fftwf_free(c2);
 }
 
+/* mix carrier and standard correlator (N = 2 * n) ---------------------------*/
+void corr_std(const float *buff, int ix, int N, double fs, double fc,
+    double phi, const float *code, const int *pos, int n, float *corr)
+{
+    float *data = (float *)sdr_malloc(sizeof(float) * N * 2);
+    
+    mix_carr(buff, ix, N, fs, fc, phi, data);
+    corr_std_(data, code, N, pos, n, corr);
+    
+    sdr_free(data);
+}
+
+/* mix carrier and FFT correlator (N = 2 * n) --------------------------------*/
+void corr_fft(const float *buff, int ix, int N, double fs, double fc,
+    double phi, const float *code_fft, float *corr)
+{
+    float *data = (float *)sdr_malloc(sizeof(float) * N * 2);
+    
+    mix_carr(buff, ix, N, fs, fc, phi, data);
+    corr_fft_(data, code_fft, N, corr);
+    
+    sdr_free(data);
+}
+
+/* generate FFTW wisdom ------------------------------------------------------*/
+int gen_fftw_wisdom(const char *file, int N)
+{
+    fftwf_plan plan[2] = {0};
+    fftwf_complex *c1, *c2;
+    int stat;
+    
+    c1 = (fftwf_complex *)fftwf_malloc(sizeof(fftwf_complex) * N);
+    c2 = (fftwf_complex *)fftwf_malloc(sizeof(fftwf_complex) * N);
+    plan[0] = fftwf_plan_dft_1d(N, c1, c2, FFTW_FORWARD,  FFTW_PATIENT);
+    plan[1] = fftwf_plan_dft_1d(N, c2, c1, FFTW_BACKWARD, FFTW_PATIENT);
+    
+    stat = fftwf_export_wisdom_to_filename(file);
+    
+    fftwf_destroy_plan(plan[0]);
+    fftwf_destroy_plan(plan[1]);
+    fftwf_free(c1);
+    fftwf_free(c2);
+    
+    return stat;
+}

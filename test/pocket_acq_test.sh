@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-#  test drive for pocket_acq.py
+#  test driver for pocket_acq.py
 #
 
 ../bin/pocket_dump -t 10 L1.bin L2.bin -c ../conf/pocket_L1L2_8MHz.conf
@@ -56,8 +56,8 @@
 ../python/pocket_acq.py B1I.bin -f 12 -np -sig B1I -prn 1-37
 ../python/pocket_acq.py B2I.bin -f 12 -np -sig B2I -prn 1-37
 
-../bin/pocket_dump -t 10 B1I.bin B3I.bin -c ../conf/pocket_B1IB3I_24MHz.conf
+../bin/pocket_dump -t 10 B1Ia.bin B3I.bin -c ../conf/pocket_B1IB3I_24MHz.conf
 
-../python/pocket_acq.py B1I.bin -f 24 -np -sig B1I -prn 1-37
+../python/pocket_acq.py B1Ia.bin -f 24 -np -sig B1I -prn 1-37
 ../python/pocket_acq.py B3I.bin -f 24 -np -sig B3I -prn 1-63
 
