@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#  uinit test for sdr_func.py
+#  unit test driver for sdr_func.py
 #
 import sys, time
 sys.path.append('../python')
