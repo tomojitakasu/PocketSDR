@@ -7,6 +7,7 @@
 #  History:
 #  2021-12-24  1.0  new
 #  2022-01-13  1.1  support tracking of L6D, L6E
+#  2022-02-15  1.2  update ch state by external trigger
 #
 from math import *
 import numpy as np
@@ -14,7 +15,6 @@ from sdr_func import *
 import sdr_code, sdr_nav
 
 # constants --------------------------------------------------------------------
-T_SRCH     = 60.0            # average of signal search interval (s)
 T_ACQ      = 0.010           # non-coherent integration time for acquisition (s)
 T_DLL      = 0.010           # non-coherent integration time for DLL (s)
 T_CN0      = 1.0             # averaging time for C/N0 (s)
@@ -52,7 +52,7 @@ class Obj: pass
 def ch_new(sig, prn, fs, fi, max_dop=MAX_DOP, sp_corr=SP_CORR, add_corr=0,
     nav_opt=''):
     ch = Obj()
-    ch.state = 'SRCH'               # channel state
+    ch.state = 'IDLE'               # channel state
     ch.time = 0.0                   # receiver time
     ch.sig = sig.upper()            # signal type
     ch.prn = prn                    # PRN number
@@ -104,8 +104,8 @@ def ch_update(ch, time, buff, ix):
         search_sig(ch, time, buff, ix)
     elif ch.state == 'LOCK':
         track_sig(ch, time, buff, ix)
-    elif np.random.rand() * T_SRCH / ch.T < 1.0: # IDLE
-        ch.state = 'SRCH'
+    else: # IDLE
+        ch.time = time
 
 # new signal acquisition -------------------------------------------------------
 def acq_new(code, T, fs, N, max_dop):
