@@ -1,7 +1,48 @@
 /*
-* Wrapper functions of RTKLIB for librtk.so
+*  Wrapper functions of RTKLIB for librtk.so
+*
+*  References:
+*  [1] RTKLIB: An Open Source Program Package for GNSS Positioning
+*      (https://github.com/tomojitakasu/RTKLIB)
+*
+*  Author:
+*  T.TAKASU
+*
+*  History:
+*  2021-12-24  1.0  new
+*  2022-02-08  1.1  add get_const_int(), navgettgd()
 */
 #include "rtklib.h"
+
+/* get constant int ----------------------------------------------------------*/
+int get_const_int(const char *name)
+{
+    if (!strcmp(name, "MAXSAT")) {
+        return MAXSAT;
+    }
+    else if (!strcmp(name, "MAXSTA")) {
+        return MAXSTA;
+    }
+    else if (!strcmp(name, "MAXANT")) {
+        return MAXANT;
+    }
+    else if (!strcmp(name, "MAXOBS")) {
+        return MAXOBS;
+    }
+    else if (!strcmp(name, "NFREQ")) {
+        return NFREQ;
+    }
+    else if (!strcmp(name, "NEXOBS")) {
+        return NEXOBS;
+    }
+    else if (!strcmp(name, "NSYS")) {
+        return NSYS;
+    }
+    else if (!strcmp(name, "SNR_UNIT")) {
+        return SNR_UNIT;
+    }
+    return 0;
+}
 
 /* new observation data ------------------------------------------------------*/
 obs_t *obsnew(void)
@@ -48,6 +89,13 @@ void navfree(nav_t *nav)
     free(nav);
 }
 
+/* iono model with navigation d ---------------------------------------------*/
+double ionmodel_nav(gtime_t time, nav_t *nav, const double *pos,
+    const double *azel)
+{
+    return ionmodel(time, nav->ion_gps, pos, azel);
+}
+
 /* get ephemeris -------------------------------------------------------------*/
 eph_t *navgeteph(nav_t *nav, int idx)
 {
@@ -62,33 +110,17 @@ geph_t *navgetgeph(nav_t *nav, int idx)
     return nav->geph + idx;
 }
 
-/* new station parameter -----------------------------------------------------*/
-sta_t *stanew(void)
+/* get TGD -------------------------------------------------------------------*/
+double navgettgd(int sat, const nav_t *nav)
 {
-    sta_t *sta;
+    int i;
     
-    if (!(sta = (sta_t *)calloc(1, sizeof(sta_t)))) {
-        return NULL;
+    if (nav) {
+        for (i = 0; i < nav->n; i++) {
+            if (nav->eph[i].sat == sat) return CLIGHT * nav->eph[i].tgd[0];
+        }
     }
-    return sta;
-}
-
-/* new solution --------------------------------------------------------------*/
-sol_t *solnew(void)
-{
-    sol_t *sol;
-    
-    if (!(sol = (sol_t *)calloc(1, sizeof(sol_t)))) {
-        return NULL;
-    }
-    return sol;
-}
-
-/* free solution -------------------------------------------------------------*/
-void solfree(sol_t *sol)
-{
-    if (!sol) return;
-    free(sol);
+    return 0.0;
 }
 
 /* new stream ----------------------------------------------------------------*/
