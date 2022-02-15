@@ -1,12 +1,12 @@
 #
-# makefile of LIBFEC shared library (libfec.so)
+#  makefile of LIBFEC shared library (libfec.so)
 #
 #! You need to install LIBFEC source tree as follows.
 #!
 #! $ git clone https://github.com/quiet/libfec libfec
 
 #! specify directory of LIBFEC source tree
-SRC = ./libfec
+SRC = ../libfec
 
 #! uncomment for Windows
 INSTALL = ../win32
@@ -24,7 +24,7 @@ $(TARGET) :
 	mv makefile.p makefile; \
 	make; \
 	cd $$DIR; \
-	cp $(SRC)/$(TARGET) $(TARGET)
+	cp $(SRC)/$@ .
 
 clean:
 	rm -f $(TARGET)
