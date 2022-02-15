@@ -9,10 +9,10 @@
 SRC = ../libfec
 
 #! uncomment for Windows
-INSTALL = ../win32
+#INSTALL = ../win32
 
 #! uncomment for Linuex
-#INSTALL = ../linux
+INSTALL = ../linux
 
 TARGET = libfec.so
 
@@ -27,6 +27,10 @@ $(TARGET) :
 	cp $(SRC)/$@ .
 
 clean:
+	DIR=`pwd`; \
+	cd $(SRC); \
+	make clean; \
+	cd $$DIR; \
 	rm -f $(TARGET)
 
 install:
