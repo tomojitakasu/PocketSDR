@@ -1,4 +1,4 @@
-# **PocketSDR - An Open-Source GNSS SDR, ver. 0.6**
+# **PocketSDR - An Open-Source GNSS SDR, ver. 0.7**
 
 ## **Overview**
 
@@ -25,10 +25,10 @@ navigation data in them. The supported GNSS signals are as follows. These APs
 are written in Python by very compact way. They are easily modified by users
 to add user's unique algorithms. 
 
-GPS: L1C/A, L1CP, L1CD, L2CM, L5I, L5Q, GLONASS: L1C/A, L2C/A, Galileo: E1B,
-E1C, E5aI, E5aQ, E5bI, E5bQ, E6B, E6C, QZSS: L1C/A, L1C/B, L1CP, L1CD, L1S,
-L2CM, L5I, L5Q, L5SI, L5SQ, L6D, L6E, BeiDou: B1I, B1CP, B1CD, B2I, B2aD, B2aP,
-B2bI, B3I, SBAS: L1C/A, L5I, L5Q
+GPS: L1C/A, L1CP, L1CD, L2CM, L5I, L5Q, GLONASS: L1C/A, L2C/A, L3OCD, L3OCP,
+Galileo: E1B, E1C, E5aI, E5aQ, E5bI, E5bQ, E6B, E6C, QZSS: L1C/A, L1C/B, L1CP,
+L1CD, L1S, L2CM, L5I, L5Q, L5SI, L5SQ, L6D, L6E, BeiDou: B1I, B1CP, B1CD, B2I,
+B2aD, B2aP, B2bI, B3I, NavIC: L5-SPS, SBAS: L1C/A, L5I, L5Q
 
 <img src="image/pocket_sdr_image.jpg" width=80%>
 
@@ -50,6 +50,7 @@ PocketSDR --+-- bin     PocketSDR utility binary programs for Windows
             |           (*.brd and *.sch are for Eagle, *.f3d is for Fusion 360)
             +-- image   Image files for documents
             +-- sample  Sample digital IF data captured by PocketSDR
+            +-- test    Test codes
 ```
 
 --------------------------------------------------------------------------------
@@ -78,6 +79,11 @@ PocketSDR --+-- bin     PocketSDR utility binary programs for Windows
 * To rebuild the binary programs, you need MinGW64 and libusb-1.0 library. 
   Refer MSYS2 (https://www.msys2.org/) for details.
 
+* In MinGW64 environment, you need fftw3 library. To install fftw3 library.
+```
+    $ pacman -S mingw-w64-x86_64-fftw
+```
+
 --------------------------------------------------------------------------------
 
 ## **Installation for Linux**
@@ -89,6 +95,10 @@ PocketSDR --+-- bin     PocketSDR utility binary programs for Windows
 * Install libusb-1.0 developtment package. For Ubuntu:
 ```
     $ sudo apt install libusb-1.0-0-dev
+```
+* Install libfftw3 developtment package. For Ubuntu:
+```
+    $ sudo apt install libfftw3-dev
 ```
 * Move to the source program directory, edit makefile and build utilities.
 ```
@@ -133,15 +143,17 @@ src/pocket_dump.c.
 
 PocketSDR contains the following application programs for GNSS-SDR.
 
-- **pocket_psd.py**: Plot PSD and histgrams of digital IF data
-- **pocket_acq.py**: GNSS signal acquisition in digital IF data
-- **pocket_trk.py**: GNSS signal tracking and navigation data decoding in digital IF data
+- **pocket_psd.py** : Plot PSD and histgrams of digital IF data
+- **pocket_acq.py** : GNSS signal acquisition in digital IF data
+- **pocket_trk.py** : GNSS signal tracking and navigation data decoding in digital IF data
+- **pocket_snap.py**: Snapshot positioning with digital IF data
+- **pocket_plot.py**: Plot GNSS signal tracking log by pocket_trk.py
 
-For details, refer comment lines in python/pocket_psd.py, python/pocket_acq.py
-and python/pocket_trk.py. You need Python 3, Numpy, Scipy and matplotlib to
-execute Python scripts. pocket_trk.py uses external shared libraries of
-LIBFEC [5] and RTKLIB [6] in lib/ directory.  These were built for Windows
-(64bit) and Linux for x86_64 CPU.
+For details, refer comment lines in python/pocket_psd.py, python/pocket_acq.py,
+python/pocket_trk.py, python/pocket_snap.py and python/pocket_plot.py. You need
+Python 3, Numpy, Scipy and matplotlib to execute Python scripts. pocket_trk.py
+uses external shared libraries of LIBFEC [5] and RTKLIB [6] in lib/ directory.
+These were built for Windows (64bit) and Linux for x86_64 CPU.
 
 --------------------------------------------------------------------------------
 
@@ -254,4 +266,5 @@ PocketSDR. Refer "Installation for Windows" above.
 - 2021-12-25  0.4  Add and modify Python scripts
 - 2022-01-05  0.5  Fix several problems.
 - 2022-01-13  0.6  Add and modify Python scripts
+- 2022-02-15  0.7  Improve performance, Add some Python scripts.
 
