@@ -472,21 +472,28 @@ def decode_G3OCD(ch):
         if ch.lock == ch.nav.fsync + 3000:
             search_glo_L3OCD_str(ch)
     
-    elif (ch.lock - ch.nav.ssync) % 500 == 0:
+    elif (ch.lock - ch.nav.ssync) % 1000 == 0:
         search_glo_L3OCD_str(ch)
+
+# swap convolutional code G1 and G2 --------------------------------------------
+def swap_syms(syms):
+    ssyms = np.zeros(len(syms), dtype='uint8')
+    ssyms[0::2] = syms[1::2]
+    ssyms[1::2] = syms[0::2]
+    return ssyms
 
 # search GLONASS L3OCD nav string ----------------------------------------------
 def search_glo_L3OCD_str(ch):
     preamb = (0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 0)
     
     # decode 1/2 FEC (852 syms -> 420 bits)
-    bits = sdr_fec.decode_conv(ch.nav.syms[-852:] * 255)
+    bits = sdr_fec.decode_conv(swap_syms(ch.nav.syms[-852:]) * 255)
     
     # search and decode GLONASS L3OCD nav string
     for i in range(100):
         rev = sync_frame(ch, preamb, bits[i:i+320])
         if rev >= 0:
-            decode_glo_L3OCD_str(ch, bits[i:i+300] ^ rev, rev, i * 2)
+            decode_glo_L3OCD_str(ch, bits[i:i+300] ^ rev, rev, i)
             break
 
 # decode GLONASS L3OCD nav string ----------------------------------------------
