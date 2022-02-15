@@ -4,6 +4,7 @@
 #
 import sys, time
 sys.path.append('../python')
+sys.path.append('.')
 import numpy as np
 import sdr_code
 
