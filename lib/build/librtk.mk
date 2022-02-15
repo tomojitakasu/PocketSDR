@@ -8,7 +8,7 @@
 CC = gcc
 
 #! specify directory of RTKLIB source tree
-SRC = ./RTKLIB/src
+SRC = ../RTKLIB/src
 
 #! uncomment for Windows
 INSTALL = ../win32
