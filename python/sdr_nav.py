@@ -31,6 +31,8 @@
 #      Navigational radiosignal In bands L1, L2 (Edition 5.1), 2008
 #  [15] IRNSS SIS ICD for Standard Positioning Service version 1.1, August,
 #      2017
+#  [16] GLONASS Interface Control Document Code Devision Multiple Access Open
+#      Service Navigation Signal in L3 frequency band Edition 1.0, 2016
 #
 #  Author:
 #  T.TAKASU
@@ -41,6 +43,7 @@
 #  2022-01-13  1.2  support L1CD, L6D, L6E, G1CA, G2CA, B1I, B2I, B3I
 #  2022-01-20  1.3  support I5S, ISS
 #                   move sec-code sync to sdr_ch.py
+#  2022-01-28  1.4  support G3OCD
 #
 from math import *
 import numpy as np
@@ -109,6 +112,8 @@ def nav_decode(ch):
         decode_G1CA(ch)
     elif ch.sig == 'G2CA':
         decode_G2CA(ch)
+    elif ch.sig == 'G3OCD':
+        decode_G3OCD(ch)
     elif ch.sig == 'E1B':
         decode_E1B(ch)
     elif ch.sig == 'E5AI':
@@ -456,6 +461,49 @@ def decode_glo_str(ch, syms, rev):
 # decode G2CA nav data ---------------------------------------------------------
 def decode_G2CA(ch):
     decode_G1CA(ch)
+
+# decode G3OCD nav data ([16]) -------------------------------------------------
+def decode_G3OCD(ch):
+    
+    if not sync_sec_code(ch): # sync secondary code
+        return
+    
+    if ch.nav.fsync > 0: # sync GLONASS L3OCD nav string
+        if ch.lock == ch.nav.fsync + 3000:
+            search_glo_L3OCD_str(ch)
+    
+    elif (ch.lock - ch.nav.ssync) % 500 == 0:
+        search_glo_L3OCD_str(ch)
+
+# search GLONASS L3OCD nav string ----------------------------------------------
+def search_glo_L3OCD_str(ch):
+    preamb = (0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 0)
+    
+    # decode 1/2 FEC (852 syms -> 420 bits)
+    bits = sdr_fec.decode_conv(ch.nav.syms[-852:] * 255)
+    
+    # search and decode GLONASS L3OCD nav string
+    for i in range(100):
+        rev = sync_frame(ch, preamb, bits[i:i+320])
+        if rev >= 0:
+            decode_glo_L3OCD_str(ch, bits[i:i+300] ^ rev, rev, i * 2)
+            break
+
+# decode GLONASS L3OCD nav string ----------------------------------------------
+def decode_glo_L3OCD_str(ch, bits, rev, i):
+    time = ch.time - 4.2 + 0.01 * i
+    
+    if test_CRC(bits):
+        ch.nav.ssync = ch.nav.fsync = ch.lock
+        ch.nav.rev = rev
+        data = pack_bits(bits) # GLONASS L3OCD nav string (300 bits)
+        ch.nav.data.append((time, data))
+        ch.nav.count[0] += 1
+        log(3, '$G3OCD,%.3f,%s,%d,%s' % (time, ch.sig, ch.prn, hex_str(data)))
+    else:
+        ch.nav.ssync = ch.nav.fsync = ch.nav.rev = 0
+        ch.nav.count[1] += 1
+        log(3, '$LOG,%.3f,%s,%d,G3OCD STRING ERROR' % (time, ch.sig, ch.prn))
 
 # decode E1B nav data ([2]) ----------------------------------------------------
 def decode_E1B(ch):
