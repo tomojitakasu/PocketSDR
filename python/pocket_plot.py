@@ -8,7 +8,7 @@
 #  History:
 #  2022-02-11  1.0  new
 #
-import sys
+import sys, re
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -22,6 +22,10 @@ def show_usage():
     print('Usage: pocket_plot.py [-sig sig] [-prn prn] [-type type] [-atype type]')
     print('       [-ts time] [-te time] [-nav file] [-pos lat,lon,hgt] file')
     exit()
+
+# time string to time ----------------------------------------------------------
+def str2time(str):
+    return sdr_rtk.epoch2time([float(s) for s in re.split('[/:-_ ]', str)])
 
 # satellite elevations ---------------------------------------------------------
 def sat_els(ts, te, sat, pos, nav):
@@ -50,7 +54,8 @@ def read_log(ts, te, sig, prn, type, file):
             time = sdr_rtk.utc2gpst(utc)
             continue
         
-        if (sdr_rtk.timediff(time, ts) < 0.0 or sdr_rtk.timediff(time, te) > 0.0):
+        if ((ts.time != 0 and sdr_rtk.timediff(time, ts) <  0.0) or
+            (te.time != 0 and sdr_rtk.timediff(time, te) >= 0.0)):
             continue
         
         if s[0] == '$CH':
@@ -76,10 +81,11 @@ def read_log(ts, te, sig, prn, type, file):
 def plot_log(fig, rect, type, log, els, msg):
     color = ('darkblue', 'dimgray', 'blue')
     ax = fig.add_axes(rect)
-    time = np.mod(log.T[0], 86400 * 7) / 3600
+    t0 = np.floor(log.T[0][0] / 86400) * 86400
+    time = (log.T[0] - t0) / 3600
     ax.plot(time, log.T[1], '.', color=color[0], ms=0.1)
     ax.grid(True, lw=0.4)
-    ax.set_xticks(np.arange(-24, 48, 2))
+    ax.set_xticks(np.arange(0, 24 * 7, 2))
     ax.set_xlim(time[0], time[-1])
     ax.set_xlabel('Hour (GPST)')
     if type == 'LOCK':
@@ -98,7 +104,7 @@ def plot_log(fig, rect, type, log, els, msg):
     
     if len(els) > 0:
         ax3 = ax.twinx()
-        time = np.mod(els.T[0], 86400 * 7) / 3600
+        time = (els.T[0] - t0) / 3600
         ax3.plot(time, els.T[1], '.', color=color[1], ms=0.1)
         ax3.set_ylim(0, 90.0)
         ax3.set_ylabel('Elevation Angle (deg)', color=color[1])
@@ -107,13 +113,14 @@ def plot_log(fig, rect, type, log, els, msg):
     if len(msg) > 0:
         ax2 = ax.twinx()
         ax2.axis('off')
-        time = np.mod(msg.T[0], 86400 * 7) / 3600
+        time = (msg.T[0] - t0) / 3600
         ax2.plot(time, msg.T[1], 'o', color=color[2], ms=2)
         ax2.set_ylim(0, 20)
         n = len(time)
-        rate = n * 100.0 / (time[-1] - time[0]) / 3600
-        ax2.text(0.96, 0.95, '# L6FRM = %d (%.1f %%)' % (n, rate), ha='right',
-            va='top', c=color[2], transform=ax2.transAxes)
+        N = (time[-1] - time[0]) * 3600 + 1
+        rate = n * 100.0 / N
+        ax2.text(0.97, 0.96, '# L6FRM = %d / %d (%.1f %%)' % (n, N, rate),
+            ha='right', va='top', c=color[2], transform=ax2.transAxes)
     
 #-------------------------------------------------------------------------------
 #
@@ -165,14 +172,10 @@ def plot_log(fig, rect, type, log, els, msg):
 #
 if __name__ == '__main__':
     window = 'Pocket SDR - GNSS SIGNAL TRACKING LOG'
-    nav = None
-    ts = sdr_rtk.epoch2time([2022, 2, 10, 2,  0,  0])
-    te = sdr_rtk.epoch2time([2022, 2, 11, 1, 59, 59])
-    sig = 'L6D'
-    prn = 194
-    type = 'C/N0'
-    atype = ''
-    pos = [35.872998 * sdr_rtk.D2R, 138.389679 * sdr_rtk.D2R, 1003.0]
+    ts = sdr_rtk.GTIME()
+    te = sdr_rtk.GTIME()
+    sig, prn, type, atype = 'L6D', 194, 'C/N0', ''
+    pos = [35.6 * sdr_rtk.D2R, 139.6 * sdr_rtk.D2R, 0.0]
     size = (9, 6)
     rect0 = [0.08, 0.090, 0.84, 0.85]
     rect1 = [0.08, 0.089, 0.84, 0.85]
@@ -192,6 +195,12 @@ if __name__ == '__main__':
         elif sys.argv[i] == '-atype':
             i += 1
             atype = sys.argv[i]
+        elif sys.argv[i] == '-ts':
+            i += 1
+            ts = str2time(sys.argv[i])
+        elif sys.argv[i] == '-te':
+            i += 1
+            te = str2time(sys.argv[i])
         elif sys.argv[i] == '-nav':
             i += 1
             nfile = sys.argv[i]
@@ -214,8 +223,9 @@ if __name__ == '__main__':
         sat = sdr_rtk.satno(sdr_rtk.SYS_QZS, prn)
         obs, nav = sdr_rtk.readrnx(nfile)
         els = sat_els(ts, te, sat, pos, nav)
+        sdr_rtk.navfree(nav)
     else:
-        els = None
+        els = []
     
     log = read_log(ts, te, sig, prn, type, file)
     msg = read_log(ts, te, sig, prn, atype, file)
@@ -227,5 +237,4 @@ if __name__ == '__main__':
         (sig, prn, type, file), fontsize=10)
     
     plot_log(fig, rect1, type, log, els, msg)
-    
     plt.show()
