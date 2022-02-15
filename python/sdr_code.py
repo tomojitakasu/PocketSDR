@@ -34,6 +34,8 @@
 #      Positioning Technology Verification Service, December 27, 2019
 #  [16] IRNSS SIS ICD for Standard Positioning Service version 1.1, August,
 #      2017
+#  [17] GLONASS Interface Control Document Code Devision Multiple Access Open
+#      Service Navigation Signal in L3 frequency band Edition 1.0, 2016
 #
 #  Author:
 #  T.TAKASU
@@ -47,6 +49,7 @@
 #  2022-01-13  1.4  change API gen_code_fft()
 #                   add support of G1CA, G2CA and B3I in sec_code()
 #  2022-01-17  1.5  add signals: L2CL, I5S, ISS
+#  2022-01-27  1.6  add signals: G3OCD, G3OCP
 #
 import numpy as np
 import scipy.fftpack as fft
@@ -64,6 +67,7 @@ L2CM, L2CL = {}, {}
 L5I , L5Q  = {}, {}
 L6D,  L6E  = {}, {}
 G1CA       = {}
+G3OCD, G3OCP = {}, {}
 E1B , E1C  = {}, {}
 E5AI, E5AQ = {}, {}
 E5BI, E5BQ = {}, {}
@@ -80,6 +84,7 @@ I5S, ISS   = {}, {}
 L1CA_G1, L1CA_G2 = [], []
 L1C_L_SEQ = []
 L5_XA, L5_XB = [], []
+G3OC_D1 = []
 B1C_L_SEQ, B1C_L_SEQ_S = [], []
 B2AD_G1, B2AP_G1 = [], []
 B2A_L_SEQ = []
@@ -553,11 +558,14 @@ ISS_G2_init = ( # PRN 1 - 14
     0b0100101100, 0b0010001110, 0b0100100110, 0b1100001110, 0b1010111110,
     0b1110010001, 0b1101101001, 0b0101000101, 0b0100001101)
 
-NH10 = ( # 10 bits Neuman-Hofman code
+NH10 = ( # 10 bits Neuman-Hoffman code
     -1, -1, -1, -1, 1, 1, -1, 1, -1, 1)
  
-NH20 = ( # 20 bits Neuman-Hofman code
+NH20 = ( # 20 bits Neuman-Hoffman code
    -1, -1, -1, -1, -1, 1, -1, -1, 1, 1, -1, 1, -1, 1, -1, -1, 1, 1, 1, -1)
+
+BC = ( # Baker code
+   -1, -1, -1, 1, -1)
 
 #-------------------------------------------------------------------------------
 #  Generate primary code.
@@ -602,6 +610,10 @@ def gen_code(sig, prn):
         return gen_code_G1CA(prn)
     elif sig == 'G2CA':
         return gen_code_G2CA(prn)
+    elif sig == 'G3OCD':
+        return gen_code_G3OCD(prn)
+    elif sig == 'G3OCP':
+        return gen_code_G3OCP(prn)
     elif sig == 'E1B':
         return gen_code_E1B(prn)
     elif sig == 'E1C':
@@ -670,6 +682,10 @@ def sec_code(sig, prn):
         return sec_code_G1CA(prn)
     elif sig == 'G2CA':
         return sec_code_G2CA(prn)
+    elif sig == 'G3OCD':
+        return sec_code_G3OCD(prn)
+    elif sig == 'G3OCP':
+        return sec_code_G3OCP(prn)
     elif sig == 'E1C':
         return sec_code_E1C(prn)
     elif sig == 'E5AI':
@@ -749,8 +765,8 @@ def gen_code_fft(code, T, coff, fs, N, Nz=0):
 def code_cyc(sig):
     sig = sig.upper()
     if sig in ('L1CA', 'L1CB', 'L1S', 'L5I', 'L5Q', 'L5SI', 'L5SQ', 'G1CA',
-       'G2CA', 'E5AI', 'E5AQ', 'E5BI', 'E5BQ', 'E6B', 'E6C', 'B1I', 'B2I',
-       'B2AD', 'B2AP', 'B2BI', 'B3I', 'I5S', 'ISS'):
+       'G2CA', 'G3OCD', 'G3OCP', 'E5AI', 'E5AQ', 'E5BI', 'E5BQ', 'E6B', 'E6C',
+       'B1I', 'B2I', 'B2AD', 'B2AP', 'B2BI', 'B3I', 'I5S', 'ISS'):
         return 1e-3
     elif sig in ('L6D', 'L6E', 'E1B', 'E1C'):
         return 4e-3
@@ -777,8 +793,8 @@ def code_len(sig):
     if sig in ('L1CA', 'L1S', 'L1CB', 'I5S', 'ISS'):
         return 1023
     elif sig in ('L1CP', 'L1CD', 'L2CM', 'L5I', 'L5Q', 'L5SI', 'L5SQ', 'L6D',
-         'L6E', 'E5AI', 'E5AQ', 'E5BI', 'E5BQ', 'B1CD', 'B1CP', 'B2AD', 'B2AP',
-         'B2BI', 'B3I'):
+        'L6E', 'G3OCD', 'G3OCP', 'E5AI', 'E5AQ', 'E5BI', 'E5BQ', 'B1CD',
+        'B1CP', 'B2AD', 'B2AP', 'B2BI', 'B3I'):
         return 10230
     elif sig == 'L2CL':
         return 767250
@@ -824,6 +840,8 @@ def sig_freq(sig):
         return 1602.0e6
     elif sig == 'G2CA':
         return 1246.0e6
+    elif sig in ('G3OCD', 'G3OCP'):
+        return 1202.025e6
     elif sig == 'ISS':
         return 2492.028e6
     else:
@@ -1066,15 +1084,56 @@ def gen_code_G1CA(prn):
 def gen_code_G2CA(prn):
     return gen_code_G1CA(prn)
 
+# generate G3OCD code ([17]) ---------------------------------------------------
+def gen_code_G3OCD(prn):
+   if prn < 0 or prn > 63:
+       return NONE
+   N = 10230
+   if prn not in G3OCD:
+       DC1 = gen_code_G3OC_DC1(N)
+       DC2 = LFSR(N, prn, 0b0000010, 7)
+       G3OCD[prn] = -DC1 * DC2
+   return G3OCD[prn]
+
+# generate G3OCP code ([17]) ---------------------------------------------------
+def gen_code_G3OCP(prn):
+   if prn < 0 or prn > 63:
+       return NONE
+   N = 10230
+   if prn not in G3OCP:
+       DC1 = gen_code_G3OC_DC1(N)
+       DC3 = LFSR(N, prn + 64, 0b0000010, 7)
+       G3OCP[prn] = -DC1 * DC3
+   return G3OCP[prn]
+
+# generate G3OC DC1 code ([17]) ------------------------------------------------
+def gen_code_G3OC_DC1(N):
+   global G3OC_D1
+   if len(G3OC_D1) == 0:
+       G3OC_D1 = LFSR(N, 0b00110100111000, 0b00010001000011, 14)
+   return G3OC_D1
+
 # generate G1CA secondary code -------------------------------------------------
 def sec_code_G1CA(prn):
     if prn < -7 or prn > 6: # FCN
         return NONE
     return np.array([1, -1] * 5, dtype='int8')
 
-# generate G2CA code -----------------------------------------------------------
+# generate G2CA secondary code -------------------------------------------------
 def sec_code_G2CA(prn):
     return sec_code_G1CA(prn)
+
+# generate G3OCD secondary code ([17]) -----------------------------------------
+def sec_code_G3OCD(prn):
+   if prn < 0 or prn > 63:
+       return NONE
+   return np.array(BC, dtype='int8')
+
+# generate G3OCP secondary code ([17]) -----------------------------------------
+def sec_code_G3OCD(prn):
+   if prn < 0 or prn > 63:
+       return NONE
+   return np.array(NH10, dtype='int8')
 
 # generate E1B code ([5]) ------------------------------------------------------
 def gen_code_E1B(prn):
