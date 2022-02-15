@@ -1,5 +1,5 @@
 #
-# makefile of LDPC-codes shared library (libldpc.so)
+#  makefile of LDPC-codes shared library (libldpc.so)
 #
 #! You need to install LDPC-codes source tree as follows.
 #!
@@ -8,7 +8,7 @@
 CC  = gcc
 
 #! specify directory of LDPC-codes source tree
-SRC = ./LDPC-codes
+SRC = ../LDPC-codes
 
 #! uncomment for Windows
 INSTALL = ../win32
