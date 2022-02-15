@@ -20,6 +20,7 @@ from sdr_func import *
 import sdr_code, sdr_ch
 
 # constants --------------------------------------------------------------------
+CYC_SRCH = 10.0      # signal search cycle (s)
 MAX_BUFF = 32        # max number of IF data buffer
 NCORR_PLOT = 40      # numober of additional correlators for plot
 ESC_UP  = '\033[%dF' # ANSI escape cursor up
@@ -70,7 +71,7 @@ def read_data(fp, N, IQ, buff, ix):
 
 # print receiver channel status header -----------------------------------------
 def print_head():
-    print('%9s %4s %3s %5s %8s %4s %-12s %10s %7s %10s %4s %4s %4s %4s %3s' %
+    print('%9s %5s %3s %5s %8s %4s %-12s %10s %7s %11s %4s %4s %4s %4s %3s' %
         ('TIME(s)', 'SIG', 'PRN', 'STATE', 'LOCK(s)', 'C/N0', '(dB-Hz)',
         'COFF(ms)', 'DOP(Hz)', 'ADR(cyc)', 'SYNC', '#NAV', '#ERR', '#LOL', 'NER'))
 
@@ -87,7 +88,7 @@ def update_stat(prns, ch, ncol):
         print(ESC_UP % (ncol), end='')
     ncol = 0
     for i in range(len(prns)):
-        print('%s%9.2f %4s %3d %5s %8.2f %4.1f %-13s%10.7f %7.1f %10.1f %s %4d %4d %4d %3d%s' %
+        print('%s%9.2f %5s %3d %5s %8.2f %4.1f %-13s%10.7f %7.1f %11.1f %s %4d %4d %4d %3d%s' %
             (ESC_COL if ch[i].state == 'LOCK' else '',
             ch[i].time, ch[i].sig, prns[i], ch[i].state, ch[i].lock * ch[i].T,
             ch[i].cn0, cn0_bar(ch[i].cn0), ch[i].coff * 1e3, ch[i].fd, ch[i].adr,
@@ -337,7 +338,7 @@ def update_nav_data(ax, p, ch):
         text += '\n'
     p[1].set_text(text)
 
-# set axes colors ---------------------------------------------------------------
+# set axes colors --------------------------------------------------------------
 def set_axcolor(ax, color):
     ax.tick_params(color=color)
     plt.setp(ax.get_xticklabels(), color=color)
@@ -507,6 +508,7 @@ if __name__ == '__main__':
     for i in range(len(prns)):
         ncorr = NCORR_PLOT if plot and i == 0 else 0
         ch[i] = sdr_ch.ch_new(sig, prns[i], fs, fi, add_corr=ncorr)
+        ch[i].state = 'SRCH'
     
     if not quiet:
         print_head()
@@ -521,6 +523,7 @@ if __name__ == '__main__':
     N = int(T * fs)
     buff = np.zeros(N * (MAX_BUFF + 1), dtype='complex64')
     ncol = 0
+    ix = 0
     tt = time.time()
     log(3, '$LOG,%.3f,%s,%d,START FILE=%s FS=%.3f FI=%.3f IQ=%d TOFF=%.3f' %
         (0.0, '', 0, file, fs * 1e-6, fi * 1e-6, IQ, toff))
@@ -539,8 +542,16 @@ if __name__ == '__main__':
                 buff[-N:] = buff[:N]
             
             # update receiver channel
-            for j in range(len(prns)):
+            for j in range(len(ch)):
                 sdr_ch.ch_update(ch[j], time_rcv, buff, N * ((i - 1) % MAX_BUFF))
+            
+            # update receiver channel state
+            if i % int(CYC_SRCH / T) == 0:
+                for j in range(len(ch)):
+                    ix = (ix + 1) % len(ch)
+                    if ch[ix].state == 'IDLE':
+                        ch[ix].state = 'SRCH'
+                        break
             
             if (i - 1) % int(tint / T) != 0:
                 continue
