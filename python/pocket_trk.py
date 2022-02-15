@@ -12,7 +12,7 @@
 #  2022-01-20  1.2  improve performance
 #                   add option -3d
 #
-import sys, math, time
+import sys, math, time, datetime
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -21,6 +21,7 @@ import sdr_code, sdr_ch
 
 # constants --------------------------------------------------------------------
 MAX_BUFF = 32        # max number of IF data buffer
+NCORR_PLOT = 40      # numober of additional correlators for plot
 ESC_UP  = '\033[%dF' # ANSI escape cursor up
 ESC_COL = '\033[34m' # ANSI escape color blue
 ESC_RES = '\033[0m'  # ANSI escape reset
@@ -138,7 +139,7 @@ def update_plot(fig, ax, p, ch, env, p3d, toff, tspan):
 def plot_corr_env(fig, rect, env, pos, chip):
     ax = fig.add_axes(rect)
     p0 = ax.plot([], [], '-', color=gc, lw=0.4)
-    p1 = ax.plot([], [], '.', color=gc, ms=2)
+    p1 = ax.plot([], [], '.', color=fc, ms=2)
     p2 = ax.plot([], [], '.', color=fc, ms=10)
     xl = [pos[4] * 1e3, pos[-1] * 1e3]
     if env:
@@ -170,7 +171,6 @@ def plot_corr_env(fig, rect, env, pos, chip):
 # update correlation envelope --------------------------------------------------
 def update_corr_env(ax, p, ch, env):
     Tc = ch.T / sdr_code.code_len(sig)
-    #pos = np.array(ch.trk.pos) / ch.fs / Tc
     x0 = ch.coff * 1e3
     x = x0 + np.array(ch.trk.pos) / ch.fs * 1e3
     if env:
@@ -207,13 +207,14 @@ def update_corr_3d(ax, p, ch, env, toff, tspan):
     
     for line in ax.lines:
         line.remove()
-    N = np.min([int(tspan / ch.T), len(ch.trk.P)])
+    N = int(tspan / ch.T)
     time = ch.time + np.arange(-N+1, 1) * ch.T
     t0 = toff if ch.lock < N else ch.time - N * ch.T
     xl = [t0, t0 + N * ch.T]
     Tc = ch.T / sdr_code.code_len(ch.sig)
     x = np.full(len(ch.trk.pos), ch.time)
-    y0 = ch.coff * 1e3
+    y0 = 0.0
+    #y0 = ch.coff * 1e3
     y = y0 + np.array(ch.trk.pos) / ch.fs * 1e3
     if env:
         z = np.abs(ch.trk.C)
@@ -504,7 +505,7 @@ if __name__ == '__main__':
             exit()
     
     for i in range(len(prns)):
-        ncorr = 40 if plot and i == 0 else 0
+        ncorr = NCORR_PLOT if plot and i == 0 else 0
         ch[i] = sdr_ch.ch_new(sig, prns[i], fs, fi, add_corr=ncorr)
     
     if not quiet:
@@ -555,6 +556,10 @@ if __name__ == '__main__':
                 update_plot(fig, ax, p, ch[0], env, p3d, toff, tspan)
             
             # update log
+            t = datetime.datetime.now(datetime.timezone.utc)
+            log(3, '$TIME,%d,%d,%d,%d,%d,%.6f' % (t.year, t.month, t.day, t.hour,
+                t.minute, t.second + t.microsecond * 1e-6))
+            
             for j in range(len(prns)):
                 if ch[j].state != 'LOCK':
                     continue
