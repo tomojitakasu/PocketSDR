@@ -1091,7 +1091,7 @@ def gen_code_G3OCD(prn):
    N = 10230
    if prn not in G3OCD:
        DC1 = gen_code_G3OC_DC1(N)
-       DC2 = LFSR(N, prn, 0b0000010, 7)
+       DC2 = LFSR(N, prn, 0b0000011, 7)
        G3OCD[prn] = -DC1 * DC2
    return G3OCD[prn]
 
@@ -1102,7 +1102,7 @@ def gen_code_G3OCP(prn):
    N = 10230
    if prn not in G3OCP:
        DC1 = gen_code_G3OC_DC1(N)
-       DC3 = LFSR(N, prn + 64, 0b0000010, 7)
+       DC3 = LFSR(N, prn + 64, 0b0000011, 7)
        G3OCP[prn] = -DC1 * DC3
    return G3OCP[prn]
 
@@ -1130,7 +1130,7 @@ def sec_code_G3OCD(prn):
    return np.array(BC, dtype='int8')
 
 # generate G3OCP secondary code ([17]) -----------------------------------------
-def sec_code_G3OCD(prn):
+def sec_code_G3OCP(prn):
    if prn < 0 or prn > 63:
        return NONE
    return np.array(NH10, dtype='int8')
