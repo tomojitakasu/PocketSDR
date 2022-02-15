@@ -16,7 +16,7 @@ def test_01():
         if sys != sdr_rtk.SYS_NONE and sat != satno:
             print('satsys: sat=%3d NG' % (sat))
             exit()
-    print('test_01 OK')
+    print('test_01: OK')
 
 # test sdr_rtk.satid2no(), sano2id() -------------------------------------------
 def test_02():
@@ -27,7 +27,7 @@ def test_02():
         if id and sat != satno:
             print('satno2id: sat=%3d NG' % (sat))
             exit()
-    print('test_02 OK')
+    print('test_02: OK')
 
 # test sdr_rtk.obs2code(), code2obs() ------------------------------------------
 def test_03():
@@ -38,7 +38,7 @@ def test_03():
         if obs and code != obscode:
             print('obs2code: code=%3d NG' % (code))
             exit()
-    print('test_03 OK')
+    print('test_03: OK')
 
 # test sdr_rtk.epoch2time(), time2epoch() --------------------------------------
 def test_04():
@@ -56,7 +56,7 @@ def test_04():
         if not np.all(e == epoch):
             print('epcoh2time: time=%s NG' % (sdr_rtk.time2str(time, 6)))
             exit()
-    print('test_04 OK')
+    print('test_04: OK')
 
 # test sdr_rtk.gpst2time(), time2gpst() ----------------------------------------
 def test_05():
@@ -76,7 +76,7 @@ def test_05():
             print('gpst2time: time=%s week=%4d tow=%12.6f dt=%.4e NG' % (
                 sdr_rtk.time2str(time, 6), week, tow, dt))
             exit()
-    print('test_05 OK')
+    print('test_05: OK')
 
 # test sdr_rtk.gpst2utc(), utc2gpst() ------------------------------------------
 def test_06():
@@ -94,7 +94,7 @@ def test_06():
         if np.abs(dt) > 1e-9:
             print('gpst2utc: time=%s dt=%.4e NG' % (sdr_rtk.time2str(gpst, 3), dt))
             exit()
-    print('test_06 OK')
+    print('test_06: OK')
 
 # test sdr_rtk.timeadd(), timediff() -------------------------------------------
 def test_07():
@@ -114,7 +114,7 @@ def test_07():
         if np.abs(dt - dt1) > 1e-9 or np.abs(dt + dt2) > 1e-9:
             print('timeadd: time=%s dt=%.4e NG' % (sdr_rtk.time2str(time1, 3), dt))
             exit()
-    print('test_07 OK')
+    print('test_07: OK')
 
 # test sdr_rtk.time2str() ------------------------------------------------------
 def test_08():
@@ -133,7 +133,7 @@ def test_08():
         if str1 != str2:
             print('time2str: time=%s %s NG' % (str1, str2))
             exit()
-    print('test_08 OK')
+    print('test_08: OK')
 
 # test sdr_rtk.readrnx() -------------------------------------------------------
 def test_09():
@@ -212,7 +212,7 @@ def test_09():
     
     sdr_rtk.obsfree(obs)
     sdr_rtk.navfree(nav)
-    print('test_09 OK')
+    print('test_09: OK')
 
 # test sdr_rtk.satpos() -------------------------------------------------------
 def test_10():
@@ -225,11 +225,11 @@ def test_10():
     
     n = 0
     for sat in range(1, sdr_rtk.MAXSAT + 1):
-        pos, dtr, var, svh = sdr_rtk.satpos(time, time, sat, nav)
-        if len(pos) >= 6:
+        rs, dts, var, svh = sdr_rtk.satpos(time, time, sat, nav)
+        if len(rs) >= 6:
             #print('%s %s pos=%13.3f %13.3f %13.3f %13.6f %13.6f %13.6f dtr=%13.3f %9.6f sig=%6.1f svh=%3d' % (
-            #    sdr_rtk.time2str(time, 2), sdr_rtk.satno2id(sat), pos[0], pos[1],
-            #    pos[2], pos[3], pos[4], pos[5], dtr[0] * 1e9, dtr[1] * 1e9,
+            #    sdr_rtk.time2str(time, 2), sdr_rtk.satno2id(sat), rs[0], rs[1],
+            #    rs[2], rs[3], rs[4], rs[5], dts[0] * 1e9, dts[1] * 1e9,
             #    math.sqrt(var), svh))
             n += 1
     
@@ -239,7 +239,7 @@ def test_10():
     
     sdr_rtk.obsfree(obs)
     sdr_rtk.navfree(nav)
-    print('test_10 OK')
+    print('test_10: OK')
 
 # test sdr_rtk.ecef2pos(), pos2ecef() -------------------------------------------
 def test_11():
@@ -255,7 +255,7 @@ def test_11():
         if np.any(np.abs(p - p2) > 1e-4):
             print('ecef2pos: pos=%.9f %.9f %.9f NG' % (p[0], p[1], p[2]))
             exit()
-    print('test_11 OK')
+    print('test_11: OK')
 
 # test sdr_rtk.ecef2enu(), enu2ecef() -------------------------------------------
 def test_12():
@@ -272,7 +272,32 @@ def test_12():
         if np.any(np.abs(e - enu) > 1e-4):
             print('ecef2enu: pos=%.9f %.9f %.9f NG' % (p[0], p[1], p[2]))
             exit()
-    print('test_12 OK')
+    print('test_12: OK')
+
+# test sdr_rtk.satazel(), geodist() ---------------------------------------------
+def test_13():
+    file = 'mosaic_20220201_0506.nav'
+    pos = np.array([40.123 * sdr_rtk.D2R, 135.186 * sdr_rtk.D2R, 24.567])
+    rr = sdr_rtk.pos2ecef(pos)
+    obs, nav = sdr_rtk.readrnx(file)
+    time = sdr_rtk.epoch2time([2022, 2, 1, 5, 35, 20.123])
+    
+    n = 0
+    for sat in range(1, sdr_rtk.MAXSAT + 1):
+        rs, dts, var, svh = sdr_rtk.satpos(time, time, sat, nav)
+        if np.dot(rs, rs) < 1e-3:
+            continue
+        r, e = sdr_rtk.geodist(rs, rr)
+        az, el = sdr_rtk.satazel(pos, e)
+        #print('(%2d) %s  r=%13.3f  e=%9.6f %9.6f %9.6f  az=%6.1f el=%5.1f' % (
+        #    n + 1, sdr_rtk.satno2id(sat), r, e[0], e[1], e[2],
+        #    az * sdr_rtk.R2D, el * sdr_rtk.R2D))
+        if r > 2e7:
+            n += 1
+    if n < 30:
+        print('satazel: n=%d NG' % (n))
+        exit()
+    print('test_13: OK')
 
 # main --------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -291,5 +316,6 @@ if __name__ == '__main__':
     test_10()
     test_11()
     test_12()
+    test_13()
     
     #sdr_rtk.traceclose()
