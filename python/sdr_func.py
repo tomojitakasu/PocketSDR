@@ -114,7 +114,7 @@ def search_sig(sig, prn, data, fs, fi, max_dop=MAX_DOP, zero_pad=True):
     code_fft = sdr_code.gen_code_fft(code, T, 0.0, fs, N, N if zero_pad else 0)
     
     # doppler search bins
-    fds = dop_bins(T, max_dop)
+    fds = dop_bins(T, 0.0, max_dop)
     
     # parallel code search and non-coherent integration
     P = np.zeros((len(fds), N), dtype='float32')
@@ -177,8 +177,8 @@ def shift_freq(sig, fcn, fi):
     return fi
 
 # doppler search bins ----------------------------------------------------------
-def dop_bins(T, max_dop):
-    return np.arange(-max_dop, max_dop + DOP_STEP / T, DOP_STEP / T)
+def dop_bins(T, dop, max_dop):
+    return np.arange(dop - max_dop, dop + max_dop + DOP_STEP / T, DOP_STEP / T)
 
 # mix carrier and standard correlator ------------------------------------------
 def corr_std(buff, ix, N, fs, fc, phi, code, pos):
