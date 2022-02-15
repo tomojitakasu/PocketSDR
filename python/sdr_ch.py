@@ -20,8 +20,9 @@ T_DLL      = 0.010           # non-coherent integration time for DLL (s)
 T_CN0      = 1.0             # averaging time for C/N0 (s)
 T_FPULLIN  = 1.0             # frequency pullin time (s)
 T_NPULLIN  = 1.5             # navigation data pullin time (s)
+N_HIST     = 10000           # number of P correlator history
 B_DLL      = 0.5             # band-width of DLL filter (Hz)
-B_PLL      = 5.0             # band-width of PLL filter (Hz)
+B_PLL      = 10.0            # band-width of PLL filter (Hz)
 B_FLL      = (10.0, 2.0)     # band-width of FLL filter (Hz) (wide, narrow)
 SP_CORR    = 0.5             # default correlator spacing (chip)
 MAX_DOP    = 5000.0          # default max Doppler for acquisition (Hz)
@@ -110,8 +111,8 @@ def ch_update(ch, time, buff, ix):
 def acq_new(code, T, fs, N, max_dop):
     acq = Obj()
     acq.code_fft = sdr_code.gen_code_fft(code, T, 0.0, fs, N, N) # (code + ZP) DFT
-    acq.fds = dop_bins(T, max_dop)  # Doppler search bins
-    acq.P_sum = np.zeros((len(acq.fds), N)) # non-coherent sum of correlations
+    acq.fds = dop_bins(T, 0.0, max_dop)  # Doppler search bins
+    acq.P_sum = np.zeros((len(acq.fds), N)) # non-coherent sum of corr. powers
     acq.n_sum = 0                   # number of non-coherent sum
     return acq
 
@@ -123,7 +124,7 @@ def trk_new(sig, prn, code, T, fs, sp_corr, add_corr):
     if add_corr > 0:                # additional correlator positions
         trk.pos += range(-add_corr, add_corr + 1)
     trk.C = np.zeros(len(trk.pos), dtype='complex64') # correlator outputs
-    trk.P = np.zeros(2000, dtype='complex64') # history of P correlator outputs
+    trk.P = np.zeros(N_HIST, dtype='complex64') # history of P corr outputs
     trk.sec_sync = trk.sec_pol = 0  # secondary code sync and polarity
     trk.err_phas = 0.0              # carrier phase error (cyc)
     trk.sumP = trk.sumE = trk.sumL = trk.sumN = 0.0 # sum of correlator outputs
