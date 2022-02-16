@@ -1,5 +1,5 @@
 #
-#  makefile for Pocket SDR APs
+#  makefile for Pocket SDR RF Frontend Utitlities
 #
 
 CC = g++
@@ -7,17 +7,19 @@ CC = g++
 
 BIN = ../bin
 
+#! uncomment for Windows
 INCLUDE = -I../lib/cyusb
 OPTIONS = -DCYUSB
+LDLIBS = ../lib/cyusb/CyAPI.a -lsetupapi -lwinmm -lavrt
+
+#! uncomment for Linux
+INCLUDE =
+OPTIONS =
+LDLIBS = -lusb-1.0 -lpthread
 
 WARNOPT = -Wall -Wextra -Wno-missing-field-initializers -Wno-unused-parameter
 
 CFLAGS = -O3 $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
-
-LDLIBS = ../lib/cyusb/CyAPI.a -lsetupapi -lwinmm -lavrt
-#LDLIBS = -lusb-1.0
-
-LDFLAGS = -static
 
 TARGET = pocket_conf pocket_dump pocket_scan
 
