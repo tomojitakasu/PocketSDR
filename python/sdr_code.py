@@ -34,7 +34,7 @@
 #      Positioning Technology Verification Service, December 27, 2019
 #  [16] IRNSS SIS ICD for Standard Positioning Service version 1.1, August,
 #      2017
-#  [17] GLONASS Interface Control Document Code Devision Multiple Access Open
+#  [17] GLONASS Interface Control Document Code Division Multiple Access Open
 #      Service Navigation Signal in L3 frequency band Edition 1.0, 2016
 #
 #  Author:
