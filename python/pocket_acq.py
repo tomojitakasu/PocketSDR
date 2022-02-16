@@ -164,36 +164,39 @@ def add_text(ax, x, y, text, color='k'):
 #
 #         L1CA:  GPS, QZSS, SBAS L1C/A
 #         L1CB:  QZSS L1C/B
-#         L1CP:  GPS, QZSS L1Cp
-#         L1CD:  GPS, QZSS L1Cd
-#         L2CM:  GPS, QZSS L2CM
-#         L2CL:  GPS, QZSS L2CL
-#         L5I :  GPS, QZSS, SBAS L5I
-#         L5Q :  GPS, QZSS, SBAS L5Q
-#         L5SI:  QZSS L5SI
-#         L5SQ:  QZSS L5SQ
+#         L1CD:  GPS, QZSS L1C-D
+#         L1CP:  GPS, QZSS L1C-P
+#         L1S :  QZSS L1S
+#         L2CM:  GPS, QZSS L2C-M
+#         L2CL:  GPS, QZSS L2C-L
+#         L5I :  GPS, QZSS, SBAS L5-I
+#         L5Q :  GPS, QZSS, SBAS L5-Q
+#         L5SI:  QZSS L5S-I
+#         L5SQ:  QZSS L5S-Q
 #         L6D :  QZSS L6D
 #         L6E :  QZSS L6E
 #         G1CA:  GLONASS L1C/A
 #         G2CA:  GLONASS L2C/A
-#         E1B :  Galileo E1B
-#         E1C :  Galileo E1C
-#         E5AI:  Galileo E5aI
-#         E5AQ:  Galileo E5aQ
-#         E5BI:  Galileo E5bI
-#         E5BQ:  Galileo E5bQ
-#         E6B :  Galileo E6B
-#         E6C :  Galileo E6C
+#         G3OCD: GLONASS L3OCd
+#         G3OCP: GLONASS L3OCp
+#         E1B :  Galileo E1-B
+#         E1C :  Galileo E1-C
+#         E5AI:  Galileo E5a-I
+#         E5AQ:  Galileo E5a-Q
+#         E5BI:  Galileo E5b-I
+#         E5BQ:  Galileo E5b-Q
+#         E6B :  Galileo E6-B
+#         E6C :  Galileo E6-C
 #         B1I :  BDS B1I
-#         B1CD:  BDS B1CD
-#         B1CP:  BDS B1CP
+#         B1CD:  BDS B1C-D
+#         B1CP:  BDS B1C-P
 #         B2I :  BDS B2I
-#         B2AD:  BDS B2aD
-#         B2AP:  BDS B2aP
-#         B2BI:  BDS B2bI
+#         B2AD:  BDS B2a-D
+#         B2AP:  BDS B2a-P
+#         B2BI:  BDS B2b-I
 #         B3I :  BDS B3I
-#         I5S :  NavIC (IRNSS) L5 SPS
-#         ISS :  NavIC (IRNSS) S SPS
+#         I5S :  NavIC (IRNSS) L5-SPS
+#         ISS :  NavIC (IRNSS) S-SPS
 #
 if __name__ == '__main__':
     window = 'PocketSDR - GNSS SIGNAL ACQUISITION'
