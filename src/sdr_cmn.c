@@ -1,29 +1,26 @@
-/*---------------------------------------------------------------------------*/
-/**
- *  Pocket SDR - SDR Common Functions.
- *
- *  Author:
- *  T.TAKASU
- *
- *  History:
- *  2021-10-03  0.1  new
- *  2022-01-04  1.0  support Windows API.
- *
- */
-
+//
+//  Pocket SDR C library - SDR Common Functions.
+//
+//  Author:
+//  T.TAKASU
+//
+//  History:
+//  2021-10-03  0.1  new
+//  2022-01-04  1.0  support Windows API.
+//  2022-05-17  1.1  add API sdr_cpx_malloc(), sdr_cpx_free()
+//
 #include "pocket.h"
 
-/*---------------------------------------------------------------------------*/
-/*
- *  Allocate memory. If no memory allocated, it exits the AP immediately with
- *  an error message.
- *  
- *  args:
- *      size     (I)  memory size (bytes)
- *
- *  return:
- *      memory pointer allocated.
- */
+//------------------------------------------------------------------------------
+//  Allocate memory. If no memory allocated, it exits the AP immediately with
+//  an error message.
+//  
+//  args:
+//      size     (I)  memory size (bytes)
+//
+//  return:
+//      memory pointer allocated.
+//
 void *sdr_malloc(size_t size)
 {
     void *p;
@@ -35,31 +32,64 @@ void *sdr_malloc(size_t size)
     return p;
 }
 
-/*---------------------------------------------------------------------------*/
-/*
- *  Free memory allocated by sdr_malloc()
- *  
- *  args:
- *      p        (I)  memory pointer allocated.
- *
- *  return:
- *      none
- */
+//------------------------------------------------------------------------------
+//  Free memory allocated by sdr_malloc()
+//  
+//  args:
+//      p        (I)  memory pointer allocated.
+//
+//  return:
+//      none
+//
 void sdr_free(void *p)
 {
     free(p);
 }
 
-/*---------------------------------------------------------------------------*/
-/*
- *  Get system tick (msec).
- *  
- *  args:
- *      none
- *
- *  return:
- *      system tick (ms)
- */
+//------------------------------------------------------------------------------
+//  Allocate memory for complex array. If no memory allocated, it exits the AP
+//  immediately with an error message.
+//  
+//  args:
+//      N        (I)  size of complex array
+//
+//  return:
+//      complex array allocated.
+//
+sdr_cpx_t *sdr_cpx_malloc(int N)
+{
+    sdr_cpx_t *cpx;
+    
+    if (!(cpx = (sdr_cpx_t *)fftwf_malloc(sizeof(sdr_cpx_t) * N))) {
+        fprintf(stderr, "sdr_cpx_t memory allocation error N=%d\n", N);
+        exit(-1);
+    }
+    return cpx;
+}
+
+//------------------------------------------------------------------------------
+//  Free memory allocated by sdr_cpx_malloc()
+//  
+//  args:
+//      cpx      (I)  complex array
+//
+//  return:
+//      none
+//
+void sdr_cpx_free(sdr_cpx_t *cpx)
+{
+    fftwf_free(cpx);
+}
+
+//------------------------------------------------------------------------------
+//  Get system tick (msec).
+//  
+//  args:
+//      none
+//
+//  return:
+//      system tick (ms)
+//
 uint32_t sdr_get_tick(void)
 {
 #ifdef CYUSB
@@ -72,16 +102,15 @@ uint32_t sdr_get_tick(void)
 #endif
 }
 
-/*---------------------------------------------------------------------------*/
-/*
- *  Sleep for milli-seconds.
- *  
- *  args:
- *      msec     (I)  mill-seconds to sleep
- *
- *  return:
- *      none
- */
+//------------------------------------------------------------------------------
+//  Sleep for milli-seconds.
+//  
+//  args:
+//      msec     (I)  mill-seconds to sleep
+//
+//  return:
+//      none
+//
 void sdr_sleep_msec(int msec)
 {
 #ifdef CYUSB
