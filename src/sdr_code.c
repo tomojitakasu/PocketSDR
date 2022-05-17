@@ -2114,14 +2114,21 @@ void res_code(const int8_t *code, int len_code, double T, double coff, double fs
 void gen_code_fft(const int8_t *code, int len_code, double T, double coff,
     double fs, int N, int Nz, sdr_cpx_t *code_fft)
 {
+    static fftwf_plan plan = NULL;
+    static int N_plan = 0;
     sdr_cpx_t *code_res = sdr_cpx_malloc(N + Nz);
     
     res_code(code, len_code, T, coff, fs, N, Nz, code_res);
     
-    fftwf_plan plan = fftwf_plan_dft_1d(N + Nz, code_res, code_fft,
-        FFTW_FORWARD, FFTW_ESTIMATE);
+    if (N + Nz != N_plan) {
+        if (plan) {
+            fftwf_destroy_plan(plan);
+        }
+        plan = fftwf_plan_dft_1d(N + Nz, code_res, code_fft, FFTW_FORWARD,
+            FFTW_ESTIMATE);
+        N_plan = N + Nz;
+    }
     fftwf_execute_dft(plan, code_res, code_fft);
-    fftwf_destroy_plan(plan);
     
     // complex conjugate
     for (int i = 0; i < N + Nz; i++) {
