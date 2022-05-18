@@ -12,6 +12,7 @@
 #  2022-01-20  1.3  use external library for mix_carr(), corr_std(), corr_fft()
 #                   modify API search_sig(), search_code(), mix_carr() 
 #  2022-01-25  1.4  support TCP client/server for log stream
+#  2022-05-18  1.5  support API changes of sdr_func.c
 #
 from math import *
 from ctypes import *
@@ -34,7 +35,7 @@ try:
 except:
     libsdr = None
 else:
-    libsdr.init_lib(c_char_p((dir + '/fftw_wisdom.txt').encode()))
+    libsdr.sdr_init_lib(c_char_p((dir + '/fftw_wisdom.txt').encode()))
 
 # constants --------------------------------------------------------------------
 MAX_DOP  = 5000.0  # default max Doppler frequency to search signals (Hz)
@@ -185,12 +186,12 @@ def corr_std(buff, ix, N, fs, fc, phi, code, pos):
     if libsdr and LIBSDR_ENA:
         corr = np.empty(len(pos), dtype='complex64')
         pos = np.array(pos, dtype='int32')
-        libsdr.corr_std.argtypes = [
+        libsdr.sdr_corr_std.argtypes = [
             ctypeslib.ndpointer('complex64'), c_int32, c_int32, c_double,
             c_double, c_double, ctypeslib.ndpointer('complex64'),
             ctypeslib.ndpointer('int32'), c_int32,
             ctypeslib.ndpointer('complex64')]
-        libsdr.corr_std(buff, ix, N, fs, fc, phi, code, pos, len(pos), corr)
+        libsdr.sdr_corr_std(buff, ix, N, fs, fc, phi, code, pos, len(pos), corr)
         return corr
     else:
         data = mix_carr(buff, ix, N, fs, fc, phi)
@@ -200,11 +201,11 @@ def corr_std(buff, ix, N, fs, fc, phi, code, pos):
 def corr_fft(buff, ix, N, fs, fc, phi, code_fft):
     if libsdr and LIBSDR_ENA:
         corr = np.empty(N, dtype='complex64')
-        libsdr.corr_fft.argtypes = [
+        libsdr.sdr_corr_fft.argtypes = [
             ctypeslib.ndpointer('complex64'), c_int32, c_int32, c_double,
             c_double, c_double, ctypeslib.ndpointer('complex64'),
             ctypeslib.ndpointer('complex64')]
-        libsdr.corr_fft(buff, ix, N, fs, fc, phi, code_fft, corr)
+        libsdr.sdr_corr_fft(buff, ix, N, fs, fc, phi, code_fft, corr)
         return corr
     else:
         data = mix_carr(buff, ix, N, fs, fc, phi)
@@ -214,10 +215,10 @@ def corr_fft(buff, ix, N, fs, fc, phi, code_fft):
 def mix_carr(buff, ix, N, fs, fc, phi):
     if libsdr and LIBSDR_ENA:
         data = np.empty(N, dtype='complex64')
-        libsdr.mix_carr.argtypes = [
+        libsdr.sdr_mix_carr.argtypes = [
             ctypeslib.ndpointer('complex64'), c_int32, c_int32, c_double,
             c_double, c_double, ctypeslib.ndpointer('complex64')]
-        libsdr.mix_carr(buff, ix, N, fs, fc, phi, data)
+        libsdr.sdr_mix_carr(buff, ix, N, fs, fc, phi, data)
         return data
     else:
         global carr_tbl
