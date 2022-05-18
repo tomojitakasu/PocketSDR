@@ -42,6 +42,7 @@
 // 
 //  History:
 //  2022-05-17  1.0  port sdr_code.py to C
+//  2022-05-18  1.1  change API: *() -> sdr_*()
 //
 
 #include "pocket.h"
@@ -650,7 +651,7 @@ static int8_t *LFSR(int N, int32_t R, int32_t tap, int n)
     
     for (int i = 0; i < N; i++) {
         code[i] = CHIP[R & 1];
-        R = (xor_bits(R & tap) << (n - 1)) | (R >> 1);
+        R = (sdr_xor_bits(R & tap) << (n - 1)) | (R >> 1);
     }
     return code;
 }
@@ -1026,7 +1027,7 @@ static int8_t *gen_code_GLO_CA(int N)
     
     for (int i = 0; i < N; i++) {
         code[i] = CHIP[(R >> 2) & 1];
-        R = (xor_bits(R & 0x011) << 8) | (R >> 1);
+        R = (sdr_xor_bits(R & 0x011) << 8) | (R >> 1);
     }
     return code;
 }
@@ -1375,8 +1376,8 @@ static int8_t *gen_code_B1I_G2(int N, const uint8_t *ph_sel)
         tap |= 1 << (11 - ph_sel[i]);
     }
     for (int i = 0; i < N; i++) {
-        code[i] = CHIP[xor_bits(R & tap)];
-        R = (xor_bits(R & 0x7CD) << 10) | (R >> 1);
+        code[i] = CHIP[sdr_xor_bits(R & tap)];
+        R = (sdr_xor_bits(R & 0x7CD) << 10) | (R >> 1);
     }
     return code;
 }
@@ -1755,7 +1756,7 @@ static int8_t *gen_code_ISS(int prn, int *N)
 //      Primary code as int8_t array (-1 or 1)
 //      (sub-carrier modulated for BOC or zero-padded for TDM)
 //
-int8_t *gen_code(const char *sig, int prn, int *N)
+int8_t *sdr_gen_code(const char *sig, int prn, int *N)
 {
     char Sig[16];
     
@@ -1880,7 +1881,7 @@ int8_t *gen_code(const char *sig, int prn, int *N)
 //  return:
 //      Secondary code as int8_t array (-1 or 1)
 //
-int8_t *sec_code(const char *sig, int prn, int *N)
+int8_t *sdr_sec_code(const char *sig, int prn, int *N)
 {
     static int8_t code[] = {1};
     char Sig[16];
@@ -1971,7 +1972,7 @@ int8_t *sec_code(const char *sig, int prn, int *N)
 //  returns:
 //      Primary code length (chips) (0: error)
 //
-int code_len(const char *sig)
+int sdr_code_len(const char *sig)
 {
     char Sig[16];
     
@@ -2018,7 +2019,7 @@ int code_len(const char *sig)
 //  return:
 //      Signal carrier frequency (Hz) (0.0: error)
 //
-double sig_freq(const char *sig)
+double sdr_sig_freq(const char *sig)
 {
     char Sig[16];
     
@@ -2082,8 +2083,8 @@ double sig_freq(const char *sig)
 //  return:
 //      none
 //
-void res_code(const int8_t *code, int len_code, double T, double coff, double fs,
-    int N, int Nz, sdr_cpx_t *code_res)
+void sdr_res_code(const int8_t *code, int len_code, double T, double coff,
+    double fs, int N, int Nz, sdr_cpx_t *code_res)
 {
     double dx = len_code / T / fs;
     
@@ -2111,14 +2112,14 @@ void res_code(const int8_t *code, int len_code, double T, double coff, double fs
 //  return:
 //      none
 //
-void gen_code_fft(const int8_t *code, int len_code, double T, double coff,
+void sdr_gen_code_fft(const int8_t *code, int len_code, double T, double coff,
     double fs, int N, int Nz, sdr_cpx_t *code_fft)
 {
     static fftwf_plan plan = NULL;
     static int N_plan = 0;
     sdr_cpx_t *code_res = sdr_cpx_malloc(N + Nz);
     
-    res_code(code, len_code, T, coff, fs, N, Nz, code_res);
+    sdr_res_code(code, len_code, T, coff, fs, N, Nz, code_res);
     
     if (N + Nz != N_plan) {
         if (plan) {
