@@ -8,6 +8,7 @@
 //  2022-01-25  1.0  new
 //  2022-05-11  1.1  add API: search_code(), corr_max(), fine_dop(),
 //                   shift_freq(), dop_bins(), add_buff(), xor_bits()
+//  2022-05-18  1.2  change API: *() -> sdr_*()
 //
 #include <math.h>
 #include "pocket.h"
@@ -30,7 +31,7 @@ static float cos_tbl[NTBL] = {0}; // carrier lookup table
 static float sin_tbl[NTBL] = {0};
 
 // initialize library ----------------------------------------------------------
-void init_lib(const char *file)
+void sdr_init_lib(const char *file)
 {
     int i;
     
@@ -46,7 +47,7 @@ void init_lib(const char *file)
 }
 
 // mix carrier (N = 2 * n) -----------------------------------------------------
-void mix_carr(const sdr_cpx_t *buff, int ix, int N, double fs, double fc,
+void sdr_mix_carr(const sdr_cpx_t *buff, int ix, int N, double fs, double fc,
     double phi, sdr_cpx_t *data)
 {
     double step = fc / fs * NTBL;
@@ -66,7 +67,7 @@ void mix_carr(const sdr_cpx_t *buff, int ix, int N, double fs, double fc,
 }
 
 // inner product of complex and real -------------------------------------------
-void dot_cpx_real(const sdr_cpx_t *a, const sdr_cpx_t *b, int N, float s,
+static void dot_cpx_real(const sdr_cpx_t *a, const sdr_cpx_t *b, int N, float s,
     sdr_cpx_t *c)
 {
 #ifdef AVX2
@@ -80,31 +81,31 @@ void dot_cpx_real(const sdr_cpx_t *a, const sdr_cpx_t *b, int N, float s,
         __m256 ymm4 = _mm256_loadu_ps(a[i + 4]);
         __m256 ymm5 = _mm256_shuffle_ps(ymm3, ymm4, 0x88); // a.real 
         __m256 ymm6 = _mm256_shuffle_ps(ymm3, ymm4, 0xDD); // a.imag 
-        __m256 ymm7 = _mm256_shuffle_ps(ymm3, ymm4, 0x88); // b.real 
         ymm3 = _mm256_loadu_ps(b[i]);
         ymm4 = _mm256_loadu_ps(b[i + 4]);
+        __m256 ymm7 = _mm256_shuffle_ps(ymm3, ymm4, 0x88); // b.real 
         ymm1 = _mm256_fmadd_ps(ymm5, ymm7, ymm1);   // c.real 
         ymm2 = _mm256_fmadd_ps(ymm6, ymm7, ymm2);   // c.imag 
     }
     float d[8], e[8];
     _mm256_storeu_ps(d, ymm1);
     _mm256_storeu_ps(e, ymm2);
-    *c[0] = (d[0] + d[1] + d[2] + d[3] + d[4] + d[5] + d[6] + d[7]) * s;
-    *c[1] = (e[0] + e[1] + e[2] + e[3] + e[4] + e[5] + e[6] + e[7]) * s;
+    (*c)[0] = (d[0] + d[1] + d[2] + d[3] + d[4] + d[5] + d[6] + d[7]) * s;
+    (*c)[1] = (e[0] + e[1] + e[2] + e[3] + e[4] + e[5] + e[6] + e[7]) * s;
     
     for ( ; i < N; i++) {
-        *c[0] += a[i][0] * b[i][0] * s;
-        *c[1] += a[i][1] * b[i][0] * s;
+        (*c)[0] += a[i][0] * b[i][0] * s;
+        (*c)[1] += a[i][1] * b[i][0] * s;
     }
 #else
-    *c[0] = *c[1] = 0.0f;
+    (*c)[0] = (*c)[1] = 0.0f;
     
     for (int i = 0; i < N; i++) {
-        *c[0] += a[i][0] * b[i][0];
-        *c[1] += a[i][1] * b[i][0];
+        (*c)[0] += a[i][0] * b[i][0];
+        (*c)[1] += a[i][1] * b[i][0];
     }
-    *c[0] *= s;
-    *c[1] *= s;
+    (*c)[0] *= s;
+    (*c)[1] *= s;
 #endif // AVX2 
 }
 
@@ -112,17 +113,17 @@ void dot_cpx_real(const sdr_cpx_t *a, const sdr_cpx_t *b, int N, float s,
 static void corr_std_(const sdr_cpx_t *data, const sdr_cpx_t *code, int N,
     const int *pos, int n, sdr_cpx_t *corr)
 {
-    for (int i = 0, j = 0; i < n; i++, j++) {
+    for (int i = 0; i < n; i++) {
         if (pos[i] > 0) {
             int M = N - pos[i];
-            dot_cpx_real(data + pos[i], code, M, 1.0f / M, corr + j);
+            dot_cpx_real(data + pos[i], code, M, 1.0f / M, corr + i);
         }
         else if (pos[i] < 0) {
             int M = N + pos[i];
-            dot_cpx_real(data, code - pos[i], M, 1.0f / M, corr + j);
+            dot_cpx_real(data, code - pos[i], M, 1.0f / M, corr + i);
         }
         else {
-            dot_cpx_real(data, code, N, 1.0f / N, corr + j);
+            dot_cpx_real(data, code, N, 1.0f / N, corr + i);
         }
     }
 }
@@ -168,31 +169,31 @@ static void corr_fft_(const sdr_cpx_t *data, const sdr_cpx_t *code_fft, int N,
 }
 
 // mix carrier and standard correlator (N = 2 * n) -----------------------------
-void corr_std(const sdr_cpx_t *buff, int ix, int N, double fs, double fc,
+void sdr_corr_std(const sdr_cpx_t *buff, int ix, int N, double fs, double fc,
     double phi, const sdr_cpx_t *code, const int *pos, int n, sdr_cpx_t *corr)
 {
     sdr_cpx_t *data = sdr_cpx_malloc(N);
     
-    mix_carr(buff, ix, N, fs, fc, phi, data);
+    sdr_mix_carr(buff, ix, N, fs, fc, phi, data);
     corr_std_(data, code, N, pos, n, corr);
     
     sdr_cpx_free(data);
 }
 
 // mix carrier and FFT correlator (N = 2 * n) ----------------------------------
-void corr_fft(const sdr_cpx_t *buff, int ix, int N, double fs, double fc,
+void sdr_corr_fft(const sdr_cpx_t *buff, int ix, int N, double fs, double fc,
     double phi, const sdr_cpx_t *code_fft, sdr_cpx_t *corr)
 {
     sdr_cpx_t *data = sdr_cpx_malloc(N);
     
-    mix_carr(buff, ix, N, fs, fc, phi, data);
+    sdr_mix_carr(buff, ix, N, fs, fc, phi, data);
     corr_fft_(data, code_fft, N, corr);
     
-    sdr_free(data);
+    sdr_cpx_free(data);
 }
 
 // generate FFTW wisdom --------------------------------------------------------
-int gen_fftw_wisdom(const char *file, int N)
+int sdr_gen_fftw_wisdom(const char *file, int N)
 {
     fftwf_plan plan[2] = {0};
     
@@ -229,23 +230,23 @@ int gen_fftw_wisdom(const char *file, int N)
 //  return:
 //      none
 //
-void search_code(const sdr_cpx_t *code_fft, double T, const sdr_cpx_t *buff,
+void sdr_search_code(const sdr_cpx_t *code_fft, double T, const sdr_cpx_t *buff,
     int ix, double fs, double fi, const float *fds, int len_fds, float *P)
 {
     int N = (int)(fs * T);
     sdr_cpx_t *C = sdr_cpx_malloc(len_fds);
     
     for (int i = 0; i < len_fds; i++) {
-        corr_fft(buff, ix, N, fs, fi + fds[i], 0.0, code_fft, C);
+        sdr_corr_fft(buff, ix, N, fs, fi + fds[i], 0.0, code_fft, C);
         for (int j = 0; j < N; j++) {
             P[i*N+j] = SQR(C[j][0]) + SQR(C[j][1]); // abs(C) ** 2
         }
     }
-    sdr_free(C);
+    sdr_cpx_free(C);
 }
 
 // max correlation power and C/N0 ----------------------------------------------
-float corr_max(const float *P, int N, int len_fds, double T, int *ix,
+float sdr_corr_max(const float *P, int N, int len_fds, double T, int *ix,
     float *cn0)
 {
     float P_max = 0.0, P_ave = 0.0;
@@ -289,7 +290,7 @@ static int polyfit(const double *x, const double *y, int nx, int np, double *p)
 }
 
 // fine Doppler frequency by quadratic fitting ---------------------------------
-float fine_dop(const float *P, const float *fds, int len_fds, int ix)
+float sdr_fine_dop(const float *P, const float *fds, int len_fds, int ix)
 {
     if (ix == 0 || ix == len_fds - 1) {
         return fds[ix];
@@ -307,7 +308,7 @@ float fine_dop(const float *P, const float *fds, int len_fds, int ix)
 }
 
 // shift IF frequency for GLONASS FDMA -----------------------------------------
-double shift_freq(const char *sig, int fcn, double fi)
+double sdr_shift_freq(const char *sig, int fcn, double fi)
 {
     if (!strcmp(sig, "G1CA")) {
         fi += 0.5625e6 * fcn;
@@ -319,7 +320,7 @@ double shift_freq(const char *sig, int fcn, double fi)
 }
 
 // doppler search bins ---------------------------------------------------------
-float *dop_bins(double T, float dop, float max_dop, int *len_fds)
+float *sdr_dop_bins(double T, float dop, float max_dop, int *len_fds)
 {
     float *fds, step = DOP_STEP / T;
     
@@ -333,14 +334,14 @@ float *dop_bins(double T, float dop, float max_dop, int *len_fds)
 }
 
 // add item to buffer -----------------------------------------------------------
-void add_buff(void *buff, int len_buff, void *item, size_t size_item)
+void sdr_add_buff(void *buff, int len_buff, void *item, size_t size_item)
 {
     memmove(buff, buff + size_item, size_item * (len_buff - 1));
     memcpy(buff + size_item * (len_buff - 1), item, size_item);
 }
 
 // exclusive-or of all bits ----------------------------------------------------
-uint8_t xor_bits(uint32_t X)
+uint8_t sdr_xor_bits(uint32_t X)
 {
     static const uint8_t xor_8b[] = { // xor of 8 bits
         0,1,1,0,1,0,0,1, 1,0,0,1,0,1,1,0, 1,0,0,1,0,1,1,0, 0,1,1,0,1,0,0,1,
