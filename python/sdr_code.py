@@ -50,6 +50,7 @@
 #                   add support of G1CA, G2CA and B3I in sec_code()
 #  2022-01-17  1.5  add signals: L2CL, I5S, ISS
 #  2022-01-27  1.6  add signals: G3OCD, G3OCP
+#  2022-05-17  l.7  fix bug on gen_code_ISS()
 #
 import numpy as np
 import scipy.fftpack as fft
@@ -1487,7 +1488,7 @@ def gen_code_ISS(prn):
         ISS_G1 = LFSR(N, 0b1111111111, 0b0010000001, 10)
         ISS_G2 = LFSR(N, rev_reg(ISS_G2_init[prn-1], 10), 0b0110010111, 10)
         ISS[prn] = -ISS_G1 * ISS_G2
-    return I5S[prn]
+    return ISS[prn]
 
 # modulation of code by sub-carrier --------------------------------------------
 def mod_code(code, sub_carr):
