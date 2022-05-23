@@ -1,5 +1,5 @@
 #
-#  makefile for Pocket SDR shared library (libpocket.so)
+#  makefile for Pocket SDR device library (libdev.so, libdev.a)
 #
 #! You need to install libfftw3 as follows.
 #!
