@@ -132,8 +132,8 @@ static void read_config_key(FILE *fp, uint32_t regs[][SDR_MAX_REG], int opt)
         if (!(p = strchr(buff, '='))) continue;
         *p++ = '\0';
         if (sscanf(buff, "%31s", key) < 1) continue;
-        
-        for (int i = 0; *reg_field[i].field; i++) {
+        int i;
+        for (i = 0; *reg_field[i].field; i++) {
             if (!strcmp(key, reg_field[i].field)) break;
         }
         if (!*reg_field[i].field) {
