@@ -1,5 +1,5 @@
 #
-#  makefile for RTKLIB shared library (librtk.so)
+#  makefile for RTKLIB library (librtk.so, librtk.a)
 #
 #! You need to install RTKLIB 2.4.3 source tree as follows.
 #!
@@ -32,10 +32,15 @@ OBJ = rtkcmn.o tides.o rtksvr.o rtkpos.o postpos.o geoid.o solution.o lambda.o s
       novatel.o ublox.o ss2.o crescent.o skytraq.o javad.o nvs.o binex.o rt17.o septentrio.o \
       rtklib_wrap.o
 
-TARGET = librtk.so
+TARGET = librtk.so librtk.a
 
-$(TARGET) : $(OBJ)
+all : $(TARGET)
+
+librtk.so : $(OBJ)
 	$(CC) -shared -o $@ $(OBJ) $(LDLIBS)
+
+librtk.a  : $(OBJ)
+	$(AR) r $@ $(OBJ)
 
 rtkcmn.o   : $(SRC)/rtkcmn.c
 	$(CC) -c $(CFLAGS) $(SRC)/rtkcmn.c
