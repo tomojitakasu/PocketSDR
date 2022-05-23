@@ -9,7 +9,10 @@
 //  2022-01-04  1.0  support Windows API.
 //  2022-05-17  1.1  add API sdr_cpx_malloc(), sdr_cpx_free()
 //
-#include "pocket.h"
+#ifdef WIN32
+#include <windows.h>
+#endif
+#include "pocket_sdr.h"
 
 //------------------------------------------------------------------------------
 //  Allocate memory. If no memory allocated, it exits the AP immediately with
@@ -68,7 +71,7 @@ sdr_cpx_t *sdr_cpx_malloc(int N)
 }
 
 //------------------------------------------------------------------------------
-//  Free memory allocated by sdr_cpx_malloc()
+//  Free memory allocated by sdr_cpx_malloc().
 //  
 //  args:
 //      cpx      (I)  complex array
@@ -92,7 +95,7 @@ void sdr_cpx_free(sdr_cpx_t *cpx)
 //
 uint32_t sdr_get_tick(void)
 {
-#ifdef CYUSB
+#ifdef WIN32
     return (uint32_t)timeGetTime();
 #else
     struct timeval tv = {0};
@@ -113,7 +116,7 @@ uint32_t sdr_get_tick(void)
 //
 void sdr_sleep_msec(int msec)
 {
-#ifdef CYUSB
+#ifdef WIN32
     Sleep(msec < 5 ? 1 : msec);
 #else
     struct timespec ts = {0};
