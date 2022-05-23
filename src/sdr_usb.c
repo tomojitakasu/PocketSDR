@@ -1,42 +1,40 @@
-/*----------------------------------------------------------------------------*/
-/**
- *  Pocket SDR - USB Device Functions.
- *
- *  Author:
- *  T.TAKASU
- *
- *  History:
- *  2021-10-20  0.1  new
- *  2022-01-04  0.2  support CyUSB on Windows
- *
- */
-#include "pocket.h"
+// 
+//  Pocket SDR - USB Device Functions.
+//
+//  Author:
+//  T.TAKASU
+//
+//  History:
+//  2021-10-20  0.1  new
+//  2022-01-04  0.2  support CyUSB on Windows
+//  2022-05-23  0.3  change coding style
+//
+#include "pocket_dev.h"
 
-/* constants and macros ------------------------------------------------------*/
-#ifndef CYUSB
+// constants and macros --------------------------------------------------------
+#ifndef WIN32
 #define USB_VR          (LIBUSB_RECIPIENT_DEVICE | LIBUSB_REQUEST_TYPE_VENDOR)
 #define USB_VR_IN       (USB_VR | LIBUSB_ENDPOINT_IN)
 #define USB_VR_OUT      (USB_VR | LIBUSB_ENDPOINT_OUT)
 #endif
 
-#define TO_TRANSFER     15000    /* USB transfer timeout (ms) */
+#define TO_TRANSFER     15000    // USB transfer timeout (ms)
 
-/*----------------------------------------------------------------------------*/
-/**
- *  Open USB device.
- *
- *  args:
- *      bus         (I)   USB bus number  (-1: any)
- *      port        (I)   USB port number (-1: any)
- *      vid         (I)   USB device vendor ID
- *      pid         (I)   USB device product ID
- *
- *  return
- *      USB device (NULL: error)
- */
+//------------------------------------------------------------------------------
+//  Open USB device.
+//
+//  args:
+//      bus         (I)   USB bus number  (-1: any)
+//      port        (I)   USB port number (-1: any)
+//      vid         (I)   USB device vendor ID
+//      pid         (I)   USB device product ID
+//
+//  return
+//      USB device (NULL: error)
+//
 sdr_usb_t *sdr_usb_open(int bus, int port, uint16_t vid, uint16_t pid)
 {
-#ifdef CYUSB
+#ifdef WIN32
     sdr_usb_t *usb = new CCyUSBDevice();
     int i;
     
@@ -88,52 +86,50 @@ sdr_usb_t *sdr_usb_open(int bus, int port, uint16_t vid, uint16_t pid)
     libusb_free_device_list(devs, 0);
     libusb_claim_interface(usb, SDR_DEV_IF);
     return usb;
-#endif /* CYUSB */
+#endif // WIN32
 }
 
-/*----------------------------------------------------------------------------*/
-/**
- *  Close USB device.
- *
- *  args:
- *      usb         (I)   USB device
- *
- *  return
- *      none
- */
+//------------------------------------------------------------------------------
+//  Close USB device.
+//
+//  args:
+//      usb         (I)   USB device
+//
+//  return
+//      none
+//
 void sdr_usb_close(sdr_usb_t *usb)
 {
-#ifdef CYUSB
+#ifdef WIN32
     usb->Close();
     delete usb;
 #else
     libusb_release_interface(usb, SDR_DEV_IF);
     libusb_close(usb);
     libusb_exit(NULL);
-#endif /* CYUSB */
+#endif // WIN32
 }
 
-/*----------------------------------------------------------------------------*/
-/**
- *  Send vendor request to USB device.
- *
- *  args:
- *      usb         (I)   USB device
- *      mode        (I)   direction (0:IN,1:OUT)
- *      req         (I)   USB vendor request
- *      val         (I)   USB vendor request wValue
- *      data        (IO)  data
- *      size        (I)   data size (bytes)
- *
- *  return
- *      status (1: OK, 0: error)
- */
+//------------------------------------------------------------------------------
+//  Send vendor request to USB device.
+//
+//  args:
+//      usb         (I)   USB device
+//      mode        (I)   direction (0:IN,1:OUT)
+//      req         (I)   USB vendor request
+//      val         (I)   USB vendor request wValue
+//      data        (IO)  data
+//      size        (I)   data size (bytes)
+//
+//  return
+//      status (1: OK, 0: error)
+//
 int sdr_usb_req(sdr_usb_t *usb, int mode, uint8_t req, uint16_t val,
         uint8_t *data, int size)
 {
     if (size > 64) return 0;
     
-#ifdef CYUSB
+#ifdef WIN32
     CCyControlEndPoint *ep = usb->ControlEndPt;
     long len = size;
     
@@ -150,5 +146,5 @@ int sdr_usb_req(sdr_usb_t *usb, int mode, uint8_t req, uint16_t val,
         return 0;
     }
     return 1;
-#endif /* CYUSB */
+#endif /* WIN32 */
 }

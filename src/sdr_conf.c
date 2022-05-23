@@ -1,32 +1,30 @@
-/*---------------------------------------------------------------------------*/
-/**
- *  Pocket SDR - Pocket SDR Configuration Functions.
- *
- *  Author:
- *  T.TAKASU
- *
- *  History:
- *  2021-10-03  0.1  new
- *  2022-01-04  1.0  support C++
- *
- */
+// 
+//  Pocket SDR C AP - Pocket SDR Configuration Functions.
+//
+//  Author:
+//  T.TAKASU
+//
+//  History:
+//  2021-10-03  0.1  new
+//  2022-01-04  1.0  support C++
+//  2022-05-23  1.1  change coding style
+//
+#include "pocket_dev.h"
 
-#include "pocket.h"
-
-/* type definitions ----------------------------------------------------------*/
-typedef struct {     /* register field definition type */
-    const char *field; /* field name */
-    uint8_t addr;    /* register address */
-    uint8_t nbit;    /* number of bits */
-    uint8_t pos;     /* bit position (0:LSB,31:MSB) */
-    uint8_t fix[SDR_MAX_CH]; /* fixed setting (0:free,1:fixed) */
-    uint32_t val[SDR_MAX_CH]; /* value for fixed setting */
-    const char *desc; /* description */
+// type definitions ------------------------------------------------------------
+typedef struct {       // register field definition type
+    const char *field; // field name
+    uint8_t addr;      // register address
+    uint8_t nbit;      // number of bits
+    uint8_t pos;       // bit position (0:LSB,31:MSB)
+    uint8_t fix[SDR_MAX_CH];  // fixed setting (0:free,1:fixed)
+    uint32_t val[SDR_MAX_CH]; // value for fixed setting
+    const char *desc;  // description */
 } reg_t;
 
-/* device register definitions -----------------------------------------------*/
-static const reg_t reg_field[] = { /* MAX2771 register field definitions */
-    /* field          ,addr,nbit,pos, fix[],  val[], desc */
+// device register definitions -------------------------------------------------
+static const reg_t reg_field[] = { // MAX2771 register field definitions
+    // field          ,addr,nbit,pos, fix[],  val[], desc
     {"CHIPEN"         , 0x0,  1, 31, {1, 1}, {1, 1}, "Chip enable (0:disable,1:enable)"},
     {"IDLE"           , 0x0,  1, 30, {1, 1}, {0, 0}, "Idle enable (0:operating-mode,1:idle-mode)"},
     {"MIXPOLE"        , 0x0,  1, 17, {1, 1}, {0, 0}, "Mixer pole selection (0:13MHz,1:36MHz)"},
@@ -79,29 +77,31 @@ static const reg_t reg_field[] = { /* MAX2771 register field definitions */
     {"ADCCLK_M_CNT"   , 0xA, 12,  4, {0, 1}, {0, 0}, "ADC clock divider M counter value (0-4095)"},
     {"CLKOUT_SEL"     , 0xA,  1,  2, {1, 1}, {1, 1}, "CLKOUT selection (0:integer-clock-div/mul,1:ADC-clock)"},
     {"MODE"           , 0x7,  1,  0, {1, 1}, {0, 0}, "DSP interface mode selection"},
-    {"", 0, 0, 0, {0}, {0}, ""} /* terminator */
+    {"", 0, 0, 0, {0}, {0}, ""} // terminator
 };
 
-/* bit mask ------------------------------------------------------------------*/
+// bit mask --------------------------------------------------------------------
 static uint32_t bit_mask(const reg_t *reg)
 {
     uint32_t mask = 0;
-    int i, pos1 = reg->pos, pos2 = pos1 + reg->nbit;
+    int pos1 = reg->pos, pos2 = pos1 + reg->nbit;
     
-    for (i = 31; i >= 0; i--) {
+    for (int i = 31; i >= 0; i--) {
         mask = (mask << 1) | (i >= pos1 && i < pos2 ? 1 : 0);
     }
     return mask;
 }
 
-/* read settings from configuration file in hexadecimal format ---------------*/
+// read settings from configuration file in hexadecimal format -----------------
 static void read_config_hex(FILE *fp, uint32_t regs[][SDR_MAX_REG], int opt)
 {
-    uint32_t addr, val;
-    char buff[128], *p;
-    int ch;
+    char buff[128];
     
     while (fgets(buff, sizeof(buff), fp)) {
+        uint32_t addr, val;
+        int ch;
+        char *p;
+        
         if ((p = strchr(buff, '#'))) *p = '\0';
         if (sscanf(buff, "%d 0x%X 0x%X", &ch, &addr, &val) < 3) continue;
         if (ch < 1 || ch > SDR_MAX_CH) {
@@ -116,14 +116,16 @@ static void read_config_hex(FILE *fp, uint32_t regs[][SDR_MAX_REG], int opt)
     }
 }
 
-/* read settings from configuration file in keyword = value format -----------*/
+// read settings from configuration file in keyword = value format -------------
 static void read_config_key(FILE *fp, uint32_t regs[][SDR_MAX_REG], int opt)
 {
-    uint32_t val, mask;
-    char buff[128], key[32], *p;
-    int i, ch = 1;
+    char buff[128];
+    int ch = 1;
     
     while (fgets(buff, sizeof(buff), fp)) {
+        uint32_t val, mask;
+        char key[32], *p;
+        
         if ((p = strchr(buff, '#'))) *p = '\0';
         if (sscanf(buff, "[CH%d]", &ch) == 1) continue;
         if (ch < 1 || ch > SDR_MAX_CH) continue;
@@ -131,7 +133,7 @@ static void read_config_key(FILE *fp, uint32_t regs[][SDR_MAX_REG], int opt)
         *p++ = '\0';
         if (sscanf(buff, "%31s", key) < 1) continue;
         
-        for (i = 0; *reg_field[i].field; i++) {
+        for (int i = 0; *reg_field[i].field; i++) {
             if (!strcmp(key, reg_field[i].field)) break;
         }
         if (!*reg_field[i].field) {
@@ -152,7 +154,7 @@ static void read_config_key(FILE *fp, uint32_t regs[][SDR_MAX_REG], int opt)
     }
 }
 
-/* read settings from configuration file -------------------------------------*/
+// read settings from configuration file ---------------------------------------
 static int read_config(const char *file, uint32_t regs[][SDR_MAX_REG], int opt)
 {
     FILE *fp;
@@ -171,75 +173,69 @@ static int read_config(const char *file, uint32_t regs[][SDR_MAX_REG], int opt)
     return 1;
 }
 
-/* write channel status ------------------------------------------------------*/
+// write channel status --------------------------------------------------------
 static void write_stat(FILE *fp, int ch, uint32_t *reg)
 {
-    uint32_t FCEN, FBW, FCENX, ENIQ, INT_PLL, NDIV, RDIV, FDIV, REFDIV;
-    uint32_t EXTADCCLK, FCLKIN, ADCCLK, REFCLK_L, REFCLK_M, ADCCLK_L, ADCCLK_M;
-    uint32_t PREFRACDIV;
-    double f_bw[8] = {2.5, 8.7, 4.2, 23.4, 36.0, 0.0, 0.0, 16.4};
-    double f_step[8] = {0.195, 0.66, 0.355};
-    double ratio[8] = {2.0, 0.25, 0.5, 1.0, 4.0};
-    double f_lo, f_adc, f_cen;
+    static double f_bw[8] = {2.5, 8.7, 4.2, 23.4, 36.0, 0.0, 0.0, 16.4};
+    static double f_step[8] = {0.195, 0.66, 0.355};
+    static double ratio[8] = {2.0, 0.25, 0.5, 1.0, 4.0};
     
-    FCEN       = (reg[0x0] >>  6) & 0x7F;
-    FBW        = (reg[0x0] >>  3) & 0x7;
-    FCENX      = (reg[0x0] >>  1) & 0x1;
-    ENIQ       = (reg[0x1] >> 27) & 0x1;
-    INT_PLL    = (reg[0x3] >>  3) & 0x1;
-    NDIV       = (reg[0x4] >> 13) & 0x7FFF;
-    RDIV       = (reg[0x4] >>  3) & 0x3FF;
-    FDIV       = (reg[0x5] >>  8) & 0xFFFFF;
-    REFDIV     = (reg[0x3] >> 29) & 0x7;
-    EXTADCCLK  = (reg[0x7] >> 28) & 0x1;
-    FCLKIN     = (reg[0x7] >>  3) & 0x1;
-    ADCCLK     = (reg[0x7] >>  2) & 0x1;
-    REFCLK_L   = (reg[0x7] >> 16) & 0xFFF;
-    REFCLK_M   = (reg[0x7] >>  4) & 0xFFF;
-    ADCCLK_L   = (reg[0xA] >> 16) & 0xFFF;
-    ADCCLK_M   = (reg[0xA] >>  4) & 0xFFF;
-    PREFRACDIV = (reg[0xA] >>  3) & 0x1;
+    uint32_t FCEN       = (reg[0x0] >>  6) & 0x7F;
+    uint32_t FBW        = (reg[0x0] >>  3) & 0x7;
+    uint32_t FCENX      = (reg[0x0] >>  1) & 0x1;
+    uint32_t ENIQ       = (reg[0x1] >> 27) & 0x1;
+    uint32_t INT_PLL    = (reg[0x3] >>  3) & 0x1;
+    uint32_t NDIV       = (reg[0x4] >> 13) & 0x7FFF;
+    uint32_t RDIV       = (reg[0x4] >>  3) & 0x3FF;
+    uint32_t FDIV       = (reg[0x5] >>  8) & 0xFFFFF;
+    uint32_t REFDIV     = (reg[0x3] >> 29) & 0x7;
+    uint32_t EXTADCCLK  = (reg[0x7] >> 28) & 0x1;
+    uint32_t FCLKIN     = (reg[0x7] >>  3) & 0x1;
+    uint32_t ADCCLK     = (reg[0x7] >>  2) & 0x1;
+    uint32_t REFCLK_L   = (reg[0x7] >> 16) & 0xFFF;
+    uint32_t REFCLK_M   = (reg[0x7] >>  4) & 0xFFF;
+    uint32_t ADCCLK_L   = (reg[0xA] >> 16) & 0xFFF;
+    uint32_t ADCCLK_M   = (reg[0xA] >>  4) & 0xFFF;
+    uint32_t PREFRACDIV = (reg[0xA] >>  3) & 0x1;
     
-    f_lo = SDR_FREQ_TCXO / RDIV;
+    double f_lo = SDR_FREQ_TCXO / RDIV;
     f_lo *= INT_PLL ? NDIV : NDIV + FDIV / 1048576.0;
-    f_adc = EXTADCCLK ? 0.0 : SDR_FREQ_TCXO;
+    double f_adc = EXTADCCLK ? 0.0 : SDR_FREQ_TCXO;
     f_adc *= !PREFRACDIV ? 1.0 : REFCLK_L / (4096.0 - REFCLK_M + REFCLK_L);
     f_adc *= ADCCLK      ? 1.0 : ratio[REFDIV];
     f_adc *= !FCLKIN     ? 1.0 : ADCCLK_L / (4096.0 - ADCCLK_M + ADCCLK_L);
-    f_cen = FCENX ? (128 - FCEN) / 2.0 * f_step[FBW] : 0.0;
+    double f_cen = FCENX ? (128 - FCEN) / 2.0 * f_step[FBW] : 0.0;
     fprintf(fp, "#  [CH%d] F_LO =%9.3f MHz, F_ADC =%7.3f MHz (%-2s), "
         "F_FILT =%5.1f MHz, BW_FILT =%5.1f MHz\n", ch + 1, f_lo, f_adc,
         ENIQ ? "IQ" : "I", f_cen, f_bw[FBW]);
 }
 
-/* write settings to configuration file in hexadecimal format ----------------*/
+// write settings to configuration file in hexadecimal format ------------------
 static void write_config_hex(FILE *fp, uint32_t regs[][SDR_MAX_REG], int opt)
 {
-    int i, j;
-    
     fprintf(fp, "#%2s  %4s  %10s\n", "CH", "ADDR", "VALUE");
-    for (i = 0; i < SDR_MAX_CH; i++) {
-        for (j = 0; j < SDR_MAX_REG; j++) {
+    
+    for (int i = 0; i < SDR_MAX_CH; i++) {
+        for (int j = 0; j < SDR_MAX_REG; j++) {
             fprintf(fp, "%3d  0x%02X  0x%08X\n", i + 1, j, regs[i][j]);
         }
     }
 }
 
-/* write settings to configuration file in keyword = value format ------------*/
+// write settings to configuration file in keyword = value format --------------
 static void write_config_key(FILE *fp, uint32_t regs[][SDR_MAX_REG], int opt)
 {
-    uint32_t val, mask;
-    int i, j;
-     
     fprintf(fp, "#\n#  %s device settings\n#\n", SDR_DEV_NAME);
     
-    for (i = 0; i < SDR_MAX_CH; i++) {
+    for (int i = 0; i < SDR_MAX_CH; i++) {
         write_stat(fp, i, regs[i]);
     }
-    for (i = 0; i < SDR_MAX_CH; i++) {
+    for (int i = 0; i < SDR_MAX_CH; i++) {
         fprintf(fp, "\n[CH%d]\n", i + 1);
         
-        for (j = 0; *reg_field[j].field; j++) {
+        for (int j = 0; *reg_field[j].field; j++) {
+            uint32_t val, mask;
+            
             if (!(opt & 1) && reg_field[j].fix[i]) continue;
             mask = bit_mask(reg_field + j);
             val = (regs[i][reg_field[j].addr] & mask) >> reg_field[j].pos;
@@ -249,7 +245,7 @@ static void write_config_key(FILE *fp, uint32_t regs[][SDR_MAX_REG], int opt)
     }
 }
 
-/* write settings to configuration file --------------------------------------*/
+// write settings to configuration file ----------------------------------------
 static int write_config(const char *file, uint32_t regs[][SDR_MAX_REG], int opt)
 {
     FILE *fp = stdout;
@@ -268,31 +264,30 @@ static int write_config(const char *file, uint32_t regs[][SDR_MAX_REG], int opt)
     return 1;
 }
 
-/* read device register ------------------------------------------------------*/
+// read device register --------------------------------------------------------
 static uint32_t read_reg(sdr_usb_t *usb, int ch, int addr)
 {
     uint8_t data[4];
-    uint32_t val = 0;
-    int i;
     
     if (!sdr_usb_req(usb, 0, SDR_VR_REG_READ, (uint16_t)((ch << 8) + addr),
              data, 4)) {
         fprintf(stderr, "register read error. [CH%d] 0x%X\n", ch + 1, addr);
         return 0;
     }
-    for (i = 0; i < 4; i++ ) {
+    uint32_t val = 0;
+    
+    for (int i = 0; i < 4; i++ ) {
         val = (val << 8) | data[i];
     }
     return val;
 }
 
-/* write device register -----------------------------------------------------*/
+// write device register -------------------------------------------------------
 static void write_reg(sdr_usb_t *usb, int ch, int addr, uint32_t val)
 {
     uint8_t data[4];
-    int i;
     
-    for (i = 0; i < 4; i++ ) {
+    for (int i = 0; i < 4; i++ ) {
         data[i] = (uint8_t)(val >> (3 - i) * 8);
     }
     if (!sdr_usb_req(usb, 1, SDR_VR_REG_WRITE, (uint16_t)((ch << 8) + addr),
@@ -301,50 +296,43 @@ static void write_reg(sdr_usb_t *usb, int ch, int addr, uint32_t val)
     }
 }
 
-/* read settings from device registers ---------------------------------------*/
+// read settings from device registers -----------------------------------------
 static void read_regs(sdr_usb_t *usb, uint32_t regs[][SDR_MAX_REG])
 {
-    int i, j;
-    
-    for (i = 0; i < SDR_MAX_CH; i++) {
-        for (j = 0; j < SDR_MAX_REG; j++) {
+    for (int i = 0; i < SDR_MAX_CH; i++) {
+        for (int j = 0; j < SDR_MAX_REG; j++) {
             regs[i][j] = read_reg(usb, i, j);
         }
     }
 }
 
-/* set fixed value of settings -----------------------------------------------*/
+// set fixed value of settings -------------------------------------------------
 static void set_fixed(uint32_t regs[][SDR_MAX_REG])
 {
-    uint32_t val, mask;
-    int i, j;
-    
-    for (i = 0; *reg_field[i].field; i++) {
-        for (j = 0; j < SDR_MAX_CH; j++) {
+    for (int i = 0; *reg_field[i].field; i++) {
+        for (int j = 0; j < SDR_MAX_CH; j++) {
             if (!reg_field[i].fix[j]) continue;
-            mask = bit_mask(reg_field + i);
-            val = reg_field[i].val[j];
+            uint32_t mask = bit_mask(reg_field + i);
+            uint32_t val = reg_field[i].val[j];
             regs[j][reg_field[i].addr] &= ~mask;
             regs[j][reg_field[i].addr] |= (val << reg_field[i].pos) & mask;
         }
     }
 }
 
-/* write settings to device registers ----------------------------------------*/
+// write settings to device registers ------------------------------------------
 static void write_regs(sdr_usb_t *usb, uint32_t regs[][SDR_MAX_REG])
 {
-    int i, j;
-    
-    for (i = 0; i < SDR_MAX_CH; i++) {
-        for (j = 0; j < SDR_MAX_REG; j++) {
-            if (j != 6 && j != 8 && j != 9) { /* except reserved or test reg */
+    for (int i = 0; i < SDR_MAX_CH; i++) {
+        for (int j = 0; j < SDR_MAX_REG; j++) {
+            if (j != 6 && j != 8 && j != 9) { // except reserved or test reg
                 write_reg(usb, i, j, regs[i][j]);
             }
         }
     }
 }
 
-/* save device registers to EEPROM -------------------------------------------*/
+// save device registers to EEPROM ---------------------------------------------
 static void save_regs(sdr_usb_t *usb)
 {
     if (!sdr_usb_req(usb, 1, SDR_VR_SAVE, 0, NULL, 0)) {
@@ -352,33 +340,33 @@ static void save_regs(sdr_usb_t *usb)
     }
 }
 
-/*----------------------------------------------------------------------------*/
-/*
- *  Read SDR device settings and output to a configuration file.
- *  
- *  args:
- *      file     (I)  configuration file ("": stdout)
- *      bus      (I)  SDR device USB bus number  (-1:any)
- *      port     (I)  SDR device USB port number (-1:any)
- *      opt      (I)  options (OR of the followings)
- *                      1: read all registers
- *                      4: output in hexadecimal format
- *
- *  return:
- *      status (0: error, 1: OK)
- */
+//------------------------------------------------------------------------------
+//  Read SDR device settings and output to a configuration file.
+//  
+//  args:
+//      file     (I)  configuration file ("": stdout)
+//      bus      (I)  SDR device USB bus number  (-1:any)
+//      port     (I)  SDR device USB port number (-1:any)
+//      opt      (I)  options (OR of the followings)
+//                      1: read all registers
+//                      4: output in hexadecimal format
+//
+//  return:
+//      status (0: error, 1: OK)
+//
 int sdr_read_settings(const char *file, int bus, int port, int opt)
 {
-    uint32_t regs[SDR_MAX_CH][SDR_MAX_REG] = {{0}};
     sdr_usb_t *usb;
     
     if (!(usb = sdr_usb_open(bus, port, SDR_DEV_VID, SDR_DEV_PID))) {
         return 0;
     }
-    /* read settings from device registers */
+    uint32_t regs[SDR_MAX_CH][SDR_MAX_REG] = {{0}};
+    
+    // read settings from device registers
     read_regs(usb, regs);
     
-    /* write settings to configuration file */
+    // write settings to configuration file
     if (!write_config(file, regs, opt)) {
         sdr_usb_close(usb);
         return 0;
@@ -387,45 +375,46 @@ int sdr_read_settings(const char *file, int bus, int port, int opt)
     return 1;
 }
 
-/*----------------------------------------------------------------------------*/
-/*
- *  Write SDR device settings in a configuration file.
- *  
- *  args:
- *      file     (I)  configuration file
- *      bus      (I)  SDR device USB bus number  (-1:any)
- *      port     (I)  SDR device USB port number (-1:any)
- *      opt      (I)  options (OR of the followings)
- *                      1: save settings to EEPROM
- *                      4: input in hexadecimal format
- *
- *  return:
- *      status (0: error, 1: OK)
- */
+//------------------------------------------------------------------------------
+//
+//  Write SDR device settings in a configuration file.
+//  
+//  args:
+//      file     (I)  configuration file
+//      bus      (I)  SDR device USB bus number  (-1:any)
+//      port     (I)  SDR device USB port number (-1:any)
+//      opt      (I)  options (OR of the followings)
+//                      1: save settings to EEPROM
+//                      4: input in hexadecimal format
+//
+//  return:
+//      status (0: error, 1: OK)
+//
 int sdr_write_settings(const char *file, int bus, int port, int opt)
 {
-    uint32_t regs[SDR_MAX_CH][SDR_MAX_REG] = {{0}};
     sdr_usb_t *usb;
     
     if (!(usb = sdr_usb_open(bus, port, SDR_DEV_VID, SDR_DEV_PID))) {
         return 0;
     }
-    /* read settings from device registers */
+    uint32_t regs[SDR_MAX_CH][SDR_MAX_REG] = {{0}};
+    
+    // read settings from device registers
     read_regs(usb, regs);
     
-    /* set fixed value of settings */
+    // set fixed value of settings
     set_fixed(regs);
     
-    /* read settings from configuration file */
+    // read settings from configuration file
     if (!read_config(file, regs, opt)) {
         sdr_usb_close(usb);
         return 0;
     }
-    /* write settings to device registers */
+    // write settings to device registers
     write_regs(usb, regs);
     
     if (opt & 1) {
-        /* save device registers to EEPROM */
+        // save device registers to EEPROM
         save_regs(usb);
     }
     sdr_usb_close(usb);
