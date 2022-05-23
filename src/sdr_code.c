@@ -43,9 +43,10 @@
 //  History:
 //  2022-05-17  1.0  port sdr_code.py to C
 //  2022-05-18  1.1  change API: *() -> sdr_*()
+//  2022-05-23  1.2  add API: sdr_code_cyc()
 //
-
-#include "pocket.h"
+#include <ctype.h>
+#include "pocket_sdr.h"
 
 // Galileo code HEX strings ---------------------------------------------------
 extern const char *code_gal_E1B[];
@@ -680,7 +681,7 @@ static int8_t *gen_code_L1CA(int prn, int *N)
             L1CA_G1 = gen_code_L1CA_G1(*N);
             L1CA_G2 = gen_code_L1CA_G2(*N);
         }
-        L1CA[prn-1] = sdr_malloc(*N);
+        L1CA[prn-1] = (int8_t *)sdr_malloc(*N);
         for (int i = 0; i < *N; i++) {
             int j = (i + (*N) - L1CA_G2_delay[prn-1]) % (*N);
             L1CA[prn-1][i] = -L1CA_G1[i] * L1CA_G2[j];
@@ -973,7 +974,7 @@ static int8_t *gen_code_L6(int N, uint32_t R)
 {
     int8_t *code1 = LFSR(N, 0x3FF, 0x0F3, 10);
     int8_t *code2 = LFSR(N, rev_reg(R, 20), 0x00053, 20);
-    int8_t *code = sdr_malloc(N);
+    int8_t *code = (int8_t *)sdr_malloc(N);
     
     for (int i = 0; i < N; i++) {
         code[i] = -code1[i] * code2[i];
@@ -1961,6 +1962,49 @@ int8_t *sdr_sec_code(const char *sig, int prn, int *N)
     }
     *N = 0;
     return NULL;
+}
+
+//------------------------------------------------------------------------------
+//  Get primary code cycle (period).
+//
+//  args:
+//      sig      (I) Signal type as string ('L1CA', 'L1CB', 'L1CP', ....)
+//
+//  returns:
+//      Primary code cycle (period) (s) (0.0: error)
+//
+double sdr_code_cyc(const char *sig)
+{
+    char Sig[16];
+    
+    sig_upper(sig, Sig);
+    
+    if (!strcmp(Sig, "L1CA") || !strcmp(Sig, "L1CB") || !strcmp(Sig, "L1S" ) ||
+        !strcmp(Sig, "L5I" ) || !strcmp(Sig, "L5Q" ) || !strcmp(Sig, "L5SI") ||
+        !strcmp(Sig, "L5SQ") || !strcmp(Sig, "G1CA") || !strcmp(Sig, "G2CA") ||
+        !strcmp(Sig, "G3OCD") || !strcmp(Sig, "G3OCP") ||
+        !strcmp(Sig, "E5AI") || !strcmp(Sig, "E5AQ") || !strcmp(Sig, "E5BI") ||
+        !strcmp(Sig, "E5BQ") || !strcmp(Sig, "E6B" ) || !strcmp(Sig, "E6C" ) ||
+        !strcmp(Sig, "B1I" ) || !strcmp(Sig, "B2I" ) || !strcmp(Sig, "B2AD") ||
+        !strcmp(Sig, "B2AP") || !strcmp(Sig, "B2BI") || !strcmp(Sig, "B3I" ) ||
+        !strcmp(Sig, "I5S" ) || !strcmp(Sig, "ISS" )) {
+        return 1e-3;
+    }
+    else if (!strcmp(Sig, "L6D" ) || !strcmp(Sig, "L6E" ) ||
+        !strcmp(Sig, "E1B" ) || !strcmp(Sig, "E1C" )) {
+        return 4e-3;
+    }
+    else if (!strcmp(Sig, "L1CP") || !strcmp(Sig, "L1CD") ||
+        !strcmp(Sig, "B1CD") || !strcmp(Sig, "B1CP")) {
+        return 10e-3;
+    }
+    else if (!strcmp(Sig, "L2CM")) {
+        return 20e-3;
+    }
+    else if (!strcmp(Sig, "L2CL")) {
+        return 1500e-3;
+    }
+    return 0.0;
 }
 
 //------------------------------------------------------------------------------
