@@ -44,11 +44,12 @@
 //  2022-05-17  1.0  port sdr_code.py to C
 //  2022-05-18  1.1  change API: *() -> sdr_*()
 //  2022-05-23  1.2  add API: sdr_code_cyc()
+//  2022-07-08  1.3  fix bug in sdr_sig_freq()
 //
 #include <ctype.h>
 #include "pocket_sdr.h"
 
-// Galileo code HEX strings ---------------------------------------------------
+// Galileo code HEX strings in sdr_code_gal.c ---------------------------------
 extern const char *code_gal_E1B[];
 extern const char *code_gal_E1C[];
 extern const char *code_gal_E6B[];
@@ -635,7 +636,7 @@ static int8_t *read_code_hex(const char *str, int N)
 }
 
 // reverse bits in shift register ----------------------------------------------
-static int32_t rev_reg(int32_t R, int N)
+int32_t rev_reg(int32_t R, int N)
 {
     int32_t RR = 0;
     
@@ -646,7 +647,7 @@ static int32_t rev_reg(int32_t R, int N)
 }
 
 // generate code by LFSR  ------------------------------------------------------
-static int8_t *LFSR(int N, int32_t R, int32_t tap, int n)
+int8_t *LFSR(int N, int32_t R, int32_t tap, int n)
 {
     int8_t *code = (int8_t *)sdr_malloc(N);
     
@@ -1094,7 +1095,6 @@ static int8_t *gen_code_G3OCP(int prn, int *N)
        for (int i = 0; i < *N; i++) {
            G3OCP[prn][i] = -DC1[i] * DC3[i];
        }
-       sdr_free(DC1);
        sdr_free(DC3);
    }
    return G3OCP[prn];
@@ -2078,8 +2078,9 @@ double sdr_sig_freq(const char *sig)
         return 1227.60e6;
     }
     else if (!strcmp(Sig, "L5I" ) || !strcmp(Sig, "L5Q" ) ||
-        !strcmp(Sig, "L5SI") || !strcmp(Sig, "L5SQ") || !strcmp(Sig, "L5AI") ||
-        !strcmp(Sig, "L5AQ") || !strcmp(Sig, "B2AD") || !strcmp(Sig, "B2AP")) {
+        !strcmp(Sig, "L5SI") || !strcmp(Sig, "L5SQ") || !strcmp(Sig, "E5AI") ||
+        !strcmp(Sig, "E5AQ") || !strcmp(Sig, "B2AD") || !strcmp(Sig, "B2AP") ||
+        !strcmp(Sig, "I5S")) {
         return 1176.45e6;
     }
     else if (!strcmp(Sig, "E5BI") || !strcmp(Sig, "E5BQ") ||
@@ -2177,7 +2178,7 @@ void sdr_gen_code_fft(const int8_t *code, int len_code, double T, double coff,
     
     // complex conjugate
     for (int i = 0; i < N + Nz; i++) {
-        code_fft[i][1] = -code_fft[i][1];
+        code_fft[i][1] *= -1.0f;
     }
     sdr_cpx_free(code_res);
 }
