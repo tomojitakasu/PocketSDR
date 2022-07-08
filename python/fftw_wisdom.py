@@ -7,6 +7,7 @@
 #
 #  History:
 #  2022-01-20  1.0  new
+#  2022-07-08  1.1  support API change
 #
 import time, sys, os, platform
 from ctypes import *
@@ -59,7 +60,7 @@ if __name__ == '__main__':
     
     tt = time.time()
     
-    if libsdr.gen_fftw_wisdom(c_char_p(file.encode()), N):
+    if libsdr.sdr_gen_fftw_wisdom(c_char_p(file.encode()), N):
         print('FFTW wisdom generated as %s (N=%d).' % (file, N))
     else:
         print('FFTW wisdom generation error.')
