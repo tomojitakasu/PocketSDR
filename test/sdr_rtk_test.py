@@ -137,9 +137,9 @@ def test_08():
 
 # test sdr_rtk.readrnx() -------------------------------------------------------
 def test_09():
-    file1 = 'mosaic_20220201_0506.ob_'
-    file2 = 'mosaic_20220201_0506.obs'
-    file3 = 'mosaic_20220201_0506.nav'
+    file1 = 'data/mosaic_20220221_0353.ob_'
+    file2 = 'data/mosaic_20220221_0353.obs'
+    file3 = 'data/mosaic_20220221_0353.nav'
     
     # no RINEX
     obs, nav = sdr_rtk.readrnx(file1)
@@ -159,7 +159,7 @@ def test_09():
         #print('%s sat=%s rcv=%d' % (sdr_rtk.time2str(data.time, 2),
         #    sdr_rtk.satno2id(data.sat), data.rcv))
         n += 1
-    if n < 100000:
+    if n < 4000:
         print('obsget: file=%s n=%d NG' % (file2, n))
         exit()
     sdr_rtk.obsfree(obs)
@@ -216,7 +216,7 @@ def test_09():
 
 # test sdr_rtk.satpos() -------------------------------------------------------
 def test_10():
-    file = 'mosaic_20220201_0506.nav'
+    file = 'data/mosaic_20220221_0353.nav'
     
     # RINEX NAV
     obs, nav = sdr_rtk.readrnx(file)
@@ -276,7 +276,7 @@ def test_12():
 
 # test sdr_rtk.satazel(), geodist() ---------------------------------------------
 def test_13():
-    file = 'mosaic_20220201_0506.nav'
+    file = 'data/mosaic_20220221_0353.nav'
     pos = np.array([40.123 * sdr_rtk.D2R, 135.186 * sdr_rtk.D2R, 24.567])
     rr = sdr_rtk.pos2ecef(pos)
     obs, nav = sdr_rtk.readrnx(file)

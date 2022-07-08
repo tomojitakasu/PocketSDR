@@ -31,7 +31,7 @@
 ../python/pocket_acq.py L5.bin -f 24 -np -sig B2AD -prn 19-46
 ../python/pocket_acq.py L5.bin -f 24 -np -sig I5S  -prn 1-7
 
-../bin/pocket_dump -t 10 L1.bin L6.bin -c ../conf/pocket_L1L6_12MHz.conf
+../bin/pocket_dump -t 10 L1b.bin L6.bin -c ../conf/pocket_L1L6_12MHz.conf
 
 ../python/pocket_acq.py L6.bin -f 12 -np -sig L6D -prn 193-199
 ../python/pocket_acq.py L6.bin -f 12 -np -sig L6E -prn 203-209
