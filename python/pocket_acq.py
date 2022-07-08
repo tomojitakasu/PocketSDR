@@ -12,6 +12,7 @@
 #  2021-12-15  1.2  add option: -d, -nz, -np
 #  2022-01-20  1.3  add signals: I5S
 #                   add option: -l, -s
+#  2022-02-17  1.4  add option: -h
 #
 import sys, time
 import numpy as np
@@ -33,7 +34,75 @@ def show_usage():
     print('Usage: pocket_acq.py [-sig sig] [-prn prn[,...]] [-tint tint]')
     print('       [-toff toff] [-f freq] [-fi freq] [-d freq] [-nz] [-np]')
     print('       [-s] [-p] [-l] [-3d] file')
-    exit()
+
+# show signal type IDs ---------------------------------------------------------
+def show_sigid():
+    print('Signal type IDs (sig):')
+    print('       L1CA   GPS, QZSS, SBAS L1C/A')
+    print('       L1CB   QZSS L1C/B')
+    print('       L1CD   GPS, QZSS L1C-D')
+    print('       L1CP   GPS, QZSS L1C-P')
+    print('       L1S    QZSS L1S')
+    print('       L2CM   GPS, QZSS L2C-M')
+    print('       L5I    GPS, QZSS, SBAS L5-I')
+    print('       L5Q    GPS, QZSS, SBAS L5-Q')
+    print('       L5SI   QZSS L5S-I')
+    print('       L5SQ   QZSS L5S-Q')
+    print('       L6D    QZSS L6D')
+    print('       L6E    QZSS L6E')
+    print('       G1CA   GLONASS L1C/A')
+    print('       G2CA   GLONASS L2C/A')
+    print('       G3OCD  GLONASS L3OCd')
+    print('       G3OCP  GLONASS L3OCp')
+    print('       E1B    Galileo E1-B')
+    print('       E1C    Galileo E1-C')
+    print('       E5AI   Galileo E5a-I')
+    print('       E5AQ   Galileo E5a-Q')
+    print('       E5BI   Galileo E5b-I')
+    print('       E5BQ   Galileo E5b-Q')
+    print('       E6B    Galileo E6-B')
+    print('       E6C    Galileo E6-C')
+    print('       B1I    BDS B1I')
+    print('       B1CD   BDS B1C-D')
+    print('       B1CP   BDS B1C-P')
+    print('       B2I    BDS B2I')
+    print('       B2AD   BDS B2a-D')
+    print('       B2AP   BDS B2a-P')
+    print('       B2BI   BDS B2b-I')
+    print('       B3I    BDS B3I')
+    print('       I5S    NavIC L5-SPS')
+
+# search signals ---------------------------------------------------------------
+def search_sig(sig, prn, data, fs, fi, max_dop, zero_pad):
+    # generate code
+    code = sdr_code.gen_code(sig, prn)
+    
+    if len(code) == 0:
+        return [], [0.0], [0.0], (0, 0), 0.0, 0.0
+    
+    # shift IF frequency for GLONASS FDMA
+    fi = sdr_func.shift_freq(sig, prn, fi)
+    
+    # generate code FFT
+    T = sdr_code.code_cyc(sig)
+    N = int(fs * T)
+    code_fft = sdr_code.gen_code_fft(code, T, 0.0, fs, N, N if zero_pad else 0)
+    
+    # doppler search bins
+    fds = sdr_func.dop_bins(T, 0.0, max_dop)
+    
+    # parallel code search and non-coherent integration
+    P = np.zeros((len(fds), N), dtype='float32')
+    for i in range(0, len(data) - len(code_fft) + 1, N):
+        P += sdr_func.search_code(code_fft, T, data, i, fs, fi, fds)
+    
+    # max correlation power and C/N0
+    P_max, ix, cn0 = sdr_func.corr_max(P, T)
+    
+    coffs = np.arange(0, T, 1.0 / fs, dtype='float32')
+    dop = sdr_func.fine_dop(P.T[ix[1]], fds, ix[0])
+    
+    return P / P_max, fds, coffs, ix, cn0, dop
 
 # plot C/N0 --------------------------------------------------------------------
 def plot_cn0(ax, cn0, prns, fc):
@@ -154,6 +223,9 @@ def add_text(ax, x, y, text, color='k'):
 #     -3d
 #         Plot correlation powers in a 3D-plot.
 #
+#     -h
+#         Show usage and signal type IDs
+#
 #     file
 #         File path of the input digital IF data. The format should be a series of
 #         int8_t (signed byte) for real-sampling (I-sampling) or interleaved int8_t
@@ -162,41 +234,6 @@ def add_text(ax, x, y, text, color='k'):
 #
 #   GNSS signal type IDs
 #
-#         L1CA:  GPS, QZSS, SBAS L1C/A
-#         L1CB:  QZSS L1C/B
-#         L1CD:  GPS, QZSS L1C-D
-#         L1CP:  GPS, QZSS L1C-P
-#         L1S :  QZSS L1S
-#         L2CM:  GPS, QZSS L2C-M
-#         L2CL:  GPS, QZSS L2C-L
-#         L5I :  GPS, QZSS, SBAS L5-I
-#         L5Q :  GPS, QZSS, SBAS L5-Q
-#         L5SI:  QZSS L5S-I
-#         L5SQ:  QZSS L5S-Q
-#         L6D :  QZSS L6D
-#         L6E :  QZSS L6E
-#         G1CA:  GLONASS L1C/A
-#         G2CA:  GLONASS L2C/A
-#         G3OCD: GLONASS L3OCd
-#         G3OCP: GLONASS L3OCp
-#         E1B :  Galileo E1-B
-#         E1C :  Galileo E1-C
-#         E5AI:  Galileo E5a-I
-#         E5AQ:  Galileo E5a-Q
-#         E5BI:  Galileo E5b-I
-#         E5BQ:  Galileo E5b-Q
-#         E6B :  Galileo E6-B
-#         E6C :  Galileo E6-C
-#         B1I :  BDS B1I
-#         B1CD:  BDS B1C-D
-#         B1CP:  BDS B1C-P
-#         B2I :  BDS B2I
-#         B2AD:  BDS B2a-D
-#         B2AP:  BDS B2a-P
-#         B2BI:  BDS B2b-I
-#         B3I :  BDS B3I
-#         I5S :  NavIC (IRNSS) L5-SPS
-#         ISS :  NavIC (IRNSS) S-SPS
 #
 if __name__ == '__main__':
     window = 'PocketSDR - GNSS SIGNAL ACQUISITION'
@@ -248,8 +285,13 @@ if __name__ == '__main__':
             opt[3] = True
         elif sys.argv[i] == '-s':
             opt[4] = True
+        elif sys.argv[i] == '-h':
+            show_usage()
+            show_sigid()
+            exit()
         elif sys.argv[i][0] == '-':
             show_usage()
+            exit()
         else:
             file = sys.argv[i];
         i += 1
@@ -264,7 +306,7 @@ if __name__ == '__main__':
         exit()
 
     # integration time (s)
-    if T < Tcode:
+    if T < Tcode or sig[:2] == 'L6':
         T = Tcode
     
     if sig == 'G1CA' or sig == 'G2CA':
@@ -283,8 +325,8 @@ if __name__ == '__main__':
         if len(prns) > 1:
             cn0 = np.zeros(len(prns))
             for i in range(len(prns)):
-                P, dops, coffs, ix, cn0[i], dop = sdr_func.search_sig(sig,
-                    prns[i], data, fs, fi, max_dop=max_dop, zero_pad=opt[2])
+                P, dops, coffs, ix, cn0[i], dop = search_sig(sig, prns[i], data,
+                    fs, fi, max_dop=max_dop, zero_pad=opt[2])
                 
                 if opt[4]: # short output mode
                     print('%d %.0f' % (prns[i], cn0[i]))
@@ -294,16 +336,13 @@ if __name__ == '__main__':
                          sig, label, prns[i], coffs[ix[1]] * 1e3, dop, cn0[i],
                          ESC_RES if cn0[i] >= THRES_CN0 else ''))
             
-            t = time.time() - t
             if not opt[3]:
                 ax1 = fig.add_axes(rect0, facecolor=bc)
                 plot_cn0(ax1, cn0, prns, fc)
                 ax0.set_title('SIG = %s, FILE = %s' % (sig, file), fontsize=10)
         else:
-            P, dops, coffs, ix, cn0, dop = \
-                sdr_func.search_sig(sig, prns[0], data, fs, fi, max_dop=max_dop,
-                    zero_pad=opt[2])
-            t = time.time() - t
+            P, dops, coffs, ix, cn0, dop = search_sig(sig, prns[0], data, fs, fi,
+                max_dop=max_dop, zero_pad=opt[2])
             text = 'COFF=%.5fms, DOP=%.0fHz, C/N0=%.1fdB-Hz' % \
                    (coffs[ix[1]] * 1e3, dop, cn0)
             if opt[3]: # text
@@ -347,7 +386,7 @@ if __name__ == '__main__':
                 (sig, label, prns[0], file), fontsize=10)
         
         if not opt[4]:
-            print('TIME = %.3f s' % (t))
+            print('TIME = %.3f s' % (time.time() - t))
         plt.show()
     
     except KeyboardInterrupt:
