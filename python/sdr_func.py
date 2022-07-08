@@ -13,6 +13,7 @@
 #                   modify API search_sig(), search_code(), mix_carr() 
 #  2022-01-25  1.4  support TCP client/server for log stream
 #  2022-05-18  1.5  support API changes of sdr_func.c
+#                   support np.fromfile() without offset option
 #
 from math import *
 from ctypes import *
@@ -35,10 +36,9 @@ try:
 except:
     libsdr = None
 else:
-    libsdr.sdr_init_lib(c_char_p((dir + '/fftw_wisdom.txt').encode()))
+    libsdr.sdr_func_init(c_char_p((dir + '/fftw_wisdom.txt').encode()))
 
 # constants --------------------------------------------------------------------
-MAX_DOP  = 5000.0  # default max Doppler frequency to search signals (Hz)
 DOP_STEP = 0.5     # Doppler frequency search step (* 1 / code cycle)
 LIBSDR_ENA = True  # enable flag of LIBSDR
 
@@ -66,7 +66,10 @@ def read_data(file, fs, IQ, T, toff=0.0):
     off = int(fs * toff * IQ)
     cnt = int(fs * T * IQ) if T > 0.0 else -1 # all if T=0.0
     
-    raw = np.fromfile(file, dtype=np.int8, offset=off, count=cnt)
+    f = open(file, 'rb')
+    f.seek(off, os.SEEK_SET)
+    raw = np.fromfile(f, dtype=np.int8, count=cnt)
+    f.close()
     
     if len(raw) < cnt:
         return np.array([], dtype='complex64')
@@ -74,60 +77,6 @@ def read_data(file, fs, IQ, T, toff=0.0):
         return np.array(raw, dtype='complex64')
     else: # IQ-sampling
         return np.array(raw[0::2] - raw[1::2] * 1j, dtype='complex64')
-
-#-------------------------------------------------------------------------------
-#  Search signals in digitized IF data. The signals are searched by parallel
-#  code search algorithm in the Doppler frequencies - code offset space with or
-#  w/o zero-padding option.
-#
-#  args:
-#      sig      (I) Signal type as string ('L1CA', 'L1CB', 'L1CP', ....)
-#      prn      (I) PRN number
-#      data     (I) Digitized IF data as complex64 ndarray
-#      fs       (I) Sampling frequency (Hz)
-#      fi       (I) IF frequency (Hz)
-#      max_dop  (I) Max Doppler frequency for signal search (Hz) (optional)
-#      zero_pad (I) Zero-padding option for singal search (optional)
-#
-#  returns:
-#      P        Normalized correlation powers in the Doppler frequencies - Code
-#               offset space as float32 2D-ndarray
-#      fds      Doppler frequencies for signal search as ndarray (Hz)
-#      coffs    Code offsets for signal search as ndarray (s)
-#      ix       Index of position with max correlation power in the search space
-#               (ix[0]: in Doppler frequencies, ix[1]: in Code offsets)
-#      cn0      C/N0 of max correlation power (dB-Hz)
-#      dop      Fine Doppler frequency estimated (Hz)
-#
-def search_sig(sig, prn, data, fs, fi, max_dop=MAX_DOP, zero_pad=True):
-    # generate code
-    code = sdr_code.gen_code(sig, prn)
-    
-    if len(code) == 0:
-        return [], [0.0], [0.0], (0, 0), 0.0, 0.0
-    
-    # shift IF frequency for GLONASS FDMA
-    fi = shift_freq(sig, prn, fi)
-    
-    # generate code FFT
-    T = sdr_code.code_cyc(sig)
-    N = int(fs * T)
-    code_fft = sdr_code.gen_code_fft(code, T, 0.0, fs, N, N if zero_pad else 0)
-    
-    # doppler search bins
-    fds = dop_bins(T, 0.0, max_dop)
-    
-    # parallel code search and non-coherent integration
-    P = np.zeros((len(fds), N), dtype='float32')
-    for i in range(0, len(data) - len(code_fft) + 1, N):
-        P += search_code(code_fft, T, data, i, fs, fi, fds)
-    
-    # max correlation power and C/N0
-    P_max, ix, cn0 = corr_max(P, T)
-    
-    coffs = np.arange(0, T, 1.0 / fs, dtype='float32')
-    
-    return P / P_max, fds, coffs, ix, cn0, fine_dop(P.T[ix[1]], fds, ix[0])
 
 #-------------------------------------------------------------------------------
 #  Parallel code search in digitized IF data.
