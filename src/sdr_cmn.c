@@ -8,9 +8,14 @@
 //  2021-10-03  0.1  new
 //  2022-01-04  1.0  support Windows API.
 //  2022-05-17  1.1  add API sdr_cpx_malloc(), sdr_cpx_free()
+//  2022-07-08  1.2  add API sdr_get_time()
+//                   move API sdr_cpx_malloc(), sdr_cpx_free() to sdr_func.c
 //
 #ifdef WIN32
 #include <windows.h>
+#else
+#include <time.h>
+#include <sys/time.h>
 #endif
 #include "pocket_sdr.h"
 
@@ -50,38 +55,39 @@ void sdr_free(void *p)
 }
 
 //------------------------------------------------------------------------------
-//  Allocate memory for complex array. If no memory allocated, it exits the AP
-//  immediately with an error message.
+//  Get current time in UTC.
 //  
 //  args:
-//      N        (I)  size of complex array
-//
-//  return:
-//      complex array allocated.
-//
-sdr_cpx_t *sdr_cpx_malloc(int N)
-{
-    sdr_cpx_t *cpx;
-    
-    if (!(cpx = (sdr_cpx_t *)fftwf_malloc(sizeof(sdr_cpx_t) * N))) {
-        fprintf(stderr, "sdr_cpx_t memory allocation error N=%d\n", N);
-        exit(-1);
-    }
-    return cpx;
-}
-
-//------------------------------------------------------------------------------
-//  Free memory allocated by sdr_cpx_malloc().
-//  
-//  args:
-//      cpx      (I)  complex array
+//      t        (O)  Current time as {year, month, day, hour, minute, second}
 //
 //  return:
 //      none
 //
-void sdr_cpx_free(sdr_cpx_t *cpx)
+void sdr_get_time(double *t)
 {
-    fftwf_free(cpx);
+#ifdef WIN32
+    SYSTEMTIME ts;
+    
+    GetSystemTime(&ts); /* in UTC */
+    t[0] = ts.wYear;
+    t[1] = ts.wMonth;
+    t[2] = ts.wDay;
+    t[3] = ts.wHour;
+    t[4] = ts.wMinute;
+    t[5] = ts.wSecond + ts.wMilliseconds * 1E-3;
+#else
+    struct timeval tv;
+    struct tm *tt;
+    
+    if (!gettimeofday(&tv, NULL) && (tt = gmtime(&tv.tv_sec))) {
+        t[0] = tt->tm_year + 1900;
+        t[1] = tt->tm_mon + 1;
+        t[2] = tt->tm_mday;
+        t[3] = tt->tm_hour;
+        t[4] = tt->tm_min;
+        t[5] = tt->tm_sec + tv.tv_usec * 1E-6;
+    }
+#endif
 }
 
 //------------------------------------------------------------------------------
