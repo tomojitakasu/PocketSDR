@@ -8,7 +8,8 @@
 //  2021-10-20  0.1  new
 //  2022-01-04  0.2  support CyUSB on Windows
 //  2022-01-13  1.0  rise process/thread priority for Windows
-//  2022-05-23  0.3  change coding style
+//  2022-05-23  1.1  change coding style
+//  2022-07-08  1.2  fix a bug
 //
 #include "pocket_dev.h"
 #ifdef WIN32
@@ -309,18 +310,17 @@ void sdr_dev_close(sdr_dev_t *dev)
     for (int i = 0; i < SDR_MAX_BUFF; i++) {
         libusb_cancel_transfer(dev->transfer[i]);
     }
-    sdr_sleep_msec(100);
     sdr_usb_close(dev->usb);
     
-    for (i = 0; i < SDR_MAX_BUFF; i++) {
+    for (int i = 0; i < SDR_MAX_BUFF; i++) {
         libusb_free_transfer(dev->transfer[i]);
 #if 1
         libusb_dev_mem_free(dev->usb, dev->data[i], SDR_SIZE_BUFF);
 #else
-        sdr_free(dev->data[i]);
+        free(dev->data[i]);
 #endif
     }
-    sdr_free(dev);
+    free(dev);
 #endif // WIN32
 }
 
