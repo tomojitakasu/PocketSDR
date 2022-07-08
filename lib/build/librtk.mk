@@ -10,15 +10,15 @@ CC = gcc
 #! specify directory of RTKLIB source tree
 SRC = ../RTKLIB/src
 
-#! uncomment for Windows
-INSTALL = ../win32
-OPTIONS= -DENAGLO -DENAGAL -DENAQZS -DENACMP -DENAIRN -DNFREQ=5 -DEXOBS=3 -DSVR_REUSEADDR -DTRACE -DWIN32
-LDLIBS = -lwsock32 -lwinmm
-
-#! uncomment for Linuex
-#INSTALL = ../linux
-#OPTIONS= -DENAGLO -DENAGAL -DENAQZS -DENACMP -DENAIRN -DNFREQ=5 -DEXOBS=3 -DSVR_REUSEADDR -DTRACE
-#LDLIBS =
+ifeq ($(OS),Windows_NT)
+    INSTALL = ../win32
+    OPTIONS= -DENAGLO -DENAGAL -DENAQZS -DENACMP -DENAIRN -DNFREQ=5 -DEXOBS=3 -DSVR_REUSEADDR -DTRACE -DWIN32
+    LDLIBS = -lwsock32 -lwinmm
+else
+    INSTALL = ../linux
+    OPTIONS= -DENAGLO -DENAGAL -DENAQZS -DENACMP -DENAIRN -DNFREQ=5 -DEXOBS=3 -DSVR_REUSEADDR -DTRACE
+    LDLIBS =
+endif
 
 INCLUDE= -I$(SRC)
 WARNOPTS = -ansi -pedantic -Wall -Wno-unused-but-set-variable -Wno-unused-function -Wno-unused-const-variable

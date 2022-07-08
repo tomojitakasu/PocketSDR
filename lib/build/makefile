@@ -1,5 +1,5 @@
 #
-#  makefile for Pocket SDR external shared libraries
+#  makefile for Pocket SDR external shared and static libraries
 #
 #! You need to install external libary source trees as follows.
 #!

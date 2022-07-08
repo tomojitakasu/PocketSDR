@@ -1,5 +1,5 @@
 #
-#  makefile of LDPC-codes shared library (libldpc.so)
+#  makefile of LDPC-codes library (libldpc.so, libldpc.a)
 #
 #! You need to install LDPC-codes source tree as follows.
 #!
@@ -10,11 +10,11 @@ CC  = gcc
 #! specify directory of LDPC-codes source tree
 SRC = ../LDPC-codes
 
-#! uncomment for Windows
-INSTALL = ../win32
-
-#! uncomment for Linux
-#INSTALL = ../linux
+ifeq ($(OS),Windows_NT)
+    INSTALL = ../win32
+else
+    INSTALL = ../linux
+endif
 
 INCLUDE = -I$(SRC)
 
@@ -24,10 +24,15 @@ OBJ = rcode.o channel.o dec.o enc.o alloc.o intio.o blockio.o \
       check.o open.o mod2dense.o mod2sparse.o mod2convert.o \
       distrib.o rand.o
 
-TARGET = libldpc.so
+TARGET = libldpc.so libldpc.a
 
-$(TARGET) : $(OBJ)
+all: $(TARGET)
+
+libldpc.so : $(OBJ)
 	$(CC) -shared -o $@ $(OBJ)
+
+libldpc.a : $(OBJ)
+	$(AR) r $@ $(OBJ)
 
 rcode.o   : $(SRC)/rcode.c
 	$(CC) $(CFLAGS) -c $(SRC)/rcode.c

@@ -8,15 +8,15 @@
 #! specify directory of LIBFEC source tree
 SRC = ../libfec
 
-#! uncomment for Windows
-INSTALL = ../win32
+ifeq ($(OS),Windows_NT)
+    INSTALL = ../win32
+else
+    INSTALL = ../linux
+endif
 
-#! uncomment for Linuex
-#INSTALL = ../linux
+TARGET = libfec.so libfec.a
 
-TARGET = libfec.so
-
-$(TARGET) :
+all :
 	DIR=`pwd`; \
 	cd $(SRC); \
 	./configure; \
@@ -24,7 +24,7 @@ $(TARGET) :
 	mv makefile.p makefile; \
 	make; \
 	cd $$DIR; \
-	cp $(SRC)/$@ .
+	cp $(SRC)/libfec.so $(SRC)/libfec.a .
 
 clean:
 	DIR=`pwd`; \
