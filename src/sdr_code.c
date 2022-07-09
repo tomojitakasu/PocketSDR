@@ -45,6 +45,7 @@
 //  2022-05-18  1.1  change API: *() -> sdr_*()
 //  2022-05-23  1.2  add API: sdr_code_cyc()
 //  2022-07-08  1.3  fix bug in sdr_sig_freq()
+//  2022-07-10  1.4  fix memory-free bug in gen_code_L1CB()
 //
 #include <ctype.h>
 #include "pocket_sdr.h"
@@ -711,7 +712,6 @@ static int8_t *gen_code_L1CB(int prn, int *N)
     int8_t *code_L1CA = gen_code_L1CA(prn, N);
     int8_t *code = mod_code(code_L1CA, *N, sub_carr, 2);
     *N *= 2;
-    sdr_free(code_L1CA);
     return code;
 }
 
