@@ -19,7 +19,8 @@ endif
 
 WARNOPT = -Wall -Wextra -Wno-unused-parameter
 
-CFLAGS = -Ofast -march=native $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
+#CFLAGS = -Ofast -march=native $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
+CFLAGS = -Ofast -mavx2 -mfma $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
 
 TARGET = pocket_acq
 
