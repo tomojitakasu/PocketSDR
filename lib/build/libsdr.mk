@@ -16,7 +16,8 @@ ifeq ($(OS),Windows_NT)
 else
     INSTALL = ../linux
     OPTIONS = -DAVX2
-    LDLIBS = ./librtk.so -lfftw3f
+    #LDLIBS = ./librtk.so -lfftw3f
+    LDLIBS = ./librtk.a -lfftw3f
 endif
 
 INCLUDE = -I$(SRC) -I../RTKLIB/src
