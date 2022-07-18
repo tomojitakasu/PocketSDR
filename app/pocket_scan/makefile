@@ -9,7 +9,7 @@ BIN = ../../bin
 
 INCLUDE =
 OPTIONS =
-LDLIBS = -lusb-1.0
+LDLIBS = -static -lusb-1.0
 
 WARNOPT = -Wall -Wextra
 

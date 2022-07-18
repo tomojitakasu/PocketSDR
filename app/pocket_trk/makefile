@@ -12,7 +12,7 @@ INCLUDE = -I$(SRC) -I$(LIB)/RTKLIB/src
 OPTIONS = -DAVX2
 
 ifeq ($(OS),Windows_NT)
-    LDLIBS = $(LIB)/win32/librtk.a $(LIB)/win32/libfec.a $(LIB)/win32/libldpc.a -lfftw3f -lwinmm -lws2_32
+    LDLIBS = -static $(LIB)/win32/librtk.a $(LIB)/win32/libfec.a $(LIB)/win32/libldpc.a -lfftw3f -lwinmm -lws2_32
 else
     LDLIBS = $(LIB)/linux/librtk.a $(LIB)/linux/libfec.a $(LIB)/linux/libldpc.a -lfftw3f -lpthread -lm
 endif
