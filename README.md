@@ -32,6 +32,12 @@ B2aD, B2aP, B2bI, B3I, NavIC: L5-SPS, SBAS: L1C/A, L5I, L5Q
 
 <img src="image/pocket_sdr_image.jpg" width=80%>
 
+The introduction of Pocket SDR is shown in the following slides.
+
+T.Takasu, An Open Source GNSS SDR: Development and Application, IPNTJ Next GNSS
+Technology WG, Feb 2, 2022
+(https://gpspp.sakura.ne.jp/paper2005/IPNTJ_NEXTWG_202202.pdf)
+
 --------------------------------------------------------------------------------
 
 ## **Package Structure**
