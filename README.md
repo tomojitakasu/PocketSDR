@@ -101,6 +101,10 @@ PocketSDR --+-- bin     Pocket SDR utilities and APs binary programs for Windows
 ```
     $ sudo apt install libfftw3-dev
 ```
+* Download the content of the libs submodules
+```
+$ git submodule update --init --recursive
+```
 * Move to the library directory, build libraries.
 ```
     $ cd <install_dir>/lib/build
