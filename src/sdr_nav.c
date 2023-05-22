@@ -648,7 +648,7 @@ static void decode_glo_str(sdr_ch_t *ch, const uint8_t *syms, int rev)
     }
     sdr_pack_bits(bits, 85, 0, data); // GLONASS string (85 bits, packed)
     
-    if (test_glostr(bits)) {
+    if (test_glostr(data)) {
         ch->nav->fsync = ch->lock;
         ch->nav->rev = rev;
         memcpy(ch->nav->data, data, 11);
