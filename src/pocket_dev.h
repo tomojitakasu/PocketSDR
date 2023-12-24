@@ -9,6 +9,8 @@
 //  2022-01-04  1.0  support CyUSB on Windows
 //  2022-01-10  1.1  SDR_SIZE_BUFF: (1<<12) -> (1<<14)
 //  2022-01-20  1.2  add API mix_carr(), corr_std(), corr_fft()
+//  2023-12-24  1.3  SDR_MAX_CH: 2 -> 8
+//                   support USB context
 //
 #ifndef POCKET_DEV_H
 #define POCKET_DEV_H
@@ -44,15 +46,15 @@ extern "C" {
 
 #define SDR_FREQ_TCXO   24.000  // SDR frequency of TCXO (MHz) 
 
-#define SDR_MAX_CH      2       // number of channels in a SDR device 
-#define SDR_MAX_REG     11      // number of registers in a SDR device 
+#define SDR_MAX_CH      8       // max number of channels in a SDR device 
+#define SDR_MAX_REG     11      // max number of registers in a SDR device 
 
 #ifdef WIN32
 #define SDR_MAX_BUFF    1024    // number of digital IF data buffer 
 #define SDR_SIZE_BUFF   (1<<14) // size of digital IF data buffer (bytes) 
 #else
-#define SDR_MAX_BUFF    4       // number of digital IF data buffer 
-#define SDR_SIZE_BUFF   (1<<22) // size of digital IF data buffer (bytes) 
+#define SDR_MAX_BUFF    15      // number of digital IF data buffer 
+#define SDR_SIZE_BUFF   (1<<21) // size of digital IF data buffer (bytes) 
 #endif // WIN32
 
 // type definitions ----------------------------------------------------------
@@ -66,6 +68,7 @@ typedef struct {                // SDR device type
     sdr_usb_t *usb;             // USB device 
     sdr_ep_t *ep;               // bulk endpoint 
     uint8_t *buff[SDR_MAX_BUFF]; // data buffers 
+    int max_ch;                 // max number of channels
     int IQ[SDR_MAX_CH];         // sampling types 
     int rp, wp;                 // read/write pointer of data buffers 
     int state;                  // state of event handler 
@@ -74,13 +77,18 @@ typedef struct {                // SDR device type
 
 #else
 
-typedef libusb_device_handle sdr_usb_t; // USB device type 
+typedef struct {                // USB device type 
+    libusb_context *ctx;        // USB context
+    libusb_device_handle *h;    // USB device handle
+} sdr_usb_t;
+
 typedef struct libusb_transfer sdr_transfer_t; // USB transfer type 
 
 typedef struct {                // SDR device type 
     sdr_usb_t *usb;             // USB device 
     sdr_transfer_t *transfer[SDR_MAX_BUFF]; // USB transfers 
     uint8_t *data[SDR_MAX_BUFF]; // USB transfer data 
+    int max_ch;                 // max number of channels
     int IQ[SDR_MAX_CH];         // sampling types 
     pthread_t thread;           // USB event handler thread 
     int state;                  // state of USB event handler 
