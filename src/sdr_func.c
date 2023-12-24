@@ -11,6 +11,8 @@
 //  2022-05-18  1.2  change API: *() -> sdr_*()
 //  2022-05-23  1.3  add API: sdr_read_data(), sdr_parse_nums()
 //  2022-07-08  1.4  port sdr_func.py to C
+//  2022-08-04  1.5  ftell(),fseek() -> fgetpos(),fsetpos()
+//  2022-08-15  1.6  ensure thread-safety of sdr_corr_fft_()
 //
 #include <math.h>
 #include <stdarg.h>
@@ -22,13 +24,17 @@
 #endif
 
 // constants and macros --------------------------------------------------------
-#define NTBL      256     // carrier lookup table size 
-#define DOP_STEP  0.5     // Doppler frequency search step (* 1 / code cycle)
-#define FFTW_FLAG FFTW_ESTIMATE // FFTW flag 
-#define SQR(x)    ((x) * (x))
+#define NTBL          256 // carrier lookup table size 
+#define DOP_STEP      0.5 // Doppler frequency search step (* 1 / code cycle)
+#define MAX_FFTW_PLAN 16  // max number of FFTW plans
+#define FFTW_FLAG     FFTW_ESTIMATE // FFTW flag 
+#define SQR(x)        ((x) * (x))
+#define MIN(x, y)     ((x) < (y) ? (x) : (y))
 
 // global variables ------------------------------------------------------------
 static float carr_tbl[NTBL][2] = {{0}}; // carrier lookup table
+static fftwf_plan fftw_plans[MAX_FFTW_PLAN][2] = {{0}}; // FFTW plan buffer
+static int fftw_size[16] = {0};   // FFTW plan sizes
 static int log_lvl = 3;           // log level
 static stream_t log_str = {0};    // log stream
 
@@ -128,19 +134,32 @@ sdr_cpx_t *sdr_read_data(const char *file, double fs, int IQ, double T,
     }
     // get file size
     fseek(fp, 0, SEEK_END);
-    size_t size = (size_t)ftell(fp);
+#ifdef WIN32
+    fpos_t pos = 0;
+    fgetpos(fp, &pos);
+    size_t size = (size_t)pos;
+#else
+    fpos_t pos = {0};
+    fgetpos(fp, &pos);
+    size_t size = (size_t)(pos.__pos);
+#endif
     rewind(fp);
     
     if (cnt <= 0) {
         cnt = size - off;
     }
     if (size < off + cnt) {
-        fprintf(stderr, "data size error %s\n", file);
         fclose(fp);
         return NULL;
     }
     int8_t *raw = (int8_t *)sdr_malloc(cnt);
-    fseek(fp, off, SEEK_SET);
+#ifdef WIN32
+    pos = (size_t)off;
+    fsetpos(fp, &pos);
+#else
+    pos.__pos = (__off_t)off;
+    fsetpos(fp, &pos);
+#endif
     
     if (fread(raw, 1, cnt, fp) < cnt) {
         fprintf(stderr, "data read error %s\n", file);
@@ -175,8 +194,9 @@ sdr_cpx_t *sdr_read_data(const char *file, double fs, int IQ, double T,
 //      code_fft (I) Code DFT (with or w/o zero-padding) as complex array
 //      T        (I) Code cycle (period) (s)
 //      buff     (I) Buffer of IF data as complex array
-//      ix       (I) Index of buffer
-//      N        (I) length of buffer
+//      len_buff (I) length of buffer
+//      ix       (I) Index of sample data
+//      N        (I) length of sample data
 //      fs       (I) Sampling frequency (Hz)
 //      fi       (I) IF frequency (Hz)
 //      fds      (I) Doppler frequency bins as ndarray (Hz)
@@ -188,15 +208,15 @@ sdr_cpx_t *sdr_read_data(const char *file, double fs, int IQ, double T,
 //      none
 //
 void sdr_search_code(const sdr_cpx_t *code_fft, double T, const sdr_cpx_t *buff,
-    int ix, int N, double fs, double fi, const float *fds, int len_fds,
-    float *P)
+    int len_buff, int ix, int N, double fs, double fi, const float *fds,
+    int len_fds, float *P)
 {
     sdr_cpx_t *C = sdr_cpx_malloc(N);
     
     for (int i = 0; i < len_fds; i++) {
         
         // FFT correlator
-        sdr_corr_fft(buff, ix, N, fs, fi + fds[i], 0.0, code_fft, C);
+        sdr_corr_fft(buff, len_buff, ix, N, fs, fi + fds[i], 0.0, code_fft, C);
         
         // add correlation power
         for (int j = 0; j < N; j++) {
@@ -244,7 +264,7 @@ static int poly_fit(const double *x, const double *y, int nx, int np, double *p)
 }
 
 // fine Doppler frequency by quadratic fitting ---------------------------------
-float sdr_fine_dop(const float *P, int N, const float *fds, int len_fds,
+double sdr_fine_dop(const float *P, int N, const float *fds, int len_fds,
     const int *ix)
 {
     if (ix[0] == 0 || ix[0] == len_fds - 1) {
@@ -259,7 +279,7 @@ float sdr_fine_dop(const float *P, int N, const float *fds, int len_fds,
     if (!poly_fit(x, y, 3, 3, p)) {
         return fds[ix[0]];
     }
-    return (float)(-p[1] / (2.0 * p[2]));
+    return -p[1] / (2.0 * p[2]);
 }
 
 // shift IF frequency for GLONASS FDMA -----------------------------------------
@@ -292,13 +312,14 @@ float *sdr_dop_bins(double T, float dop, float max_dop, int *len_fds)
 static void dot_cpx_real(const sdr_cpx_t *a, const sdr_cpx_t *b, int N, float s,
     sdr_cpx_t *c)
 {
-#ifdef AVX2
-    int i;
+    int i = 0;
     
+#ifdef AVX2
     __m256 ymm1 = _mm256_setzero_ps();
     __m256 ymm2 = _mm256_setzero_ps();
+    float d[8], e[8];
     
-    for (i = 0; i < N - 7; i += 8) {
+    for ( ; i < N - 7; i += 8) {
         __m256 ymm3 = _mm256_loadu_ps(a[i]);
         __m256 ymm4 = _mm256_loadu_ps(a[i + 4]);
         __m256 ymm5 = _mm256_shuffle_ps(ymm3, ymm4, 0x88); // a.real 
@@ -309,68 +330,71 @@ static void dot_cpx_real(const sdr_cpx_t *a, const sdr_cpx_t *b, int N, float s,
         ymm1 = _mm256_fmadd_ps(ymm5, ymm7, ymm1);   // c.real 
         ymm2 = _mm256_fmadd_ps(ymm6, ymm7, ymm2);   // c.imag 
     }
-    float d[8], e[8];
     _mm256_storeu_ps(d, ymm1);
     _mm256_storeu_ps(e, ymm2);
-    (*c)[0] = (d[0] + d[1] + d[2] + d[3] + d[4] + d[5] + d[6] + d[7]) * s;
-    (*c)[1] = (e[0] + e[1] + e[2] + e[3] + e[4] + e[5] + e[6] + e[7]) * s;
-    
-    for ( ; i < N; i++) {
-        (*c)[0] += a[i][0] * b[i][0] * s;
-        (*c)[1] += a[i][1] * b[i][0] * s;
-    }
+    (*c)[0] = d[0] + d[1] + d[2] + d[3] + d[4] + d[5] + d[6] + d[7];
+    (*c)[1] = e[0] + e[1] + e[2] + e[3] + e[4] + e[5] + e[6] + e[7];
 #else
     (*c)[0] = (*c)[1] = 0.0f;
+#endif // AVX2 
     
-    for (int i = 0; i < N; i++) {
+    for ( ; i < N; i++) {
         (*c)[0] += a[i][0] * b[i][0];
         (*c)[1] += a[i][1] * b[i][0];
     }
     (*c)[0] *= s;
     (*c)[1] *= s;
-#endif // AVX2 
 }
 
 // mix carrier and standard correlator (N = 2 * n) -----------------------------
-void sdr_corr_std(const sdr_cpx_t *buff, int ix, int N, double fs, double fc,
-    double phi, const sdr_cpx_t *code, const int *pos, int n, sdr_cpx_t *corr)
+void sdr_corr_std(const sdr_cpx_t *buff, int len_buff, int ix, int N, double fs,
+    double fc, double phi, const sdr_cpx_t *code, const int *pos, int n,
+    sdr_cpx_t *corr)
 {
     sdr_cpx_t *data = sdr_cpx_malloc(N);
     
-    sdr_mix_carr(buff, ix, N, fs, fc, phi, data);
+    sdr_mix_carr(buff, len_buff, ix, N, fs, fc, phi, data);
     sdr_corr_std_(data, code, N, pos, n, corr);
     
     sdr_cpx_free(data);
 }
 
 // mix carrier and FFT correlator (N = 2 * n) ----------------------------------
-void sdr_corr_fft(const sdr_cpx_t *buff, int ix, int N, double fs, double fc,
-    double phi, const sdr_cpx_t *code_fft, sdr_cpx_t *corr)
+void sdr_corr_fft(const sdr_cpx_t *buff, int len_buff, int ix, int N, double fs,
+    double fc, double phi, const sdr_cpx_t *code_fft, sdr_cpx_t *corr)
 {
     sdr_cpx_t *data = sdr_cpx_malloc(N);
     
-    sdr_mix_carr(buff, ix, N, fs, fc, phi, data);
+    sdr_mix_carr(buff, len_buff, ix, N, fs, fc, phi, data);
     sdr_corr_fft_(data, code_fft, N, corr);
     
     sdr_cpx_free(data);
 }
 
-// mix carrier (N = 2 * n) -----------------------------------------------------
-void sdr_mix_carr(const sdr_cpx_t *buff, int ix, int N, double fs, double fc,
-    double phi, sdr_cpx_t *data)
+// mix carrier -----------------------------------------------------------------
+static void mix_carr(const sdr_cpx_t *buff, int N, double phi, double step,
+    sdr_cpx_t *data)
+{
+    for (int i = 0; i < N; i++) {
+        uint8_t j = (uint8_t)(phi + step * i);
+        data[i][0] = buff[i][0] * carr_tbl[j][0] - buff[i][1] * carr_tbl[j][1];
+        data[i][1] = buff[i][0] * carr_tbl[j][1] + buff[i][1] * carr_tbl[j][0];
+    }
+}
+
+void sdr_mix_carr(const sdr_cpx_t *buff, int len_buff, int ix, int N, double fs,
+    double fc, double phi, sdr_cpx_t *data)
 {
     double step = fc / fs * NTBL;
     phi = fmod(phi, 1.0) * NTBL;
     
-    for (int i = 0, j = ix; i < N; i += 2, j += 2) {
-        double p = phi + step * i;
-        uint8_t k = (uint8_t)p;
-        uint8_t m = (uint8_t)(p + step);
-        
-        data[i  ][0] = buff[j  ][0] * carr_tbl[k][0] - buff[j  ][1] * carr_tbl[k][1];
-        data[i  ][1] = buff[j  ][0] * carr_tbl[k][1] + buff[j  ][1] * carr_tbl[k][0];
-        data[i+1][0] = buff[j+1][0] * carr_tbl[m][0] - buff[j+1][1] * carr_tbl[m][1];
-        data[i+1][1] = buff[j+1][0] * carr_tbl[m][1] + buff[j+1][1] * carr_tbl[m][0];
+    if (ix + N <= len_buff) {
+        mix_carr(buff + ix, N, phi, step, data);
+    }
+    else {
+        int n = len_buff - ix;
+        mix_carr(buff + ix, n, phi, step, data);
+        mix_carr(buff, N - n, phi + step * n, step, data + n);
     }
 }
 
@@ -405,25 +429,48 @@ static void mul_cpx(const sdr_cpx_t *a, const sdr_cpx_t *b, int N, float s,
     }
 }
 
+// get FFTW plan ---------------------------------------------------------------
+static int get_fftw_plan(int N, fftwf_plan *plan)
+{
+    static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
+    
+    pthread_mutex_lock(&mtx);
+    
+    for (int i = 0; i < MAX_FFTW_PLAN; i++) {
+        if (fftw_size[i] == 0) {
+            sdr_cpx_t *cpx1 = sdr_cpx_malloc(N);
+            sdr_cpx_t *cpx2 = sdr_cpx_malloc(N);
+            fftw_plans[i][0] = fftwf_plan_dft_1d(N, cpx1, cpx2, FFTW_FORWARD,  FFTW_FLAG);
+            fftw_plans[i][1] = fftwf_plan_dft_1d(N, cpx2, cpx1, FFTW_BACKWARD, FFTW_FLAG);
+            fftw_size[i] = N;
+            sdr_cpx_free(cpx1);
+            sdr_cpx_free(cpx2);
+        }
+        if (fftw_size[i] == N) {
+            plan[0] = fftw_plans[i][0];
+            plan[1] = fftw_plans[i][1];
+            pthread_mutex_unlock(&mtx);
+            return 1;
+        }
+    }
+    fprintf(stderr, "fftw plan buffer overflow N=%d\n", N);
+    pthread_mutex_unlock(&mtx);
+    return 0;
+}
+
 // FFT correlator (N = 2 * n) --------------------------------------------------
 void sdr_corr_fft_(const sdr_cpx_t *data, const sdr_cpx_t *code_fft, int N,
     sdr_cpx_t *corr)
 {
-    static fftwf_plan plan[2] = {0};
-    static int N_plan = 0;
+    fftwf_plan plan[2];
+    
+    // get FFTW plan
+    if (!get_fftw_plan(N, plan)) {
+        return;
+    }
     sdr_cpx_t *cpx1 = sdr_cpx_malloc(N);
     sdr_cpx_t *cpx2 = sdr_cpx_malloc(N);
     
-    // generate FFTW plan 
-    if (N != N_plan) {
-        if (plan[0]) {
-            fftwf_destroy_plan(plan[0]);
-            fftwf_destroy_plan(plan[1]);
-        }
-        plan[0] = fftwf_plan_dft_1d(N, cpx1, cpx2, FFTW_FORWARD,  FFTW_FLAG);
-        plan[1] = fftwf_plan_dft_1d(N, cpx2, cpx1, FFTW_BACKWARD, FFTW_FLAG);
-        N_plan = N;
-    }
     // ifft(fft(data) * code_fft) / N^2 
     fftwf_execute_dft(plan[0], (sdr_cpx_t *)data, cpx1);
     mul_cpx(cpx1, code_fft, N, 1.0f / N / N, cpx2);
@@ -439,13 +486,13 @@ int sdr_log_open(const char *path)
     const char *p = strchr(path, ':');
     int stat;
     
-    if (!p) {
+    if (!p || *(p + 1) == ':' ) { // file (path = file[::opt...])
         stat = stropen(&log_str, STR_FILE, STR_MODE_W, path);
     }
-    else if (p == path) { // TCP server
+    else if (p == path) { // TCP server (path = :port)
         stat = stropen(&log_str, STR_TCPSVR, STR_MODE_W, path);
     }
-    else { // TCP client
+    else { // TCP client (path = addr:port)
         stat = stropen(&log_str, STR_TCPCLI, STR_MODE_W, path);
     }
     if (!stat) {
@@ -478,9 +525,10 @@ void sdr_log(int level, const char *msg, ...)
     }
     else if (level <= log_lvl) {
         char buff[1024];
-        vsnprintf(buff, sizeof(buff), msg, ap);
-        strwrite(&log_str, (uint8_t *)buff, strlen(buff));
-        strwrite(&log_str, (uint8_t *)"\r\n", 2);
+        int len = vsnprintf(buff, sizeof(buff) - 2, msg, ap);
+        len = MIN(len, (int)sizeof(buff) - 3);
+        sprintf(buff + len, "\r\n");
+        strwrite(&log_str, (uint8_t *)buff, len + 2);
     }
     va_end(ap);
 }
