@@ -9,12 +9,13 @@ LIB = ../../lib
 BIN = ../../bin
 
 INCLUDE = -I$(SRC) -I$(LIB)/RTKLIB/src
-OPTIONS = -DAVX2
 
 ifeq ($(OS),Windows_NT)
     LDLIBS = -static $(LIB)/win32/librtk.a -lfftw3f -lwinmm -lws2_32
+    OPTIONS = -DWIN32 -DAVX2
 else
     LDLIBS = $(LIB)/linux/librtk.a -lfftw3f -lpthread -lm
+    OPTIONS = -DAVX2
 endif
 
 WARNOPT = -Wall -Wextra -Wno-unused-parameter
