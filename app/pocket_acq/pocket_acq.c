@@ -6,29 +6,29 @@
 //
 //  History:
 //  2022-07-05  1.0  port pocket_acq.py to C
+//  2022-08-08  1.1  add option -w, modify option -d
 //
 #include "pocket_sdr.h"
 
-// constants --------------------------------------------------------------------
+// constants -------------------------------------------------------------------
 #define T_AQC     0.010      // non-coherent integration time for acquisition (s)
 #define THRES_CN0 38.0       // threshold to lock (dB-Hz)
 #define ESC_COL   "\033[34m" // ANSI escape color = blue
 #define ESC_RES   "\033[0m"  // ANSI escape reset
-
 #define FFTW_WISDOM "../python/fftw_wisdom.txt"
 
-// show usage -------------------------------------------------------------------
+// show usage ------------------------------------------------------------------
 static void show_usage(void)
 {
     printf("Usage: pocket_acq [-sig sig] [-prn prn[,...]] [-tint tint]\n");
-    printf("       [-toff toff] [-f freq] [-fi freq] [-d freq] [-nz] file\n");
+    printf("       [-toff toff] [-f freq] [-fi freq] [-d freq[,freq]] [-nz] file\n");
     exit(0);
 }
 
 // search signal ---------------------------------------------------------------
 int search_sig(const char *sig, int prn, const sdr_cpx_t *data, int len_data,
-    double fs, double fi, float max_dop, const int *opt, double *dop,
-    double *coff, float *cn0)
+    double fs, double fi, float ref_dop, float max_dop, const int *opt,
+    double *dop, double *coff, float *cn0)
 {
     int8_t *code;
     int len_code;
@@ -48,12 +48,13 @@ int search_sig(const char *sig, int prn, const sdr_cpx_t *data, int len_data,
     
     // doppler search bins
     int len_fds;
-    float *fds = sdr_dop_bins(T, 0.0, max_dop, &len_fds);
+    float *fds = sdr_dop_bins(T, ref_dop, max_dop, &len_fds);
     
     // parallel code search and non-coherent integration
     float *P = (float *)sdr_malloc(sizeof(float) * (N + Nz) * len_fds);
     for (int i = 0; i < len_data - 2 * N + 1; i += N) {
-        sdr_search_code(code_fft, T, data, i, N + Nz, fs, fi, fds, len_fds, P);
+        sdr_search_code(code_fft, T, data, len_data, i, N + Nz, fs, fi, fds,
+            len_fds, P);
     }
     // max correlation power and C/N0
     int ix[2] = {0};
@@ -106,8 +107,9 @@ int search_sig(const char *sig, int prn, const sdr_cpx_t *data, int len_data,
 //         IF frequency of digital IF data in MHz. The IF frequency equals 0, the
 //         IF data is treated as IQ-sampling (zero-IF). [0.0]
 //
-//     -d freq
-//         Max Doppler frequency to search the signal in Hz. [5000.0]
+//     -d freq[,freq]
+//         Reference and max Doppler frequency to search the signal in Hz.
+//         [0.0,5000.0]
 //
 //     -nz
 //         Disalbe zero-padding for circular colleration to search the signal.
@@ -124,8 +126,9 @@ int search_sig(const char *sig, int prn, const sdr_cpx_t *data, int len_data,
 //
 int main(int argc, char **argv)
 {
-    const char *sig = "L1CA", *file = "";
-    double fs = 12e6, fi = 0.0, T = T_AQC, toff = 0.0, max_dop = 5000.0;
+    const char *sig = "L1CA", *file = "", *fftw_wisdom = FFTW_WISDOM;
+    double fs = 12e6, fi = 0.0, T = T_AQC, toff = 0.0, ref_dop = 0.0;
+    double max_dop = 5000.0;
     int prns[SDR_MAX_NPRN], nprn = 0, opt[5] = {0};
     
     for (int i = 1; i < argc; i++) {
@@ -147,8 +150,11 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "-fi") && i + 1 < argc) {
             fi = atof(argv[++i]) * 1e6;
         }
+        else if (!strcmp(argv[i], "-w") && i + 1 < argc) {
+            fftw_wisdom = argv[++i];
+        }
         else if (!strcmp(argv[i], "-d") && i + 1 < argc) {
-            max_dop = atof(argv[++i]);
+            sscanf(argv[++i], "%lf,%lf", &ref_dop, &max_dop);
         }
         else if (!strcmp(argv[i], "-nz")) {
             opt[2] = 1;
@@ -174,7 +180,7 @@ int main(int argc, char **argv)
     if (T < Tcode) {
         T = Tcode;
     }
-    sdr_func_init(FFTW_WISDOM);
+    sdr_func_init(fftw_wisdom);
     
     // read IF data
     sdr_cpx_t *data;
@@ -190,8 +196,8 @@ int main(int argc, char **argv)
         double dop, coff;
         float cn0;
         
-        if (!search_sig(sig, prns[i], data, len_data, fs, fi, max_dop, opt,
-                &dop, &coff, &cn0)) {
+        if (!search_sig(sig, prns[i], data, len_data, fs, fi, ref_dop, max_dop,
+                opt, &dop, &coff, &cn0)) {
             continue;
         }
         printf("%sSIG= %-4s, %s= %3d, COFF= %8.5f ms, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz%s\n",
