@@ -1,5 +1,5 @@
 // 
-//  Pocket SDR - USB Device Functions.
+//  Pocket SDR C library - USB Device Functions.
 //
 //  Author:
 //  T.TAKASU
@@ -8,6 +8,7 @@
 //  2021-10-20  0.1  new
 //  2022-01-04  0.2  support CyUSB on Windows
 //  2022-05-23  0.3  change coding style
+//  2022-08-08  1.0  support multiple contexts for libusb-1.0
 //
 #include "pocket_dev.h"
 
@@ -57,10 +58,15 @@ sdr_usb_t *sdr_usb_open(int bus, int port, uint16_t vid, uint16_t pid)
     sdr_usb_t *usb;
     int i, n;
     
-    libusb_init(NULL);
+    if (!(usb = (sdr_usb_t *)malloc(sizeof(sdr_usb_t)))) {
+        return NULL;
+    }
+    libusb_init(&usb->ctx);
     
     if ((n = libusb_get_device_list(NULL, &devs)) <= 0) {
         fprintf(stderr, "USB device list get error.\n");
+        libusb_exit(usb->ctx);
+        free(usb);
         return NULL;
     }
     for (i = 0; i < n; i++) {
@@ -75,16 +81,20 @@ sdr_usb_t *sdr_usb_open(int bus, int port, uint16_t vid, uint16_t pid)
         fprintf(stderr, "No device found. BUS=%d PORT=%d ID=%04X:%04X\n", bus,
             port, vid, pid);
         libusb_free_device_list(devs, 0);
+        libusb_exit(usb->ctx);
+        free(usb);
         return NULL;
     }
-    if (libusb_open(devs[i], &usb)) {
+    if (libusb_open(devs[i], &usb->h)) {
         fprintf(stderr, "USB device open error. BUS=%d PORT=%d ID=%04X:%04X\n",
             bus, port, vid, pid);
         libusb_free_device_list(devs, 0);
+        libusb_exit(usb->ctx);
+        free(usb);
         return NULL;
     }
     libusb_free_device_list(devs, 0);
-    libusb_claim_interface(usb, SDR_DEV_IF);
+    libusb_claim_interface(usb->h, SDR_DEV_IF);
     return usb;
 #endif // WIN32
 }
@@ -104,9 +114,10 @@ void sdr_usb_close(sdr_usb_t *usb)
     usb->Close();
     delete usb;
 #else
-    libusb_release_interface(usb, SDR_DEV_IF);
-    libusb_close(usb);
-    libusb_exit(NULL);
+    libusb_release_interface(usb->h, SDR_DEV_IF);
+    libusb_close(usb->h);
+    libusb_exit(usb->ctx);
+    free(usb);
 #endif // WIN32
 }
 
@@ -141,7 +152,7 @@ int sdr_usb_req(sdr_usb_t *usb, int mode, uint8_t req, uint16_t val,
     ep->Index     = 0;
     return ep->XferData(data, len);
 #else
-    if (libusb_control_transfer(usb, mode ? USB_VR_OUT : USB_VR_IN, req, val,
+    if (libusb_control_transfer(usb->h, mode ? USB_VR_OUT : USB_VR_IN, req, val,
             0, data, size, TO_TRANSFER) < size) {
         return 0;
     }
