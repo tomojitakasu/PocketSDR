@@ -6,6 +6,8 @@
 //
 //  History:
 //  2022-07-08  1.0  port sdr_ch.py to C
+//  2022-07-16  1.1  modify API sdr_ch_new()
+//  2023-12-16  1.2  reduce memory usage
 //
 #include <ctype.h>
 #include <math.h>
@@ -45,14 +47,14 @@ static void sig_upper(const char *sig, char *Sig)
 
 // new signal acquisition ------------------------------------------------------
 static sdr_acq_t *acq_new(const int8_t *code, int len_code, double T, double fs,
-    int N, double max_dop)
+    int N, double ref_dop, double max_dop)
 {
     sdr_acq_t *acq = (sdr_acq_t *)sdr_malloc(sizeof(sdr_acq_t));
     
     acq->code_fft = sdr_cpx_malloc(2 * N);
     sdr_gen_code_fft(code, len_code, T, 0.0, fs, N, N, acq->code_fft);
-    acq->fds = sdr_dop_bins(T, 0.0, max_dop, &acq->len_fds);
-    acq->P_sum = (float *)sdr_malloc(sizeof(float) * 2 * N * acq->len_fds);
+    acq->fds = sdr_dop_bins(T, ref_dop, max_dop, &acq->len_fds);
+    acq->P_sum = NULL;
     acq->n_sum = 0;
     return acq;
 }
@@ -116,16 +118,18 @@ static void trk_free(sdr_trk_t *trk)
 //      prn      (I) PRN number
 //      fs       (I) Sampling frequency (Hz)
 //      fi       (I) IF frequency (Hz)
-//      max_dop  (I) Max Doppler frequency for acquisition (Hz)
 //      sp_corr  (I) Correlator spacing (chips)
 //      add_corr (I) Number of additional correlator for plot
+//      ref_dop  (I) Reference Doppler frequency for acquisition (Hz)
+//      max_dop  (I) Max Doppler frequency for acquisition (Hz)
 //      nav_opt  (I) Navigation data options
 //
 //  return:
-//      Receiver channel
+//      Receiver channel (NULL: error)
 //
 sdr_ch_t *sdr_ch_new(const char *sig, int prn, double fs, double fi,
-    double max_dop, double sp_corr, int add_corr, const char *nav_opt)
+    double sp_corr, int add_corr, double ref_dop, double max_dop,
+    const char *nav_opt)
 {
     sdr_ch_t *ch = (sdr_ch_t *)sdr_malloc(sizeof(sdr_ch_t));
     
@@ -133,8 +137,11 @@ sdr_ch_t *sdr_ch_new(const char *sig, int prn, double fs, double fi,
     ch->time = 0.0;
     sig_upper(sig, ch->sig);
     ch->prn = prn;
-    ch->code = sdr_gen_code(sig, prn, &ch->len_code);
-    ch->sec_code = sdr_sec_code(sig, prn, &ch->len_sec_code);
+    if (!(ch->code = sdr_gen_code(sig, prn, &ch->len_code)) ||
+        !(ch->sec_code = sdr_sec_code(sig, prn, &ch->len_sec_code))) {
+        sdr_free(ch);
+        return NULL;
+    }
     ch->fc = sdr_sig_freq(sig);
     ch->fs = fs;
     ch->fi = sdr_shift_freq(sig, prn, fi);
@@ -143,7 +150,8 @@ sdr_ch_t *sdr_ch_new(const char *sig, int prn, double fs, double fi,
     ch->fd = ch->coff = ch->adr = ch->cn0 = 0.0;
     ch->lock = ch->lost = 0;
     ch->costas = strcmp(ch->sig, "L6D") && strcmp(ch->sig, "L6E");
-    ch->acq = acq_new(ch->code, ch->len_code, ch->T, fs, ch->N, max_dop);
+    ch->acq = acq_new(ch->code, ch->len_code, ch->T, fs, ch->N, ref_dop,
+        max_dop);
     ch->trk = trk_new(ch->sig, ch->prn, ch->code, ch->len_code, ch->T, fs,
         sp_corr, add_corr);
     ch->nav = sdr_nav_new(nav_opt);
@@ -192,13 +200,18 @@ static void start_track(sdr_ch_t *ch, double fd, double coff, double cn0)
 }
 
 // search signal ---------------------------------------------------------------
-static void search_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff, int ix)
+static void search_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff,
+    int len_buff, int ix)
 {
     ch->time = time;
     
+    if (!ch->acq->P_sum) {
+        ch->acq->P_sum = (float *)sdr_malloc(sizeof(float) * 2 * ch->N *
+            ch->acq->len_fds);
+    }
     // parallel code search and non-coherent integration 
-    sdr_search_code(ch->acq->code_fft, ch->T, buff, ix, 2 * ch->N, ch->fs,
-        ch->fi, ch->acq->fds, ch->acq->len_fds, ch->acq->P_sum);
+    sdr_search_code(ch->acq->code_fft, ch->T, buff, len_buff, ix, 2 * ch->N,
+        ch->fs, ch->fi, ch->acq->fds, ch->acq->len_fds, ch->acq->P_sum);
     ch->acq->n_sum++;
     
     if (ch->acq->n_sum * ch->T >= T_ACQ) {
@@ -221,7 +234,8 @@ static void search_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff, int ix)
             sdr_log(3, "$LOG,%.3f,%s,%d,SIGNAL NOT FOUND (%.1f)", ch->time,
                 ch->sig, ch->prn, cn0);
         }
-        memset(ch->acq->P_sum, 0, sizeof(float) * 2 * ch->N * ch->acq->len_fds);
+        sdr_free(ch->acq->P_sum);
+        ch->acq->P_sum = NULL;
         ch->acq->n_sum = 0;
     }
 }
@@ -360,7 +374,8 @@ static void CSK(sdr_ch_t *ch, const sdr_cpx_t *corr)
 }
 
 // track signal ----------------------------------------------------------------
-static void track_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff, int ix)
+static void track_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff,
+    int len_buff, int ix)
 {
     double tau = time - ch->time;   // time interval (s) 
     double fc = ch->fi + ch->fd;    // IF carrier frequency with Doppler (Hz) 
@@ -377,7 +392,8 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff, int ix)
         sdr_cpx_t *corr = sdr_cpx_malloc(ch->N);
         
         // FFT correlator 
-        sdr_corr_fft(buff, ix + i, ch->N, ch->fs, fc, phi, ch->trk->code, corr);
+        sdr_corr_fft(buff, len_buff, ix + i, ch->N, ch->fs, fc, phi,
+            ch->trk->code, corr);
         
         // decode L6 CSK 
         CSK(ch, corr);
@@ -386,10 +402,10 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff, int ix)
     }
     else {
         // standard correlator 
-        sdr_corr_std(buff, ix + i, ch->N, ch->fs, fc, phi, ch->trk->code,
-            ch->trk->pos, ch->trk->npos, ch->trk->C);
+        sdr_corr_std(buff, len_buff, ix + i, ch->N, ch->fs, fc, phi,
+            ch->trk->code, ch->trk->pos, ch->trk->npos, ch->trk->C);
     }
-    // add P correlator outputs to histroy 
+    // add P correlator outputs to history 
     sdr_add_buff(ch->trk->P, SDR_N_HIST, ch->trk->C[0], sizeof(sdr_cpx_t));
     ch->lock++;
     
@@ -438,18 +454,20 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff, int ix)
 //      ch       (I) Receiver channel
 //      time     (I) Sampling time of the end of digitized IF data (s)
 //      buff     (I) buffer of digitized IF data as complex64 ndarray
+//      len_buff (I) length of buffer
 //      ix       (I) index of IF data
 //
 //  return:
 //      none
 //
-void sdr_ch_update(sdr_ch_t *ch, double time, const sdr_cpx_t *buff, int ix)
+void sdr_ch_update(sdr_ch_t *ch, double time, const sdr_cpx_t *buff,
+    int len_buff, int ix)
 {
     if (!strcmp(ch->state, "SRCH")) {
-        search_sig(ch, time, buff, ix);
+        search_sig(ch, time, buff, len_buff, ix);
     }
     else if (!strcmp(ch->state, "LOCK")) {
-        track_sig(ch, time, buff, ix);
+        track_sig(ch, time, buff, len_buff, ix);
     }
     else { // IDLE
         ch->time = time;
