@@ -7,11 +7,18 @@
 //  History:
 //  2021-10-11  0.1  new
 //  2022-01-04  1.0  change version
+//  2022-08-13  1.1  support CyUSB for windows
 //
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef WIN32
+#include <windows.h>
+#include <CyAPI.h>
+#else
 #include <libusb-1.0/libusb.h>
+#endif
 
 // constants and macros ----------------------------------------------------------------
 #define PROG_NAME       "pocket_scan" // program name
@@ -24,6 +31,7 @@ static void show_usage(void)
 }
 
 // get USB device string ---------------------------------------------------------------
+#ifndef WIN32
 static void get_usb_string(struct libusb_device *dev, char *name, size_t size)
 {
     libusb_device_handle *h;
@@ -44,12 +52,35 @@ static void get_usb_string(struct libusb_device *dev, char *name, size_t size)
     }
     libusb_close(h);
 }
+#endif // WIN32
 
 // scan USB devices --------------------------------------------------------------------
 static int scan_usb(int ep)
 {
     static const char *speed[] =
         {"UNKNOWN", "LOW", "FULL", "HIGH", "SUPER", "SUPER_PLUS"};
+    
+#ifdef WIN32
+    CCyUSBDevice *usb = new CCyUSBDevice();
+    
+    for (int i = 0; i < usb->DeviceCount(); i++) {
+        usb->Open(i);
+        printf("(%2d) ADDR=%2d SPEED=%-5s ID=%04X:%04X %s,%s\n", i,
+             usb->USBAddress, speed[usb->bSuperSpeed ? 4 : (usb->bHighSpeed ? 3 : 2)],
+             usb->VendorID, usb->ProductID, usb->DeviceName, usb->FriendlyName);
+        
+        if (!ep) continue;
+        
+        for (int j = 0; j < usb->EndPointCount(); j++) {
+            CCyUSBEndPoint *ep = usb->EndPoints[j];
+            printf("%5sIF=%2d ALT=%2d EP=%2d DIR=%s MAXSIZE=%4d\n", "",
+                0, 0, ep->Address & 0xF, (ep->Address & 0x80) ? "IN " : "OUT",
+                ep->MaxPktSize);
+        }
+        usb->Close();
+    }
+    delete usb;
+#else
     libusb_device **devs;
     ssize_t n;
     
@@ -93,6 +124,7 @@ static int scan_usb(int ep)
         libusb_free_config_descriptor(cfg);
     }
     libusb_free_device_list(devs, 0);
+#endif // WIN32
     return 1;
 }
 
