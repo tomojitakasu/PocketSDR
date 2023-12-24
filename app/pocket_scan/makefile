@@ -1,15 +1,22 @@
 #
-#  makefile for pocket_dump
+#  makefile for pocket_scan
 #
 
-CC = gcc
+CC = g++
 
 SRC = ../../src
+LIB = ../../lib
 BIN = ../../bin
 
-INCLUDE =
-OPTIONS =
-LDLIBS = -static -lusb-1.0
+ifeq ($(OS),Windows_NT)
+    INCLUDE = -I$(LIB)/cyusb
+    OPTIONS = -DWIN32
+    LDLIBS = $(LIB)/cyusb/CyAPI.a -lsetupapi
+else
+    INCLUDE =
+    OPTIONS =
+    LDLIBS = -lusb-1.0
+endif
 
 WARNOPT = -Wall -Wextra
 
