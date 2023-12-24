@@ -46,7 +46,10 @@
 //  2022-05-23  1.2  add API: sdr_code_cyc()
 //  2022-07-08  1.3  fix bug in sdr_sig_freq()
 //  2022-07-10  1.4  fix memory-free bug in gen_code_L1CB()
-//
+//  2022-08-15  1.6  ensure thread-safety of sdr_gen_code(), sdr_sec_code()
+//                   and sdr_gen_code_fft()
+//  2023-11-08  1.7  L1S PRN range: 184-191 -> 183-191
+
 #include <ctype.h>
 #include "pocket_sdr.h"
 
@@ -695,7 +698,7 @@ static int8_t *gen_code_L1CA(int prn, int *N)
 // generate L1S code ([2]) -----------------------------------------------------
 static int8_t *gen_code_L1S(int prn, int *N)
 {
-    if (prn < 184 || prn > 191) {
+    if (prn < 183 || prn > 191) {
         return NULL;
     }
     return gen_code_L1CA(prn, N);
@@ -883,7 +886,7 @@ static int8_t *gen_code_L5_XB(int N)
 // generate L5I code ([2]) -----------------------------------------------------
 static int8_t *gen_code_L5I(int prn, int *N)
 {
-    if (prn < 1 && prn > 210) {
+    if (prn < 1 || prn > 210) {
         return NULL;
     }
     *N = 10230;
@@ -903,7 +906,7 @@ static int8_t *gen_code_L5I(int prn, int *N)
 // generate L5Q code ([2]) -----------------------------------------------------
 static int8_t *gen_code_L5Q(int prn, int *N)
 {
-    if (prn < 1 && prn > 210) {
+    if (prn < 1 || prn > 210) {
         return NULL;
     }
     *N = 10230;
@@ -923,7 +926,7 @@ static int8_t *gen_code_L5Q(int prn, int *N)
 // generate L5SI code ([15]) ---------------------------------------------------
 static int8_t *gen_code_L5SI(int prn, int *N)
 {
-    if (prn < 184 && prn > 189) {
+    if (prn < 184 || prn > 189) {
         return NULL;
     }
     return gen_code_L5I(prn, N);
@@ -932,7 +935,7 @@ static int8_t *gen_code_L5SI(int prn, int *N)
 // generate L5SQ code ([15]) ---------------------------------------------------
 static int8_t *gen_code_L5SQ(int prn, int *N)
 {
-    if (prn < 184 && prn > 189) {
+    if (prn < 184 || prn > 189) {
         return NULL;
     }
     return gen_code_L5Q(prn, N);
@@ -955,7 +958,7 @@ static int8_t *sec_code_L5Q(int prn, int *N)
 // generate L5SI secondary code ([6]) ------------------------------------------
 static int8_t *sec_code_L5SI(int prn, int *N)
 {
-    if (prn < 184 && prn > 189) {
+    if (prn < 184 || prn > 189) {
         return NULL;
     }
     return sec_code_L5I(prn, N);
@@ -964,7 +967,7 @@ static int8_t *sec_code_L5SI(int prn, int *N)
 // generate L5SQ secondary code ([6]) ------------------------------------------
 static int8_t *sec_code_L5SQ(int prn, int *N)
 {
-    if (prn < 184 && prn > 189) {
+    if (prn < 184 || prn > 189) {
         return NULL;
     }
     return sec_code_L5Q(prn, N);
@@ -1745,19 +1748,8 @@ static int8_t *gen_code_ISS(int prn, int *N)
     return ISS[prn-1];
 }
 
-//------------------------------------------------------------------------------
-//  Generate primary code.
-//
-//  args:
-//      sig      (I) Signal type as string ('L1CA', 'L1CB', 'L1CP', ....)
-//      prn      (I) PRN number
-//      N        (O) length of primary code
-//
-//  return:
-//      Primary code as int8_t array (-1 or 1)
-//      (sub-carrier modulated for BOC or zero-padded for TDM)
-//
-int8_t *sdr_gen_code(const char *sig, int prn, int *N)
+// generate primary code -------------------------------------------------------
+static int8_t *gen_code(const char *sig, int prn, int *N)
 {
     char Sig[16];
     
@@ -1872,17 +1864,30 @@ int8_t *sdr_gen_code(const char *sig, int prn, int *N)
 }
 
 //------------------------------------------------------------------------------
-//  Generate secondary (overlay) code.
+//  Generate primary code.
 //
 //  args:
 //      sig      (I) Signal type as string ('L1CA', 'L1CB', 'L1CP', ....)
 //      prn      (I) PRN number
-//      N        (O) length of secondary code
+//      N        (O) Length of primary code
 //
 //  return:
-//      Secondary code as int8_t array (-1 or 1)
+//      Primary code as int8_t array (-1 or 1)
+//      (sub-carrier modulated for BOC or zero-padded for TDM)
 //
-int8_t *sdr_sec_code(const char *sig, int prn, int *N)
+int8_t *sdr_gen_code(const char *sig, int prn, int *N)
+{
+    static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
+    
+    pthread_mutex_lock(&mtx);
+    int8_t *code = gen_code(sig, prn, N);
+    pthread_mutex_unlock(&mtx);
+    
+    return code;
+}
+
+// generate secondary (overlay) code -------------------------------------------
+static int8_t *sec_code(const char *sig, int prn, int *N)
 {
     static int8_t code[] = {1};
     char Sig[16];
@@ -1962,6 +1967,28 @@ int8_t *sdr_sec_code(const char *sig, int prn, int *N)
     }
     *N = 0;
     return NULL;
+}
+
+//------------------------------------------------------------------------------
+//  Generate secondary (overlay) code.
+//
+//  args:
+//      sig      (I) Signal type as string ('L1CA', 'L1CB', 'L1CP', ....)
+//      prn      (I) PRN number
+//      N        (O) Length of secondary code
+//
+//  return:
+//      Secondary code as int8_t array (-1 or 1)
+//
+int8_t *sdr_sec_code(const char *sig, int prn, int *N)
+{
+    static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
+    
+    pthread_mutex_lock(&mtx);
+    int8_t *code = sec_code(sig, prn, N);
+    pthread_mutex_unlock(&mtx);
+    
+    return code;
 }
 
 //------------------------------------------------------------------------------
@@ -2117,7 +2144,7 @@ double sdr_sig_freq(const char *sig)
 //
 //  args:
 //      code     (I) Code as int8_t array (-1 or 1)
-//      len_code (I) length of code (= 2 * n)
+//      len_code (I) Length of code (= 2 * n)
 //      T        (I) Code cycle (period) (s)
 //      coff     (I) Code offset (s)
 //      fs       (I) Sampling frequency (Hz)
@@ -2145,7 +2172,7 @@ void sdr_res_code(const int8_t *code, int len_code, double T, double coff,
 //
 //  args:
 //      code     (I) Code as int8_t array (-1 or 1)
-//      len_code (I) length of code
+//      len_code (I) Length of code
 //      T        (I) Code cycle (period) (s)
 //      coff     (I) Code offset (s)
 //      fs       (I) Sampling frequency (Hz)
@@ -2160,12 +2187,14 @@ void sdr_res_code(const int8_t *code, int len_code, double T, double coff,
 void sdr_gen_code_fft(const int8_t *code, int len_code, double T, double coff,
     double fs, int N, int Nz, sdr_cpx_t *code_fft)
 {
+    static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
     static fftwf_plan plan = NULL;
     static int N_plan = 0;
     sdr_cpx_t *code_res = sdr_cpx_malloc(N + Nz);
     
     sdr_res_code(code, len_code, T, coff, fs, N, Nz, code_res);
     
+    pthread_mutex_lock(&mtx);
     if (N + Nz != N_plan) {
         if (plan) {
             fftwf_destroy_plan(plan);
@@ -2174,6 +2203,8 @@ void sdr_gen_code_fft(const int8_t *code, int len_code, double T, double coff,
             FFTW_ESTIMATE);
         N_plan = N + Nz;
     }
+    pthread_mutex_unlock(&mtx);
+    
     fftwf_execute_dft(plan, code_res, code_fft);
     
     // complex conjugate
