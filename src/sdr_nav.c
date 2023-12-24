@@ -493,12 +493,12 @@ static void decode_CNAV(sdr_ch_t *ch, const uint8_t *bits, int rev, int off)
         ch->nav->count[0]++;
         char str[256];
         hex_str(ch->nav->data, 300, str);
-        sdr_log(3, "$CNAV,%->3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+        sdr_log(3, "$CNAV,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
     }
     else {
         ch->nav->fsync = ch->nav->rev = 0;
         ch->nav->count[1]++;
-        sdr_log(3, "$LOG,%->3f,%s,%d,CNAV FRAME ERROR", time, ch->sig, ch->prn);
+        sdr_log(3, "$LOG,%.3f,%s,%d,CNAV FRAME ERROR", time, ch->sig, ch->prn);
     }
 }
 
@@ -506,8 +506,7 @@ static void decode_CNAV(sdr_ch_t *ch, const uint8_t *bits, int rev, int off)
 static void search_CNAV_frame(sdr_ch_t *ch)
 {
     static const uint8_t preamb[] = {1, 0, 0, 0, 1, 0, 1, 1};
-    //uint8_t buff[1228], bits[608];
-    uint8_t buff[1228], bits[1024];
+    uint8_t buff[1228], bits[608];
     
     // decode 1/2 FEC (1228 syms -> 608 bits)
     for (int i = 0; i < 1228; i++) {
@@ -648,7 +647,7 @@ static void decode_glo_str(sdr_ch_t *ch, const uint8_t *syms, int rev)
     }
     sdr_pack_bits(bits, 85, 0, data); // GLONASS string (85 bits, packed)
     
-    if (test_glostr(bits)) {
+    if (test_glostr(data)) {
         ch->nav->fsync = ch->lock;
         ch->nav->rev = rev;
         memcpy(ch->nav->data, data, 11);
