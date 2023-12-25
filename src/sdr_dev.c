@@ -11,6 +11,7 @@
 //  2022-05-23  1.1  change coding style
 //  2022-07-08  1.2  fix a bug
 //  2022-08-08  1.3  support Spider SDR
+//  2023-12-25  1.3  modify taskname for AvSetMmThreadCharacteristicsA()
 //
 #include "pocket_dev.h"
 #ifdef WIN32
@@ -107,7 +108,7 @@ static void rise_pri(void)
         fprintf(stderr, "SetThreadPriority error (%d)\n", (int)GetLastError());
     }
     DWORD task = 0;
-    HANDLE h = AvSetMmThreadCharacteristicsA("Capture", &task);
+    HANDLE h = AvSetMmThreadCharacteristicsA("DisplayPostProcessing", &task);
     
     if (h == 0) {
         fprintf(stderr, "AvSetMmThreadCharacteristicsA error (%d)\n",
