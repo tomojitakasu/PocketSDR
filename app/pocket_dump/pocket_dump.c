@@ -12,6 +12,7 @@
 //                   add option -q to suppress output of status
 //  2022-08-31  1.3  support max 8 CH inputs
 //                   DATA_CYC: 50 -> 10 (ms)
+//  2023-12-25  1.4  insert wait after writing receiver settings
 //
 #include <signal.h>
 #include <time.h>
@@ -213,8 +214,11 @@ int main(int argc, char **argv)
             files[n++] = argv[i];
         }
     }
-    if (*conf_file && !sdr_write_settings(conf_file, bus, port, 0)) {
-        return -1;
+    if (*conf_file) {
+        if (!sdr_write_settings(conf_file, bus, port, 0)) {
+            return -1;
+        }
+        sleep_msec(100);
     }
     if (!(dev = sdr_dev_open(bus, port))) {
         return -1;
