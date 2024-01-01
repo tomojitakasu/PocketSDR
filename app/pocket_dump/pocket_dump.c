@@ -13,9 +13,13 @@
 //  2022-08-31  1.3  support max 8 CH inputs
 //                   DATA_CYC: 50 -> 10 (ms)
 //  2023-12-25  1.4  insert wait after writing receiver settings
+//  2023-12-28  1.5  set binary mode to stdout for Windows
 //
 #include <signal.h>
 #include <time.h>
+#ifdef WIN32
+#include <fcntl.h>
+#endif
 #include "pocket_dev.h"
 
 // constants and macros --------------------------------------------------------
@@ -235,6 +239,9 @@ int main(int argc, char **argv)
     for (i = 0; i < dev->max_ch; i++) {
         if (!files[i] || (raw && i > 0)) continue;
         if (!strcmp(files[i], "-")) {
+#ifdef WIN32 // set binary mode for Windows
+            _setmode(_fileno(stdout), _O_BINARY);
+#endif
             fp[i] = stdout;
         }
         else if (*files[i] && !(fp[i] = fopen(files[i], "wb"))) {
