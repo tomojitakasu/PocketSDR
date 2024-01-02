@@ -8,6 +8,7 @@
 //  2022-05-23  1.0  new
 //  2022-07-08  1.1  modify types, add APIs
 //  2022-07-16  1.2  modify API
+//  2023-12-28  1.3  modify types and APIs
 //
 #ifndef POCKET_SDR_H
 #define POCKET_SDR_H
@@ -51,7 +52,8 @@ typedef struct {                // signal tracking type
     int sec_pol;                // secondary code polarity 
     double err_phas;            // phase error (cyc) 
     double sumP, sumE, sumL, sumN; // sum of correlations 
-    sdr_cpx_t *code;            // resampled code 
+    float *code;                // resampled code 
+    sdr_cpx_t *code_fft;        // code FFT
 } sdr_trk_t;
 
 typedef struct {                // SDR receiver navigation data type
@@ -65,6 +67,7 @@ typedef struct {                // SDR receiver navigation data type
     uint8_t data[SDR_MAX_DATA]; // navigation data buffer
     double time_data;           // navigation data time
     int count[2];               // navigation data count (OK, error)
+    char opt[256];              // navigation option string
 } sdr_nav_t;
 
 typedef struct {                // SDR receiver channel type 
@@ -117,13 +120,13 @@ double sdr_fine_dop(const float *P, int N, const float *fds, int len_fds,
 double sdr_shift_freq(const char *sig, int fcn, double fi);
 float *sdr_dop_bins(double T, float dop, float max_dop, int *len_fds);
 void sdr_corr_std(const sdr_cpx_t *buff, int len_buff, int ix, int N, double fs,
-    double fc, double phi, const sdr_cpx_t *code, const int *pos, int n,
+    double fc, double phi, const float *code, const int *pos, int n,
     sdr_cpx_t *corr);
 void sdr_corr_fft(const sdr_cpx_t *buff, int len_buff, int ix, int N, double fs,
     double fc, double phi, const sdr_cpx_t *code_fft, sdr_cpx_t *corr);
 void sdr_mix_carr(const sdr_cpx_t *buff, int len_buff, int ix, int N, double fs,
     double fc, double phi, sdr_cpx_t *data);
-void sdr_corr_std_(const sdr_cpx_t *data, const sdr_cpx_t *code, int N,
+void sdr_corr_std_(const sdr_cpx_t *data, const float *code, int N,
     const int *pos, int n, sdr_cpx_t *corr);
 void sdr_corr_fft_(const sdr_cpx_t *data, const sdr_cpx_t *code_fft, int N,
     sdr_cpx_t *corr);
@@ -146,7 +149,7 @@ double sdr_code_cyc(const char *sig);
 int sdr_code_len(const char *sig);
 double sdr_sig_freq(const char *sig);
 void sdr_res_code(const int8_t *code, int len_code, double T, double coff,
-    double fs, int N, int Nz, sdr_cpx_t *code_res);
+    double fs, int N, int Nz, float *code_res);
 void sdr_gen_code_fft(const int8_t *code, int len_code, double T, double coff,
     double fs, int N, int Nz, sdr_cpx_t *code_fft);
 
