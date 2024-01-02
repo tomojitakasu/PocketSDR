@@ -13,12 +13,17 @@
 //  2022-07-08  1.4  port sdr_func.py to C
 //  2022-08-04  1.5  ftell(),fseek() -> fgetpos(),fsetpos()
 //  2022-08-15  1.6  ensure thread-safety of sdr_corr_fft_()
+//  2023-12-28  1.7  support API changes
+//                   enable escape sequence for Windows console
 //
 #include <math.h>
 #include <stdarg.h>
 #include "rtklib.h"
 #include "pocket_sdr.h"
 
+#ifdef WIN32
+#include <io.h>
+#endif
 #ifdef AVX2
 #include <immintrin.h>
 #endif
@@ -38,6 +43,20 @@ static int fftw_size[16] = {0};   // FFTW plan sizes
 static int log_lvl = 3;           // log level
 static stream_t log_str = {0};    // log stream
 
+// enable escape sequence for Windows console ----------------------------------
+static void enable_console_esc(void)
+{
+#ifdef WIN32
+    HANDLE h = (HANDLE)_get_osfhandle(1); // stdout
+    DWORD mode = 0;
+    
+    if (!GetConsoleMode(h, &mode) ||
+        !SetConsoleMode(h, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING)) {
+        //fprintf(stderr, "SetConsoleMode() error (%ld)\n", GetLastError());
+    }
+#endif
+}
+
 // initialize GNSS SDR functions -----------------------------------------------
 void sdr_func_init(const char *file)
 {
@@ -54,6 +73,8 @@ void sdr_func_init(const char *file)
         carr_tbl[i][0] = cosf(-2.0f * (float)PI * i / NTBL);
         carr_tbl[i][1] = sinf(-2.0f * (float)PI * i / NTBL);
     }
+    // enable escape sequence for Windows console
+    enable_console_esc();
 }
 
 //------------------------------------------------------------------------------
@@ -309,7 +330,7 @@ float *sdr_dop_bins(double T, float dop, float max_dop, int *len_fds)
 }
 
 // inner product of complex and real -------------------------------------------
-static void dot_cpx_real(const sdr_cpx_t *a, const sdr_cpx_t *b, int N, float s,
+static void dot_cpx_real(const sdr_cpx_t *a, const float *b, int N, float s,
     sdr_cpx_t *c)
 {
     int i = 0;
@@ -324,11 +345,9 @@ static void dot_cpx_real(const sdr_cpx_t *a, const sdr_cpx_t *b, int N, float s,
         __m256 ymm4 = _mm256_loadu_ps(a[i + 4]);
         __m256 ymm5 = _mm256_shuffle_ps(ymm3, ymm4, 0x88); // a.real 
         __m256 ymm6 = _mm256_shuffle_ps(ymm3, ymm4, 0xDD); // a.imag 
-        ymm3 = _mm256_loadu_ps(b[i]);
-        ymm4 = _mm256_loadu_ps(b[i + 4]);
-        __m256 ymm7 = _mm256_shuffle_ps(ymm3, ymm4, 0x88); // b.real 
-        ymm1 = _mm256_fmadd_ps(ymm5, ymm7, ymm1);   // c.real 
-        ymm2 = _mm256_fmadd_ps(ymm6, ymm7, ymm2);   // c.imag 
+        ymm3 = _mm256_loadu_ps(b + i);
+        ymm1 = _mm256_fmadd_ps(ymm5, ymm3, ymm1);   // c.real 
+        ymm2 = _mm256_fmadd_ps(ymm6, ymm3, ymm2);   // c.imag 
     }
     _mm256_storeu_ps(d, ymm1);
     _mm256_storeu_ps(e, ymm2);
@@ -339,16 +358,16 @@ static void dot_cpx_real(const sdr_cpx_t *a, const sdr_cpx_t *b, int N, float s,
 #endif // AVX2 
     
     for ( ; i < N; i++) {
-        (*c)[0] += a[i][0] * b[i][0];
-        (*c)[1] += a[i][1] * b[i][0];
+        (*c)[0] += a[i][0] * b[i];
+        (*c)[1] += a[i][1] * b[i];
     }
     (*c)[0] *= s;
     (*c)[1] *= s;
 }
 
-// mix carrier and standard correlator (N = 2 * n) -----------------------------
+// mix carrier and standard correlator -----------------------------------------
 void sdr_corr_std(const sdr_cpx_t *buff, int len_buff, int ix, int N, double fs,
-    double fc, double phi, const sdr_cpx_t *code, const int *pos, int n,
+    double fc, double phi, const float *code, const int *pos, int n,
     sdr_cpx_t *corr)
 {
     sdr_cpx_t *data = sdr_cpx_malloc(N);
@@ -399,7 +418,7 @@ void sdr_mix_carr(const sdr_cpx_t *buff, int len_buff, int ix, int N, double fs,
 }
 
 // standard correlator ---------------------------------------------------------
-void sdr_corr_std_(const sdr_cpx_t *data, const sdr_cpx_t *code, int N,
+void sdr_corr_std_(const sdr_cpx_t *data, const float *code, int N,
     const int *pos, int n, sdr_cpx_t *corr)
 {
     for (int i = 0; i < n; i++) {
