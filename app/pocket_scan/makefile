@@ -11,7 +11,7 @@ BIN = ../../bin
 ifeq ($(OS),Windows_NT)
     INCLUDE = -I$(LIB)/cyusb
     OPTIONS = -DWIN32
-    LDLIBS = $(LIB)/cyusb/CyAPI.a -lsetupapi
+    LDLIBS = -static $(LIB)/cyusb/CyAPI.a -lsetupapi
 else
     INCLUDE =
     OPTIONS =
