@@ -8,6 +8,7 @@
 //  2022-07-08  1.0  port sdr_ch.py to C
 //  2022-07-16  1.1  modify API sdr_ch_new()
 //  2023-12-16  1.2  reduce memory usage
+//  2023-12-28  1.3  support type and API changes.
 //
 #include <ctype.h>
 #include <math.h>
@@ -91,11 +92,12 @@ static sdr_trk_t *trk_new(const char *sig, int prn, const int8_t *code,
     trk->err_phas = 0.0;
     trk->sumP = trk->sumE = trk->sumL = trk->sumN = 0.0;
     int N = (int)(fs * T);
-    trk->code = sdr_cpx_malloc(N);
     if (!strcmp(sig, "L6D") || !strcmp(sig, "L6E")) {
-        sdr_gen_code_fft(code, len_code, T, 0.0, fs, N, 0, trk->code);
+        trk->code_fft = sdr_cpx_malloc(N);
+        sdr_gen_code_fft(code, len_code, T, 0.0, fs, N, 0, trk->code_fft);
     }
     else {
+        trk->code = (float *)sdr_malloc(sizeof(float) * N);
         sdr_res_code(code, len_code, T, 0.0, fs, N, 0, trk->code);
     }
     return trk;
@@ -106,7 +108,8 @@ static void trk_free(sdr_trk_t *trk)
 {
     if (!trk) return;
     sdr_free(trk->C);
-    sdr_cpx_free(trk->code);
+    sdr_free(trk->code);
+    sdr_cpx_free(trk->code_fft);
     sdr_free(trk);
 }
 
@@ -393,7 +396,7 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff,
         
         // FFT correlator 
         sdr_corr_fft(buff, len_buff, ix + i, ch->N, ch->fs, fc, phi,
-            ch->trk->code, corr);
+            ch->trk->code_fft, corr);
         
         // decode L6 CSK 
         CSK(ch, corr);
