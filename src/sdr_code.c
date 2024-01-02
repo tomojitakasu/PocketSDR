@@ -30,8 +30,8 @@
 //      Document - Open Service Signal B3I (Version 1.0), February, 2018
 //  [14] Global Navigation Satellite System GLONASS Interface Control Document
 //      Navigation radiosignal in bands L1, L2 (Version 5.1), 2008
-//  [15] IS-QZSS-TV-003, Quasi-Zenith Satellite System Interface Specification
-//      Positioning Technology Verification Service, December 27, 2019
+//  [15] IS-QZSS-TV-004, Quasi-Zenith Satellite System Interface Specification
+//      Positioning Technology Verification Service, Septemver 27, 2023
 //  [16] IRNSS SIS ICD for Standard Positioning Service version 1.1, August,
 //      2017
 //  [17] GLONASS Interface Control Document Code Division Multiple Access Open
@@ -49,7 +49,10 @@
 //  2022-08-15  1.6  ensure thread-safety of sdr_gen_code(), sdr_sec_code()
 //                   and sdr_gen_code_fft()
 //  2023-11-08  1.7  L1S PRN range: 184-191 -> 183-191
-
+//  2023-12-27  1.8  modify API sdr_res_code(): return float *
+//                   L5S PRN range: 184-189 -> 184-189,205-206 [15]
+//                   add signal L5SIV (L5SI verification mode)
+//
 #include <ctype.h>
 #include "pocket_sdr.h"
 
@@ -599,6 +602,10 @@ static int8_t BC[] = { // Baker code
    -1, -1, -1, 1, -1
 };
 
+static int8_t MC[] = { // Manchester code
+   1, -1
+};
+
 // upper cases of signal string ------------------------------------------------
 static void sig_upper(const char *sig, char *Sig)
 {
@@ -926,7 +933,16 @@ static int8_t *gen_code_L5Q(int prn, int *N)
 // generate L5SI code ([15]) ---------------------------------------------------
 static int8_t *gen_code_L5SI(int prn, int *N)
 {
-    if (prn < 184 || prn > 189) {
+    if ((prn < 184 || prn > 189) && (prn < 205 || prn > 206)) {
+        return NULL;
+    }
+    return gen_code_L5I(prn, N);
+}
+
+// generate L5SIV code ([15]) --------------------------------------------------
+static int8_t *gen_code_L5SIV(int prn, int *N)
+{
+    if ((prn < 184 || prn > 189) && (prn < 205 || prn > 206)) {
         return NULL;
     }
     return gen_code_L5I(prn, N);
@@ -935,7 +951,7 @@ static int8_t *gen_code_L5SI(int prn, int *N)
 // generate L5SQ code ([15]) ---------------------------------------------------
 static int8_t *gen_code_L5SQ(int prn, int *N)
 {
-    if (prn < 184 || prn > 189) {
+    if ((prn < 184 || prn > 189) && (prn < 205 || prn > 206)) {
         return NULL;
     }
     return gen_code_L5Q(prn, N);
@@ -948,6 +964,13 @@ static int8_t *sec_code_L5I(int prn, int *N)
     return NH10;
 }
 
+// generate L5I SBAS secondary code --------------------------------------------
+static int8_t *sec_code_L5I_SBAS(int prn, int *N)
+{
+    *N = 2;
+    return MC;
+}
+
 // generate L5Q secondary code ([2]) -------------------------------------------
 static int8_t *sec_code_L5Q(int prn, int *N)
 {
@@ -955,19 +978,31 @@ static int8_t *sec_code_L5Q(int prn, int *N)
     return NH20;
 }
 
-// generate L5SI secondary code ([6]) ------------------------------------------
+// generate L5SI secondary code ([15]) -----------------------------------------
 static int8_t *sec_code_L5SI(int prn, int *N)
 {
-    if (prn < 184 || prn > 189) {
+    static int8_t code[] = {1};
+    
+    if ((prn < 184 || prn > 189) && (prn < 205 || prn > 206)) {
         return NULL;
     }
-    return sec_code_L5I(prn, N);
+    *N = 1;
+    return code; // L5SI normal mode
 }
 
-// generate L5SQ secondary code ([6]) ------------------------------------------
+// generate L5SIV secondary code ([15]) ----------------------------------------
+static int8_t *sec_code_L5SIV(int prn, int *N)
+{
+    if ((prn < 184 || prn > 189) && (prn < 205 || prn > 206)) {
+        return NULL;
+    }
+    return sec_code_L5I_SBAS(prn, N); // L5SI verification mode
+}
+
+// generate L5SQ secondary code ([15]) -----------------------------------------
 static int8_t *sec_code_L5SQ(int prn, int *N)
 {
-    if (prn < 184 || prn > 189) {
+    if ((prn < 184 || prn > 189) && (prn < 205 || prn > 206)) {
         return NULL;
     }
     return sec_code_L5Q(prn, N);
@@ -1106,12 +1141,12 @@ static int8_t *gen_code_G3OCP(int prn, int *N)
 // generate G1CA secondary code ------------------------------------------------
 static int8_t *sec_code_G1CA(int prn, int *N)
 {
-    static int8_t code[] = {1, -1, 1, -1, 1, -1, 1, -1, 1, -1};
+    static int8_t code[] = {1};
     
     if (prn < -7 || prn > 6) { // FCN
         return NULL;
     }
-    *N = 10;
+    *N = 1;
     return code;
 }
 
@@ -1785,6 +1820,9 @@ static int8_t *gen_code(const char *sig, int prn, int *N)
     else if (!strcmp(Sig, "L5SI")) {
         return gen_code_L5SI(prn, N);
     }
+    else if (!strcmp(Sig, "L5SIV")) {
+        return gen_code_L5SIV(prn, N);
+    }
     else if (!strcmp(Sig, "L5SQ")) {
         return gen_code_L5SQ(prn, N);
     }
@@ -1906,13 +1944,21 @@ static int8_t *sec_code(const char *sig, int prn, int *N)
         return sec_code_L1CP(prn, N);
     }
     else if (!strcmp(Sig, "L5I")) {
-        return sec_code_L5I(prn, N);
+        if (prn >= 120 && prn <=158) {
+            return sec_code_L5I_SBAS(prn, N);
+        }
+        else {
+            return sec_code_L5I(prn, N);
+        }
     }
     else if (!strcmp(Sig, "L5Q")) {
         return sec_code_L5Q(prn, N);
     }
     else if (!strcmp(Sig, "L5SI")) {
         return sec_code_L5SI(prn, N);
+    }
+    else if (!strcmp(Sig, "L5SIV")) {
+        return sec_code_L5SIV(prn, N);
     }
     else if (!strcmp(Sig, "L5SQ")) {
         return sec_code_L5SQ(prn, N);
@@ -2008,8 +2054,8 @@ double sdr_code_cyc(const char *sig)
     
     if (!strcmp(Sig, "L1CA") || !strcmp(Sig, "L1CB") || !strcmp(Sig, "L1S" ) ||
         !strcmp(Sig, "L5I" ) || !strcmp(Sig, "L5Q" ) || !strcmp(Sig, "L5SI") ||
-        !strcmp(Sig, "L5SQ") || !strcmp(Sig, "G1CA") || !strcmp(Sig, "G2CA") ||
-        !strcmp(Sig, "G3OCD") || !strcmp(Sig, "G3OCP") ||
+        !strcmp(Sig, "L5SIV") || !strcmp(Sig, "L5SQ") || !strcmp(Sig, "G1CA") ||
+        !strcmp(Sig, "G2CA") || !strcmp(Sig, "G3OCD") || !strcmp(Sig, "G3OCP") ||
         !strcmp(Sig, "E5AI") || !strcmp(Sig, "E5AQ") || !strcmp(Sig, "E5BI") ||
         !strcmp(Sig, "E5BQ") || !strcmp(Sig, "E6B" ) || !strcmp(Sig, "E6C" ) ||
         !strcmp(Sig, "B1I" ) || !strcmp(Sig, "B2I" ) || !strcmp(Sig, "B2AD") ||
@@ -2055,12 +2101,12 @@ int sdr_code_len(const char *sig)
     }
     else if (!strcmp(Sig, "L1CP") || !strcmp(Sig, "L1CD") ||
         !strcmp(Sig, "L2CM") || !strcmp(Sig, "L5I" ) || !strcmp(Sig, "L5Q" ) ||
-        !strcmp(Sig, "L5SI") || !strcmp(Sig, "L5SQ") || !strcmp(Sig, "L6D" ) ||
-        !strcmp(Sig, "L6E" ) || !strcmp(Sig, "G3OCD") || !strcmp(Sig, "G3OCP") ||
-        !strcmp(Sig, "E5AI") || !strcmp(Sig, "E5AQ") || !strcmp(Sig, "E5BI") ||
-        !strcmp(Sig, "E5BQ") || !strcmp(Sig, "B1CD") || !strcmp(Sig, "B1CP") ||
-        !strcmp(Sig, "B2AD") || !strcmp(Sig, "B2AP") || !strcmp(Sig, "B2BI") ||
-        !strcmp(Sig, "B3I" )) {
+        !strcmp(Sig, "L5SI") || !strcmp(Sig, "L5SIV") || !strcmp(Sig, "L5SQ") ||
+        !strcmp(Sig, "L6D" ) || !strcmp(Sig, "L6E" ) || !strcmp(Sig, "G3OCD") ||
+        !strcmp(Sig, "G3OCP") || !strcmp(Sig, "E5AI") || !strcmp(Sig, "E5AQ") ||
+        !strcmp(Sig, "E5BI") || !strcmp(Sig, "E5BQ") || !strcmp(Sig, "B1CD") ||
+        !strcmp(Sig, "B1CP") || !strcmp(Sig, "B2AD") || !strcmp(Sig, "B2AP") ||
+        !strcmp(Sig, "B2BI") || !strcmp(Sig, "B3I" )) {
         return 10230;
     }
     else if (!strcmp(Sig, "L2CL")) {
@@ -2105,9 +2151,9 @@ double sdr_sig_freq(const char *sig)
         return 1227.60e6;
     }
     else if (!strcmp(Sig, "L5I" ) || !strcmp(Sig, "L5Q" ) ||
-        !strcmp(Sig, "L5SI") || !strcmp(Sig, "L5SQ") || !strcmp(Sig, "E5AI") ||
-        !strcmp(Sig, "E5AQ") || !strcmp(Sig, "B2AD") || !strcmp(Sig, "B2AP") ||
-        !strcmp(Sig, "I5S")) {
+        !strcmp(Sig, "L5SI") || !strcmp(Sig, "L5SIV") || !strcmp(Sig, "L5SQ") ||
+        !strcmp(Sig, "E5AI") || !strcmp(Sig, "E5AQ") || !strcmp(Sig, "B2AD") ||
+        !strcmp(Sig, "B2AP") || !strcmp(Sig, "I5S")) {
         return 1176.45e6;
     }
     else if (!strcmp(Sig, "E5BI") || !strcmp(Sig, "E5BQ") ||
@@ -2150,20 +2196,20 @@ double sdr_sig_freq(const char *sig)
 //      fs       (I) Sampling frequency (Hz)
 //      N        (I) Number of samples
 //      Nz       (I) Number of zero-padding
-//      code_res (O) Resampled and zero-padded code as complex array (N + Nz)
+//      code_res (O) Resampled and zero-padded code as float array (N + Nz)
 //
 //  return:
 //      none
 //
 void sdr_res_code(const int8_t *code, int len_code, double T, double coff,
-    double fs, int N, int Nz, sdr_cpx_t *code_res)
+    double fs, int N, int Nz, float *code_res)
 {
     double dx = len_code / T / fs;
     
-    memset(code_res, 0, sizeof(sdr_cpx_t) * (N + Nz));
+    memset(code_res, 0, sizeof(float) * (N + Nz));
     
     for (int i = 0; i < N; i++) {
-        code_res[i][0] = code[(int)((coff * fs + i) * dx) % len_code];
+        code_res[i] = code[(int)((coff * fs + i) * dx) % len_code];
     }
 }
 
@@ -2190,10 +2236,14 @@ void sdr_gen_code_fft(const int8_t *code, int len_code, double T, double coff,
     static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
     static fftwf_plan plan = NULL;
     static int N_plan = 0;
+    float *code_res_f = (float *)sdr_malloc(sizeof(float) * (N + Nz));
     sdr_cpx_t *code_res = sdr_cpx_malloc(N + Nz);
     
-    sdr_res_code(code, len_code, T, coff, fs, N, Nz, code_res);
-    
+    sdr_res_code(code, len_code, T, coff, fs, N, Nz, code_res_f);
+    for (int i = 0; i < N + Nz; i++) {
+        code_res[i][0] = code_res_f[i];
+        code_res[i][1] = 0.0;
+    }
     pthread_mutex_lock(&mtx);
     if (N + Nz != N_plan) {
         if (plan) {
@@ -2209,8 +2259,9 @@ void sdr_gen_code_fft(const int8_t *code, int len_code, double T, double coff,
     
     // complex conjugate
     for (int i = 0; i < N + Nz; i++) {
-        code_fft[i][1] *= -1.0f;
+        code_fft[i][1] = -code_fft[i][1];
     }
+    sdr_free(code_res_f);
     sdr_cpx_free(code_res);
 }
 
