@@ -1,5 +1,5 @@
 //
-//  Pocket SDR C AP - GNSS Signal Tracking
+//  Pocket SDR C AP - GNSS Signal Tracking and NAV data decoding
 //
 //  Author:
 //  T.TAKASU
@@ -9,20 +9,30 @@
 //  2022-08-08  1.1  add option -w, -d
 //  2023-12-15  1.2  support multi-threading
 //  2023-12-25  1.3  add -r option for raw SDR device data
+//  2023-12-28  1.4  set binary mode to stdin for Windows
 //
+#include <signal.h>
+#ifdef WIN32
+#include <fcntl.h>
+#endif
 #include "pocket_sdr.h"
 
 // constants --------------------------------------------------------------------
-#define SP_CORR    0.5        // default correlator spacing (chip) 
+#define SP_CORR    0.5        // correlator spacing (chip) 
 #define T_CYC      1e-3       // data read cycle (s)
 #define LOG_CYC    1000       // receiver channel log cycle (* T_CYC)
 #define TH_CYC     10         // receiver channel thread cycle (ms)
 #define MIN_LOCK   2.0        // min lock time to print channel status (s)
-#define MAX_BUFF   8000       // max number of IF data buffer (20 * n)
+#define MAX_BUFF   8000       // max number of IF data buffer
 #define MAX_DOP    5000.0     // default max Doppler for acquisition (Hz) 
-#define ESC_CLS    "\033[H\033[2J" // ANSI escape erase screen
+
+#define ESC_CLS    "\033[2J"  // ANSI escape erase screen
+#define ESC_HOME   "\033[H"   // ANSI escape cursor home
 #define ESC_COL    "\033[34m" // ANSI escape color blue
 #define ESC_RES    "\033[0m"  // ANSI escape reset
+#define ESC_VCUR   "\033[?25h" // ANSI escape show cursor
+#define ESC_HCUR   "\033[?25l" // ANSI escape hide cursor
+
 #define FFTW_WISDOM "../python/fftw_wisdom.txt"
 
 // type definitions -------------------------------------------------------------
@@ -48,15 +58,23 @@ typedef struct rcv_tag {      // receiver type
     int8_t *raw;              // input data buffer
 } rcv_t;
 
-// IF buffer usage rate --------------------------------------------------------
-static double buff_usage(rcv_t *rcv)
+// interrupt flag --------------------------------------------------------------
+static volatile uint8_t intr = 0;
+
+// signal handler --------------------------------------------------------------
+static void sig_func(int sig)
 {
-    int64_t max_nx = 0;
+    intr = 1;
+    signal(sig, sig_func);
+}
+
+// test IF buffer full ---------------------------------------------------------
+static int buff_full(rcv_t *rcv)
+{
     for (int i = 0; i < rcv->nch; i++) {
-        int64_t nx = rcv->ix + 1 - rcv->ch[i]->ix;
-        if (nx > max_nx) max_nx = nx;
+        if (rcv->ix + 1 - rcv->ch[i]->ix >= MAX_BUFF) return 1;
     }
-    return (double)max_nx / MAX_BUFF;
+    return 0;
 }
 
 // C/N0 bar --------------------------------------------------------------------
@@ -84,13 +102,12 @@ static void print_head(rcv_t *rcv)
     for (int i = 0; i < rcv->nch; i++) {
         if (!strcmp(rcv->ch[i]->ch->state, "LOCK")) nch++;
     }
-    printf("%s TIME(s):%10.2f%49sBUFF:%4.0f%%  SRCH:%4d  LOCK:%3d/%3d\n",
-        ESC_CLS, rcv->ix * T_CYC, "", buff_usage(rcv) * 100.0, rcv->ich + 1,
+    printf("%s TIME(s):%10.2f%49s%10s  SRCH:%4d  LOCK:%3d/%3d\n", ESC_HOME,
+        rcv->ix * T_CYC, "", buff_full(rcv) ? "BUFF-FULL" : "", rcv->ich + 1,
         nch, rcv->nch);
     printf("%3s %5s %3s %5s %8s %4s %-12s %11s %7s %11s %4s %5s %4s %4s %3s\n",
-        "CH", "SIG", "PRN", "STATE", "LOCK(s)", "C/N0", "(dB-Hz)",
-        "COFF(ms)", "DOP(Hz)", "ADR(cyc)", "SYNC", "#NAV", "#ERR", "#LOL",
-        "NER");
+        "CH", "SIG", "PRN", "STATE", "LOCK(s)", "C/N0", "(dB-Hz)", "COFF(ms)",
+        "DOP(Hz)", "ADR(cyc)", "SYNC", "#NAV", "#ERR", "#LOL", "NER");
 }
 
 // print receiver channel status -----------------------------------------------
@@ -106,16 +123,21 @@ static void print_ch_stat(sdr_ch_t *ch)
 }
 
 // print receiver status -------------------------------------------------------
-static void rcv_print_stat(rcv_t *rcv)
+static int rcv_print_stat(rcv_t *rcv, int ncol)
 {
+    int n = 2;
     print_head(rcv);
     for (int i = 0; i < rcv->nch; i++) {
         sdr_ch_t *ch = rcv->ch[i]->ch;
-        if (!strcmp(ch->state, "LOCK") && ch->lock * ch->T >= MIN_LOCK) {
-            print_ch_stat(ch);
-        }
+        if (strcmp(ch->state, "LOCK") || ch->lock * ch->T < MIN_LOCK) continue;
+        print_ch_stat(ch);
+        n++;
+    }
+    for (int i = n; i < ncol; i++) {
+        printf("%*s\n", 103, "");
     }
     fflush(stdout);
+    return n;
 }
 
 // output log $TIME ------------------------------------------------------------
@@ -138,9 +160,9 @@ static void out_log_ch(sdr_ch_t *ch)
 // show usage ------------------------------------------------------------------
 static void show_usage(void)
 {
-    printf("Usage: pocket_trk [-sig sig] [-prn prn[,...]] [-sig ... -prn ... ...]\n");
-    printf("       [-toff toff] [-f freq] [-fi freq] [-d freq[,freq]] [-IQ]\n");
-    printf("       [-ti tint] [-log path] [-out path] [-q] [file]\n");
+    printf("Usage: pocket_trk [-sig sig -prn prn[,...] ...] [-r] [-toff toff] [-f freq]\n");
+    printf("       [-fi freq[,freq]] [-d freq[,freq]] [-IQ|-IQI|-IIQ] [-ti tint]\n");
+    printf("       [-log path] [-w filg] [-q] [file]\n");
     exit(0);
 }
 
@@ -204,7 +226,7 @@ static void rcv_ch_free(rcv_ch_t *ch)
     sdr_free(ch);
 }
 
-// new receiver ----------------------------------------------------------------
+// generate new receiver -------------------------------------------------------
 static rcv_t *rcv_new(char **sigs, const int *prns, int n, double fs,
     const double *fi, const double *dop, int fmt, const int *IQ)
 {
@@ -221,7 +243,7 @@ static rcv_t *rcv_new(char **sigs, const int *prns, int n, double fs,
     rcv->raw = (int8_t *)sdr_malloc(rcv->N * (fmt || IQ[0] == 1 ? 1 : 2));
     
     for (int i = 0; i < n && rcv->nch < SDR_MAX_NCH; i++) {
-        int j = (sdr_sig_freq(sigs[i]) > 1.3e9) ? 0 : 1; // 0:L1,1:L2/L5/L6
+        int j = (sdr_sig_freq(sigs[i]) >= 1.5e9) ? 0 : 1; // 0:L1,1:L2/L5/L6
         rcv_ch_t *ch;
         if ((ch = rcv_ch_new(sigs[i], prns[i], fs, fi[j], dop, rcv, j))) {
             ch->ch->no = rcv->nch + 1;
@@ -276,7 +298,7 @@ static int rcv_read_data(rcv_t *rcv, int64_t ix, FILE *fp)
     int N = rcv->N * ((rcv->fmt || rcv->IQ[0] == 1) ? 1 : 2);
     
     if (fread(rcv->raw, N, 1, fp) < 1) {
-        return 0;
+        return 0; // end of file
     }
     if (rcv->fmt) { // raw SDR device format
         if (LUT[0][0][0] == 0.0) {
@@ -326,9 +348,49 @@ static void rcv_update_srch(rcv_t *rcv)
 static void rcv_wait(rcv_t *rcv)
 {
     for (int i = 0; i < rcv->nch; i++) {
-        while (rcv->ix >= rcv->ch[i]->ix + MAX_BUFF - 100) {
+        while (rcv->ix + 1 - rcv->ch[i]->ix >= MAX_BUFF - 10) {
             sdr_sleep_msec(TH_CYC);
         }
+    }
+}
+
+// execute receiver ------------------------------------------------------------
+static void rcv_exec(rcv_t *rcv, FILE *fp, double tint, int quiet)
+{
+    int ncol = 0;
+    
+    // set all channels search for file input
+    if (fp != stdin) {
+        for (int i = 0; i < rcv->nch; i++) {
+            rcv->ch[i]->ch->state = "SRCH";
+        }
+    }
+    if (!quiet) {
+        printf("%s%s", ESC_HCUR, ESC_CLS); // clear screen
+    }
+    for (int64_t ix = 0; !intr ; ix++) {
+        if (ix % LOG_CYC == 0) {
+            out_log_time(ix * T_CYC);
+        }
+        // read IF data
+        if (!rcv_read_data(rcv, ix, fp)) break;
+        
+        // update signal search channel
+        rcv_update_srch(rcv);
+        
+        // print receiver status
+        if (!quiet && ix % (int)(tint / T_CYC) == 0) {
+            ncol = rcv_print_stat(rcv, ncol);
+        }
+        // suspend data reading for file input
+        if (fp != stdin) rcv_wait(rcv);
+    }
+    // stop receiver
+    rcv_stop(rcv);
+    
+    if (!quiet) {
+        rcv_print_stat(rcv, ncol);
+        printf("%s", ESC_VCUR);
     }
 }
 
@@ -336,78 +398,79 @@ static void rcv_wait(rcv_t *rcv)
 //
 //   Synopsis
 //
-//     pocket_trk [-sig sig] [-prn prn[,...]] [-sig ... -prn ... ...]
-//         [-toff toff] [-f freq] [-fi freq] [-d freq[,freq]] [-IQ] [-ti tint]
-//         [-log path] [-out path] [-q] [file]
+//     pocket_trk [-sig sig -prn prn[,...] ...] [-r] [-toff toff] [-f freq]
+//         [-fi freq[,freq]] [-d freq[,freq]] [-IQ|-IQI|-IIQ] [-ti tint]
+//         [-log path] [-w file] [-q] [file]
 //
 //   Description
 //
 //     It tracks GNSS signals in digital IF data and decode navigation data in
 //     the signals.
-//     If single PRN number by -prn option, it plots correlation power and
-//     correlation shape of the specified GNSS signal. If multiple PRN numbers
-//     specified by -prn option, it plots C/N0 for each PRN.
 //
 //   Options ([]: default)
 //
-//     -sig sig
-//         GNSS signal type ID (L1CA, L2CM, ...). Refer pocket_acq.py manual for
-//         details. [L1CA]
-//
-//     -prn prn[,...]
-//         PRN numbers of the GNSS signal separated by ','. A PRN number can be a
-//         PRN number range like 1-32 with start and end PRN numbers. For GLONASS
-//         FDMA signals (G1CA, G2CA), the PRN number is treated as FCN (frequency
-//         channel number).
-//
-//     -toff toff
-//         Time offset from the start of digital IF data in s. [0.0]
+//     -sig sig -prn prn[,...] ...
+//         A GNSS signal type ID (L1CA, L2CM, ...) and a PRN number list of the
+//         signal. For signal type IDs, refer pocket_acq.py manual. The PRN
+//         number list shall be PRN numbers or PRN number ranges like 1-32 with
+//         the start and the end numbers. They are separated by ",". For
+//         GLONASS FDMA signals (G1CA, G2CA), the PRN number is treated as the
+//         FCN (frequency channel number). The pair of a signal type ID and a PRN
+//         number list can be repeated for multiple GNSS signals to be tracked.
 //
 //     -r
-//         Input raw SDR device data generated by Pocket SDR RF-frontend.
-//         Without the option, inputs are handled as a series of int8_t
-//         (I-sampling) or of interleaved int8_t (IQ-sampling).
+//         Input raw SDR device data format generated by Pocket SDR RF-frontend.
+//         The data can be captured by pocket_dump with the -r option.
+//         Without the option, input data are handled as a series of int8_t
+//         (I-sampling) or interleaved int8_t (IQ-sampling) as the format.
+//
+//     -toff toff
+//         Time offset from the start of the digital IF data in s. [0.0]
 //
 //     -f freq
-//         Sampling frequency of digital IF data in MHz. [12.0]
+//         Sampling frequency of the digital IF data in MHz. [12.0]
 //
 //     -fi freq[,freq]
-//         IF frequency of digital IF data in MHz. The IF frequency is equal 0,
-//         the IF data is treated as IQ-sampling without -IQ option (zero-IF).
-//         The second freq is for CH2 (L2/L5/L6) in raw SDR device data with -r
-//         option. [0.0,0.0]
+//         IF frequency of the digital IF data in MHz. The IF frequency is equal
+//         0, the digital IF data is treated as IQ-sampling without -IQ, -IIQ,
+//         or -IQI option (zero-IF). The second frequency is for the CH2
+//         (L2/L5/L6) in the raw SDR device data format. [0.0, 0.0]
 //
 //     -d freq[,freq]
 //         Reference and max Doppler frequencies to search the signal in Hz.
-//         [0.0,5000.0]
+//         As default, the range of the Doppler frequencies is -5 kHz to +5 kHz.
+//         [0.0, 5000.0]
 //
-//     -IQ
-//         IQ-sampling even if the IF frequency is not equal 0.
+//     -IQ|-IQI|-IIQ
+//         IQ-sampling even if the IF frequency is not equal 0. (-IQ: CH1 and
+//         CH2, -IQI: CH1 only, -IIQ: CH2 only)
 //
 //     -ti tint
-//         Update interval of signal tracking status, plot and log in s. [0.05]
-//
-//     -w file
-//         Specify FFTW wisdowm file. [../python/fftw_wisdom.txt]
+//         Update interval of signal tracking status in s. [0.1]
 //
 //     -log path
-//         Log stream path to write signal tracking status. The log includes
+//         A log stream path to write the signal tracking log. The log includes
 //         decoded navigation data and code offset, including navigation data
 //         decoded. The stream path should be one of the followings.
+//
 //         (1) local file  file path without ':'. The file path can be contain
 //             time keywords (%Y, %m, %d, %h, %M) as same as RTKLIB stream.
 //         (2) TCP server  :port
 //         (3) TCP client  address:port
 //
+//     -w file
+//         Specify the FFTW wisdowm file. [../python/fftw_wisdom.txt]
+//
 //     -q
-//         Suppress showing signal tracking status.
+//         Suppress showing the signal tracking status.
 //
 //     [file]
-//         File path of the input digital IF data. The format should be a series of
-//         int8_t (signed byte) for real-sampling (I-sampling), interleaved int8_t
-//         for complex-sampling (IQ-sampling) or raw SDR device data. PocketSDR
-//         and AP pocket_dump can be used to capture such digital IF data. If the
-//         option omitted, the input is taken from stdin.
+//         A file path of the input digital IF data. The format should be a
+//         series of int8_t (signed byte) for real-sampling (I-sampling),
+//         interleaved int8_t for complex-sampling (IQ-sampling) or raw SDR
+//         device data. The Pocket SDR RF-frontend and pocket_dump can be used
+//         to capture such digital IF data. If the option omitted, the input
+//         is taken from stdin.
 //
 int main(int argc, char **argv)
 {
@@ -450,6 +513,14 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "-IQ")) {
             IQ[0] = IQ[1] = 2;
         }
+        else if (!strcmp(argv[i], "-IIQ")) {
+            IQ[0] = 1;
+            IQ[1] = 2;
+        }
+        else if (!strcmp(argv[i], "-IQI")) {
+            IQ[0] = 2;
+            IQ[1] = 1;
+        }
         else if (!strcmp(argv[i], "-ti") && i + 1 < argc) {
             tint = atof(argv[++i]);
         }
@@ -479,49 +550,38 @@ int main(int argc, char **argv)
         }
         fseek(fp, (long)(toff * fs * (fmt || IQ[0] == 1 ? 1 : 2)), SEEK_SET);
     }
+#ifdef WIN32 // set binary mode to stdin for Windows
+    else {
+        _setmode(_fileno(stdin), _O_BINARY);
+    }
+#endif
     sdr_func_init(fftw_wisdom);
-    
     if (*log_file) {
         sdr_log_open(log_file);
         sdr_log_level(log_lvl);
     }
-    // new receiver
+    signal(SIGTERM, sig_func);
+    signal(SIGINT, sig_func);
+    
+    uint32_t tt = sdr_get_tick();
+    sdr_log(3, "$LOG,%.3f,%s,%d,START FILE=%s FS=%.3f FMT=%d IQ=%d,%d", 0.0, "",
+        0, file, fs * 1e-6, fmt, IQ[0], IQ[1]);
+    
+    // generate new receiver
     rcv_t *rcv = rcv_new(sigs, prns, nch, fs, fi, dop, fmt, IQ);
     
-    if (*file) {
-        for (int i = 0; i < rcv->nch; i++) {
-            rcv->ch[i]->ch->state = "SRCH";
-        }
-    }
-    uint32_t tt = sdr_get_tick();
-    sdr_log(3, "$LOG,%.3f,%s,%d,START FILE=%s FS=%.3f IQ=%d", 0.0, "", 0, file,
-        fs * 1e-6, IQ);
+    // execute receiver
+    rcv_exec(rcv, fp, tint, quiet);
     
-    for (int64_t ix = 0; ; ix++) {
-        if (ix % LOG_CYC == 0) {
-            out_log_time(ix * T_CYC);
-        }
-        // read IF data
-        if (!rcv_read_data(rcv, ix, fp)) break;
-        
-        // update signal search channel
-        rcv_update_srch(rcv);
-        
-        // print receiver status
-        if (!quiet && ix % (int)(tint / T_CYC) == 0) {
-            rcv_print_stat(rcv);
-        }
-        // suspend IF data reading for file input
-        if (*file) rcv_wait(rcv);
-    }
-    rcv_stop(rcv);
-    if (!quiet) rcv_print_stat(rcv);
+    // free receiver
+    rcv_free(rcv);
+    
     tt = sdr_get_tick() - tt;
     sdr_log(3, "$LOG,%.3f,%s,%d,END FILE=%s", tt * 1e-3, "", 0, file);
-    if (!quiet) printf("  TIME(s) = %.3f\n", tt * 1e-3);
-    rcv_free(rcv);
-    fclose(fp);
+    if (!quiet) {
+        printf("  TIME(s) = %.3f\n", tt * 1e-3);
+    }
     sdr_log_close();
-    
+    fclose(fp);
     return 0;
 }
