@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#  Pocket SDR Python AP - GNSS Signal Tracking
+#  Pocket SDR Python AP - GNSS Signal Tracking and NAV data decoding
 #
 #  Author:
 #  T.TAKASU
@@ -11,6 +11,7 @@
 #                   add options -IQ, -e, -yl, -q
 #  2022-01-20  1.2  improve performance
 #                   add option -3d
+#  2023-12-28  1.3  change receiver channel status format
 #
 import sys, math, time, datetime
 import numpy as np
@@ -23,7 +24,8 @@ import sdr_code, sdr_ch
 CYC_SRCH = 10.0      # signal search cycle (s)
 MAX_BUFF = 32        # max number of IF data buffer
 NCORR_PLOT = 40      # numober of additional correlators for plot
-ESC_UP  = '\033[%dF' # ANSI escape cursor up
+MIN_LOCK = 2.0       # min lock time to print channel status (s)
+ESC_CLS = '\033[H\033[2J' # ANSI escape erase screen
 ESC_COL = '\033[34m' # ANSI escape color blue
 ESC_RES = '\033[0m'  # ANSI escape reset
 
@@ -70,10 +72,19 @@ def read_data(fp, N, IQ, buff, ix):
     return True
 
 # print receiver channel status header -----------------------------------------
-def print_head():
-    print('%9s %5s %3s %5s %8s %4s %-12s %10s %7s %11s %4s %4s %4s %4s %3s' %
-        ('TIME(s)', 'SIG', 'PRN', 'STATE', 'LOCK(s)', 'C/N0', '(dB-Hz)',
-        'COFF(ms)', 'DOP(Hz)', 'ADR(cyc)', 'SYNC', '#NAV', '#ERR', '#LOL', 'NER'))
+def print_head(ch):
+    nch = 0
+    srch = 0
+    for i in range(len(ch)):
+        if ch[i].state == 'LOCK':
+            nch += 1
+        if ch[i].state == 'SRCH':
+            srch = i + 1
+    print('%s TIME(s):%10.2f%61sSRCH: %3d  LOCK:%3d/%3d' % (ESC_CLS, ch[0].time,
+        '', srch, nch, len(ch)))
+    print('%3s %5s %3s %5s %8s %4s %-12s %11s %7s %11s %4s %5s %4s %4s %3s' % (
+        'CH', 'SIG', 'PRN', 'STATE', 'LOCK(s)', 'C/N0', '(dB-Hz)', 'COFF(ms)',
+        'DOP(Hz)', 'ADR(cyc)', 'SYNC', '#NAV', '#ERR', '#LOL', 'NER'))
 
 # receiver channel sync status -------------------------------------------------
 def sync_stat(ch):
@@ -83,19 +94,16 @@ def sync_stat(ch):
         ('R' if ch.nav.rev else '-'))
 
 # update receiver channel status -----------------------------------------------
-def update_stat(prns, ch, ncol):
-    if ncol > 0: # cursor up
-        print(ESC_UP % (ncol), end='')
-    ncol = 0
+def update_stat(prns, ch):
+    print_head(ch)
     for i in range(len(prns)):
-        print('%s%9.2f %5s %3d %5s %8.2f %4.1f %-13s%10.7f %7.1f %11.1f %s %4d %4d %4d %3d%s' %
-            (ESC_COL if ch[i].state == 'LOCK' else '',
-            ch[i].time, ch[i].sig, prns[i], ch[i].state, ch[i].lock * ch[i].T,
-            ch[i].cn0, cn0_bar(ch[i].cn0), ch[i].coff * 1e3, ch[i].fd, ch[i].adr,
-            sync_stat(ch[i]), ch[i].nav.count[0], ch[i].nav.count[1], ch[i].lost,
-            ch[i].nav.nerr, ESC_RES if ch[i].state == 'LOCK' else ''))
-        ncol += 1
-    return ncol
+        if ch[i].state == 'LOCK' and ch[i].lock * ch[i].T >= MIN_LOCK:
+            print('%s%3d %5s %3d %5s %8.2f %4.1f %-13s%11.7f %7.1f %11.1f %s %5d %4d %4d %3d%s' % (
+                ESC_COL, i + 1, ch[i].sig, prns[i], ch[i].state,
+                ch[i].lock * ch[i].T, ch[i].cn0, cn0_bar(ch[i].cn0),
+                ch[i].coff * 1e3, ch[i].fd, ch[i].adr, sync_stat(ch[i]),
+                ch[i].nav.count[0], ch[i].nav.count[1], ch[i].lost,
+                ch[i].nav.nerr, ESC_RES))
 
 # C/N0 bar ---------------------------------------------------------------------
 def cn0_bar(cn0):
@@ -346,18 +354,18 @@ def set_axcolor(ax, color):
 
 # show usage -------------------------------------------------------------------
 def show_usage():
-    print('Usage: pocket_trk.py [-sig sig] [-prn prn[,...]] [-p] [-e] [-toff toff] [-f freq]')
+    print('Usage: pocket_trk.py [-sig sig -prn prn[,...]] [-p] [-e] [-toff toff] [-f freq]')
     print('           [-fi freq] [-IQ] [-ti tint] [-ts tspan] [-yl ylim] [-log path]')
-    print('           [-out path] [-q] [file]')
+    print('           [-q] [file]')
     exit()
 
 #-------------------------------------------------------------------------------
 #
 #   Synopsis
 # 
-#     pocket_trk.py [-sig sig] [-prn prn[,...]] [-p] [-e] [-toff toff] [-f freq]
+#     pocket_trk.py [-sig sig -prn prn[,...]] [-p] [-e] [-toff toff] [-f freq]
 #         [-fi freq] [-IQ] [-ti tint] [-ts tspan] [-yl ylim] [-log path]
-#         [-out path] [-q] [file]
+#         [-q] [file]
 # 
 #   Description
 # 
@@ -369,15 +377,13 @@ def show_usage():
 # 
 #   Options ([]: default)
 #  
-#     -sig sig
-#         GNSS signal type ID (L1CA, L2CM, ...). Refer pocket_acq.py manual for
-#         details. [L1CA]
-# 
-#     -prn prn[,...]
-#         PRN numbers of the GNSS signal separated by ','. A PRN number can be a
-#         PRN number range like 1-32 with start and end PRN numbers. For GLONASS
-#         FDMA signals (G1CA, G2CA), the PRN number is treated as FCN (frequency
-#         channel number). [1]
+#     -sig sig -prn prn[,...]
+#         A GNSS signal type ID (L1CA, L2CM, ...) and a PRN number list of the
+#         signal. For signal type IDs, refer pocket_acq.py manual. The PRN
+#         number list shall be PRN numbers or PRN number ranges like 1-32 with
+#         the start and the end numbers. They are separated by ",". For
+#         GLONASS FDMA signals (G1CA, G2CA), the PRN number is treated as the
+#         FCN (frequency channel number).
 # 
 #     -p
 #         Plot signal tracking status in an integrated window. The window shows
@@ -407,7 +413,7 @@ def show_usage():
 #         IQ-sampling even if the IF frequency is not equal 0.
 #
 #     -ti tint
-#         Update interval of signal tracking status, plot and log in s. [0.05]
+#         Update interval of signal tracking status, plot and log in s. [0.1]
 #
 #     -ts tspan
 #         Time span for correlation to time plot in s. [1.0]
@@ -416,27 +422,25 @@ def show_usage():
 #         Y-axis limit of plots. [0.3]
 #
 #     -log path
-#         Log stream path to write signal tracking status. The log includes
+#         A Log stream path to write signal tracking status. The log includes
 #         decoded navigation data and code offset, including navigation data
 #         decoded. The stream path should be one of the followings.
+#
 #         (1) local file  file path without ':'. The file path can be contain
 #             time keywords (%Y, %m, %d, %h, %M) as same as RTKLIB stream.
 #         (2) TCP server  :port
 #         (3) TCP client  address:port
 #
-#     -out path
-#         Output stream path to write special messages. Currently only UBX-RXM-
-#         QZSSL6 message is supported as a special message,
-#
 #     -q
 #         Suppress showing signal tracking status.
 #
 #     [file]
-#         File path of the input digital IF data. The format should be a series of
-#         int8_t (signed byte) for real-sampling (I-sampling) or interleaved int8_t
-#         for complex-sampling (IQ-sampling). PocketSDR and AP pocket_dump can be
-#         used to capture such digital IF data. If the option omitted, the input
-#         is taken from stdin.
+#         A file path of the input digital IF data. The format should be a
+#         series of int8_t (signed byte) for real-sampling (I-sampling),
+#         interleaved int8_t for complex-sampling (IQ-sampling).
+#         The Pocket SDR RF-frontend and pocket_dump can be used to capture
+#         such digital IF data. If the option omitted, the input is taken
+#         from stdin.
 #
 if __name__ == '__main__':
     sig, prns, plot, env, p3d = 'L1CA', [1], False, False, False
@@ -510,9 +514,6 @@ if __name__ == '__main__':
         ch[i] = sdr_ch.ch_new(sig, prns[i], fs, fi, add_corr=ncorr)
         ch[i].state = 'SRCH'
     
-    if not quiet:
-        print_head()
-    
     if plot:
         fig, ax, p = init_plot(sig, prns[0], ch[0], env, p3d, file)
     
@@ -522,7 +523,6 @@ if __name__ == '__main__':
     
     N = int(T * fs)
     buff = np.zeros(N * (MAX_BUFF + 1), dtype='complex64')
-    ncol = 0
     ix = 0
     tt = time.time()
     log(3, '$LOG,%.3f,%s,%d,START FILE=%s FS=%.3f FI=%.3f IQ=%d TOFF=%.3f' %
@@ -558,7 +558,7 @@ if __name__ == '__main__':
             
             # update receiver channel status
             if not quiet:
-                ncol = update_stat(prns, ch, ncol)
+                update_stat(prns, ch)
             
             # update plots
             if plot:
