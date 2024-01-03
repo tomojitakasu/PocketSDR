@@ -11,8 +11,8 @@
 #      Satellite Positioning, Navigation and Timing Service, November 5, 2018
 #  [5] IS-QZSS-L6-003, Quasi-Zenith Satellite System Interface Specification
 #      Centimeter Level Augmentation Service, August 20, 2020
-#  [6] IS-QZSS-TV-003, Quasi-Zenith Satellite System Interface Specification
-#      Positioning Technology Verification Service, December 27, 2019
+#  [6] IS-QZSS-TV-004, Quasi-Zenith Satellite System Interface Specification
+#      Positioning Technology Verification Service, September 27, 2023
 #  [7] BeiDou Navigation Satellite System Signal In Space Interface Control
 #      Document - Open Service Signal B1I (Version 3.0), February, 2019
 #  [8] BeiDou Navigation Satellite System Signal In Space Interface Control
@@ -44,6 +44,7 @@
 #  2022-01-20  1.3  support I5S, ISS
 #                   move sec-code sync to sdr_ch.py
 #  2022-01-28  1.4  support G3OCD
+#  2023-12-28  1.5  fix L1CA_SBAS, L5I, L5I_SBAS, L5SI, G1CA and G3OCD
 #
 from math import *
 import numpy as np
@@ -80,6 +81,7 @@ def nav_new(nav_opt):
     nav.tsyms = np.zeros(18000) # nav symbols time (for debug)
     nav.data = []       # navigation data buffer
     nav.count = [0, 0]  # navigation data count (OK, error)
+    nav.opt = nav_opt   # navigation option string
     return nav
 
 # initialize nav data ----------------------------------------------------------
@@ -108,6 +110,8 @@ def nav_decode(ch):
         decode_L6E(ch)
     elif ch.sig == 'L5SI':
         decode_L5SI(ch)
+    elif ch.sig == 'L5SIV':
+        decode_L5SIV(ch)
     elif ch.sig == 'G1CA':
         decode_G1CA(ch)
     elif ch.sig == 'G2CA':
@@ -261,24 +265,23 @@ def decode_SBAS(ch):
         return
     
     if ch.nav.fsync > 0: # sync SBAS message
-        if ch.lock == ch.nav.fsync + 1000:
+        if ch.lock >= ch.nav.fsync + 1000:
             search_SBAS_msgs(ch)
-    
-    elif (ch.lock - ch.nav.ssync) % 250 == 0:
+        elif ch.lock > ch.nav.fsync + 2000:
+            ch.nav.fsync = ch.nav.rev = 0
+    elif ch.lock > 1088:
         search_SBAS_msgs(ch)
 
 # search SBAS message ----------------------------------------------------------
 def search_SBAS_msgs(ch):
     
-    # decode 1/2 FEC (1028 syms -> 508 bits)
-    bits = sdr_fec.decode_conv(ch.nav.syms[-1028:] * 255)
+    # decode 1/2 FEC (544 syms -> 258 + 8 bits)
+    bits = sdr_fec.decode_conv(ch.nav.syms[-544:] * 255)
     
     # search and decode SBAS message
-    for i in range(250):
-        rev = sync_SBAS_msgs(bits[i:i+258])
-        if rev >= 0:
-            decode_SBAS_msgs(ch, bits[i:i+250] ^ rev, rev, i * 2)
-            break
+    rev = sync_SBAS_msgs(bits[:258])
+    if rev >= 0:
+        decode_SBAS_msgs(ch, bits[:250] ^ rev, rev)
 
 # sync SBAS message ------------------------------------------------------------
 def sync_SBAS_msgs(bits):
@@ -294,8 +297,8 @@ def sync_SBAS_msgs(bits):
     return -1
 
 # decode SBAS message ----------------------------------------------------------
-def decode_SBAS_msgs(ch, bits, rev, off):
-    time = ch.time - 1e-3 * (1028 - off)
+def decode_SBAS_msgs(ch, bits, rev):
+    time = ch.time - 1e-3 * 1088
     
     if test_CRC(bits):
         ch.nav.fsync = ch.lock
@@ -316,46 +319,46 @@ def decode_L2CM(ch):
     add_buff(ch.nav.syms, 1 if ch.trk.P[-1].real >= 0.0 else 0)
     
     if ch.nav.fsync > 0: # sync CNAV subframe
-        if ch.lock == ch.nav.fsync + 600:
+        if ch.lock >= ch.nav.fsync + 600:
             search_CNAV_frame(ch)
-    
-    elif (ch.lock - ch.nav.ssync) % 150 == 0:
+        elif ch.lock > ch.nav.fsync + 1200:
+            ch.nav.fsync = ch.nav.rev = 0
+    elif ch.lock > 644:
         search_CNAV_frame(ch)
 
 # decode L5I nav data ([13]) ---------------------------------------------------
 def decode_L5I(ch):
     
     if (ch.prn >= 120 and ch.prn <= 158): # L5 SBAS
-        decode_SBAS(ch)
+        decode_L5_SBAS(ch)
         return
     
     if not sync_sec_code(ch): # sync secondary code
         return
     
     if ch.nav.fsync > 0: # sync CNAV subframe
-        if ch.lock == ch.nav.fsync + 6000:
+        if ch.lock >= ch.nav.fsync + 6000:
             search_CNAV_frame(ch)
-    
-    elif (ch.lock - ch.nav.ssync) % 1000 == 0:
+        elif ch.lock > ch.nav.fsync + 12000:
+            ch.nav.fsync = ch.nav.rev = 0
+    elif ch.lock > 6440:
         search_CNAV_frame(ch)
-    
+
 # search CNAV subframe ([13]) --------------------------------------------------
 def search_CNAV_frame(ch):
     preamb = (1, 0, 0, 0, 1, 0, 1, 1)
     
-    # decode 1/2 FEC (1228 syms -> 608 bits)
-    bits = sdr_fec.decode_conv(ch.nav.syms[-1228:] * 255)
+    # decode 1/2 FEC (644 syms -> 308 + 8 bits)
+    bits = sdr_fec.decode_conv(ch.nav.syms[-644:] * 255)
     
     # search and decode CNAV subframe
-    for i in range(300):
-        rev = sync_frame(ch, preamb, bits[i:i+308])
-        if rev >= 0:
-            decode_CNAV(ch, bits[i:i+300] ^ rev, rev, i * 2)
-            break
+    rev = sync_frame(ch, preamb, bits[:308])
+    if rev >= 0:
+        decode_CNAV(ch, bits[:300] ^ rev, rev)
 
 # decode CNAV subframe ([13]) --------------------------------------------------
-def decode_CNAV(ch, bits, rev, off):
-    time = ch.time - 10e-3 * (1228 - off)
+def decode_CNAV(ch, bits, rev):
+    time = ch.time - 1e-3 * 6440
     
     if test_CRC(bits):
         ch.nav.fsync = ch.lock
@@ -372,7 +375,55 @@ def decode_CNAV(ch, bits, rev, off):
 
 # decode L5SI nav data ([6]) ---------------------------------------------------
 def decode_L5SI(ch):
-    decode_SBAS(ch)
+    decode_SBAS(ch) # normal mode
+
+# decode L5SI verification mode nav data ([6]) ---------------------------------
+def decode_L5SIV(ch):
+    decode_L5_SBAS(ch)
+
+# decode L5 SBAS nav data ------------------------------------------------------
+def decode_L5_SBAS(ch):
+    
+    if not sync_sec_code(ch): # sync secondary code
+        return
+    
+    if ch.nav.fsync > 0: # sync L5 SBAS message
+        if ch.lock >= ch.nav.fsync + 1000:
+            search_L5_SBAS_msgs(ch)
+        elif ch.lock > ch.nav.fsync + 2000:
+            ch.nav.fsync = ch.nav.rev = 0
+    elif ch.lock >= 3093:
+        search_L5_SBAS_msgs(ch)
+
+# search L5 SBAS message -------------------------------------------------------
+def search_L5_SBAS_msgs(ch):
+    
+    # decode 1/2 FEC (1546 syms -> 758 + 8 bits)
+    bits = sdr_fec.decode_conv(ch.nav.syms[-1546:] * 255)
+    
+    # search and decode SBAS message
+    rev = sync_L5_SBAS_msgs(bits[:758])
+    if rev >= 0:
+        decode_SBAS_msgs(ch, bits[500:750] ^ rev, rev)
+
+# sync L5 SBAS message ---------------------------------------------------------
+def sync_L5_SBAS_msgs(bits):
+    preamb = ((0, 1, 0, 1), (1, 1, 0, 0), (0, 1, 1, 0), (1, 0, 0, 1),
+        (0, 0, 1, 1), (1, 0, 1, 0))
+    
+    for i in range(6):
+        j, k, m = (i + 1) % 6, (i + 2) % 6, (i + 3) % 6
+        if np.all(bits[:4] == preamb[i]) and \
+           np.all(bits[250:254] == preamb[j]) and \
+           np.all(bits[500:504] == preamb[k]) and \
+           np.all(bits[750:754] == preamb[m]):
+            return 0
+        if np.all(bits[:4] != preamb[i]) and \
+           np.all(bits[250:254] != preamb[j]) and \
+           np.all(bits[500:504] != preamb[k]) and \
+           np.all(bits[750:754] != preamb[m]):
+            return 1
+    return -1
 
 # decode L6D nav data ([5]) ----------------------------------------------------
 def decode_L6D(ch):
@@ -424,17 +475,16 @@ def decode_G1CA(ch):
     time_mark = (1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0,
         0, 1, 0, 0, 1, 0, 1, 1, 0)
     
-    if not sync_sec_code(ch): # sync secondary code
+    if not sync_symb(ch, 10): # sync symbol
         return
     
     if ch.nav.fsync > 0: # sync GLONASS nav string
-        if ch.lock == ch.nav.fsync + 2000:
+        if ch.lock >= ch.nav.fsync + 2000:
             rev = sync_frame(ch, time_mark, ch.nav.syms[-230:])
             if rev == ch.nav.rev:
                 decode_glo_str(ch, ch.nav.syms[-200:] ^ rev, rev)
-            else:
-                ch.nav.fsync = ch.nav.rev = 0
-     
+        elif ch.lock > ch.nav.fsync + 4000:
+            ch.nav.fsync = ch.nav.rev = 0
     elif ch.lock >= 2300:
         # sync and decode GLONASS nav string
         rev = sync_frame(ch, time_mark, ch.nav.syms[-230:])
@@ -443,9 +493,10 @@ def decode_G1CA(ch):
 
 # decode GLONASS nav string ([14]) ---------------------------------------------
 def decode_glo_str(ch, syms, rev):
-    time = ch.time - 2.3
+    time = ch.time - 1e-3 * 2000
     
-    data = pack_bits(syms[0:170:2]) # GLONASS string (85 bits, packed)
+    # handle meander and relative code transformation ([14] fig.3.4)
+    data = pack_bits(np.hstack([0, syms[0:168:2] ^ syms[2:170:2]]))
     
     if sdr_rtk.test_glostr(data):
         ch.nav.fsync = ch.lock
@@ -469,10 +520,11 @@ def decode_G3OCD(ch):
         return
     
     if ch.nav.fsync > 0: # sync GLONASS L3OCD nav string
-        if ch.lock == ch.nav.fsync + 3000:
+        if ch.lock >= ch.nav.fsync + 3000:
             search_glo_L3OCD_str(ch)
-    
-    elif (ch.lock - ch.nav.ssync) % 1000 == 0:
+        elif ch.lock > ch.nav.fsync + 6000:
+            ch.nav.fsync = ch.nav.rev = 0
+    elif ch.lock > ch.nav.ssync + 6680:
         search_glo_L3OCD_str(ch)
 
 # swap convolutional code G1 and G2 --------------------------------------------
@@ -486,19 +538,17 @@ def swap_syms(syms):
 def search_glo_L3OCD_str(ch):
     preamb = (0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 0)
     
-    # decode 1/2 FEC (852 syms -> 420 bits)
-    bits = sdr_fec.decode_conv(swap_syms(ch.nav.syms[-852:]) * 255)
+    # decode 1/2 FEC (668 syms -> 320 + 8 bits)
+    bits = sdr_fec.decode_conv(swap_syms(ch.nav.syms[-668:]) * 255)
     
     # search and decode GLONASS L3OCD nav string
-    for i in range(100):
-        rev = sync_frame(ch, preamb, bits[i:i+320])
-        if rev >= 0:
-            decode_glo_L3OCD_str(ch, bits[i:i+300] ^ rev, rev, i)
-            break
+    rev = sync_frame(ch, preamb, bits[:320])
+    if rev >= 0:
+        decode_glo_L3OCD_str(ch, bits[:300] ^ rev, rev)
 
 # decode GLONASS L3OCD nav string ----------------------------------------------
-def decode_glo_L3OCD_str(ch, bits, rev, i):
-    time = ch.time - 4.2 + 0.01 * i
+def decode_glo_L3OCD_str(ch, bits, rev):
+    time = ch.time - 1e-3 * 328
     
     if test_CRC(bits):
         ch.nav.ssync = ch.nav.fsync = ch.lock
@@ -683,7 +733,7 @@ def decode_B1I_D1(ch):
     
     if not sync_sec_code(ch): # sync secondary code
         return
-
+    
     if ch.nav.fsync > 0: # sync frame
         if ch.lock == ch.nav.fsync + 6000:
             rev = sync_frame(ch, preamb, ch.nav.syms[-311:])
