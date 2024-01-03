@@ -42,12 +42,12 @@ def sdr_sec_code(sig, prn):
 # sdr_res_code() by libsdr -----------------------------------------------------
 def sdr_res_code(code, T, coff, fs, N, Nz):
     code = np.array(code, dtype='int8')
-    code_res = np.zeros(N + Nz, dtype='complex64')
+    code_res = np.zeros(N + Nz, dtype='float32')
     libsdr.sdr_res_code.argtypes = [
         ctypeslib.ndpointer('int8'), c_int32, c_double, c_double, c_double,
-        c_int32, c_int32, ctypeslib.ndpointer('complex64')]
+        c_int32, c_int32, ctypeslib.ndpointer('float32')]
     libsdr.sdr_res_code(code, len(code), T, coff, fs, N, Nz, code_res)
-    return code_res
+    return np.array(code_res, dtype='complex64')
 
 # sdr_gen_code_fft() by libsdr -------------------------------------------------
 def sdr_gen_code_fft(code, T, coff, fs, N, Nz):
@@ -157,6 +157,14 @@ def test_01():
         if not np.all(code == code_ref):
             err = 1
     print('sdr_gen_code() L5SI : %s' % ('NG' if err else 'OK'))
+    
+    err = 0
+    for prn in range(184, 190):
+        code = sdr_gen_code('L5SIV', prn)
+        code_ref = sdr_code.gen_code('L5SIV', prn)
+        if not np.all(code == code_ref):
+            err = 1
+    print('sdr_gen_code() L5SIV: %s' % ('NG' if err else 'OK'))
     
     err = 0
     for prn in range(184, 190):
@@ -385,6 +393,14 @@ def test_02():
         if not np.all(code == code_ref):
             err = 1
     print('sdr_sec_code() L5SI : %s' % ('NG' if err else 'OK'))
+    
+    err = 0
+    for prn in range(184, 190):
+        code = sdr_sec_code('L5SIV', prn)
+        code_ref = sdr_code.sec_code('L5SIV', prn)
+        if not np.all(code == code_ref):
+            err = 1
+    print('sdr_sec_code() L5SIV: %s' % ('NG' if err else 'OK'))
     
     err = 0
     for prn in range(184, 190):
