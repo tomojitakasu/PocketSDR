@@ -15,6 +15,7 @@
 //  2022-08-15  1.6  ensure thread-safety of sdr_corr_fft_()
 //  2023-12-28  1.7  support API changes
 //                   enable escape sequence for Windows console
+//  2024-01-03  1.8  fix AVX2 codes in dot_cpx_real()
 //
 #include <math.h>
 #include <stdarg.h>
@@ -336,9 +337,10 @@ static void dot_cpx_real(const sdr_cpx_t *a, const float *b, int N, float s,
     int i = 0;
     
 #ifdef AVX2
+    static const int32_t offset[] = {0, 1, 4, 5, 2, 3, 6, 7};
+    __m256i ymm7 = _mm256_loadu_si256((__m256i_u *)offset);
     __m256 ymm1 = _mm256_setzero_ps();
     __m256 ymm2 = _mm256_setzero_ps();
-    float d[8], e[8];
     
     for ( ; i < N - 7; i += 8) {
         __m256 ymm3 = _mm256_loadu_ps(a[i]);
@@ -346,9 +348,11 @@ static void dot_cpx_real(const sdr_cpx_t *a, const float *b, int N, float s,
         __m256 ymm5 = _mm256_shuffle_ps(ymm3, ymm4, 0x88); // a.real 
         __m256 ymm6 = _mm256_shuffle_ps(ymm3, ymm4, 0xDD); // a.imag 
         ymm3 = _mm256_loadu_ps(b + i);
-        ymm1 = _mm256_fmadd_ps(ymm5, ymm3, ymm1);   // c.real 
-        ymm2 = _mm256_fmadd_ps(ymm6, ymm3, ymm2);   // c.imag 
+        ymm4 = _mm256_permutevar8x32_ps(ymm3, ymm7);
+        ymm1 = _mm256_fmadd_ps(ymm5, ymm4, ymm1);   // c.real 
+        ymm2 = _mm256_fmadd_ps(ymm6, ymm4, ymm2);   // c.imag 
     }
+    float d[8], e[8];
     _mm256_storeu_ps(d, ymm1);
     _mm256_storeu_ps(e, ymm2);
     (*c)[0] = d[0] + d[1] + d[2] + d[3] + d[4] + d[5] + d[6] + d[7];
