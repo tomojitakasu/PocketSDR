@@ -14,6 +14,7 @@
 #  2022-01-25  1.4  support TCP client/server for log stream
 #  2022-05-18  1.5  support API changes of sdr_func.c
 #                   support np.fromfile() without offset option
+#  2023-12-27  1.6  support API changes of sdr_func.c
 #
 from math import *
 from ctypes import *
@@ -134,13 +135,15 @@ def dop_bins(T, dop, max_dop):
 def corr_std(buff, ix, N, fs, fc, phi, code, pos):
     if libsdr and LIBSDR_ENA:
         corr = np.empty(len(pos), dtype='complex64')
+        code_real = np.array(code.real, dtype='float32')
         pos = np.array(pos, dtype='int32')
         libsdr.sdr_corr_std.argtypes = [
-            ctypeslib.ndpointer('complex64'), c_int32, c_int32, c_double,
-            c_double, c_double, ctypeslib.ndpointer('complex64'),
+            ctypeslib.ndpointer('complex64'), c_int32, c_int32, c_int32,
+            c_double, c_double, c_double, ctypeslib.ndpointer('float32'),
             ctypeslib.ndpointer('int32'), c_int32,
             ctypeslib.ndpointer('complex64')]
-        libsdr.sdr_corr_std(buff, ix, N, fs, fc, phi, code, pos, len(pos), corr)
+        libsdr.sdr_corr_std(buff, len(buff), ix, N, fs, fc, phi, code_real, pos,
+            len(pos), corr)
         return corr
     else:
         data = mix_carr(buff, ix, N, fs, fc, phi)
@@ -151,10 +154,10 @@ def corr_fft(buff, ix, N, fs, fc, phi, code_fft):
     if libsdr and LIBSDR_ENA:
         corr = np.empty(N, dtype='complex64')
         libsdr.sdr_corr_fft.argtypes = [
-            ctypeslib.ndpointer('complex64'), c_int32, c_int32, c_double,
-            c_double, c_double, ctypeslib.ndpointer('complex64'),
+            ctypeslib.ndpointer('complex64'), c_int32, c_int32, c_int32,
+            c_double, c_double, c_double, ctypeslib.ndpointer('complex64'),
             ctypeslib.ndpointer('complex64')]
-        libsdr.sdr_corr_fft(buff, ix, N, fs, fc, phi, code_fft, corr)
+        libsdr.sdr_corr_fft(buff, len(buff), ix, N, fs, fc, phi, code_fft, corr)
         return corr
     else:
         data = mix_carr(buff, ix, N, fs, fc, phi)
@@ -165,9 +168,9 @@ def mix_carr(buff, ix, N, fs, fc, phi):
     if libsdr and LIBSDR_ENA:
         data = np.empty(N, dtype='complex64')
         libsdr.sdr_mix_carr.argtypes = [
-            ctypeslib.ndpointer('complex64'), c_int32, c_int32, c_double,
-            c_double, c_double, ctypeslib.ndpointer('complex64')]
-        libsdr.sdr_mix_carr(buff, ix, N, fs, fc, phi, data)
+            ctypeslib.ndpointer('complex64'), c_int32, c_int32, c_int32,
+            c_double, c_double, c_double, ctypeslib.ndpointer('complex64')]
+        libsdr.sdr_mix_carr(buff, len(buff), ix, N, fs, fc, phi, data)
         return data
     else:
         global carr_tbl
