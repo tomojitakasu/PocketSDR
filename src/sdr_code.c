@@ -52,6 +52,7 @@
 //  2023-12-27  1.8  modify API sdr_res_code(): return float *
 //                   L5S PRN range: 184-189 -> 184-189,205-206 [15]
 //                   add signal L5SIV (L5SI verification mode)
+//  2024-01-03  1.9  add secondary code of G1CA with odd FCN
 //
 #include <ctype.h>
 #include "pocket_sdr.h"
@@ -1146,8 +1147,14 @@ static int8_t *sec_code_G1CA(int prn, int *N)
     if (prn < -7 || prn > 6) { // FCN
         return NULL;
     }
-    *N = 1;
-    return code;
+    if (prn % 2 == 0) { // even FCN
+        *N = 1;
+        return code;
+    }
+    else { // odd FCN
+        *N = 2;
+        return MC;
+    }
 }
 
 // generate G2CA secondary code ------------------------------------------------
