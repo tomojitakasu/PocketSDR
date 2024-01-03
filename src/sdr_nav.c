@@ -11,8 +11,8 @@
 //      Satellite Positioning, Navigation and Timing Service, November 5, 2018
 //  [5] IS-QZSS-L6-003, Quasi-Zenith Satellite System Interface Specification
 //      Centimeter Level Augmentation Service, August 20, 2020
-//  [6] IS-QZSS-TV-003, Quasi-Zenith Satellite System Interface Specification
-//      Positioning Technology Verification Service, December 27, 2019
+//  [6] IS-QZSS-TV-004, Quasi-Zenith Satellite System Interface Specification
+//      Positioning Technology Verification Service, September 27, 2023
 //  [7] BeiDou Navigation Satellite System Signal In Space Interface Control
 //      Document - Open Service Signal B1I (Version 3.0), February, 2019
 //  [8] BeiDou Navigation Satellite System Signal In Space Interface Control
@@ -39,6 +39,7 @@
 //
 //  History:
 //  2022-07-08  1.0  port sdr_nav.py to C
+//  2023-12-28  1.1  fix L1CA_SBAS, L5I, L5I_SBAS, L5SI, L5SIV, G1CA and G3OCD
 //
 #include "rtklib.h"
 #include "pocket_sdr.h"
@@ -174,7 +175,9 @@ static void hex_str(const uint8_t *data, int nbits, char *str)
 // new nav data ----------------------------------------------------------------
 sdr_nav_t *sdr_nav_new(const char *nav_opt)
 {
-    return (sdr_nav_t *)sdr_malloc(sizeof(sdr_nav_t));
+    sdr_nav_t *nav = (sdr_nav_t *)sdr_malloc(sizeof(sdr_nav_t));
+    snprintf(nav->opt, sizeof(nav->opt), "%s", nav_opt);
+    return nav;
 }
 
 // free nav data ---------------------------------------------------------------
@@ -214,10 +217,9 @@ static int sync_SBAS_msgs(const uint8_t *bits, int N)
 }
 
 // decode SBAS message ---------------------------------------------------------
-static void decode_SBAS_msgs(sdr_ch_t *ch, const uint8_t *bits, int rev,
-    int off)
+static void decode_SBAS_msgs(sdr_ch_t *ch, const uint8_t *bits, int rev)
 {
-    double time = ch->time - 1e-3 * (1028 - off);
+    double time = ch->time - 1e-3 * 1088;
     uint8_t buff[250];
     
     for (int i = 0; i < 250; i++) {
@@ -243,21 +245,18 @@ static void decode_SBAS_msgs(sdr_ch_t *ch, const uint8_t *bits, int rev,
 // search SBAS message ---------------------------------------------------------
 static void search_SBAS_msgs(sdr_ch_t *ch)
 {
-    uint8_t syms[1028], bits[508];
+    uint8_t syms[544], bits[266];
     
-    // decode 1/2 FEC (1028 syms -> 508 bits)
-    for (int i = 0; i < 1028; i++) {
-        syms[i] = ch->nav->syms[SDR_MAX_NSYM-1028+i] * 255;
+    // decode 1/2 FEC (544 syms -> 258 + 8 bits)
+    for (int i = 0; i < 544; i++) {
+        syms[i] = ch->nav->syms[SDR_MAX_NSYM-544+i] * 255;
     }
-    sdr_decode_conv(syms, 1028, bits);
+    sdr_decode_conv(syms, 544, bits);
     
     // search and decode SBAS message
-    for (int i = 0; i < 250; i++) {
-        int rev = sync_SBAS_msgs(bits + i, 250);
-        if (rev >= 0) {
-            decode_SBAS_msgs(ch, bits + i, rev, i * 2);
-            break;
-        }
+    int rev = sync_SBAS_msgs(bits, 250);
+    if (rev >= 0) {
+        decode_SBAS_msgs(ch, bits, rev);
     }
 }
 
@@ -268,11 +267,14 @@ static void decode_SBAS(sdr_ch_t *ch)
         return;
     }
     if (ch->nav->fsync > 0) { // sync SBAS message
-        if (ch->lock == ch->nav->fsync + 1000) {
+        if (ch->lock >= ch->nav->fsync + 1000) {
             search_SBAS_msgs(ch);
         }
+        else if (ch->lock > ch->nav->fsync + 2000) {
+            ch->nav->fsync = ch->nav->rev = 0;
+        }
     }
-    else if ((ch->lock - ch->nav->ssync) % 250 == 0) {
+    else if (ch->lock > 1088) {
         search_SBAS_msgs(ch);
     }
 }
@@ -476,9 +478,9 @@ static void decode_L1CD(sdr_ch_t *ch)
 }
     
 // decode CNAV subframe ([13]) -------------------------------------------------
-static void decode_CNAV(sdr_ch_t *ch, const uint8_t *bits, int rev, int off)
+static void decode_CNAV(sdr_ch_t *ch, const uint8_t *bits, int rev)
 {
-    double time = ch->time - 10e-3 * (1228 - off);
+    double time = ch->time - 1e-3 * 6440;
     uint8_t buff[300];
     
     for (int i = 0; i < 300; i++) {
@@ -506,21 +508,18 @@ static void decode_CNAV(sdr_ch_t *ch, const uint8_t *bits, int rev, int off)
 static void search_CNAV_frame(sdr_ch_t *ch)
 {
     static const uint8_t preamb[] = {1, 0, 0, 0, 1, 0, 1, 1};
-    uint8_t buff[1228], bits[608];
+    uint8_t buff[644], bits[316];
     
-    // decode 1/2 FEC (1228 syms -> 608 bits)
-    for (int i = 0; i < 1228; i++) {
-        buff[i] = ch->nav->syms[SDR_MAX_NSYM-1228+i] * 255;
+    // decode 1/2 FEC (644 syms -> 308 + 8 bits)
+    for (int i = 0; i < 644; i++) {
+        buff[i] = ch->nav->syms[SDR_MAX_NSYM-644+i] * 255;
     }
-    sdr_decode_conv(buff, 1228, bits);
+    sdr_decode_conv(buff, 644, bits);
     
     // search and decode CNAV subframe
-    for (int i = 0; i < 300; i++) {
-        int rev = sync_frame(ch, preamb, 8, bits + i, 300);
-        if (rev >= 0) {
-            decode_CNAV(ch, bits + i, rev, i * 2);
-            break;
-        }
+    int rev = sync_frame(ch, preamb, 8, bits, 300);
+    if (rev >= 0) {
+        decode_CNAV(ch, bits, rev);
     }
 }
 
@@ -532,12 +531,75 @@ static void decode_L2CM(sdr_ch_t *ch)
     sdr_add_buff(ch->nav->syms, SDR_MAX_NSYM, &sym, sizeof(sym));
     
     if (ch->nav->fsync > 0) { // sync CNAV subframe
-        if (ch->lock == ch->nav->fsync + 600) {
+        if (ch->lock >= ch->nav->fsync + 600) {
             search_CNAV_frame(ch);
         }
+        else if (ch->lock > ch->nav->fsync + 1200) {
+            ch->nav->fsync = ch->nav->rev = 0;
+        }
     }
-    else if ((ch->lock - ch->nav->ssync) % 150 == 0) {
+    else if (ch->lock > 644) {
         search_CNAV_frame(ch);
+    }
+}
+
+// sync L5 SBAS message --------------------------------------------------------
+static int sync_L5_SBAS_msgs(const uint8_t *bits, int N)
+{
+    static const uint8_t preamb[][8] = {
+        {0, 1, 0, 1}, {1, 1, 0, 0}, {0, 1, 1, 0}, {1, 0, 0, 1}, {0, 0, 1, 1},
+        {1, 0, 1, 0}
+    };
+    for (int i = 0; i < 6; i++) {
+        int j = (i + 1) % 6, k = (i + 2) % 6, m = (i + 3) % 6;
+        if (bmatch_n(bits, preamb[i], 4) && bmatch_n(bits + N, preamb[j], 4) &&
+            bmatch_n(bits + 2 * N, preamb[k], 4) &&
+            bmatch_n(bits + 3 * N, preamb[m], 4)) {
+            return 0;
+        }
+        if (bmatch_r(bits, preamb[i], 4) && bmatch_r(bits + N, preamb[j], 4) &&
+            bmatch_r(bits + 2 * N, preamb[k], 4) &&
+            bmatch_r(bits + 3 * N, preamb[m], 4)) {
+            return 1;
+        }
+    }
+    return -1;
+}
+
+// search L5 SBAS message ------------------------------------------------------
+static void search_L5_SBAS_msgs(sdr_ch_t *ch)
+{
+    uint8_t syms[1546], bits[766];
+    
+    // decode 1/2 FEC (1546 syms -> 758 + 8 bits)
+    for (int i = 0; i < 1546; i++) {
+        syms[i] = ch->nav->syms[SDR_MAX_NSYM-1546+i] * 255;
+    }
+    sdr_decode_conv(syms, 1546, bits);
+    
+    // search and decode SBAS message
+    int rev = sync_L5_SBAS_msgs(bits, 250);
+    if (rev >= 0) {
+        decode_SBAS_msgs(ch, bits + 500, rev);
+    }
+}
+
+// decode L5 SBAS nav data ----------------------------------------------------
+static void decode_L5_SBAS(sdr_ch_t *ch)
+{
+    if (!sync_sec_code(ch)) { // sync secondary code
+        return;
+    }
+    if (ch->nav->fsync > 0) { // sync L5 SBAS message
+        if (ch->lock >= ch->nav->fsync + 1000) {
+            search_L5_SBAS_msgs(ch);
+        }
+        else if (ch->lock > ch->nav->fsync + 2000) {
+            ch->nav->fsync = ch->nav->rev = 0;
+        }
+    }
+    else if (ch->lock >= 3093) {
+        search_L5_SBAS_msgs(ch);
     }
 }
 
@@ -545,18 +607,21 @@ static void decode_L2CM(sdr_ch_t *ch)
 static void decode_L5I(sdr_ch_t *ch)
 {
     if (ch->prn >= 120 && ch->prn <= 158) { // L5 SBAS
-        decode_SBAS(ch);
+        decode_L5_SBAS(ch);
         return;
     }
     if (!sync_sec_code(ch)) { // sync secondary code
         return;
     }
     if (ch->nav->fsync > 0) { // sync CNAV subframe
-        if (ch->lock == ch->nav->fsync + 6000) {
+        if (ch->lock >= ch->nav->fsync + 6000) {
             search_CNAV_frame(ch);
         }
+        else if (ch->lock > ch->nav->fsync + 12000) {
+            ch->nav->fsync = ch->nav->rev = 0;
+        }
     }
-    else if ((ch->lock - ch->nav->ssync) % 1000 == 0) {
+    else if (ch->lock > 6440) {
         search_CNAV_frame(ch);
     }
 }
@@ -564,7 +629,13 @@ static void decode_L5I(sdr_ch_t *ch)
 // decode L5SI nav data ([6]) --------------------------------------------------
 static void decode_L5SI(sdr_ch_t *ch)
 {
-    decode_SBAS(ch);
+    decode_SBAS(ch); // L5SI normal mode
+}
+
+// decode L5SIV nav data ([6]) --------------------------------------------------
+static void decode_L5SIV(sdr_ch_t *ch)
+{
+    decode_L5_SBAS(ch); // L5SI verification mode
 }
 
 // sync and decode L6 frame ([5]) ----------------------------------------------
@@ -639,11 +710,12 @@ static void decode_L6E(sdr_ch_t *ch)
 // decode GLONASS nav string ([14]) --------------------------------------------
 static void decode_glo_str(sdr_ch_t *ch, const uint8_t *syms, int rev)
 {
-    double time = ch->time - 2.3;
-    uint8_t bits[100], data[11];
+    double time = ch->time - 1e-3 * 2000;
+    uint8_t bits[85] = {0}, data[11];
     
-    for (int i = 0; i < 100; i++) {
-        bits[i] = syms[i*2] ^ (uint8_t)rev;
+    for (int i = 1; i < 85; i++) {
+        // handle meander and relative code transformation ([14] fig.3.4)
+        bits[i] = syms[(i-1)*2] ^ syms[i*2] ^ (uint8_t)rev;
     }
     sdr_pack_bits(bits, 85, 0, data); // GLONASS string (85 bits, packed)
     
@@ -671,20 +743,20 @@ static void decode_G1CA(sdr_ch_t *ch)
         1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0,
         0, 1, 0, 0, 1, 0, 1, 1, 0
     };
-    if (!sync_sec_code(ch)) { // sync secondary code
+    if (!sync_symb(ch, 10)) { // sync symbol
         return;
     }
     uint8_t *syms = ch->nav->syms + SDR_MAX_NSYM - 230;
     
     if (ch->nav->fsync > 0) { // sync GLONASS nav string
-        if (ch->lock == ch->nav->fsync + 2000) {
+        if (ch->lock >= ch->nav->fsync + 2000) {
             int rev = sync_frame(ch, time_mark, 30, syms, 200);
             if (rev == ch->nav->rev) {
                 decode_glo_str(ch, syms + 30, rev);
             }
-            else {
-                ch->nav->fsync = ch->nav->rev = 0;
-            }
+        }
+        else if (ch->lock > ch->nav->fsync + 4000) {
+            ch->nav->fsync = ch->nav->rev = 0;
         }
     }
     else if (ch->lock >= 2300) {
@@ -703,9 +775,9 @@ static void decode_G2CA(sdr_ch_t *ch)
 }
 
 // decode GLONASS L3OCD nav string ---------------------------------------------
-static void decode_glo_L3OCD_str(sdr_ch_t *ch, const uint8_t *bits, int rev, int i)
+static void decode_glo_L3OCD_str(sdr_ch_t *ch, const uint8_t *bits, int rev)
 {
-    double time = ch->time - 4.2 + 0.01 * i;
+    double time = ch->time - 1e-3 * 328;
     uint8_t buff[300];
     
     for (int i = 0; i < 300; i++) {
@@ -719,12 +791,12 @@ static void decode_glo_L3OCD_str(sdr_ch_t *ch, const uint8_t *bits, int rev, int
         ch->nav->count[0]++;
         char str[256];
         hex_str(ch->nav->data, 300, str);
-        sdr_log(3, "$G3OCD,%->3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+        sdr_log(3, "$G3OCD,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
     }
     else {
         ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
         ch->nav->count[1]++;
-        sdr_log(3, "$LOG,%->3f,%s,%d,G3OCD STRING ERROR", time, ch->sig, ch->prn);
+        sdr_log(3, "$LOG,%.3f,%s,%d,G3OCD STRING ERROR", time, ch->sig, ch->prn);
     }
 }
 
@@ -734,23 +806,20 @@ static void search_glo_L3OCD_str(sdr_ch_t *ch)
     static uint8_t preamb[] = {
         0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 0
     };
-    uint8_t syms[852], bits[420];
+    uint8_t syms[668], bits[328];
     
     // swap convolutional code G1 and G2
-    for (int i = 0; i < 852; i += 2) {
-        syms[i  ] = ch->nav->syms[SDR_MAX_NSYM-852+i+1] * 255;
-        syms[i+1] = ch->nav->syms[SDR_MAX_NSYM-852+i  ] * 255;
+    for (int i = 0; i < 668; i += 2) {
+        syms[i  ] = ch->nav->syms[SDR_MAX_NSYM-668+i+1] * 255;
+        syms[i+1] = ch->nav->syms[SDR_MAX_NSYM-668+i  ] * 255;
     }
-    // decode 1/2 FEC (852 syms -> 420 bits)
-    sdr_decode_conv(syms, 852, bits);
+    // decode 1/2 FEC (668 syms -> 320 + 8 bits)
+    sdr_decode_conv(syms, 668, bits);
     
     // search and decode GLONASS L3OCD nav string
-    for (int i = 0; i < 100; i++) {
-        int rev = sync_frame(ch, preamb, 20, bits + i, 300);
-        if (rev >= 0) {
-            decode_glo_L3OCD_str(ch, bits + i, rev, i);
-            break;
-        }
+    int rev = sync_frame(ch, preamb, 20, bits, 300);
+    if (rev >= 0) {
+        decode_glo_L3OCD_str(ch, bits, rev);
     }
 }
 
@@ -761,11 +830,14 @@ static void decode_G3OCD(sdr_ch_t *ch)
         return;
     }
     if (ch->nav->fsync > 0) { // sync GLONASS L3OCD nav string
-        if (ch->lock == ch->nav->fsync + 3000) {
+        if (ch->lock >= ch->nav->fsync + 3000) {
             search_glo_L3OCD_str(ch);
         }
+        else if (ch->lock > ch->nav->fsync + 6000) {
+            ch->nav->ssync = ch->nav->fsync = 0;
+        }
     }
-    else if ((ch->lock - ch->nav->ssync) % 1000 == 0) {
+    else if (ch->lock > ch->nav->ssync + 6680) {
         search_glo_L3OCD_str(ch);
     }
 }
@@ -1451,6 +1523,9 @@ void sdr_nav_decode(sdr_ch_t *ch)
     }
     else if (!strcmp(ch->sig, "L5SI")) {
         decode_L5SI(ch);
+    }
+    else if (!strcmp(ch->sig, "L5SIV")) {
+        decode_L5SIV(ch);
     }
     else if (!strcmp(ch->sig, "G1CA")) {
         decode_G1CA(ch);
