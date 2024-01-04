@@ -256,13 +256,14 @@ sdr_dev_t *sdr_dev_open(int bus, int port)
     sdr_dev_t *dev;
     struct sched_param param = {99};
     int ret;
-    
+#if 1
+    // increase kernel memory size of USB stacks (16 MB-> 256 MB)
+    if (system("echo 256 > /sys/module/usbcore/parameters/usbfs_memory_mb\n")) {
+        fprintf(stderr, "Kernel memory size setting error\n");
+    }
+#endif
     if (!(dev = (sdr_dev_t *)malloc(sizeof(sdr_dev_t)))) {
         return NULL;
-    }
-    // increase kernel memory size of USB stacks (16 MB-> 64 MB)
-    if (system("echo 64 > /sys/module/usbcore/parameters/usbfs_memory_mb\n")) {
-        fprintf(stderr, "Kernel memory size setting error\n");
     }
     if (!(dev->usb = sdr_usb_open(bus, port, SDR_DEV_VID, SDR_DEV_PID))) {
         free(dev);
