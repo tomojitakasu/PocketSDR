@@ -53,8 +53,8 @@ extern "C" {
 #define SDR_MAX_BUFF    1024    // number of digital IF data buffer 
 #define SDR_SIZE_BUFF   (1<<14) // size of digital IF data buffer (bytes) 
 #else
-#define SDR_MAX_BUFF    15      // number of digital IF data buffer 
-#define SDR_SIZE_BUFF   (1<<21) // size of digital IF data buffer (bytes) 
+#define SDR_MAX_BUFF    1024    // number of digital IF data buffer 
+#define SDR_SIZE_BUFF   (1<<15) // size of digital IF data buffer (bytes) 
 #endif // WIN32
 
 // type definitions ----------------------------------------------------------
