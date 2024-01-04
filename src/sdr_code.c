@@ -53,6 +53,8 @@
 //                   L5S PRN range: 184-189 -> 184-189,205-206 [15]
 //                   add signal L5SIV (L5SI verification mode)
 //  2024-01-03  1.9  add secondary code of G1CA with odd FCN
+//  2024-01-04  1.10 add signal L5SQV (L5SQ verification mode)
+//                   fix L5Q SBAS secondary code
 //
 #include <ctype.h>
 #include "pocket_sdr.h"
@@ -958,6 +960,15 @@ static int8_t *gen_code_L5SQ(int prn, int *N)
     return gen_code_L5Q(prn, N);
 }
 
+// generate L5SQV code ([15]) --------------------------------------------------
+static int8_t *gen_code_L5SQV(int prn, int *N)
+{
+    if ((prn < 184 || prn > 189) && (prn < 205 || prn > 206)) {
+        return NULL;
+    }
+    return gen_code_L5Q(prn, N);
+}
+
 // generate L5I secondary code ([2])--------------------------------------------
 static int8_t *sec_code_L5I(int prn, int *N)
 {
@@ -979,6 +990,13 @@ static int8_t *sec_code_L5Q(int prn, int *N)
     return NH20;
 }
 
+// generate L5Q SBAS secondary code --------------------------------------------
+static int8_t *sec_code_L5Q_SBAS(int prn, int *N)
+{
+    *N = 2;
+    return MC;
+}
+
 // generate L5SI secondary code ([15]) -----------------------------------------
 static int8_t *sec_code_L5SI(int prn, int *N)
 {
@@ -997,7 +1015,7 @@ static int8_t *sec_code_L5SIV(int prn, int *N)
     if ((prn < 184 || prn > 189) && (prn < 205 || prn > 206)) {
         return NULL;
     }
-    return sec_code_L5I_SBAS(prn, N); // L5SI verification mode
+    return sec_code_L5I_SBAS(prn, N); // L5S verification mode
 }
 
 // generate L5SQ secondary code ([15]) -----------------------------------------
@@ -1007,6 +1025,15 @@ static int8_t *sec_code_L5SQ(int prn, int *N)
         return NULL;
     }
     return sec_code_L5Q(prn, N);
+}
+
+// generate L5SQV secondary code ([15]) ----------------------------------------
+static int8_t *sec_code_L5SQV(int prn, int *N)
+{
+    if ((prn < 184 || prn > 189) && (prn < 205 || prn > 206)) {
+        return NULL;
+    }
+    return sec_code_L5Q_SBAS(prn, N); // L5S verification mode
 }
 
 // generate L6 code ------------------------------------------------------------
@@ -1833,6 +1860,9 @@ static int8_t *gen_code(const char *sig, int prn, int *N)
     else if (!strcmp(Sig, "L5SQ")) {
         return gen_code_L5SQ(prn, N);
     }
+    else if (!strcmp(Sig, "L5SQV")) {
+        return gen_code_L5SQV(prn, N);
+    }
     else if (!strcmp(Sig, "L6D")) {
         return gen_code_L6D(prn, N);
     }
@@ -1959,7 +1989,12 @@ static int8_t *sec_code(const char *sig, int prn, int *N)
         }
     }
     else if (!strcmp(Sig, "L5Q")) {
-        return sec_code_L5Q(prn, N);
+        if (prn >= 120 && prn <=158) {
+            return sec_code_L5Q_SBAS(prn, N);
+        }
+        else {
+            return sec_code_L5Q(prn, N);
+        }
     }
     else if (!strcmp(Sig, "L5SI")) {
         return sec_code_L5SI(prn, N);
@@ -1969,6 +2004,9 @@ static int8_t *sec_code(const char *sig, int prn, int *N)
     }
     else if (!strcmp(Sig, "L5SQ")) {
         return sec_code_L5SQ(prn, N);
+    }
+    else if (!strcmp(Sig, "L5SQV")) {
+        return sec_code_L5SQV(prn, N);
     }
     else if (!strcmp(Sig, "G1CA")) {
         return sec_code_G1CA(prn, N);
@@ -2061,13 +2099,13 @@ double sdr_code_cyc(const char *sig)
     
     if (!strcmp(Sig, "L1CA") || !strcmp(Sig, "L1CB") || !strcmp(Sig, "L1S" ) ||
         !strcmp(Sig, "L5I" ) || !strcmp(Sig, "L5Q" ) || !strcmp(Sig, "L5SI") ||
-        !strcmp(Sig, "L5SIV") || !strcmp(Sig, "L5SQ") || !strcmp(Sig, "G1CA") ||
-        !strcmp(Sig, "G2CA") || !strcmp(Sig, "G3OCD") || !strcmp(Sig, "G3OCP") ||
-        !strcmp(Sig, "E5AI") || !strcmp(Sig, "E5AQ") || !strcmp(Sig, "E5BI") ||
-        !strcmp(Sig, "E5BQ") || !strcmp(Sig, "E6B" ) || !strcmp(Sig, "E6C" ) ||
-        !strcmp(Sig, "B1I" ) || !strcmp(Sig, "B2I" ) || !strcmp(Sig, "B2AD") ||
-        !strcmp(Sig, "B2AP") || !strcmp(Sig, "B2BI") || !strcmp(Sig, "B3I" ) ||
-        !strcmp(Sig, "I5S" ) || !strcmp(Sig, "ISS" )) {
+        !strcmp(Sig, "L5SIV") || !strcmp(Sig, "L5SQ") || !strcmp(Sig, "L5SQV") ||
+        !strcmp(Sig, "G1CA") || !strcmp(Sig, "G2CA") || !strcmp(Sig, "G3OCD") ||
+        !strcmp(Sig, "G3OCP") || !strcmp(Sig, "E5AI") || !strcmp(Sig, "E5AQ") ||
+        !strcmp(Sig, "E5BI") || !strcmp(Sig, "E5BQ") || !strcmp(Sig, "E6B" ) ||
+        !strcmp(Sig, "E6C" ) || !strcmp(Sig, "B1I" ) || !strcmp(Sig, "B2I" ) ||
+        !strcmp(Sig, "B2AD") || !strcmp(Sig, "B2AP") || !strcmp(Sig, "B2BI") ||
+        !strcmp(Sig, "B3I" ) || !strcmp(Sig, "I5S" ) || !strcmp(Sig, "ISS" )) {
         return 1e-3;
     }
     else if (!strcmp(Sig, "L6D" ) || !strcmp(Sig, "L6E" ) ||
@@ -2109,11 +2147,11 @@ int sdr_code_len(const char *sig)
     else if (!strcmp(Sig, "L1CP") || !strcmp(Sig, "L1CD") ||
         !strcmp(Sig, "L2CM") || !strcmp(Sig, "L5I" ) || !strcmp(Sig, "L5Q" ) ||
         !strcmp(Sig, "L5SI") || !strcmp(Sig, "L5SIV") || !strcmp(Sig, "L5SQ") ||
-        !strcmp(Sig, "L6D" ) || !strcmp(Sig, "L6E" ) || !strcmp(Sig, "G3OCD") ||
-        !strcmp(Sig, "G3OCP") || !strcmp(Sig, "E5AI") || !strcmp(Sig, "E5AQ") ||
-        !strcmp(Sig, "E5BI") || !strcmp(Sig, "E5BQ") || !strcmp(Sig, "B1CD") ||
-        !strcmp(Sig, "B1CP") || !strcmp(Sig, "B2AD") || !strcmp(Sig, "B2AP") ||
-        !strcmp(Sig, "B2BI") || !strcmp(Sig, "B3I" )) {
+        !strcmp(Sig, "L5SQV") || !strcmp(Sig, "L6D" ) || !strcmp(Sig, "L6E" ) ||
+        !strcmp(Sig, "G3OCD") || !strcmp(Sig, "G3OCP") || !strcmp(Sig, "E5AI") ||
+        !strcmp(Sig, "E5AQ") || !strcmp(Sig, "E5BI") || !strcmp(Sig, "E5BQ") ||
+        !strcmp(Sig, "B1CD") || !strcmp(Sig, "B1CP") || !strcmp(Sig, "B2AD") ||
+        !strcmp(Sig, "B2AP") || !strcmp(Sig, "B2BI") || !strcmp(Sig, "B3I" )) {
         return 10230;
     }
     else if (!strcmp(Sig, "L2CL")) {
@@ -2159,8 +2197,8 @@ double sdr_sig_freq(const char *sig)
     }
     else if (!strcmp(Sig, "L5I" ) || !strcmp(Sig, "L5Q" ) ||
         !strcmp(Sig, "L5SI") || !strcmp(Sig, "L5SIV") || !strcmp(Sig, "L5SQ") ||
-        !strcmp(Sig, "E5AI") || !strcmp(Sig, "E5AQ") || !strcmp(Sig, "B2AD") ||
-        !strcmp(Sig, "B2AP") || !strcmp(Sig, "I5S")) {
+        !strcmp(Sig, "L5SQV") || !strcmp(Sig, "E5AI") || !strcmp(Sig, "E5AQ") ||
+        !strcmp(Sig, "B2AD") || !strcmp(Sig, "B2AP") || !strcmp(Sig, "I5S")) {
         return 1176.45e6;
     }
     else if (!strcmp(Sig, "E5BI") || !strcmp(Sig, "E5BQ") ||
