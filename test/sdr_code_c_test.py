@@ -411,6 +411,14 @@ def test_02():
     print('sdr_sec_code() L5SI : %s' % ('NG' if err else 'OK'))
     
     err = 0
+    for prn in range(184, 190):
+        code = sdr_sec_code('L5SQV', prn)
+        code_ref = sdr_code.sec_code('L5SQV', prn)
+        if not np.all(code == code_ref):
+            err = 1
+    print('sdr_sec_code() L5SQV: %s' % ('NG' if err else 'OK'))
+    
+    err = 0
     for prn in range(-7, 7):
         code = sdr_sec_code('G1CA', prn)
         code_ref = sdr_code.sec_code('G1CA', prn)
