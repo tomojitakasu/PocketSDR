@@ -29,7 +29,7 @@
 ../python/pocket_trk.py L5.bin -f 24 -sig E5AQ -prn 1-36
 ../python/pocket_trk.py L5.bin -f 24 -sig B2AD -prn 19-46
 ../python/pocket_trk.py L5.bin -f 24 -sig B2AP -prn 19-46
-../python/pocket_trk.py L5.bin -f 24 -sig I5S  -prn 1-7
+../python/pocket_trk.py L5.bin -f 24 -sig I5S  -prn 1-10
 
 ../bin/pocket_dump -t 30 L1b.bin L6.bin -c ../conf/pocket_L1L6_12MHz.conf
 
@@ -59,7 +59,7 @@
 
 ../bin/pocket_dump -t 30 B1I.bin B2I.bin -c ../conf/pocket_B1IB2I_12MHz.conf
 
-../python/pocket_trk.py B1I.bin -f 12 -sig B1I -prn 1-61
+../python/pocket_trk.py B1I.bin -f 12 -sig B1I -prn 1-63
 ../python/pocket_trk.py B2I.bin -f 12 -sig B2I -prn 1-16
 
 ../bin/pocket_dump -t 30 B1Ia.bin B3I.bin -c ../conf/pocket_B1IB3I_24MHz.conf
