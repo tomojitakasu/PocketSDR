@@ -54,6 +54,8 @@
 #  2023-12-28  1.8  L5S PRN range: 184-189 -> 184-189,205-206 [15]
 #                   add signal L5SIV (L5SI verification mode)
 #  2024-01-03  1.9  add secondary code of G1CA with odd FCN
+#  2024-01-04  1.10 add signal L5SQV (L5SQ verification mode)
+#                   fix L5Q SBAS secondary code
 #
 import numpy as np
 import scipy.fftpack as fft
@@ -611,6 +613,8 @@ def gen_code(sig, prn):
         return gen_code_L5SIV(prn)
     elif sig == 'L5SQ':
         return gen_code_L5SQ(prn)
+    elif sig == 'L5SQV':
+        return gen_code_L5SQV(prn)
     elif sig == 'L6D':
         return gen_code_L6D(prn)
     elif sig == 'L6E':
@@ -685,13 +689,18 @@ def sec_code(sig, prn):
         else:
             return sec_code_L5I(prn)
     elif sig == 'L5Q':
-        return sec_code_L5Q(prn)
+        if prn >= 120 and prn <= 158:
+            return sec_code_L5Q_SBAS(prn)
+        else:
+            return sec_code_L5Q(prn)
     elif sig == 'L5SI':
         return sec_code_L5SI(prn)
     elif sig == 'L5SIV':
         return sec_code_L5SIV(prn)
     elif sig == 'L5SQ':
         return sec_code_L5SQ(prn)
+    elif sig == 'L5SQV':
+        return sec_code_L5SQV(prn)
     elif sig == 'G1CA':
         return sec_code_G1CA(prn)
     elif sig == 'G2CA':
@@ -779,8 +788,9 @@ def gen_code_fft(code, T, coff, fs, N, Nz=0):
 def code_cyc(sig):
     sig = sig.upper()
     if sig in ('L1CA', 'L1CB', 'L1S', 'L5I', 'L5Q', 'L5SI', 'L5SIV', 'L5SQ',
-       'G1CA', 'G2CA', 'G3OCD', 'G3OCP', 'E5AI', 'E5AQ', 'E5BI', 'E5BQ', 'E6B',
-       'E6C', 'B1I', 'B2I', 'B2AD', 'B2AP', 'B2BI', 'B3I', 'I5S', 'ISS'):
+       'L5SQV', 'G1CA', 'G2CA', 'G3OCD', 'G3OCP', 'E5AI', 'E5AQ', 'E5BI',
+       'E5BQ', 'E6B', 'E6C', 'B1I', 'B2I', 'B2AD', 'B2AP', 'B2BI', 'B3I', 'I5S',
+       'ISS'):
         return 1e-3
     elif sig in ('L6D', 'L6E', 'E1B', 'E1C'):
         return 4e-3
@@ -807,8 +817,8 @@ def code_len(sig):
     if sig in ('L1CA', 'L1S', 'L1CB', 'I5S', 'ISS'):
         return 1023
     elif sig in ('L1CP', 'L1CD', 'L2CM', 'L5I', 'L5Q', 'L5SI', 'L5SIV', 'L5SQ',
-        'L6D', 'L6E', 'G3OCD', 'G3OCP', 'E5AI', 'E5AQ', 'E5BI', 'E5BQ', 'B1CD',
-        'B1CP', 'B2AD', 'B2AP', 'B2BI', 'B3I'):
+        'L5SQV', 'L6D', 'L6E', 'G3OCD', 'G3OCP', 'E5AI', 'E5AQ', 'E5BI', 'E5BQ',
+        'B1CD', 'B1CP', 'B2AD', 'B2AP', 'B2BI', 'B3I'):
         return 10230
     elif sig == 'L2CL':
         return 767250
@@ -839,8 +849,8 @@ def sig_freq(sig):
         return 1575.42e6
     elif sig in ('L2CM', 'L2CL'):
         return 1227.60e6
-    elif sig in ('L5I', 'L5Q', 'L5SI', 'L5SIV', 'L5SQ', 'E5AI', 'E5AQ', 'B2AD',
-        'B2AP', 'I5S'):
+    elif sig in ('L5I', 'L5Q', 'L5SI', 'L5SIV', 'L5SQ', 'L5SQV', 'E5AI', 'E5AQ',
+        'B2AD', 'B2AP', 'I5S'):
         return 1176.45e6
     elif sig in ('E5BI', 'E5BQ', 'B2I', 'B2BI'):
         return 1207.14e6
@@ -1026,6 +1036,12 @@ def gen_code_L5SQ(prn):
         return NONE
     return gen_code_L5Q(prn)
 
+# generate L5SQV code ([15]) ---------------------------------------------------
+def gen_code_L5SQV(prn):
+    if (prn < 184 or prn > 189) and (prn < 205 or prn > 206):
+        return NONE
+    return gen_code_L5Q(prn)
+
 # generate L5 XA code ----------------------------------------------------------
 def gen_code_L5_XA(N):
     code = LFSR(8190, 0b1111111111111, 0b0000000011011, 13)
@@ -1057,11 +1073,15 @@ def sec_code_L5I_SBAS(prn):
 def sec_code_L5Q(prn):
     return np.array(NH20, dtype='int8')
 
+# generate L5Q SBAS secondary code ---------------------------------------------
+def sec_code_L5Q_SBAS(prn):
+    return np.array(MC, dtype='int8')
+
 # generate L5SI secondary code ([15]) ------------------------------------------
 def sec_code_L5SI(prn):
     if (prn < 184 or prn > 189) and (prn < 205 or prn > 206):
         return NONE
-    return sec_code_L5I(prn) # normal mode
+    return np.array([1], dtype='int8') # normal mode
 
 # generate L5SIV secondary code ([15]) -----------------------------------------
 def sec_code_L5SIV(prn):
@@ -1073,7 +1093,13 @@ def sec_code_L5SIV(prn):
 def sec_code_L5SQ(prn):
     if (prn < 184 or prn > 189) and (prn < 205 or prn > 206):
         return NONE
-    return sec_code_L5Q(prn)
+    return sec_code_L5Q(prn) # normal mode
+
+# generate L5SQV secondary code ([15]) -----------------------------------------
+def sec_code_L5SQV(prn):
+    if (prn < 184 or prn > 189) and (prn < 205 or prn > 206):
+        return NONE
+    return sec_code_L5Q_SBAS(prn) # verification mode
 
 # generate L6D code ([4]) ------------------------------------------------------
 def gen_code_L6D(prn):
