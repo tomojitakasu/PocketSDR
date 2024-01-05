@@ -1,10 +1,10 @@
-# **Pocket SDR - An Open-Source GNSS SDR, ver. 0.8**
+# **Pocket SDR - An Open-Source GNSS SDR, ver. 0.9**
 
 ## **Overview**
 
 Pocket SDR is an open-source GNSS (Global Navigation Satellite System) receiver
-based on SDR (software defined radio) technology. It consists of a RF front-end
-device, some utilities for the device and GNSS-SDR APs (application programs)
+based on the SDR (software defined radio) technology. It consists of a RF front-
+end device, some utilities for the device and GNSS-SDR APs (application programs)
 written in Python and C. It supports almost all signals for GPS, GLONASS,
 Galileo, QZSS, BeiDou, NavIC and SBAS.
 
@@ -21,14 +21,17 @@ These supports Windows, Linux and other environments.
 
 Pocket SDR also provides GNSS-SDR APs to show the PSD (power spectrum density)
 of captured IF data, search the GNSS signals, track these signals and decode
-navigation data in them. The supported GNSS signals are as follows. These APs
-are written in Python by very compact way. They are easily modified by users
-to add user's unique algorithms. 
+navigation data in them. The supported GNSS signals are as follows. For details
+for these signals and signal IDs used in the Pocket SDR APs, refer 
+[Pocket SDR Signal IDs](/doc/signal_IDs.pdf).
 
 GPS: L1C/A, L1CP, L1CD, L2CM, L5I, L5Q, GLONASS: L1C/A, L2C/A, L3OCD, L3OCP,
 Galileo: E1B, E1C, E5aI, E5aQ, E5bI, E5bQ, E6B, E6C, QZSS: L1C/A, L1C/B, L1CP,
 L1CD, L1S, L2CM, L5I, L5Q, L5SI, L5SQ, L6D, L6E, BeiDou: B1I, B1CP, B1CD, B2I,
 B2aD, B2aP, B2bI, B3I, NavIC: L5-SPS, SBAS: L1C/A, L5I, L5Q
+
+These APs are written in Python and C by very compact way. They are easily
+modified by users to add user's unique algorithms. 
 
 <img src="image/pocket_sdr_image.jpg" width=80%>
 
@@ -49,7 +52,7 @@ PocketSDR --+-- bin     Pocket SDR utilities and APs binary programs for Windows
             +-- lib     External library for utilities and APs
             +-- conf    Configuration files for device settings
             +-- driver  Windows driver for EZ-USB FX2LP/FX3 (cyusb3.sys) ([4])
-            +-- doc     Documents (ref {1], [2])
+            +-- doc     Documents (ref [1], [2])
             +-- FW      Firmware source programs and images
             |   +-- cypress  Cypress libraries for EZ-USB firmware development
             |                (ref [4])
@@ -77,8 +80,8 @@ PocketSDR --+-- bin     Pocket SDR utilities and APs binary programs for Windows
 * Add the Pocket SDR Python scripts path (<install_dir>\PocketSDR\python) to 
   the command search path (Path) of Windows environment variables.
 
-* To rebuild the binary programs, you need MinGW64 and libusb-1.0 library. 
-  Refer MSYS2 (https://www.msys2.org/) for details.
+* To rebuild the binary programs, you need MinGW64. Refer MSYS2
+  (https://www.msys2.org/) for details.
 
 * In MinGW64 environment, you need fftw3 library. To install fftw3 library.
 ```
@@ -101,7 +104,15 @@ PocketSDR --+-- bin     Pocket SDR utilities and APs binary programs for Windows
 ```
     $ sudo apt install libfftw3-dev
 ```
-* Move to the library directory, build libraries.
+* Move to the library directory ({5],[6],[7]}), install external library source
+ trees as follows:
+```
+    $ cd <install_dir>/lib
+    $ git clone https://github.com/quiet/libfec libfec
+    $ git clone https://github.com/radfordneal/LDPC-codes LDPC-codes
+    $ git clone https://github.com/tomojitakasu/RTKLIB -b rtklib_2.4.3 RTKLIB
+```
+* Move to the library build directory, build libraries.
 ```
     $ cd <install_dir>/lib/build
     $ make
@@ -149,12 +160,11 @@ Pocket SDR contains the following application programs for GNSS-SDR.
 - **pocket_plot.py**: Plot GNSS signal tracking log by pocket_trk.py
 - **pocket_acq**    : C-version of pocket_acq.py (w/o graph plots)
 - **pocket_trk**    : C-version of pocket_trk.py (w/o graph plots)
+- **pocket_snap**   : C-version of pocket_snap.py
 
 For details, refer comment lines in python/pocket_psd.py, python/pocket_acq.py,
 python/pocket_trk.py, python/pocket_snap.py and python/pocket_plot.py. You need
-Python 3, Numpy, Scipy and matplotlib to execute Python scripts. pocket_trk.py
-uses external shared libraries of LIBFEC [5] and RTKLIB [6] in lib/ directory.
-These were built for Windows (64bit) and Linux for x86_64 CPU.
+Python 3, Numpy, Scipy and matplotlib to execute Python scripts.
 
 --------------------------------------------------------------------------------
 
@@ -168,37 +178,36 @@ These were built for Windows (64bit) and Linux for x86_64 CPU.
     
     $ pocket_dump -t 5 ch1.bin ch2.bin
       TIME(s)    T   CH1(Bytes)   T   CH2(Bytes)   RATE(Ks/s)
-          5.0    I     59768832  IQ    119537664      11922.8
+          5.0    I     60047360  IQ    120094720      11985.5
     
     $ pocket_psd.py ch1.bin -f 12 -h
     $ pocket_acq.py ch1.bin -f 12 -fi 3 -sig L1CA -prn 1-32,193-199
-    PRN   1: SIG= L1CA, COFF=  0.12817 ms, DOP=  3500 Hz, C/N0= 37.4 dB-Hz
-    PRN   2: SIG= L1CA, COFF=  0.85242 ms, DOP= -3500 Hz, C/N0= 36.8 dB-Hz
-    PRN   3: SIG= L1CA, COFF=  0.39400 ms, DOP= -2000 Hz, C/N0= 37.0 dB-Hz
-    PRN   4: SIG= L1CA, COFF=  0.96692 ms, DOP=  2000 Hz, C/N0= 44.7 dB-Hz
+    SIG= L1CA, PRN=   1, COFF=  0.23492 ms, DOP= -1519 Hz, C/N0= 33.6 dB-Hz
+    SIG= L1CA, PRN=   2, COFF=  0.98558 ms, DOP=  2528 Hz, C/N0= 33.8 dB-Hz
+    SIG= L1CA, PRN=   3, COFF=  0.96792 ms, DOP=  3901 Hz, C/N0= 33.7 dB-Hz
+    SIG= L1CA, PRN=   4, COFF=  0.96192 ms, DOP= -1957 Hz, C/N0= 40.4 dB-Hz
     ...
-    $ pocket_acq.py ch1.bin -f 12 -fi 3 -sig L1CA -prn 26
+    $ pocket_acq.py ch1.bin -f 12 -fi 3 -sig L1CA -prn 4
 
-    $ pocket_acq.py ch1.bin -f 12 -fi 3 -sig L1CA -prn 26 -3d
+    $ pocket_acq.py ch1.bin -f 12 -fi 3 -sig L1CA -prn 8 -3d
 
     $ pocket_acq.py ch2.bin -f 12 -sig L6D -prn 194 -p
     
-    $ pocket_trk.py L1_24M.bin -prn 1-32 -f 24 -fi 6
-	  TIME(s)   SIG  PRN  STATE   LOCK(s)  C/N0 (dB-Hz)        COFF(ms)   DOP(Hz)   ADR(cyc)  SYNC #NAV #ERR
-	    1.550  L1CA    1   LOCK     1.539  42.5 ||||||||      0.8017699    3218.8     4949.3  ---     0    0
-	    0.011  L1CA    2   IDLE     0.000   0.0               0.0000000       0.0        0.0  ---     0    0
-	    0.011  L1CA    3   IDLE     0.000   0.0               0.0000000       0.0        0.0  ---     0    0
-	    0.011  L1CA    4   IDLE     0.000   0.0               0.0000000       0.0        0.0  ---     0    0
-	    0.011  L1CA    5   IDLE     0.000   0.0               0.0000000       0.0        0.0  ---     0    0
-	    0.011  L1CA    6   IDLE     0.000   0.0               0.0000000       0.0        0.0  ---     0    0
-	    1.550  L1CA    7   LOCK     1.539  45.7 ||||||||||    0.6995059     582.8      901.5  ---     0    0
-	    1.550  L1CA    8   LOCK     1.539  47.6 |||||||||||   0.0733506    -777.2    -1196.8  ---     0    0
-	    0.011  L1CA    9   IDLE     0.000   0.0               0.0000000       0.0        0.0  ---     0    0
-	    1.550  L1CA   10   LOCK     1.539  38.6 |||||         0.8658548      -6.2       -9.4  ---     0    0
-	...
-    $ pocket_trk.py L1_24M.bin -prn 194 -sig L1CA -f 24 -fi 6 -log trk.log  -p
+    $ pocket_trk.py ch1.bin -f 12 -fi 3 -sig L1CA -prn 1-32
+    TIME(s):      5.00                                                             SRCH:   0  LOCK:  8/ 32
+    CH   SIG PRN STATE  LOCK(s) C/N0 (dB-Hz)         COFF(ms) DOP(Hz)    ADR(cyc) SYNC  #NAV #ERR #LOL NER
+     4  L1CA   4  LOCK     4.99 41.7 |||||||        0.9680586 -1947.0     -9713.3 -B--     0    0    0   0
+     7  L1CA   7  LOCK     4.99 35.1 |||            0.4019474  3676.0     18351.1 -B--     0    0    0   0
+     8  L1CA   8  LOCK     4.99 46.5 ||||||||||     0.4476165  2532.0     12638.9 -B--     0    0    0   0
+     9  L1CA   9  LOCK     4.99 37.6 |||||          0.9303968  -376.9     -1867.8 -B--     0    0    0   0
+    16  L1CA  16  LOCK     4.99 46.6 |||||||||||    0.9330322  -418.9     -2089.4 -B--     0    0    0   0
+    18  L1CA  18  LOCK     4.99 42.4 ||||||||       0.7254252 -1763.4     -8791.6 -B--     0    0    0   0
+    26  L1CA  26  LOCK     4.99 45.8 ||||||||||     0.7427075 -1445.7     -7211.6 -B--     0    0    0   0
+    31  L1CA  31  LOCK     4.99 45.0 ||||||||||     0.7491922 -3013.1    -15036.7 -B--     0    0    0   0
     ...
-    $ pocket_trk.py L5_24M.bin -prn 13 -sig E5AI -f 24 -log trk.log -p -ts 0.2
+    $ pocket_trk.py ch1.bin -f 12 -fi 3 -sig E1B -prn 18 -p
+    ...
+    $ pocket_trk.py ch2.bin -f 12 -sig E6B -prn 4 -log trk.log -p -ts 0.2
     ...
 ``` 
 
@@ -209,6 +218,29 @@ These were built for Windows (64bit) and Linux for x86_64 CPU.
 <img src="image/image005.jpg" width=49%>
 <img src="image/image006.jpg" width=49%>
 <img src="image/image007.jpg" width=49%>
+
+--------------------------------------------------------------------------------
+
+## **Real-time Signal Tracking with pocket_dump and pocket_trk**
+
+With pocket_dump and pocket_trk, you can track GNSS signals in real-time.
+By using -r option in pocket_dump and pocket_trk, the captured 2 CH IF data can
+be handled as raw data format. In addition, multiple signal tracking feature is
+added to pocket_trk (C-version of pocket_trk.py) in ver. 0.9.
+
+For example, to track L1C/A and L5I signals of GPS in real-time, the following
+commands can be used. In this case, the tracking log is output as a TCP server with
+the port number 5070. For detailed options, please refer the comment lines in the
+source codes of app/pocket_dump/pocket_dump.c or app/pocket_trk/pocket_trk.c.
+For other samples, plese refer test/pocket_trk_*_test.sh.
+
+``` 
+    $ pocket_dump -r -q - -c conf/pocket_L1L5_24MHz.conf | \
+    pocket_trk -r -f 24 -fi 6,0 -sig L1CA -prn 1-32 -sig L5I -prn 1-32 \
+    -log :5070
+``` 
+
+<img src="image/image008.jpg" width=100%>
 
 --------------------------------------------------------------------------------
 
@@ -255,7 +287,9 @@ Pocket SDR. Refer "Installation for Windows" above.
 
 [5] https://github.com/quiet/libfec
 
-[6] https://github.com/tomojitakasu/RTKLIB
+[6] https://github.com/radfordneal/LDPC-codes
+
+[7] https://github.com/tomojitakasu/RTKLIB
 
 --------------------------------------------------------------------------------
 
@@ -269,4 +303,6 @@ Pocket SDR. Refer "Installation for Windows" above.
 - 2022-01-13  0.6  Add and modify Python scripts
 - 2022-02-15  0.7  Improve performance, Add some Python scripts.
 - 2022-07-08  0.8  Add C-version of pocket_acq.py and pocket_trk.py.
+- 2024-01-03  0.9  Add C-version of pocket_snap.py.
+                   pocket_trk supports multi-signal and multi-theading
 
