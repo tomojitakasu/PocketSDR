@@ -1,0 +1,10 @@
+[submodule "lib/RTKLIB"]
+	path = lib/RTKLIB
+	url = https://github.com/tomojitakasu/RTKLIB
+	branch = rtklib_2.4.3
+[submodule "lib/LDPC-codes"]
+	path = lib/LDPC-codes
+	url = https://github.com/radfordneal/LDPC-codes
+[submodule "lib/libfec"]
+	path = lib/libfec
+	url = https://github.com/quiet/libfec.git
