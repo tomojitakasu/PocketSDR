@@ -153,7 +153,7 @@ src/pocket_dump.c.
 
 Pocket SDR contains the following application programs for GNSS-SDR.
 
-- **pocket_psd.py** : Plot PSD and histgrams of digital IF data
+- **pocket_psd.py** : Plot PSD and histograms of digital IF data
 - **pocket_acq.py** : GNSS signal acquisition in digital IF data
 - **pocket_trk.py** : GNSS signal tracking and navigation data decoding in digital IF data
 - **pocket_snap.py**: Snapshot positioning with digital IF data
@@ -232,7 +232,7 @@ For example, to track L1C/A and L5I signals of GPS in real-time, the following
 commands can be used. In this case, the tracking log is output as a TCP server with
 the port number 5070. For detailed options, please refer the comment lines in the
 source codes of app/pocket_dump/pocket_dump.c or app/pocket_trk/pocket_trk.c.
-For other samples, plese refer test/pocket_trk_*_test.sh.
+For other samples, please refer test/pocket_trk_*_test.sh.
 
 ``` 
     $ sudo pocket_dump -r -q - -c conf/pocket_L1L5_24MHz.conf | \
