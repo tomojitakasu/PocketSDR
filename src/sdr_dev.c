@@ -20,6 +20,7 @@
 
 // constants and macros --------------------------------------------------------
 #define TO_TRANSFER     3000    // USB transfer timeout (ms)
+#define TO_TR_LIBUSB    10000   // USB transfer timeout for LIBUSB (ms)
 
 // quantization lookup table ---------------------------------------------------
 static int8_t LUT[2][2][256];
@@ -287,7 +288,7 @@ sdr_dev_t *sdr_dev_open(int bus, int port)
             return NULL;
         }
         libusb_fill_bulk_transfer(dev->transfer[i], dev->usb->h, SDR_DEV_EP,
-            dev->data[i], SDR_SIZE_BUFF, transfer_cb, dev, TO_TRANSFER);
+            dev->data[i], SDR_SIZE_BUFF, transfer_cb, dev, TO_TR_LIBUSB);
     }
     gen_LUT();
     
