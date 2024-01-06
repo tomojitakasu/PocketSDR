@@ -171,12 +171,12 @@ Python 3, Numpy, Scipy and matplotlib to execute Python scripts.
 ## **Execution Examples of Utility Programs and GNSS-SDR APs**
 
 ```
-    $ pocket_conf
+    $ sudo pocket_conf
     ...
-    $ pocket_conf conf/pocket_L1L6_12MHz.conf
+    $ sudo pocket_conf conf/pocket_L1L6_12MHz.conf
     Pocket SDR device settings are changed.
     
-    $ pocket_dump -t 5 ch1.bin ch2.bin
+    $ sudo pocket_dump -t 5 ch1.bin ch2.bin
       TIME(s)    T   CH1(Bytes)   T   CH2(Bytes)   RATE(Ks/s)
           5.0    I     60047360  IQ    120094720      11985.5
     
@@ -235,7 +235,7 @@ source codes of app/pocket_dump/pocket_dump.c or app/pocket_trk/pocket_trk.c.
 For other samples, plese refer test/pocket_trk_*_test.sh.
 
 ``` 
-    $ pocket_dump -r -q - -c conf/pocket_L1L5_24MHz.conf | \
+    $ sudo pocket_dump -r -q - -c conf/pocket_L1L5_24MHz.conf | \
     pocket_trk -r -f 24 -fi 6,0 -sig L1CA -prn 1-32 -sig L5I -prn 1-32 \
     -log :5070
 ``` 
