@@ -33,6 +33,8 @@
 //      2017
 //  [16] GLONASS Interface Control Document Code Devision Multiple Access Open
 //      Service Navigation Signal in L3 frequency band Edition 1.0, 2016
+//  [17] NavIC Signal in Space ICD for Standard Positioning Service in L1
+//      Frequency version 1.0, August, 2023
 //
 //  Author:
 //  T.TAKASU
@@ -40,6 +42,7 @@
 //  History:
 //  2022-07-08  1.0  port sdr_nav.py to C
 //  2023-12-28  1.1  fix L1CA_SBAS, L5I, L5I_SBAS, L5SI, L5SIV, G1CA and G3OCD
+//  2024-01-06  1.2  support I1SD
 //
 #include "rtklib.h"
 #include "pocket_sdr.h"
@@ -62,6 +65,7 @@ static uint32_t BCH_CORR_TBL[] = {
 static uint8_t *CNV2_SF1  [400] = {NULL};
 static uint8_t *BCNV1_SF1A[ 63] = {NULL};
 static uint8_t *BCNV1_SF1B[200] = {NULL};
+static uint8_t *IRNV1_SF1 [400] = {NULL};
 
 // average of IP correlation ---------------------------------------------------
 static float mean_IP(const sdr_ch_t *ch, int N)
@@ -381,13 +385,13 @@ static int sync_CNV2_frame(sdr_ch_t *ch, const uint8_t *syms, int toi)
 {
     // generate CNAV-2 subframe 1 symbols
     if (!CNV2_SF1[0]) {
-        for (int toi = 0; toi < 400; toi++) {
-            CNV2_SF1[toi] = (uint8_t *)sdr_malloc(52);
-            int8_t *code = LFSR(51, rev_reg(toi, 8), 0x9F, 8);
-            uint8_t bit0 = (uint8_t)((toi >> 8) & 1);
-            CNV2_SF1[toi][0] = bit0;
+        for (int t = 0; t < 400; t++) {
+            CNV2_SF1[t] = (uint8_t *)sdr_malloc(52);
+            int8_t *code = LFSR(51, rev_reg(t, 8), 0x9F, 8);
+            uint8_t bit0 = (uint8_t)((t >> 8) & 1);
+            CNV2_SF1[t][0] = bit0;
             for (int i = 1; i < 52; i++) {
-                CNV2_SF1[toi][i] = (uint8_t)((code[i-1] + 1) / 2) ^ bit0;
+                CNV2_SF1[t][i] = (uint8_t)((code[i-1] + 1) / 2) ^ bit0;
             }
             sdr_free(code);
         }
@@ -1424,6 +1428,105 @@ static void decode_B3I(sdr_ch_t *ch)
     decode_B1I(ch);
 }
 
+// sync NavIC L1-SPS NAV frame by subframe 1 symbols ---------------------------
+static int sync_IRNV1_frame(sdr_ch_t *ch, const uint8_t *syms, int toi)
+{
+    // generate NavIC L1-SPS subframe 1 symbols
+    if (!IRNV1_SF1[0]) {
+        for (int t = 0; t < 400; t++) {
+            IRNV1_SF1[t] = (uint8_t *)sdr_malloc(52);
+            int8_t *code = LFSR(52, rev_reg(t+1, 9), 0x1BF, 9);
+            for (int i = 0; i < 52; i++) {
+                IRNV1_SF1[t][i] = (uint8_t)((code[i] + 1) / 2);
+            }
+            sdr_free(code);
+        }
+    }
+    uint8_t *SF1 = IRNV1_SF1[toi];
+    uint8_t *SFn = IRNV1_SF1[(toi + 1) % 400];
+    
+    if (bmatch_n(syms, SF1, 52) && bmatch_n(syms + 1800, SFn, 52)) {
+        sdr_log(4, "$LOG,%.3f,%s,%d,FRAME SYNC (N) TOI=%d", ch->time, ch->sig,
+            ch->prn, toi+1);
+        return 1; // normal
+    }
+    if (bmatch_r(syms, SF1, 52) && bmatch_r(syms + 1800, SFn, 52)) {
+        sdr_log(4, "$LOG,%.3f,%s,%d,FRAME SYNC (R) TOI=%d", ch->time, ch->sig,
+            ch->prn, toi+1);
+        return 0; // reversed
+    }
+    return -1;
+}
+
+// decode NavIC L1-SPS NAV frame ([17]) ----------------------------------------
+static void decode_IRNV1(sdr_ch_t *ch, const uint8_t *syms, int rev, int toi)
+{
+    double time = ch->time - 18.52;
+    uint8_t buff[1748], SF2[600] = {0}, SF3[274] = {0}, bits[883];
+    
+    // decode block-interleave (38 x 46 = 1748 syms)
+    for (int i = 0, k = 0; i < 38; i++) {
+        for (int j = 0; j < 46; j++) {
+            buff[k++] = syms[52+j*38+i] ^ (uint8_t)rev;
+        }
+    }
+    // decode LDPC (1200 + 548 syms -> 600 + 274 bits)
+    sdr_decode_LDPC("IRNV1_SF2", buff, 1200, SF2);
+    sdr_decode_LDPC("IRNV1_SF3", buff + 1200, 548, SF3);
+    
+    if (test_CRC(SF2, 600) && test_CRC(SF3, 274)) {
+        sdr_unpack_data(toi, 9, bits);
+        memcpy(bits + 9, SF2, 600);
+        memcpy(bits + 609, SF3, 274);
+        ch->nav->ssync = ch->nav->fsync = ch->lock;
+        ch->nav->rev = rev;
+        ch->nav->seq = toi;
+        sdr_pack_bits(bits, 883, 0, ch->nav->data); // NavIC L1-SPS frame (9 + 600 + 274 bits)
+        ch->nav->time_data = time;
+        ch->nav->count[0]++;
+        char str[256];
+        hex_str(ch->nav->data, 883, str);
+        sdr_log(3, "$IRNV1,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+    }
+    else {
+        ch->nav->ssync = ch->nav->fsync = 0;
+        ch->nav->count[1]++;
+        sdr_log(3, "$LOG,%.3f,%s,%d,IRNV1 FRAME ERROR", time, ch->sig, ch->prn);
+    }
+}
+
+// decode I1SD nav data ([17]) -------------------------------------------------
+static void decode_I1SD(sdr_ch_t *ch)
+{
+    // add symbol buffer
+    uint8_t sym = ch->trk->P[SDR_N_HIST-1][0] >= 0.0 ? 1 : 0;
+    sdr_add_buff(ch->nav->syms, SDR_MAX_NSYM, &sym, sizeof(sym));
+    uint8_t *syms = ch->nav->syms + SDR_MAX_NSYM - 1852;
+    
+    if (ch->nav->fsync > 0) { // sync NavIC L1-SPS NAV frame
+        if (ch->lock == ch->nav->fsync + 1800) {
+            int toi = (ch->nav->seq + 1) % 400;
+            int rev = sync_IRNV1_frame(ch, syms, toi);
+            if (rev == ch->nav->rev) {
+                decode_IRNV1(ch, syms, rev, toi);
+            }
+            else {
+                ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
+            }
+        }
+    }
+    else if (ch->lock >= 1852) {
+        // search and decode NavIC L1-SPS NAV frame
+        for (int toi = 0; toi < 400; toi++) {
+            int rev = sync_IRNV1_frame(ch, syms, toi);
+            if (rev >= 0) {
+                decode_IRNV1(ch, syms, rev, toi);
+                break;
+            }
+        }
+    }
+}
+
 // decode IRNSS SPS NAV frame ([15]) -------------------------------------------
 static void decode_IRN_NAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
 {
@@ -1565,6 +1668,9 @@ void sdr_nav_decode(sdr_ch_t *ch)
     }
     else if (!strcmp(ch->sig, "B3I")) {
         decode_B3I(ch);
+    }
+    else if (!strcmp(ch->sig, "I1SD")) {
+        decode_I1SD(ch);
     }
     else if (!strcmp(ch->sig, "I5S")) {
         decode_I5S(ch);
