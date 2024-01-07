@@ -36,6 +36,8 @@
 //      2017
 //  [17] GLONASS Interface Control Document Code Division Multiple Access Open
 //      Service Navigation Signal in L3 frequency band Edition 1.0, 2016
+//  [18] NavIC Signal in Space ICD for Standard Positioning Service in L1
+//      Frequency version 1.0, August, 2023
 //
 //  Author:
 //  T.TAKASU
@@ -55,6 +57,7 @@
 //  2024-01-03  1.9  add secondary code of G1CA with odd FCN
 //  2024-01-04  1.10 add signal L5SQV (L5SQ verification mode)
 //                   fix L5Q SBAS secondary code
+//  2024-01-06  1.11 add signal I1SD, I1SP
 //
 #include <ctype.h>
 #include "pocket_sdr.h"
@@ -109,6 +112,9 @@ static int8_t *B2AP [ 63] = {0};
 static int8_t *B2AS [ 63] = {0};
 static int8_t *B2BI [ 63] = {0};
 static int8_t *B3I  [ 63] = {0};
+static int8_t *I1SD [ 14] = {0};
+static int8_t *I1SP [ 14] = {0};
+static int8_t *I1SPO[ 14] = {0};
 static int8_t *I5S  [ 14] = {0};
 static int8_t *ISS  [ 14] = {0};
 
@@ -591,6 +597,54 @@ static const uint16_t I5S_G2_init[] = { // PRN 1 - 14
 static const uint16_t ISS_G2_init[] = { // PRN 1 - 14
     0x00EF, 0x017D, 0x0231, 0x00AB, 0x0291, 0x012C, 0x008E, 0x0126,
     0x030E, 0x02BE, 0x0391, 0x0369, 0x0145, 0x010D
+};
+
+static const uint64_t I1SD_R0_init[] = { // PRN 1 -14
+    0x063D70B50D5B64, 0x76058F5475E4B0, 0x37D2F074FED295, 0x7E737E2ADF0BC1,
+    0x718B5157F80E9E, 0x64C4B97DAE6753, 0x66F0F9CCE0A97C, 0x0254B975B60383,
+    0x0091026C0910F5, 0x074BE51B3AF948, 0x734EEE6F471DE8, 0x77074F6C4181F3,
+    0x7D457AA2ADE0AD, 0x1649006091465D
+};
+
+static const uint64_t I1SD_R1_init[] = { // PRN 1 -14
+    0x1FF9721B874F80, 0x04F6D6D674B7C3, 0x2F17C1C778846A, 0x2920BBF796518D,
+    0x51CA3936524FFD, 0x0FD2A5D6F6922C, 0x0D22D7133CBFC6, 0x4AFD02709873B4,
+    0x299078F1B6FB54, 0x15638997825762, 0x2F6F9633538CDE, 0x59A5D67F687EC6,
+    0x4F0C30BF5B3A0A, 0x73E795C57E19BB
+};
+
+static const uint16_t I1SD_C_init[] = { // PRN 1 -14
+    0x0014, 0x0014, 0x0006, 0x0014, 0x0014, 0x0006, 0x0014, 0x0006,
+    0x0006, 0x0006, 0x0014, 0x0006, 0x0014, 0x0006
+};
+
+static const uint64_t I1SP_R0_init[] = { // PRN 1 -14
+    0x12FE3D0AE884C3, 0x30638515D33FCF, 0x3CCD53247E1C50, 0x027F3E65ED0C24,
+    0x0DB7DD9BEC8DD3, 0x024BFAF5ABC21B, 0x0BFEFCB8EA13D8, 0x2161C00EE3808E,
+    0x28253DEB538E14, 0x017D7A7CD16977, 0x366E99436BE257, 0x651C81DC3890EE,
+    0x79D6273901EC48, 0x3C7815D839828A
+};
+
+static const uint64_t I1SP_R1_init[] = { // PRN 1 -14
+    0x76E8F724A15EA5, 0x181A2F303D23DF, 0x278066D207D7A5, 0x31786E14C2045F,
+    0x66B59E5C1069CB, 0x467A6895BCB117, 0x46C309A8B40404, 0x12B7C8761471AA,
+    0x7B770DE0ED3105, 0x49CBF339896131, 0x0D584F5D59CAF8, 0x490C0AEC2962C5,
+    0x44C454BDE6DEA3, 0x420E6B88D26357
+};
+
+static const uint16_t I1SP_C_init[] = { // PRN 1 -14
+    0x0008, 0x0000, 0x0008, 0x0000, 0x0008, 0x0008, 0x0000, 0x0008,
+    0x0000, 0x0000, 0x0000, 0x0008, 0x0008, 0x0000
+};
+
+static const uint16_t I1SPO_R0_init[] = { // PRN 1 -14
+    0x01BB, 0x01E8, 0x0301, 0x01B6, 0x0118, 0x00FC, 0x0065, 0x03C5,
+    0x00CC, 0x021A, 0x0049, 0x01AB, 0x0170, 0x00B3
+};
+
+static const uint16_t I1SPO_R1_init[] = { // PRN 1 -14
+    0x0130, 0x0182, 0x0391, 0x0173, 0x02C6, 0x02AF, 0x0388, 0x0050,
+    0x02FC, 0x0115, 0x0304, 0x01DE, 0x0273, 0x026A
 };
 
 static int8_t NH10[] = { // 10 bits Neuman-Hoffman code
@@ -1775,6 +1829,103 @@ static int8_t *sec_code_B3I(int prn, int *N)
     return sec_code_B1I(prn, N);
 }
 
+// shift registers of I1S code ([18]) ------------------------------------------
+static void shift_I1S(uint64_t *R0, uint64_t *R1, uint64_t *C)
+{
+    uint64_t R0A = (*R0<<50) ^ (*R0<<45) ^ (*R0<<40) ^ (*R0<<20) ^ (*R0<<10) ^ (*R0<<5) ^ *R0;
+    uint64_t S2A = ((*R0<<50) ^ (*R0<<45) ^ (*R0<<40)) & ((*R0<<20) ^ (*R0<<10) ^ (*R0<<5) ^ *R0);
+    uint64_t S2B = (((*R0<<50) ^ (*R0<<45)) & (*R0<<40)) ^ (((*R0<<20) ^ (*R0<<10)) & ((*R0<<5) ^ *R0));
+    uint64_t S2C = ((*R0<<50) & (*R0<<45)) ^ ((*R0<<20) & (*R0<<10)) ^ ((*R0<<5) & *R0);
+    uint64_t S2 = S2A ^ S2B ^ S2C;
+    uint64_t R1A = S2 ^ (*R0<<40) ^ (*R0<<35) ^ (*R0<<30) ^ (*R0<<25) ^ (*R0<<15) ^ *R0;
+    uint64_t R1B = (*R1<<50) ^ (*R1<<45) ^ (*R1<<40) ^ (*R1<<20) ^ (*R1<<10) ^ (*R1<<5) ^ *R1;
+    *R0 = ((*R0<<1) & 0x7FFFFFFFFFFFFF) | ((R0A>>54) & 1);
+    *R1 = ((*R1<<1) & 0x7FFFFFFFFFFFFF) | (((R1A ^ R1B)>>54) & 1);
+    *C = ((*C<<1) & 0x1F) | ((*C>>4) & 1);
+}
+
+// generate I1SD code ([18]) ---------------------------------------------------
+static int8_t *gen_code_I1SD(int prn, int *N)
+{
+    static const int8_t sub_carr[] = {1, -1}; // BOC(1,1)
+    
+    if (prn < 1 || prn > 14) {
+        return NULL;
+    }
+    int n = 10230;
+    *N = n * 2;
+    if (!I1SD[prn-1]) {
+        int8_t *code = (int8_t *)sdr_malloc(n);
+        uint64_t R0 = I1SD_R0_init[prn-1];
+        uint64_t R1 = I1SD_R1_init[prn-1];
+        uint64_t C = I1SD_C_init[prn-1];
+        for (int i = 0; i < n; i++) {
+            code[i] = CHIP[((C>>4) ^ (R1>>54)) & 1];
+            shift_I1S(&R0, &R1, &C);
+        }
+        I1SD[prn-1] = mod_code(code, n, sub_carr, 2);
+        sdr_free(code);
+    }
+    return I1SD[prn-1];
+}
+
+// generate I1SP code ([18]) ---------------------------------------------------
+static int8_t *gen_code_I1SP(int prn, int *N)
+{
+    static const int8_t sub_carr[] = {1, -1}; // BOC(1,1)
+    
+    if (prn < 1 || prn > 14) {
+        return NULL;
+    }
+    int n = 10230;
+    *N = n * 2;
+    if (!I1SP[prn-1]) {
+        int8_t *code = (int8_t *)sdr_malloc(n);
+        uint64_t R0 = I1SP_R0_init[prn-1];
+        uint64_t R1 = I1SP_R1_init[prn-1];
+        uint64_t C = I1SP_C_init[prn-1];
+        for (int i = 0; i < n; i++) {
+            code[i] = CHIP[((C>>4) ^ (R1>>54)) & 1];
+            shift_I1S(&R0, &R1, &C);
+        }
+        I1SP[prn-1] = mod_code(code, n, sub_carr, 2);
+        sdr_free(code);
+    }
+    return I1SP[prn-1];
+}
+
+// shift registers of I1S overlay code ([18]) ----------------------------------
+static void shift_I1SO(uint16_t *R0, uint16_t *R1)
+{
+    uint16_t R0A = (*R0<<5) ^ (*R0<<2) ^ (*R0<<1) ^ *R0;
+    uint16_t S2A = ((*R0<<5) ^ (*R0<<2)) & ((*R0<<1) ^ *R0);
+    uint16_t S2B = ((*R0<<5) & (*R0<<2)) ^ ((*R0<<1) & *R0);
+    uint16_t R1A = S2A ^ S2B ^ (*R0<<6) ^ (*R0<<3) ^ (*R0<<2) ^ *R0;
+    uint16_t R1B = (*R1<<5) ^ (*R1<<2) ^ (*R1<<1) ^ *R1;
+    *R0 = ((*R0<<1) & 0x3FF) | ((R0A>>9) & 1);
+    *R1 = ((*R1<<1) & 0x3FF) | (((R1A ^ R1B)>>9) & 1);
+}
+
+// generate I1SP overlay code ([18]) -------------------------------------------
+static int8_t *sec_code_I1SP(int prn, int *N)
+{
+    if (prn < 1 || prn > 14) {
+        return NULL;
+    }
+    *N = 1800;
+    if (!I1SPO[prn-1]) {
+        int8_t *code = (int8_t *)sdr_malloc(*N);
+        uint16_t R0 = I1SPO_R0_init[prn-1];
+        uint16_t R1 = I1SPO_R1_init[prn-1];
+        for (int i = 0; i < *N; i++) {
+            code[i] = CHIP[(R1>>9) & 1];
+            shift_I1SO(&R0, &R1);
+        }
+        I1SPO[prn-1] = code;
+    }
+    return I1SPO[prn-1];
+}
+
 // generate I5S code -----------------------------------------------------------
 static int8_t *gen_code_I5S(int prn, int *N)
 {
@@ -1929,6 +2080,12 @@ static int8_t *gen_code(const char *sig, int prn, int *N)
     else if (!strcmp(Sig, "B3I")) {
         return gen_code_B3I(prn, N);
     }
+    else if (!strcmp(Sig, "I1SD")) {
+        return gen_code_I1SD(prn, N);
+    }
+    else if (!strcmp(Sig, "I1SP")) {
+        return gen_code_I1SP(prn, N);
+    }
     else if (!strcmp(Sig, "I5S")) {
         return gen_code_I5S(prn, N);
     }
@@ -1973,7 +2130,7 @@ static int8_t *sec_code(const char *sig, int prn, int *N)
         !strcmp(Sig, "L1CD") || !strcmp(Sig, "L2CM") || !strcmp(Sig, "L2CL") ||
         !strcmp(Sig, "L6D" ) || !strcmp(Sig, "L6E" ) || !strcmp(Sig, "E1B" ) ||
         !strcmp(Sig, "E6B" ) || !strcmp(Sig, "B1CD") || !strcmp(Sig, "B2BI") ||
-        !strcmp(Sig, "I5S" ) || !strcmp(Sig, "ISS" )) {
+        !strcmp(Sig, "I1SD") || !strcmp(Sig, "I5S" ) || !strcmp(Sig, "ISS" )) {
         *N = 1;
         return code;
     }
@@ -2056,6 +2213,9 @@ static int8_t *sec_code(const char *sig, int prn, int *N)
     else if (!strcmp(Sig, "B3I")) {
         return sec_code_B3I(prn, N);
     }
+    else if (!strcmp(Sig, "I1SP")) {
+        return sec_code_I1SP(prn, N);
+    }
     *N = 0;
     return NULL;
 }
@@ -2113,7 +2273,8 @@ double sdr_code_cyc(const char *sig)
         return 4e-3;
     }
     else if (!strcmp(Sig, "L1CP") || !strcmp(Sig, "L1CD") ||
-        !strcmp(Sig, "B1CD") || !strcmp(Sig, "B1CP")) {
+        !strcmp(Sig, "B1CD") || !strcmp(Sig, "B1CP") || !strcmp(Sig, "I1SD") ||
+        !strcmp(Sig, "I1SP")) {
         return 10e-3;
     }
     else if (!strcmp(Sig, "L2CM")) {
@@ -2151,7 +2312,8 @@ int sdr_code_len(const char *sig)
         !strcmp(Sig, "G3OCD") || !strcmp(Sig, "G3OCP") || !strcmp(Sig, "E5AI") ||
         !strcmp(Sig, "E5AQ") || !strcmp(Sig, "E5BI") || !strcmp(Sig, "E5BQ") ||
         !strcmp(Sig, "B1CD") || !strcmp(Sig, "B1CP") || !strcmp(Sig, "B2AD") ||
-        !strcmp(Sig, "B2AP") || !strcmp(Sig, "B2BI") || !strcmp(Sig, "B3I" )) {
+        !strcmp(Sig, "B2AP") || !strcmp(Sig, "B2BI") || !strcmp(Sig, "B3I" ) ||
+        !strcmp(Sig, "I1SD") || !strcmp(Sig, "I1SP")) {
         return 10230;
     }
     else if (!strcmp(Sig, "L2CL")) {
@@ -2189,7 +2351,8 @@ double sdr_sig_freq(const char *sig)
     
     if (!strcmp(Sig, "L1CA") || !strcmp(Sig, "L1CB") || !strcmp(Sig, "L1S" ) ||
         !strcmp(Sig, "E1B" ) || !strcmp(Sig, "E1C" ) || !strcmp(Sig, "L1CP") ||
-        !strcmp(Sig, "L1CD") || !strcmp(Sig, "B1CD") || !strcmp(Sig, "B1CP")) {
+        !strcmp(Sig, "L1CD") || !strcmp(Sig, "B1CD") || !strcmp(Sig, "B1CP") ||
+        !strcmp(Sig, "I1SD") || !strcmp(Sig, "I1SP")) {
         return 1575.42e6;
     }
     else if (!strcmp(Sig, "L2CM") || !strcmp(Sig, "L2CL")) {
