@@ -46,8 +46,10 @@ def show_sigid():
     print('       L2CM   GPS, QZSS L2C-M')
     print('       L5I    GPS, QZSS, SBAS L5-I')
     print('       L5Q    GPS, QZSS, SBAS L5-Q')
-    print('       L5SI   QZSS L5S-I')
-    print('       L5SQ   QZSS L5S-Q')
+    print('       L5SI   QZSS L5S-I (normal mode)')
+    print('       L5SQ   QZSS L5S-Q (normal mode)')
+    print('       L5SIV  QZSS L5S-I (verification mode)')
+    print('       L5SQV  QZSS L5S-Q (verification mode)')
     print('       L6D    QZSS L6D')
     print('       L6E    QZSS L6E')
     print('       G1CA   GLONASS L1C/A')
@@ -70,7 +72,10 @@ def show_sigid():
     print('       B2AP   BDS B2a-P')
     print('       B2BI   BDS B2b-I')
     print('       B3I    BDS B3I')
+    print('       I1SD   NavIC L1-SPS-D')
+    print('       I1SP   NavIC L1-SPS-P')
     print('       I5S    NavIC L5-SPS')
+    print('       ISS    NavIC S-SPS')
 
 # search signals ---------------------------------------------------------------
 def search_sig(sig, prn, data, fs, fi, max_dop, zero_pad):
