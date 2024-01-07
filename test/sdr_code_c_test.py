@@ -352,6 +352,22 @@ def test_01():
     
     err = 0
     for prn in range(1, 15):
+        code = sdr_gen_code('I1SD', prn)
+        code_ref = sdr_code.gen_code('I1SD', prn)
+        if not np.all(code == code_ref):
+            err = 1
+    print('sdr_gen_code() I1SD : %s' % ('NG' if err else 'OK'))
+    
+    err = 0
+    for prn in range(1, 15):
+        code = sdr_gen_code('I1SP', prn)
+        code_ref = sdr_code.gen_code('I1SP', prn)
+        if not np.all(code == code_ref):
+            err = 1
+    print('sdr_gen_code() I1SP : %s' % ('NG' if err else 'OK'))
+    
+    err = 0
+    for prn in range(1, 15):
         code = sdr_gen_code('I5S', prn)
         code_ref = sdr_code.gen_code('I5S', prn)
         if not np.all(code == code_ref):
@@ -545,6 +561,14 @@ def test_02():
         if not np.all(code == code_ref):
             err = 1
     print('sdr_sec_code() B3I  : %s' % ('NG' if err else 'OK'))
+    
+    err = 0
+    for prn in range(1, 15):
+        code = sdr_sec_code('I1SP', prn)
+        code_ref = sdr_code.sec_code('I1SP', prn)
+        if not np.all(code == code_ref):
+            err = 1
+    print('sdr_sec_code() I1SP : %s' % ('NG' if err else 'OK'))
 
 # sdr_res_code() -------------------------------------------------------------------
 def test_03():
