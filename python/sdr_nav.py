@@ -33,6 +33,8 @@
 #      2017
 #  [16] GLONASS Interface Control Document Code Devision Multiple Access Open
 #      Service Navigation Signal in L3 frequency band Edition 1.0, 2016
+#  [17] NavIC Signal in Space ICD for Standard Positioning Service in L1
+#      Frequency version 1.0, August, 2023
 #
 #  Author:
 #  T.TAKASU
@@ -45,6 +47,7 @@
 #                   move sec-code sync to sdr_ch.py
 #  2022-01-28  1.4  support G3OCD
 #  2023-12-28  1.5  fix L1CA_SBAS, L5I, L5I_SBAS, L5SI, G1CA and G3OCD
+#  2024-01-06  1.6  support I1SD
 #
 from math import *
 import numpy as np
@@ -65,6 +68,7 @@ BCH_CORR_TBL = ( # BCH(15,11,1) error correction table ([7] Table 5-2)
 CNV2_SF1   = {}
 BCNV1_SF1A = {}
 BCNV1_SF1B = {}
+IRNV1_SF1  = {}
 
 # nav data class ---------------------------------------------------------------
 class Nav: pass
@@ -138,6 +142,8 @@ def nav_decode(ch):
         decode_B2BI(ch)
     elif ch.sig == 'B3I':
         decode_B3I(ch)
+    elif ch.sig == 'I1SD':
+        decode_I1SD(ch)
     elif ch.sig == 'I5S':
         decode_I5S(ch)
     elif ch.sig == 'ISS':
@@ -886,7 +892,7 @@ def decode_B2BI(ch):
     
     # add symbol buffer
     add_buff(ch.nav.syms, 1 if ch.trk.P[-1].real >= 0.0 else 0)
-
+    
     if ch.nav.fsync > 0: # sync frame
         if ch.lock == ch.nav.fsync + 1000:
             rev = sync_frame(ch, preamb, ch.nav.syms[-1028:])
@@ -907,7 +913,7 @@ def decode_BCNV3(ch, syms, rev):
     
     # decode LDPC (972 syms -> 486 bits)
     bits = sdr_ldpc.decode_LDPC('BCNV3', syms[28:])
-     
+    
     if test_CRC(bits):
         ch.nav.ssync = ch.nav.fsync = ch.lock
         ch.nav.rev = rev
@@ -924,6 +930,54 @@ def decode_BCNV3(ch, syms, rev):
 def decode_B3I(ch):
     decode_B1I(ch)
 
+# decode I1SD nav data ([17]) --------------------------------------------------
+def decode_I1SD(ch):
+    
+    # add symbol buffer
+    add_buff(ch.nav.syms, 1 if ch.trk.P[-1].real >= 0.0 else 0)
+    
+    if ch.nav.fsync > 0: # sync NavIC L1-SPS NAV frame
+        if ch.lock == ch.nav.fsync + 1800:
+            toi = (ch.nav.seq + 1) % 400
+            rev = sync_IRNV1_frame(ch, ch.nav.syms[-1852:], toi)
+            if rev == ch.nav.rev:
+                decode_IRNV1(ch, ch.nav.syms[-1852:-52] ^ rev, rev, toi)
+            else:
+                ch.nav.ssync = ch.nav.fsync = ch.nav.rev = 0
+    
+    elif ch.lock >= 1852:
+        # search and decode NavIC L1-SPS NAV frame
+        for toi in range(400):
+            rev = sync_IRNV1_frame(ch, ch.nav.syms[-1852:], toi)
+            if rev >= 0:
+                decode_IRNV1(ch, ch.nav.syms[-1852:-52] ^ rev, rev, toi)
+                break
+
+# decode NavIC L1-SPS NAV frame ([17]) -----------------------------------------
+def decode_IRNV1(ch, syms, rev, toi):
+    time = ch.time - 18.52
+    
+    # decode block-interleave (38 x 46 = 1748 syms)
+    syms_d = syms[52:].reshape(46, 38).T.ravel()
+    
+    # decode LDPC (1200 + 548 syms -> 600 + 274 bits)
+    SF2 = sdr_ldpc.decode_LDPC('IRNV1_SF2', syms_d[:1200])
+    SF3 = sdr_ldpc.decode_LDPC('IRNV1_SF3', syms_d[1200:])
+    
+    if test_CRC(SF2) and test_CRC(SF3):
+        bits = np.hstack([unpack_data(toi, 9), SF2, SF3])
+        ch.nav.ssync = ch.nav.fsync = ch.lock
+        ch.nav.rev = rev
+        ch.nav.seq = toi
+        data = pack_bits(bits) # NavIC L1-SPS frame (9 + 600 + 274 bits)
+        ch.nav.data.append((time, data))
+        ch.nav.count[0] += 1
+        log(3, '$IRNV1,%.3f,%s,%d,%s' % (time, ch.sig, ch.prn, hex_str(data)))
+    else:
+        ch.nav.ssync = ch.nav.fsync = 0
+        ch.nav.count[1] += 1
+        log(3, '$LOG,%.3f,%s,%d,IRNV1 FRAME ERROR' % (time, ch.sig, ch.prn))
+
 # decode I5S nav data ([15]) ---------------------------------------------------
 def decode_I5S(ch):
     preamb = (1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0) # 0xEB90
@@ -931,7 +985,7 @@ def decode_I5S(ch):
     if not sync_symb(ch, 20): # sync symbol
         return
     
-    if ch.nav.fsync > 0: # sync IRNSS SPS NAV subframe
+    if ch.nav.fsync > 0: # sync NavIC SPS NAV subframe
         if ch.lock == ch.nav.fsync + 12000:
             rev = sync_frame(ch, preamb, ch.nav.syms[-616:])
             if rev == ch.nav.rev:
@@ -940,12 +994,12 @@ def decode_I5S(ch):
                 ch.nav.ssync = ch.nav.fsync = ch.nav.rev = 0
     
     elif ch.lock >= 20 * 616:
-        # sync and decode IRNSS SPS NAV subframe
+        # sync and decode NavIC SPS NAV subframe
         rev = sync_frame(ch, preamb, ch.nav.syms[-616:])
         if rev >= 0:
             decode_IRN_NAV(ch, ch.nav.syms[-616:-16] ^ rev, rev)
 
-# decode IRNSS SPS NAV frame ([15]) --------------------------------------------
+# decode NavIC SPS NAV frame ([15]) --------------------------------------------
 def decode_IRN_NAV(ch, syms, rev):
     time = ch.time - 20e-3 * 616
     
@@ -958,7 +1012,7 @@ def decode_IRN_NAV(ch, syms, rev):
     if test_CRC(bits):
         ch.nav.ssync = ch.nav.fsync = ch.lock
         ch.nav.rev = rev
-        data = pack_bits(bits) # IRNSS SPS NAV subframe (286 bits)
+        data = pack_bits(bits) # NavIC SPS NAV subframe (286 bits)
         ch.nav.seq = sdr_rtk.getbitu(data, 8, 17) # TOWC
         ch.nav.data.append((time, data))
         ch.nav.count[0] += 1
@@ -1023,10 +1077,10 @@ def sync_CNV2_frame(ch, syms, toi):
     # generate CNAV-2 subframe 1 symbols
     global CNV2_SF1
     if len(CNV2_SF1) == 0:
-        for toi in range(400):
-            code = sdr_code.LFSR(51, sdr_code.rev_reg(toi, 8), 0b10011111, 8)
-            bit0 = (toi >> 8) & 1
-            CNV2_SF1[toi] = np.hstack([bit0, ((code + 1) // 2) ^ bit0])
+        for t in range(400):
+            code = sdr_code.LFSR(51, sdr_code.rev_reg(t, 8), 0b10011111, 8)
+            bit0 = (t >> 8) & 1
+            CNV2_SF1[t] = np.hstack([bit0, ((code + 1) // 2) ^ bit0])
     
     SF1 = CNV2_SF1[toi]
     SFn = CNV2_SF1[(toi + 1) % 400]
@@ -1062,6 +1116,28 @@ def sync_BCNV1_frame(ch, syms, soh):
     
     if np.all(syms[:72] != SF1) and np.all(syms[-72:] != SFn):
         log(4, '$LOG,%.3f,%s,%d,FRAME SYNC (R) SOH=%d' % (ch.time, ch.sig, ch.prn, soh))
+        return 0 # reversed
+    return -1
+
+# sync NavIC L1-SPS NAV frame by subframe 1 symbols ----------------------------
+def sync_IRNV1_frame(ch, syms, toi):
+    
+    # generate NavIC L1-SPS NAV subframe 1 symbols
+    global IRNV1_SF1
+    if len(IRNV1_SF1) == 0:
+        for t in range(400):
+            code = sdr_code.LFSR(52, sdr_code.rev_reg(t+1, 9), 0b110111111, 9)
+            IRNV1_SF1[t] = (code + 1) // 2
+    
+    SF1 = IRNV1_SF1[toi]
+    SFn = IRNV1_SF1[(toi + 1) % 400]
+    
+    if np.all(syms[:52] == SF1) and np.all(syms[-52:] == SFn):
+        log(4, '$LOG,%.3f,%s,%d,FRAME SYNC (N) TOI=%d' % (ch.time, ch.sig, ch.prn, toi+1))
+        return 1 # normal
+    
+    if np.all(syms[:52] != SF1) and np.all(syms[-52:] != SFn):
+        log(4, '$LOG,%.3f,%s,%d,FRAME SYNC (R) TOI=%d' % (ch.time, ch.sig, ch.prn, toi+1))
         return 0 # reversed
     return -1
 
