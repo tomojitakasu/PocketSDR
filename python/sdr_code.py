@@ -36,6 +36,8 @@
 #      2017
 #  [17] GLONASS Interface Control Document Code Division Multiple Access Open
 #      Service Navigation Signal in L3 frequency band Edition 1.0, 2016
+#  [18] NavIC Signal in Space ICD for Standard Positioning Service in L1
+#      Frequency version 1.0, August, 2023
 #
 #  Author:
 #  T.TAKASU
@@ -56,6 +58,7 @@
 #  2024-01-03  1.9  add secondary code of G1CA with odd FCN
 #  2024-01-04  1.10 add signal L5SQV (L5SQ verification mode)
 #                   fix L5Q SBAS secondary code
+#  2024-01-06  1.11 add signal I1SD, I1SP
 #
 import numpy as np
 import scipy.fftpack as fft
@@ -85,7 +88,11 @@ B2AD, B2AP = {}, {}
 B2AS       = {}
 B2BI       = {}
 B3I        = {}
-I5S, ISS   = {}, {}
+I1SD       = {}
+I1SP       = {}
+I1SPO      = {}
+I5S        = {}
+ISS        = {}
 
 L1CA_G1, L1CA_G2 = [], []
 L1C_L_SEQ = []
@@ -564,6 +571,52 @@ ISS_G2_init = ( # PRN 1 - 14
     0b0100101100, 0b0010001110, 0b0100100110, 0b1100001110, 0b1010111110,
     0b1110010001, 0b1101101001, 0b0101000101, 0b0100001101)
 
+I1SD_R0_init = ( # PRN 1 - 14
+    0o0061727026503255544, 0o1660130752435362260, 0o0676457016477551225,
+    0o1763467705267605701, 0o1614265052776007236, 0o1446113457553463523,
+    0o1467417471470124574, 0o0022513456555401603, 0o0004420115402210365,
+    0o0072276243316574510, 0o1632356715721616750, 0o1670164755420300763,
+    0o1752127524253360255, 0o0262220014044243135)
+
+I1SD_R1_init = ( # PRN 1 - 14
+    0o0377627103341647600, 0o0047555332635133703, 0o0570574070736102152,
+    0o0511013576745450615, 0o1216243446624447775, 0o0176452272675511054,
+    0o0151055342317137706, 0o1127720116046071664, 0o0514407436155575524,
+    0o0253070462740453542, 0o0573371306324706336, 0o1315135317732077306,
+    0o1170303027726635012, 0o1637171270537414673)
+
+I1SD_C_init = ( # PRN 1 - 14
+    0b10100, 0b10100, 0b00110, 0b10100, 0b10100, 0b00110, 0b10100, 0b00110,
+    0b00110, 0b00110, 0b10100, 0b00110, 0b10100, 0b00110)
+
+I1SP_R0_init = ( # PRN 1 - 14
+    0o0227743641272102303, 0o0603070242564637717, 0o0746325144437416120,
+    0o0023763714573206044, 0o0155575663373106723, 0o0022277536552741033,
+    0o0137757627072411730, 0o0413034001670700216, 0o0501123675324707024,
+    0o0013727517464264567, 0o0663351450332761127, 0o1450710073416110356,
+    0o1716542347100366110, 0o0743601273016301212)
+
+I1SP_R1_init = ( # PRN 1 - 14
+    0o1667217344450257245, 0o0300642746017221737, 0o0474006332201753645,
+    0o0613606702460402137, 0o1465531713404064713, 0o1063646422557130427,
+    0o1066060465055002004, 0o0225574416605070652, 0o1733560674073230405,
+    0o1116277147142260461, 0o0152604753526345370, 0o1110300535412261305,
+    0o1046105227571557243, 0o1020346561064461527)
+
+I1SP_C_init = ( # PRN 1 - 14
+    0b01000, 0b00000, 0b01000, 0b00000, 0b01000, 0b01000, 0b00000, 0b01000,
+    0b00000, 0b00000, 0b00000, 0b01000, 0b01000, 0b00000)
+
+I1SPO_R0_init = ( # PRN 1 - 14
+    0b0110111011, 0b0111101000, 0b1100000001, 0b0110110110, 0b0100011000,
+    0b0011111100, 0b0001100101, 0b1111000101, 0b0011001100, 0b1000011010,
+    0b0001001001, 0b0110101011, 0b0101110000, 0b0010110011)
+
+I1SPO_R1_init = ( # PRN 1 - 14
+    0b0100110000, 0b0110000010, 0b1110010001, 0b0101110011, 0b1011000110,
+    0b1010101111, 0b1110001000, 0b0001010000, 0b1011111100, 0b0100010101,
+    0b1100000100, 0b0111011110, 0b1001110011, 0b1001101010)
+
 NH10 = ( # 10 bits Neuman-Hoffman code
     -1, -1, -1, -1, 1, 1, -1, 1, -1, 1)
  
@@ -659,6 +712,10 @@ def gen_code(sig, prn):
         return gen_code_B2BI(prn)
     elif sig == 'B3I':
         return gen_code_B3I(prn)
+    elif sig == 'I1SD':
+        return gen_code_I1SD(prn)
+    elif sig == 'I1SP':
+        return gen_code_I1SP(prn)
     elif sig == 'I5S':
         return gen_code_I5S(prn)
     elif sig == 'ISS':
@@ -679,7 +736,7 @@ def gen_code(sig, prn):
 def sec_code(sig, prn):
     sig = sig.upper()
     if sig in ('L1CA', 'L1S', 'L1CB','L1CD', 'L2CM', 'L2CL', 'L6D', 'L6E', 'E1B',
-       'E6B', 'B1CD', 'B2BI', 'I5S', 'ISS'):
+       'E6B', 'B1CD', 'B2BI', 'I1SD', 'I5S', 'ISS'):
         return np.array([1], dtype='int8') # no secondary code
     elif sig == 'L1CP':
         return sec_code_L1CP(prn)
@@ -733,6 +790,8 @@ def sec_code(sig, prn):
         return sec_code_B2AP(prn)
     elif sig == 'B3I':
         return sec_code_B3I(prn)
+    elif sig == 'I1SP':
+        return sec_code_I1SP(prn)
     else:
         return NONE
 
@@ -794,7 +853,7 @@ def code_cyc(sig):
         return 1e-3
     elif sig in ('L6D', 'L6E', 'E1B', 'E1C'):
         return 4e-3
-    elif sig in ('L1CP', 'L1CD', 'B1CD', 'B1CP'):
+    elif sig in ('L1CP', 'L1CD', 'B1CD', 'B1CP', 'I1SD', 'I1SP'):
         return 10e-3
     elif sig == 'L2CM':
         return 20e-3
@@ -818,7 +877,7 @@ def code_len(sig):
         return 1023
     elif sig in ('L1CP', 'L1CD', 'L2CM', 'L5I', 'L5Q', 'L5SI', 'L5SIV', 'L5SQ',
         'L5SQV', 'L6D', 'L6E', 'G3OCD', 'G3OCP', 'E5AI', 'E5AQ', 'E5BI', 'E5BQ',
-        'B1CD', 'B1CP', 'B2AD', 'B2AP', 'B2BI', 'B3I'):
+        'B1CD', 'B1CP', 'B2AD', 'B2AP', 'B2BI', 'B3I', 'I1SD', 'I1SP'):
         return 10230
     elif sig == 'L2CL':
         return 767250
@@ -845,7 +904,7 @@ def code_len(sig):
 def sig_freq(sig):
     sig = sig.upper()
     if sig in ('L1CA', 'L1CB', 'L1S' , 'E1B', 'E1C', 'L1CP', 'L1CD', 'B1CD',
-       'B1CP'):
+       'B1CP', 'I1SD', 'I1SP'):
         return 1575.42e6
     elif sig in ('L2CM', 'L2CL'):
         return 1227.60e6
@@ -1533,6 +1592,83 @@ def gen_code_B3I_G2(N, R_init):
 # generate B3I secondary code --------------------------------------------------
 def sec_code_B3I(prn):
     return sec_code_B1I(prn)
+
+# generate I1SD code ([18]) ----------------------------------------------------
+def gen_code_I1SD(prn):
+    if prn < 1 or prn > 14:
+        return NONE
+    N = 10230
+    global I1SD
+    if prn not in I1SD:
+        code = np.zeros(N, dtype='int8')
+        R0 = I1SD_R0_init[prn-1]
+        R1 = I1SD_R1_init[prn-1]
+        C = I1SD_C_init[prn-1]
+        for i in range(N):
+            code[i] = CHIP[((C>>4) ^ (R1>>54)) & 1]
+            R0, R1, C = shift_I1S(R0, R1, C)
+        #I1SD[prn] = code
+        I1SD[prn] = mod_code(code, [1, -1]) # BOC(1,1)
+    return I1SD[prn]
+
+# generate I1SP code ([18]) ----------------------------------------------------
+def gen_code_I1SP(prn):
+    if prn < 1 or prn > 14:
+        return NONE
+    N = 10230
+    global I1SP
+    if prn not in I1SP:
+        code = np.zeros(N, dtype='int8')
+        R0 = I1SP_R0_init[prn-1]
+        R1 = I1SP_R1_init[prn-1]
+        C = I1SP_C_init[prn-1]
+        for i in range(N):
+            code[i] = CHIP[((C>>4) ^ (R1>>54)) & 1]
+            R0, R1, C = shift_I1S(R0, R1, C)
+        #I1SP[prn] = code
+        I1SP[prn] = mod_code(code, [1, -1]) # BOC(1,1) instead of CBOC(6,1,1/11)
+    return I1SP[prn]
+
+# shift registers of I1S code ([18]) -------------------------------------------
+def shift_I1S(R0, R1, C):
+    R0A = (R0<<50) ^ (R0<<45) ^ (R0<<40) ^ (R0<<20) ^ (R0<<10) ^ (R0<<5) ^ R0
+    S2A = ((R0<<50) ^ (R0<<45) ^ (R0<<40)) & ((R0<<20) ^ (R0<<10) ^ (R0<<5) ^ R0)
+    S2B = (((R0<<50) ^ (R0<<45)) & (R0<<40)) ^ (((R0<<20) ^ (R0<<10)) & ((R0<<5) ^ R0))
+    S2C = ((R0<<50) & (R0<<45)) ^ ((R0<<20) & (R0<<10)) ^ ((R0<<5) & R0)
+    S2 = S2A ^ S2B ^ S2C
+    R1A = S2 ^ (R0<<40) ^ (R0<<35) ^ (R0<<30) ^ (R0<<25) ^ (R0<<15) ^ R0
+    R1B = (R1<<50) ^ (R1<<45) ^ (R1<<40) ^ (R1<<20) ^ (R1<<10) ^ (R1<<5) ^ R1
+    R0 = ((R0<<1) & 0x7FFFFFFFFFFFFF) | ((R0A>>54) & 1)
+    R1 = ((R1<<1) & 0x7FFFFFFFFFFFFF) | (((R1A ^ R1B)>>54) & 1)
+    C = ((C<<1) & 0x1F) | ((C>>4) & 1)
+    return R0, R1, C
+
+# generate I1SP overlay code ([18]) --------------------------------------------
+def sec_code_I1SP(prn):
+    if prn < 1 or prn > 14:
+        return NONE
+    N = 1800
+    global I1SPO
+    if prn not in I1SPO:
+        code = np.zeros(N, dtype='int8')
+        R0 = I1SPO_R0_init[prn-1]
+        R1 = I1SPO_R1_init[prn-1]
+        for i in range(N):
+            code[i] = CHIP[(R1>>9) & 1]
+            R0, R1 = shift_I1SO(R0, R1)
+        I1SPO[prn] = code
+    return I1SPO[prn]
+
+# shift registers of I1S overlay code ([18]) -----------------------------------
+def shift_I1SO(R0, R1):
+    R0A = (R0<<5) ^ (R0<<2) ^ (R0<<1) ^ R0
+    S2A = ((R0<<5) ^ (R0<<2)) & ((R0<<1) ^ R0)
+    S2B = ((R0<<5) & (R0<<2)) ^ ((R0<<1) & R0)
+    R1A = S2A ^ S2B ^ (R0<<6) ^ (R0<<3) ^ (R0<<2) ^ R0
+    R1B = (R1<<5) ^ (R1<<2) ^ (R1<<1) ^ R1
+    R0 = ((R0<<1) & 0x3FF) | ((R0A>>9) & 1)
+    R1 = ((R1<<1) & 0x3FF) | (((R1A ^ R1B)>>9) & 1)
+    return R0, R1
 
 # generate I5S code ([16]) -----------------------------------------------------
 def gen_code_I5S(prn):
