@@ -34,17 +34,18 @@ import gnsstools.beidou.b2ad
 import gnsstools.beidou.b2ap
 import gnsstools.beidou.b3i
 
-# code to hex ------------------------------------------------------------------
+# code to hex string -----------------------------------------------------------
 def code_hex(code):
+    str = ''
     hex = 0
     for i in range(len(code)):
         hex = (hex << 1) + (1 if code[i] == 1 else 0)
         if i % 4 == 3:
-            print('%1X' % (hex), end='')
+            str += '%1X' % (hex)
             hex = 0
-    print('')
+    return str
 
-# code to octal ----------------------------------------------------------------
+# code to octal string ---------------------------------------------------------
 def code_oct(code):
     str = ''
     oct = 0
@@ -55,16 +56,15 @@ def code_oct(code):
             oct = 0
     return str
 
-# code to binary ---------------------------------------------------------------
+# code to binary string --------------------------------------------------------
 def code_bin(code):
-    bin = 0
+    str = ''
     for c in code:
-       bin = (bin << 1) + (1 if c == 1 else 0)
-    return bin
+       str += ('1' if c == 1 else '0')
+    return str
 
-# test by comparing to code references -----------------------------------------
+# gen_code() test by references ------------------------------------------------
 def test01():
-    
     err = 0
     for prn in range(1, 211):
         code = sdr_code.gen_code('L1CA', prn)
@@ -171,35 +171,35 @@ def test01():
     
     err = 0
     for prn in range(1, 51):
-        code = sdr_code.gen_code('E5aI', prn)
+        code = sdr_code.gen_code('E5AI', prn)
         code_ref = 2 * gnsstools.galileo.e5ai.e5ai_code(prn) - 1
         if not np.all(code == code_ref):
             err = 1
-    print('test01 E5aI: %s' % ('NG' if err else 'OK'))
+    print('test01 E5AI: %s' % ('NG' if err else 'OK'))
     
     err = 0
     for prn in range(1, 51):
-        code = sdr_code.gen_code('E5aQ', prn)
+        code = sdr_code.gen_code('E5AQ', prn)
         code_ref = 2 * gnsstools.galileo.e5aq.e5aq_code(prn) - 1
         if not np.all(code == code_ref):
             err = 1
-    print('test01 E5aQ: %s' % ('NG' if err else 'OK'))
+    print('test01 E5AQ: %s' % ('NG' if err else 'OK'))
     
     err = 0
     for prn in range(1, 51):
-        code = sdr_code.gen_code('E5bI', prn)
+        code = sdr_code.gen_code('E5BI', prn)
         code_ref = 2 * gnsstools.galileo.e5bi.e5bi_code(prn) - 1
         if not np.all(code == code_ref):
             err = 1
-    print('test01 E5bI: %s' % ('NG' if err else 'OK'))
+    print('test01 E5BI: %s' % ('NG' if err else 'OK'))
     
     err = 0
     for prn in range(1, 51):
-        code = sdr_code.gen_code('E5bQ', prn)
+        code = sdr_code.gen_code('E5BQ', prn)
         code_ref = 2 * gnsstools.galileo.e5bq.e5bq_code(prn) - 1
         if not np.all(code == code_ref):
             err = 1
-    print('test01 E5bQ: %s' % ('NG' if err else 'OK'))
+    print('test01 E5BQ: %s' % ('NG' if err else 'OK'))
     
     err = 0
     for prn in range(1, 51):
@@ -275,16 +275,15 @@ def test01():
             err = 1
     print('test01 B3I : %s' % ('NG' if err else 'OK'))
     
-# test by comparing to code references -----------------------------------------
+# sec_code() test by references ------------------------------------------------
 def test02():
-    
     err = 0
     for prn in range(1, 210):
         code = sdr_code.sec_code('L1CP', prn)
         code_ref = 2 * gnsstools.gps.l1cp.secondary_code(prn) - 1
         if not np.all(code == code_ref):
             err = 1
-    print('test02 L1CPo: %s' % ('NG' if err else 'OK'))
+    print('test02 L1CP: %s' % ('NG' if err else 'OK'))
     
     err = 0
     for prn in range(1, 63):
@@ -292,7 +291,7 @@ def test02():
         code_ref = 2 * gnsstools.beidou.b1cp.secondary_code(prn) - 1
         if not np.all(code == code_ref):
             err = 1
-    print('test02 B1CPo: %s' % ('NG' if err else 'OK'))
+    print('test02 B1CP: %s' % ('NG' if err else 'OK'))
     
     err = 0
     for prn in range(1, 63):
@@ -300,9 +299,9 @@ def test02():
         code_ref = 2 * gnsstools.beidou.b2ap.secondary_code(prn) - 1
         if not np.all(code == code_ref):
             err = 1
-    print('test02 B2aPo: %s' % ('NG' if err else 'OK'))
+    print('test02 B2aP: %s' % ('NG' if err else 'OK'))
 
-# test by dump -----------------------------------------------------------------
+# gen_code() test by dump ------------------------------------------------------
 def test03():
     print('test03 L6D:')
     for prn in range(193, 202):
@@ -316,38 +315,75 @@ def test03():
         str = code_oct(code)
         print('PRN=%3d CODE= %s ... %s' % (prn, str[:8], str[-8:]))
     
+    print('test03 G1OCD:')
+    for prn in (0, 1, 2, 61, 62, 63):
+        code = sdr_code.gen_code('G1OCD', prn)
+        str1 = code_hex(code[:64:2])
+        str2 = code_hex(code[-64::2])
+        print('PRN=%3d CODE= %s ... %s' % (prn, str1, str2))
+    
+    print('test03 G1OCP:')
+    for prn in (0, 1, 2, 61, 62, 63):
+        code = sdr_code.gen_code('G1OCP', prn)
+        str1 = code_hex(code[3:128:4])
+        str2 = code_hex(code[-125::4])
+        print('PRN=%3d CODE= %s ... %s' % (prn, str1, str2))
+    
+    print('test03 G2OCP:')
+    for prn in (0, 1, 2, 61, 62, 63):
+        code = sdr_code.gen_code('G2OCP', prn)
+        str1 = code_hex(code[3:128:4])
+        str2 = code_hex(code[-125::4])
+        print('PRN=%3d CODE= %s ... %s' % (prn, str1, str2))
+    
+    print('test03 G3OCD:')
+    for prn in (0, 1, 2, 61, 62, 63):
+        code = sdr_code.gen_code('G3OCD', prn)
+        str1 = code_hex(code[:32])
+        str2 = code_hex(code[-32:])
+        print('PRN=%3d CODE= %s ... %s' % (prn, str1, str2))
+    
+    print('test03 G3OCP:')
+    for prn in (0, 1, 2, 61, 62, 63):
+        code = sdr_code.gen_code('G3OCP', prn)
+        str1 = code_hex(code[:32])
+        str2 = code_hex(code[-32:])
+        print('PRN=%3d CODE= %s ... %s' % (prn, str1, str2))
+    
     print('test03 B2BI:')
-    for prn in range(1, 64):
+    for prn in (1, 2, 3, 61, 62, 63):
         code = sdr_code.gen_code('B2BI', prn)
         str = code_oct(code)
         print('PRN=%3d CODE= %s ... %s' % (prn, str[:8], str[-8:]))
     
     print('test03 I5S:')
-    for prn in range(1, 15):
+    for prn in (1, 2, 3, 12, 13, 14):
         code = sdr_code.gen_code('I5S', prn)
         str = code_oct(np.hstack([-1, -1, code]))
         print('PRN=%3d CODE= %s ...' % (prn, str[:4]))
     
     print('test03 ISS:')
-    for prn in range(1, 15):
+    for prn in (1, 2, 3, 12, 13, 14):
         code = sdr_code.gen_code('ISS', prn)
         str = code_oct(np.hstack([-1, -1, code]))
         print('PRN=%3d CODE= %s ...' % (prn, str[:4]))
     
     print('test03 I1SD:')
-    for prn in range(1, 15):
+    for prn in (1, 2, 3, 12, 13, 14):
         code = sdr_code.gen_code('I1SD', prn)
         str = code_oct(code[1::2])
         print('PRN=%3d CODE= %s ... %s' % (prn, str[:8], str[-8:]))
     
     print('test03 I1SP:')
-    for prn in range(1, 15):
+    for prn in (1, 2, 3, 12, 13, 14):
         code = sdr_code.gen_code('I1SP', prn)
         str = code_oct(code[1::2])
         print('PRN=%3d CODE= %s ... %s' % (prn, str[:8], str[-8:]))
     
-    print('test03 I1SPo:')
-    for prn in range(1, 15):
+# sec_code() test by dump ------------------------------------------------------
+def test04():
+    print('test04 I1SP:')
+    for prn in (1, 2, 3, 12, 13, 14):
         code = sdr_code.sec_code('I1SP', prn)
         str = code_oct(code)
         print('PRN=%3d CODE= %s ... %s' % (prn, str[:8], str[-8:]))
@@ -357,4 +393,5 @@ if __name__ == '__main__':
     test01()
     test02()
     test03()
+    test04()
     
