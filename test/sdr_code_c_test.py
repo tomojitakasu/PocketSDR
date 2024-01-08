@@ -208,11 +208,27 @@ def test_01():
     
     err = 0
     for prn in range(0, 64):
-        code = sdr_gen_code('G3OCD', 1)
-        code_ref = sdr_code.gen_code('G3OCD', 1)
+        code = sdr_gen_code('G1OCD', 1)
+        code_ref = sdr_code.gen_code('G1OCD', 1)
         if not np.all(code == code_ref):
             err = 1
-    print('sdr_gen_code() G3OCD: %s' % ('NG' if err else 'OK'))
+    print('sdr_gen_code() G1OCD: %s' % ('NG' if err else 'OK'))
+    
+    err = 0
+    for prn in range(0, 64):
+        code = sdr_gen_code('G1OCP', 1)
+        code_ref = sdr_code.gen_code('G1OCP', 1)
+        if not np.all(code == code_ref):
+            err = 1
+    print('sdr_gen_code() G1OCP: %s' % ('NG' if err else 'OK'))
+    
+    err = 0
+    for prn in range(0, 64):
+        code = sdr_gen_code('G2OCP', 1)
+        code_ref = sdr_code.gen_code('G2OCP', 1)
+        if not np.all(code == code_ref):
+            err = 1
+    print('sdr_gen_code() G2OCP: %s' % ('NG' if err else 'OK'))
     
     err = 0
     for prn in range(0, 64):
@@ -451,7 +467,29 @@ def test_02():
     print('sdr_sec_code() G2CA : %s' % ('NG' if err else 'OK'))
     
     err = 0
-    for prn in range(0, 63):
+    for prn in range(0, 64):
+        code = sdr_sec_code('G1OCD', prn)
+        code_ref = sdr_code.sec_code('G1OCD', prn)
+        if not np.all(code == code_ref):
+            err = 1
+    print('sdr_sec_code() G1OCD: %s' % ('NG' if err else 'OK'))
+    
+    err = 0
+    for prn in range(0, 64):
+        code = sdr_sec_code('G2OCP', prn)
+        code_ref = sdr_code.sec_code('G2OCP', prn)
+        if not np.all(code == code_ref):
+            err = 1
+    print('sdr_sec_code() G2OCP: %s' % ('NG' if err else 'OK'))
+    
+    err = 0
+    for prn in range(0, 64):
+        code = sdr_sec_code('G1OCP', prn)
+        code_ref = sdr_code.sec_code('G1OCP', prn)
+        if not np.all(code == code_ref):
+            err = 1
+    err = 0
+    for prn in range(0, 64):
         code = sdr_sec_code('G3OCD', prn)
         code_ref = sdr_code.sec_code('G3OCD', prn)
         if not np.all(code == code_ref):
