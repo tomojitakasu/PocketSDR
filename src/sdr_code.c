@@ -38,6 +38,10 @@
 //      Service Navigation Signal in L3 frequency band Edition 1.0, 2016
 //  [18] NavIC Signal in Space ICD for Standard Positioning Service in L1
 //      Frequency version 1.0, August, 2023
+//  [19] GLONASS Interface Control Document Code Division Multiple Access Open
+//      Service Navigation Signal in L1 frequency band Edition 1.0, 2016
+//  [20] GLONASS Interface Control Document Code Division Multiple Access Open
+//      Service Navigation Signal in L2 frequency band Edition 1.0, 2016
 //
 //  Author:
 //  T.TAKASU
@@ -58,6 +62,7 @@
 //  2024-01-04  1.10 add signal L5SQV (L5SQ verification mode)
 //                   fix L5Q SBAS secondary code
 //  2024-01-06  1.11 add signal I1SD, I1SP
+//  2024-01-07  1.12 add signal G1OCD, G1OCP, G2OCP
 //
 #include <ctype.h>
 #include "pocket_sdr.h"
@@ -87,6 +92,9 @@ static int8_t *L5Q  [210] = {0};
 static int8_t *L6D  [ 10] = {0};
 static int8_t *L6E  [ 10] = {0};
 static int8_t *G1CA [  1] = {0};
+static int8_t *G1OCD[ 64] = {0};
+static int8_t *G1OCP[ 64] = {0};
+static int8_t *G2OCP[ 64] = {0};
 static int8_t *G3OCD[ 64] = {0};
 static int8_t *G3OCP[ 64] = {0};
 static int8_t *E1B  [ 50] = {0};
@@ -663,6 +671,12 @@ static int8_t MC[] = { // Manchester code
    1, -1
 };
 
+static int8_t G2OCP_OC2[] = { // GLONASS L2OCP OC2
+   -1, -1, 1, -1, 1, 1, -1, 1, -1, 1, 1, 1, 1, 1, -1, -1, -1, 1, 1, -1, -1, -1,
+   -1, 1, -1, -1, -1, 1, 1, -1, 1, -1, -1, -1, -1, -1, -1, 1, -1, 1, 1, -1, -1,
+   -1, 1, -1, -1, -1, 1, -1
+};
+
 // upper cases of signal string ------------------------------------------------
 static void sig_upper(const char *sig, char *Sig)
 {
@@ -1108,7 +1122,7 @@ static int8_t *gen_code_L6(int N, uint32_t R)
 // generate L6D code ([4]) -----------------------------------------------------
 static int8_t *gen_code_L6D(int prn, int *N)
 {
-    static const int8_t sub_carr[] = {1, 0}; // TDM
+    static const int8_t sub_carr[] = {-1, 0}; // TDM
     
     if (prn < 193 || prn > 201) {
         return NULL;
@@ -1126,7 +1140,7 @@ static int8_t *gen_code_L6D(int prn, int *N)
 // generate L6E code ([4]) -----------------------------------------------------
 static int8_t *gen_code_L6E(int prn, int *N)
 {
-    static const int8_t sub_carr[] = {0, 1}; // TDM
+    static const int8_t sub_carr[] = {0, -1}; // TDM
     
     if (prn < 203 || prn > 211) {
         return NULL;
@@ -1171,6 +1185,81 @@ static int8_t *gen_code_G1CA(int prn, int *N)
 static int8_t *gen_code_G2CA(int prn, int *N)
 {
     return gen_code_G1CA(prn, N);
+}
+
+// generate G1OCD code ([19]) --------------------------------------------------
+static int8_t *gen_code_G1OCD(int prn, int *N)
+{
+   static const int8_t sub_carr[] = {-1, 0}; // TDM
+   
+   if (prn < 0 || prn > 63) {
+       return NULL;
+   }
+   int n = 1023;
+   *N = n * 2;
+   if (!G1OCD[prn]) {
+       int8_t *DC1 = LFSR(n, 0x0C8, 0x009, 10);
+       int8_t *DC2 = LFSR(n, prn, 0x08B, 10);
+       int8_t *code = (int8_t *)sdr_malloc(n);
+       for (int i = 0; i < n; i++) {
+           code[i] = -DC1[i] * DC2[i];
+       }
+       G1OCD[prn] = mod_code(code, n, sub_carr, 2);
+       sdr_free(DC1);
+       sdr_free(DC2);
+       sdr_free(code);
+   }
+   return G1OCD[prn];
+}
+
+// generate G1OCP code ([19]) -------------------------------------------------
+static int8_t *gen_code_G1OCP(int prn, int *N)
+{
+   static const int8_t sub_carr[] = {0, 0, 1, -1}; // BOC(1,0.5) + TDM
+   
+   if (prn < 0 || prn > 63) {
+       return NULL;
+   }
+   int n = 4092;
+   *N = n * 4;
+   if (!G1OCP[prn]) {
+       int8_t *code = (int8_t *)sdr_malloc(n);
+       int8_t *DC1 = LFSR(n, 0x0C5, 0x053, 12);
+       int8_t *DC2 = LFSR(n, prn, 0x21, 6);
+       for (int i = 0; i < n; i++) {
+           code[i] = -DC1[i] * DC2[i];
+       }
+       G1OCP[prn] = mod_code(code, n, sub_carr, 4);
+       sdr_free(DC1);
+       sdr_free(DC2);
+       sdr_free(code);
+   }
+   return G1OCP[prn];
+}
+
+// generate G2OCP code ([20]) --------------------------------------------------
+static int8_t *gen_code_G2OCP(int prn, int *N)
+{
+   static const int8_t sub_carr[] = {0, 0, 1, -1}; // BOC(1,0.5) + TDM
+   
+   if (prn < 0 || prn > 63) {
+       return NULL;
+   }
+   int n = 10230;
+   *N = n * 4;
+   if (!G2OCP[prn]) {
+       int8_t *code = (int8_t *)sdr_malloc(n);
+       int8_t *DC1 = LFSR(n, 0x0D38, 0x0443, 14);
+       int8_t *DC2 = LFSR(n, prn + 64, 0x03, 7);
+       for (int i = 0; i < n; i++) {
+           code[i] = -DC1[i] * DC2[i];
+       }
+       G2OCP[prn] = mod_code(code, n, sub_carr, 4);
+       sdr_free(DC1);
+       sdr_free(DC2);
+       sdr_free(code);
+   }
+   return G2OCP[prn];
 }
 
 // generate G3OC DC1 code ([17]) -----------------------------------------------
@@ -1242,6 +1331,20 @@ static int8_t *sec_code_G1CA(int prn, int *N)
 static int8_t *sec_code_G2CA(int prn, int *N)
 {
     return sec_code_G1CA(prn, N);
+}
+
+// generate G1OCD secondary code [19] ------------------------------------------
+static int8_t *sec_code_G1OCD(int prn, int *N)
+{
+    *N = (int)sizeof(MC);
+    return MC;
+}
+
+// generate G2OCP secondary code [20] ------------------------------------------
+static int8_t *sec_code_G2OCP(int prn, int *N)
+{
+    *N = (int)sizeof(G2OCP_OC2);
+    return G2OCP_OC2;
 }
 
 // generate G3OCD secondary code ([17]) ----------------------------------------
@@ -2026,6 +2129,15 @@ static int8_t *gen_code(const char *sig, int prn, int *N)
     else if (!strcmp(Sig, "G2CA")) {
         return gen_code_G2CA(prn, N);
     }
+    else if (!strcmp(Sig, "G1OCD")) {
+        return gen_code_G1OCD(prn, N);
+    }
+    else if (!strcmp(Sig, "G1OCP")) {
+        return gen_code_G1OCP(prn, N);
+    }
+    else if (!strcmp(Sig, "G2OCP")) {
+        return gen_code_G2OCP(prn, N);
+    }
     else if (!strcmp(Sig, "G3OCD")) {
         return gen_code_G3OCD(prn, N);
     }
@@ -2128,9 +2240,10 @@ static int8_t *sec_code(const char *sig, int prn, int *N)
     
     if (!strcmp(Sig, "L1CA") || !strcmp(Sig, "L1S" ) || !strcmp(Sig, "L1CB") ||
         !strcmp(Sig, "L1CD") || !strcmp(Sig, "L2CM") || !strcmp(Sig, "L2CL") ||
-        !strcmp(Sig, "L6D" ) || !strcmp(Sig, "L6E" ) || !strcmp(Sig, "E1B" ) ||
-        !strcmp(Sig, "E6B" ) || !strcmp(Sig, "B1CD") || !strcmp(Sig, "B2BI") ||
-        !strcmp(Sig, "I1SD") || !strcmp(Sig, "I5S" ) || !strcmp(Sig, "ISS" )) {
+        !strcmp(Sig, "L6D" ) || !strcmp(Sig, "G1OCP") || !strcmp(Sig, "L6E" ) ||
+        !strcmp(Sig, "E1B" ) || !strcmp(Sig, "E6B" ) || !strcmp(Sig, "B1CD") ||
+        !strcmp(Sig, "B2BI") || !strcmp(Sig, "I1SD") || !strcmp(Sig, "I5S" ) ||
+        !strcmp(Sig, "ISS" )) {
         *N = 1;
         return code;
     }
@@ -2170,6 +2283,12 @@ static int8_t *sec_code(const char *sig, int prn, int *N)
     }
     else if (!strcmp(Sig, "G2CA")) {
         return sec_code_G2CA(prn, N);
+    }
+    else if (!strcmp(Sig, "G1OCD")) {
+        return sec_code_G1OCD(prn, N);
+    }
+    else if (!strcmp(Sig, "G2OCP")) {
+        return sec_code_G2OCP(prn, N);
     }
     else if (!strcmp(Sig, "G3OCD")) {
         return sec_code_G3OCD(prn, N);
@@ -2268,16 +2387,22 @@ double sdr_code_cyc(const char *sig)
         !strcmp(Sig, "B3I" ) || !strcmp(Sig, "I5S" ) || !strcmp(Sig, "ISS" )) {
         return 1e-3;
     }
+    else if (!strcmp(Sig, "G1OCD")) {
+        return 2e-3;
+    }
     else if (!strcmp(Sig, "L6D" ) || !strcmp(Sig, "L6E" ) ||
         !strcmp(Sig, "E1B" ) || !strcmp(Sig, "E1C" )) {
         return 4e-3;
+    }
+    else if (!strcmp(Sig, "G1OCP")) {
+        return 8e-3;
     }
     else if (!strcmp(Sig, "L1CP") || !strcmp(Sig, "L1CD") ||
         !strcmp(Sig, "B1CD") || !strcmp(Sig, "B1CP") || !strcmp(Sig, "I1SD") ||
         !strcmp(Sig, "I1SP")) {
         return 10e-3;
     }
-    else if (!strcmp(Sig, "L2CM")) {
+    else if (!strcmp(Sig, "L2CM") || !strcmp(Sig, "G2OCP")) {
         return 20e-3;
     }
     else if (!strcmp(Sig, "L2CL")) {
@@ -2302,18 +2427,18 @@ int sdr_code_len(const char *sig)
     sig_upper(sig, Sig);
     
     if (!strcmp(Sig, "L1CA") || !strcmp(Sig, "L1CB") || !strcmp(Sig, "L1S" ) ||
-        !strcmp(Sig, "I5S" ) || !strcmp(Sig, "ISS" )) {
+        !strcmp(Sig, "G1OCD") || !strcmp(Sig, "I5S" ) || !strcmp(Sig, "ISS" )) {
         return 1023;
     }
     else if (!strcmp(Sig, "L1CP") || !strcmp(Sig, "L1CD") ||
         !strcmp(Sig, "L2CM") || !strcmp(Sig, "L5I" ) || !strcmp(Sig, "L5Q" ) ||
         !strcmp(Sig, "L5SI") || !strcmp(Sig, "L5SIV") || !strcmp(Sig, "L5SQ") ||
         !strcmp(Sig, "L5SQV") || !strcmp(Sig, "L6D" ) || !strcmp(Sig, "L6E" ) ||
-        !strcmp(Sig, "G3OCD") || !strcmp(Sig, "G3OCP") || !strcmp(Sig, "E5AI") ||
-        !strcmp(Sig, "E5AQ") || !strcmp(Sig, "E5BI") || !strcmp(Sig, "E5BQ") ||
-        !strcmp(Sig, "B1CD") || !strcmp(Sig, "B1CP") || !strcmp(Sig, "B2AD") ||
-        !strcmp(Sig, "B2AP") || !strcmp(Sig, "B2BI") || !strcmp(Sig, "B3I" ) ||
-        !strcmp(Sig, "I1SD") || !strcmp(Sig, "I1SP")) {
+        !strcmp(Sig, "G2OCP") || !strcmp(Sig, "G3OCD") || !strcmp(Sig, "G3OCP") ||
+        !strcmp(Sig, "E5AI") || !strcmp(Sig, "E5AQ") || !strcmp(Sig, "E5BI") ||
+        !strcmp(Sig, "E5BQ") || !strcmp(Sig, "B1CD") || !strcmp(Sig, "B1CP") ||
+        !strcmp(Sig, "B2AD") || !strcmp(Sig, "B2AP") || !strcmp(Sig, "B2BI") ||
+        !strcmp(Sig, "B3I" ) || !strcmp(Sig, "I1SD") || !strcmp(Sig, "I1SP")) {
         return 10230;
     }
     else if (!strcmp(Sig, "L2CL")) {
@@ -2322,7 +2447,8 @@ int sdr_code_len(const char *sig)
     else if (!strcmp(Sig, "E6B" ) || !strcmp(Sig, "E6C" )) {
         return 5115;
     }
-    else if (!strcmp(Sig, "E1B" ) || !strcmp(Sig, "E1C" )) {
+    else if (!strcmp(Sig, "E1B" ) || !strcmp(Sig, "E1C" ) ||
+             !strcmp(Sig, "G1OCP")) {
         return 4092;
     }
     else if (!strcmp(Sig, "G1CA") || !strcmp(Sig, "G2CA")) {
@@ -2381,8 +2507,14 @@ double sdr_sig_freq(const char *sig)
     else if (!strcmp(Sig, "G1CA")) {
         return 1602.0e6;
     }
+    else if (!strcmp(Sig, "G1OCD") || !strcmp(Sig, "G1OCP")) {
+        return 1600.995e6;
+    }
     else if (!strcmp(Sig, "G2CA")) {
         return 1246.0e6;
+    }
+    else if (!strcmp(Sig, "G2OCP")) {
+        return 1248.0e6;
     }
     else if (!strcmp(Sig, "G3OCD") || !strcmp(Sig, "G3OCP")) {
         return 1202.025e6;
