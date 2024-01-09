@@ -634,12 +634,14 @@ BC = ( # Baker code
    -1, -1, -1, 1, -1)
 
 MC = ( # Manchester code
-   1, -1)
+   -1, 1)
 
 G2OCP_OC2 = ( # GLONASS L2OCP OC2
    -1, -1, 1, -1, 1, 1, -1, 1, -1, 1, 1, 1, 1, 1, -1, -1, -1, 1, 1, -1, -1, -1,
    -1, 1, -1, -1, -1, 1, 1, -1, 1, -1, -1, -1, -1, -1, -1, 1, -1, 1, 1, -1, -1,
    -1, 1, -1, -1, -1, 1, -1)
+
+BOC = (-1, 1) # BOC(k,k) sub-carrier
 
 #-------------------------------------------------------------------------------
 #  Generate primary code.
@@ -992,7 +994,7 @@ def gen_code_L1CB(prn):
     if prn < 203 or prn > 206:
         return NONE
     code = gen_code_L1CA(prn)
-    return mod_code(code, [1, -1]) # BOC(1,1)
+    return mod_code(code, BOC) # BOC(1,1)
 
 # generate L1CP code -----------------------------------------------------------
 def gen_code_L1CP(prn):
@@ -1001,7 +1003,7 @@ def gen_code_L1CP(prn):
     N = 10230
     if prn not in L1CP:
         code = gen_code_L1CPD(N, L1CP_weil_idx[prn-1], L1CP_ins_idx[prn-1])
-        L1CP[prn] = mod_code(code, [1, -1]) # BOC(1,1) instead of TMBOC(6,1,4/33)
+        L1CP[prn] = mod_code(code, BOC) # BOC(1,1) instead of TMBOC(6,1,4/33)
     return L1CP[prn]
 
 # generate L1CD code -----------------------------------------------------------
@@ -1011,7 +1013,7 @@ def gen_code_L1CD(prn):
     N = 10230
     if prn not in L1CD:
         code = gen_code_L1CPD(N, L1CD_weil_idx[prn-1], L1CD_ins_idx[prn-1])
-        L1CD[prn] = mod_code(code, [1, -1]) # BOC(1,1)
+        L1CD[prn] = mod_code(code, BOC) # BOC(1,1)
     return L1CD[prn]
 
 # generate L1CP/D code ([7]) ---------------------------------------------------
@@ -1258,7 +1260,7 @@ def gen_code_G1OCP(prn):
    if prn not in G1OCP:
        DC1 = LFSR(N, 0b000011000101, 0b0001010011, 12)
        DC2 = LFSR(N, prn, 0b100001, 6)
-       G1OCP[prn] = mod_code(-DC1 * DC2, [0, 0, 1, -1]) # BOC(1,0.5) + TDM
+       G1OCP[prn] = mod_code(-DC1 * DC2, [0, 0, -1, 1]) # BOC(1,1) + TDM
    return G1OCP[prn]
 
 # generate G2OCP code ([20]) ---------------------------------------------------
@@ -1269,7 +1271,7 @@ def gen_code_G2OCP(prn):
    if prn not in G2OCP:
        DC1 = LFSR(N, 0b00110100111000, 0b00010001000011, 14)
        DC2 = LFSR(N, prn + 64, 0b0000011, 7)
-       G2OCP[prn] = mod_code(-DC1 * DC2, [0, 0, 1, -1]) # BOC(1,0.5) + TDM
+       G2OCP[prn] = mod_code(-DC1 * DC2, [0, 0, -1, 1]) # BOC(1,1) + TDM
    return G2OCP[prn]
 
 # generate G3OCD code ([17]) ---------------------------------------------------
@@ -1345,7 +1347,7 @@ def gen_code_E1B(prn):
     N = 4092
     if prn not in E1B:
         code = read_code_hex(sdr_code_gal.E1B[prn-1], N)
-        E1B[prn] = mod_code(code, [1, -1]) # BOC(1,1) instead of CBOC(6,1,1/11)
+        E1B[prn] = mod_code(code, BOC) # BOC(1,1) instead of CBOC(6,1,1/11)
     return E1B[prn]
 
 # generate E1C code ([5]) ------------------------------------------------------
@@ -1355,7 +1357,7 @@ def gen_code_E1C(prn):
     N = 4092
     if prn not in E1C:
         code = read_code_hex(sdr_code_gal.E1C[prn-1], N)
-        E1C[prn] = mod_code(code, [1, -1]) # BOC(1,1) instead of CBOC(6,1,1/11)
+        E1C[prn] = mod_code(code, BOC) # BOC(1,1) instead of CBOC(6,1,1/11)
     return E1C[prn]
 
 # generate E1C secondary code ([5]) -------------------------------------------
@@ -1504,7 +1506,7 @@ def gen_code_B1CD(prn):
         for i in range(N):
             j = (i + B1CD_trunc_pnt[prn-1] - 1) % 10243
             code[i] = B1C_weil_code(j, B1CD_ph_diff[prn-1])
-        B1CD[prn] = mod_code(code, [1, -1]) # BOC(1,1)
+        B1CD[prn] = mod_code(code, BOC) # BOC(1,1)
     return B1CD[prn]
 
 # generate B1CP code ([8]) -----------------------------------------------------
@@ -1517,7 +1519,7 @@ def gen_code_B1CP(prn):
         for i in range(N):
             j = (i + B1CP_trunc_pnt[prn-1] - 1) % 10243
             code[i] = B1C_weil_code(j, B1CP_ph_diff[prn-1])
-        B1CP[prn] = mod_code(code, [1, -1]) # BOC(1,1) instead of QMBOC(6,1,4/33)
+        B1CP[prn] = mod_code(code, BOC) # BOC(1,1) instead of QMBOC(6,1,4/33)
     return B1CP[prn]
 
 # B1C Weil-code 10243 chips ----------------------------------------------------
@@ -1683,7 +1685,7 @@ def gen_code_I1SD(prn):
             code[i] = CHIP[((C>>4) ^ (R1>>54)) & 1]
             R0, R1, C = shift_I1S(R0, R1, C)
         #I1SD[prn] = code
-        I1SD[prn] = mod_code(code, [1, -1]) # BOC(1,1)
+        I1SD[prn] = mod_code(code, BOC) # BOC(1,1)
     return I1SD[prn]
 
 # generate I1SP code ([18]) ----------------------------------------------------
@@ -1701,7 +1703,7 @@ def gen_code_I1SP(prn):
             code[i] = CHIP[((C>>4) ^ (R1>>54)) & 1]
             R0, R1, C = shift_I1S(R0, R1, C)
         #I1SP[prn] = code
-        I1SP[prn] = mod_code(code, [1, -1]) # BOC(1,1) instead of CBOC(6,1,1/11)
+        I1SP[prn] = mod_code(code, BOC) # BOC(1,1) instead of CBOC(6,1,1/11)
     return I1SP[prn]
 
 # shift registers of I1S code ([18]) -------------------------------------------
