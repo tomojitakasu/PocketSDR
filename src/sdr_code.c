@@ -668,7 +668,7 @@ static int8_t BC[] = { // Baker code
 };
 
 static int8_t MC[] = { // Manchester code
-   1, -1
+   -1, 1
 };
 
 static int8_t G2OCP_OC2[] = { // GLONASS L2OCP OC2
@@ -676,6 +676,8 @@ static int8_t G2OCP_OC2[] = { // GLONASS L2OCP OC2
    -1, 1, -1, -1, -1, 1, 1, -1, 1, -1, -1, -1, -1, -1, -1, 1, -1, 1, 1, -1, -1,
    -1, 1, -1, -1, -1, 1, -1
 };
+
+static int8_t BOC[] = {-1, 1}; // BOC(k,k) sub-carrier
 
 // upper cases of signal string ------------------------------------------------
 static void sig_upper(const char *sig, char *Sig)
@@ -740,6 +742,17 @@ int8_t *LFSR(int N, int32_t R, int32_t tap, int n)
     return code;
 }
 
+// generate code by XOR of 2 codes ---------------------------------------------
+int8_t *xor_code(const int8_t *code1, const int8_t *code2, int N)
+{
+    int8_t *code = (int8_t *)sdr_malloc(N);
+    
+    for (int i = 0; i < N; i++) {
+        code[i] = -code1[i] * code2[i];
+    }
+    return code;
+}
+
 // generate L1C/A G1 code ------------------------------------------------------
 static int8_t *gen_code_L1CA_G1(int N)
 {
@@ -785,18 +798,16 @@ static int8_t *gen_code_L1S(int prn, int *N)
 // generate L1C/B code ([3]) ----------------------------------------------------
 static int8_t *gen_code_L1CB(int prn, int *N)
 {
-    static int8_t sub_carr[] = {1, -1};
-    
     if (prn < 203 || prn > 206) {
         return NULL;
     }
     int8_t *code_L1CA = gen_code_L1CA(prn, N);
-    int8_t *code = mod_code(code_L1CA, *N, sub_carr, 2);
+    int8_t *code = mod_code(code_L1CA, *N, BOC, 2); // BOC(1,1)
     *N *= 2;
     return code;
 }
 
-// generate Legendre sequnce ---------------------------------------------------
+// generate Legendre sequence --------------------------------------------------
 static int8_t *gen_legendre_seq(int N)
 {
     int8_t *L = (int8_t *)sdr_malloc(N);
@@ -835,8 +846,6 @@ static int8_t *gen_code_L1CPD(int N, int w, int p)
 // generate L1CP code ----------------------------------------------------------
 static int8_t *gen_code_L1CP(int prn, int *N)
 {
-    static int8_t sub_carr[] = {1, -1}; // BOC(1,1) instead of TMBOC(6,1,4/33)
-    
     if (prn < 1 || prn > 210) {
         return NULL;
     }
@@ -845,7 +854,7 @@ static int8_t *gen_code_L1CP(int prn, int *N)
     if (!L1CP[prn-1]) {
         int8_t *code = gen_code_L1CPD(n, L1CP_weil_idx[prn-1],
             L1CP_ins_idx[prn-1]);
-        L1CP[prn-1] = mod_code(code, n, sub_carr, 2);
+        L1CP[prn-1] = mod_code(code, n, BOC, 2); // BOC(1,1)
         sdr_free(code);
     }
     return L1CP[prn-1];
@@ -854,8 +863,6 @@ static int8_t *gen_code_L1CP(int prn, int *N)
 // generate L1CD code ----------------------------------------------------------
 static int8_t *gen_code_L1CD(int prn, int *N)
 {
-    static int8_t sub_carr[] = {1, -1}; // BOC(1,1)
-    
     if (prn < 1 || prn > 210) {
         return NULL;
     }
@@ -864,7 +871,7 @@ static int8_t *gen_code_L1CD(int prn, int *N)
     if (!L1CD[prn-1]) {
         int8_t *code = gen_code_L1CPD(n, L1CD_weil_idx[prn-1],
             L1CD_ins_idx[prn-1]);
-        L1CD[prn-1] = mod_code(code, n, sub_carr, 2);
+        L1CD[prn-1] = mod_code(code, n, BOC, 2); // BOC(1,1)
         sdr_free(code);
     }
     return L1CD[prn-1];
@@ -1013,10 +1020,7 @@ static int8_t *gen_code_L5SI(int prn, int *N)
 // generate L5SIV code ([15]) --------------------------------------------------
 static int8_t *gen_code_L5SIV(int prn, int *N)
 {
-    if ((prn < 184 || prn > 189) && (prn < 205 || prn > 206)) {
-        return NULL;
-    }
-    return gen_code_L5I(prn, N);
+    return gen_code_L5SI(prn, N);
 }
 
 // generate L5SQ code ([15]) ---------------------------------------------------
@@ -1031,10 +1035,7 @@ static int8_t *gen_code_L5SQ(int prn, int *N)
 // generate L5SQV code ([15]) --------------------------------------------------
 static int8_t *gen_code_L5SQV(int prn, int *N)
 {
-    if ((prn < 184 || prn > 189) && (prn < 205 || prn > 206)) {
-        return NULL;
-    }
-    return gen_code_L5Q(prn, N);
+    return gen_code_L5SQ(prn, N);
 }
 
 // generate L5I secondary code ([2])--------------------------------------------
@@ -1109,11 +1110,7 @@ static int8_t *gen_code_L6(int N, uint32_t R)
 {
     int8_t *code1 = LFSR(N, 0x3FF, 0x0F3, 10);
     int8_t *code2 = LFSR(N, rev_reg(R, 20), 0x00053, 20);
-    int8_t *code = (int8_t *)sdr_malloc(N);
-    
-    for (int i = 0; i < N; i++) {
-        code[i] = -code1[i] * code2[i];
-    }
+    int8_t *code = xor_code(code1, code2, N);
     sdr_free(code1);
     sdr_free(code2);
     return code;
@@ -1200,10 +1197,7 @@ static int8_t *gen_code_G1OCD(int prn, int *N)
    if (!G1OCD[prn]) {
        int8_t *DC1 = LFSR(n, 0x0C8, 0x009, 10);
        int8_t *DC2 = LFSR(n, prn, 0x08B, 10);
-       int8_t *code = (int8_t *)sdr_malloc(n);
-       for (int i = 0; i < n; i++) {
-           code[i] = -DC1[i] * DC2[i];
-       }
+       int8_t *code = xor_code(DC1, DC2, n);
        G1OCD[prn] = mod_code(code, n, sub_carr, 2);
        sdr_free(DC1);
        sdr_free(DC2);
@@ -1215,7 +1209,7 @@ static int8_t *gen_code_G1OCD(int prn, int *N)
 // generate G1OCP code ([19]) -------------------------------------------------
 static int8_t *gen_code_G1OCP(int prn, int *N)
 {
-   static const int8_t sub_carr[] = {0, 0, 1, -1}; // BOC(1,0.5) + TDM
+   static const int8_t sub_carr[] = {0, 0, -1, 1}; // BOC(1,1) + TDM
    
    if (prn < 0 || prn > 63) {
        return NULL;
@@ -1223,12 +1217,9 @@ static int8_t *gen_code_G1OCP(int prn, int *N)
    int n = 4092;
    *N = n * 4;
    if (!G1OCP[prn]) {
-       int8_t *code = (int8_t *)sdr_malloc(n);
        int8_t *DC1 = LFSR(n, 0x0C5, 0x053, 12);
        int8_t *DC2 = LFSR(n, prn, 0x21, 6);
-       for (int i = 0; i < n; i++) {
-           code[i] = -DC1[i] * DC2[i];
-       }
+       int8_t *code = xor_code(DC1, DC2, n);
        G1OCP[prn] = mod_code(code, n, sub_carr, 4);
        sdr_free(DC1);
        sdr_free(DC2);
@@ -1240,7 +1231,7 @@ static int8_t *gen_code_G1OCP(int prn, int *N)
 // generate G2OCP code ([20]) --------------------------------------------------
 static int8_t *gen_code_G2OCP(int prn, int *N)
 {
-   static const int8_t sub_carr[] = {0, 0, 1, -1}; // BOC(1,0.5) + TDM
+   static const int8_t sub_carr[] = {0, 0, -1, 1}; // BOC(1,1) + TDM
    
    if (prn < 0 || prn > 63) {
        return NULL;
@@ -1248,12 +1239,9 @@ static int8_t *gen_code_G2OCP(int prn, int *N)
    int n = 10230;
    *N = n * 4;
    if (!G2OCP[prn]) {
-       int8_t *code = (int8_t *)sdr_malloc(n);
        int8_t *DC1 = LFSR(n, 0x0D38, 0x0443, 14);
        int8_t *DC2 = LFSR(n, prn + 64, 0x03, 7);
-       for (int i = 0; i < n; i++) {
-           code[i] = -DC1[i] * DC2[i];
-       }
+       int8_t *code = xor_code(DC1, DC2, n);
        G2OCP[prn] = mod_code(code, n, sub_carr, 4);
        sdr_free(DC1);
        sdr_free(DC2);
@@ -1279,12 +1267,9 @@ static int8_t *gen_code_G3OCD(int prn, int *N)
    }
    *N = 10230;
    if (!G3OCD[prn]) {
-       G3OCD[prn] = (int8_t *)sdr_malloc(*N);
        int8_t *DC1 = gen_code_G3OC_DC1(*N);
        int8_t *DC2 = LFSR(*N, prn, 0x03, 7);
-       for (int i = 0; i < *N; i++) {
-           G3OCD[prn][i] = -DC1[i] * DC2[i];
-       }
+       G3OCD[prn] = xor_code(DC1, DC2, *N);
        sdr_free(DC2);
    }
    return G3OCD[prn];
@@ -1298,12 +1283,9 @@ static int8_t *gen_code_G3OCP(int prn, int *N)
    }
    *N = 10230;
    if (!G3OCP[prn]) {
-       G3OCP[prn] = (int8_t *)sdr_malloc(*N);
        int8_t *DC1 = gen_code_G3OC_DC1(*N);
        int8_t *DC3 = LFSR(*N, prn + 64, 0x03, 7);
-       for (int i = 0; i < *N; i++) {
-           G3OCP[prn][i] = -DC1[i] * DC3[i];
-       }
+       G3OCP[prn] = xor_code(DC1, DC3, *N);
        sdr_free(DC3);
    }
    return G3OCP[prn];
@@ -1370,8 +1352,6 @@ static int8_t *sec_code_G3OCP(int prn, int *N)
 // generate E1B code ([5]) -----------------------------------------------------
 static int8_t *gen_code_E1B(int prn, int *N)
 {
-    static const int8_t sub_carr[] = {1, -1}; // BOC(1,1) instead of CBOC
-    
     if (prn < 1 || prn > 50) {
         return NULL;
     }
@@ -1379,7 +1359,7 @@ static int8_t *gen_code_E1B(int prn, int *N)
     *N = n * 2;
     if (!E1B[prn-1]) {
         int8_t *code = read_code_hex(code_gal_E1B[prn-1], n);
-        E1B[prn-1] = mod_code(code, n, sub_carr, 2);
+        E1B[prn-1] = mod_code(code, n, BOC, 2); // BOC(1,1) instead of CBOC
         sdr_free(code);
     }
     return E1B[prn-1];
@@ -1388,8 +1368,6 @@ static int8_t *gen_code_E1B(int prn, int *N)
 // generate E1C code ([5]) -----------------------------------------------------
 static int8_t *gen_code_E1C(int prn, int *N)
 {
-    static const int8_t sub_carr[] = {1, -1}; // BOC(1,1) instead of CBOC
-    
     if (prn < 1 || prn > 50) {
         return NULL;
     }
@@ -1397,7 +1375,7 @@ static int8_t *gen_code_E1C(int prn, int *N)
     *N = n * 2;
     if (!E1C[prn-1]) {
         int8_t *code = read_code_hex(code_gal_E1C[prn-1], n);
-        E1C[prn-1] = mod_code(code, n, sub_carr, 2);
+        E1C[prn-1] = mod_code(code, n, BOC, 2); // BOC(1,1) instead of CBOC
         sdr_free(code);
     }
     return E1C[prn-1];
@@ -1433,12 +1411,9 @@ static int8_t *gen_code_E5AI(int prn, int *N)
     }
     *N = 10230;
     if (!E5AI[prn-1]) {
-        E5AI[prn-1] = (int8_t *)sdr_malloc(*N);
         int8_t *code1 = gen_code_E5_X1(*N, 040503);
         int8_t *code2 = gen_code_E5_X2(*N, 050661, E5AI_X2_init[prn-1]);
-        for (int i = 0; i < *N; i++) {
-            E5AI[prn-1][i] = -code1[i] * code2[i];
-        }
+        E5AI[prn-1] = xor_code(code1, code2, *N);
         sdr_free(code1);
         sdr_free(code2);
     }
@@ -1463,12 +1438,9 @@ static int8_t *gen_code_E5AQ(int prn, int *N)
     }
     *N = 10230;
     if (!E5AQ[prn-1]) {
-        E5AQ[prn-1] = (int8_t *)sdr_malloc(*N);
         int8_t *code1 = gen_code_E5_X1(*N, 040503);
         int8_t *code2 = gen_code_E5_X2(*N, 050661, E5AQ_X2_init[prn-1]);
-        for (int i = 0; i < *N; i++) {
-            E5AQ[prn-1][i] = -code1[i] * code2[i];
-        }
+        E5AQ[prn-1] = xor_code(code1, code2, *N);
         sdr_free(code1);
         sdr_free(code2);
     }
@@ -1496,12 +1468,9 @@ static int8_t *gen_code_E5BI(int prn, int *N)
     }
     *N = 10230;
     if (!E5BI[prn-1]) {
-        E5BI[prn-1] = (int8_t *)sdr_malloc(*N);
         int8_t *code1 = gen_code_E5_X1(*N, 064021);
         int8_t *code2 = gen_code_E5_X2(*N, 051445, E5BI_X2_init[prn-1]);
-        for (int i = 0; i < *N; i++) {
-            E5BI[prn-1][i] = -code1[i] * code2[i];
-        }
+        E5BI[prn-1] = xor_code(code1, code2, *N);
         sdr_free(code1);
         sdr_free(code2);
     }
@@ -1516,12 +1485,9 @@ static int8_t *gen_code_E5BQ(int prn, int *N)
     }
     *N = 10230;
     if (!E5BQ[prn-1]) {
-        E5BQ[prn-1] = (int8_t *)sdr_malloc(*N);
         int8_t *code1 = gen_code_E5_X1(*N, 064021);
         int8_t *code2 = gen_code_E5_X2(*N, 043143, E5BQ_X2_init[prn-1]);
-        for (int i = 0; i < *N; i++) {
-            E5BQ[prn-1][i] = -code1[i] * code2[i];
-        }
+        E5BQ[prn-1] = xor_code(code1, code2, *N);
         sdr_free(code1);
         sdr_free(code2);
     }
@@ -1620,12 +1586,9 @@ static int8_t *gen_code_B1I(int prn, int *N)
     }
     *N = 2046;
     if (!B1I[prn-1]) {
-        B1I[prn-1] = (int8_t *)sdr_malloc(*N);
         int8_t * code1 = gen_code_B1I_G1(*N);
         int8_t * code2 = gen_code_B1I_G2(*N, B1I_ph_sel[prn-1]);
-        for (int i = 0; i < *N; i++) {
-            B1I[prn-1][i] = -code1[i] * code2[i];
-        }
+        B1I[prn-1] = xor_code(code1, code2, *N);
         sdr_free(code1);
         sdr_free(code2);
     }
@@ -1660,8 +1623,6 @@ static int8_t B1C_weil_code(int k, int w)
 // generate B1CD code ([8]) ----------------------------------------------------
 static int8_t *gen_code_B1CD(int prn, int *N)
 {
-    static const int8_t sub_carr[] = {1, -1}; // BOC(1,1)
-    
     if (prn < 1 || prn > 63) {
         return NULL;
     }
@@ -1673,7 +1634,7 @@ static int8_t *gen_code_B1CD(int prn, int *N)
             int j = (i + B1CD_trunc_pnt[prn-1] - 1) % 10243;
             code[i] = B1C_weil_code(j, B1CD_ph_diff[prn-1]);
         }
-        B1CD[prn-1] = mod_code(code, n, sub_carr, 2);
+        B1CD[prn-1] = mod_code(code, n, BOC, 2); // BOC(1,1)
         sdr_free(code);
     }
     return B1CD[prn-1];
@@ -1682,8 +1643,6 @@ static int8_t *gen_code_B1CD(int prn, int *N)
 // generate B1CP code ([8]) ----------------------------------------------------
 static int8_t *gen_code_B1CP(int prn, int *N)
 {
-    static const int8_t sub_carr[] = {1, -1}; // BOC(1,1) instead of QMBOC
-    
     if (prn < 1 || prn > 63) {
         return NULL;
     }
@@ -1695,7 +1654,7 @@ static int8_t *gen_code_B1CP(int prn, int *N)
             int j = (i + B1CP_trunc_pnt[prn-1] - 1) % 10243;
             code[i] = B1C_weil_code(j, B1CP_ph_diff[prn-1]);
         }
-        B1CP[prn-1] = mod_code(code, n, sub_carr, 2);
+        B1CP[prn-1] = mod_code(code, n, BOC, 2); // BOC(1,1) instead of QMBOC
         sdr_free(code);
     }
     return B1CP[prn-1];
@@ -1764,14 +1723,11 @@ static int8_t *gen_code_B2AD(int prn, int *N)
     }
     *N = 10230;
     if (!B2AD[prn-1]) {
-        B2AD[prn-1] = (int8_t *)sdr_malloc(*N);
         if (!B2AD_G1) {
             B2AD_G1 = gen_code_B2AD_G1(*N);
         }
         int8_t *B2AD_G2 = gen_code_B2AD_G2(*N, B2AD_G2_init[prn-1]);
-        for (int i = 0; i < *N; i++) {
-            B2AD[prn-1][i] = -B2AD_G1[i] * B2AD_G2[i];
-        }
+        B2AD[prn-1] = xor_code(B2AD_G1, B2AD_G2, *N);
         sdr_free(B2AD_G2);
     }
     return B2AD[prn-1];
@@ -1811,14 +1767,11 @@ static int8_t *gen_code_B2AP(int prn, int *N)
     }
     *N = 10230;
     if (!B2AP[prn-1]) {
-        B2AP[prn-1] = (int8_t *)sdr_malloc(*N);
         if (!B2AP_G1) {
             B2AP_G1 = gen_code_B2AP_G1(*N);
         }
         int8_t *B2AP_G2 = gen_code_B2AP_G2(*N, B2AP_G2_init[prn-1]);
-        for (int i = 0; i < *N; i++) {
-            B2AP[prn-1][i] = -B2AP_G1[i] * B2AP_G2[i];
-        }
+        B2AP[prn-1] = xor_code(B2AP_G1, B2AP_G2, *N);
         sdr_free(B2AP_G2);
     }
     return B2AP[prn-1];
@@ -1875,14 +1828,11 @@ static int8_t *gen_code_B2BI(int prn, int *N)
     }
     *N = 10230;
     if (!B2BI[prn-1]) {
-        B2BI[prn-1] = (int8_t *)sdr_malloc(*N);
         if (!B2BI_G1) {
             B2BI_G1 = gen_code_B2BI_G1(*N);
         }
         int8_t *B2BI_G2 = gen_code_B2BI_G2(*N, B2BI_G2_init[prn-1]);
-        for (int i = 0; i < *N; i++) {
-            B2BI[prn-1][i] = -B2BI_G1[i] * B2BI_G2[i];
-        }
+        B2BI[prn-1] = xor_code(B2BI_G1, B2BI_G2, *N);
         sdr_free(B2BI_G2);
     }
     return B2BI[prn-1];
@@ -1913,14 +1863,11 @@ static int8_t *gen_code_B3I(int prn, int *N)
     }
     *N = 10230;
     if (!B3I[prn-1]) {
-        B3I[prn-1] = (int8_t *)sdr_malloc(*N);
         if (!B3I_G1) {
             B3I_G1 = gen_code_B3I_G1(*N);
         }
         int8_t *B3I_G2 = gen_code_B3I_G2(*N, B3I_G2_init[prn-1]);
-        for (int i = 0; i < *N; i++) {
-            B3I[prn-1][i] = -B3I_G1[i] * B3I_G2[i];
-        }
+        B3I[prn-1] = xor_code(B3I_G1, B3I_G2, *N);
         sdr_free(B3I_G2);
     }
     return B3I[prn-1];
@@ -1950,8 +1897,6 @@ static void shift_I1S(uint64_t *R0, uint64_t *R1, uint64_t *C)
 // generate I1SD code ([18]) ---------------------------------------------------
 static int8_t *gen_code_I1SD(int prn, int *N)
 {
-    static const int8_t sub_carr[] = {1, -1}; // BOC(1,1)
-    
     if (prn < 1 || prn > 14) {
         return NULL;
     }
@@ -1966,7 +1911,7 @@ static int8_t *gen_code_I1SD(int prn, int *N)
             code[i] = CHIP[((C>>4) ^ (R1>>54)) & 1];
             shift_I1S(&R0, &R1, &C);
         }
-        I1SD[prn-1] = mod_code(code, n, sub_carr, 2);
+        I1SD[prn-1] = mod_code(code, n, BOC, 2); // BOC(1,1)
         sdr_free(code);
     }
     return I1SD[prn-1];
@@ -1975,8 +1920,6 @@ static int8_t *gen_code_I1SD(int prn, int *N)
 // generate I1SP code ([18]) ---------------------------------------------------
 static int8_t *gen_code_I1SP(int prn, int *N)
 {
-    static const int8_t sub_carr[] = {1, -1}; // BOC(1,1)
-    
     if (prn < 1 || prn > 14) {
         return NULL;
     }
@@ -1991,7 +1934,7 @@ static int8_t *gen_code_I1SP(int prn, int *N)
             code[i] = CHIP[((C>>4) ^ (R1>>54)) & 1];
             shift_I1S(&R0, &R1, &C);
         }
-        I1SP[prn-1] = mod_code(code, n, sub_carr, 2);
+        I1SP[prn-1] = mod_code(code, n, BOC, 2); // BOC(1,1)
         sdr_free(code);
     }
     return I1SP[prn-1];
@@ -2017,14 +1960,13 @@ static int8_t *sec_code_I1SP(int prn, int *N)
     }
     *N = 1800;
     if (!I1SPO[prn-1]) {
-        int8_t *code = (int8_t *)sdr_malloc(*N);
         uint16_t R0 = I1SPO_R0_init[prn-1];
         uint16_t R1 = I1SPO_R1_init[prn-1];
+        I1SPO[prn-1] = (int8_t *)sdr_malloc(*N);
         for (int i = 0; i < *N; i++) {
-            code[i] = CHIP[(R1>>9) & 1];
+            I1SPO[prn-1][i] = CHIP[(R1>>9) & 1];
             shift_I1SO(&R0, &R1);
         }
-        I1SPO[prn-1] = code;
     }
     return I1SPO[prn-1];
 }
@@ -2037,13 +1979,10 @@ static int8_t *gen_code_I5S(int prn, int *N)
     }
     *N = 1023;
     if (!I5S[prn-1]) {
-        I5S[prn-1] = (int8_t *)sdr_malloc(*N);
         int32_t R_init = rev_reg(I5S_G2_init[prn-1], 10);
         int8_t *I5S_G1 = LFSR(*N, 0x3FF, 0x081, 10);
         int8_t *I5S_G2 = LFSR(*N, R_init, 0x197, 10);
-        for (int i = 0; i < *N; i++) {
-            I5S[prn-1][i] = -I5S_G1[i] * I5S_G2[i];
-        }
+        I5S[prn-1] = xor_code(I5S_G1, I5S_G2, *N);
         sdr_free(I5S_G1);
         sdr_free(I5S_G2);
     }
@@ -2058,13 +1997,10 @@ static int8_t *gen_code_ISS(int prn, int *N)
     }
     *N = 1023;
     if (!ISS[prn-1]) {
-        ISS[prn-1] = (int8_t *)sdr_malloc(*N);
         int32_t R_init = rev_reg(ISS_G2_init[prn-1], 10);
         int8_t *ISS_G1 = LFSR(*N, 0x3FF, 0x081, 10);
         int8_t *ISS_G2 = LFSR(*N, R_init, 0x197, 10);
-        for (int i = 0; i < *N; i++) {
-            ISS[prn-1][i] = -ISS_G1[i] * ISS_G2[i];
-        }
+        ISS[prn-1] = xor_code(ISS_G1, ISS_G2, *N);
         sdr_free(ISS_G1);
         sdr_free(ISS_G2);
     }
