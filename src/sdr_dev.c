@@ -201,7 +201,7 @@ static void transfer_cb(struct libusb_transfer *transfer)
 static void *event_handler_thread(void *arg)
 {
     sdr_dev_t *dev = (sdr_dev_t *)arg;
-    struct timeval to = {0, 1000000};
+    struct timeval to = {0, 100000};
     
     while (dev->state) {
         if (libusb_handle_events_timeout(NULL, &to)) continue;
