@@ -25,7 +25,7 @@
 #ifdef WIN32
 #include <io.h>
 #endif
-#ifdef AVX2
+#if defined(AVX2) || defined(AVX512)
 #include <immintrin.h>
 #endif
 
@@ -336,30 +336,56 @@ static void dot_cpx_real(const sdr_cpx_t *a, const float *b, int N, float s,
 {
     int i = 0;
     
-#ifdef AVX2
+#if defined(AVX2)
     static const int32_t offset[] = {0, 1, 4, 5, 2, 3, 6, 7};
-    __m256i ymm7 = _mm256_loadu_si256((__m256i_u *)offset);
+    __m256i idx = _mm256_loadu_si256((__m256i_u *)offset);
     __m256 ymm1 = _mm256_setzero_ps();
     __m256 ymm2 = _mm256_setzero_ps();
     
     for ( ; i < N - 7; i += 8) {
         __m256 ymm3 = _mm256_loadu_ps(a[i]);
         __m256 ymm4 = _mm256_loadu_ps(a[i + 4]);
-        __m256 ymm5 = _mm256_shuffle_ps(ymm3, ymm4, 0x88); // a.real 
-        __m256 ymm6 = _mm256_shuffle_ps(ymm3, ymm4, 0xDD); // a.imag 
+        __m256 ymm5 = _mm256_shuffle_ps(ymm3, ymm4, 0x88); // a.real
+        __m256 ymm6 = _mm256_shuffle_ps(ymm3, ymm4, 0xDD); // a.imag
         ymm3 = _mm256_loadu_ps(b + i);
-        ymm4 = _mm256_permutevar8x32_ps(ymm3, ymm7);
-        ymm1 = _mm256_fmadd_ps(ymm5, ymm4, ymm1);   // c.real 
-        ymm2 = _mm256_fmadd_ps(ymm6, ymm4, ymm2);   // c.imag 
+        ymm4 = _mm256_permutexvar_ps(idx, ymm3);
+        ymm1 = _mm256_fmadd_ps(ymm5, ymm4, ymm1); // c.real
+        ymm2 = _mm256_fmadd_ps(ymm6, ymm4, ymm2); // c.imag
     }
     float d[8], e[8];
     _mm256_storeu_ps(d, ymm1);
     _mm256_storeu_ps(e, ymm2);
     (*c)[0] = d[0] + d[1] + d[2] + d[3] + d[4] + d[5] + d[6] + d[7];
     (*c)[1] = e[0] + e[1] + e[2] + e[3] + e[4] + e[5] + e[6] + e[7];
+    
+#elif defined(AVX512)
+    static const int32_t offset[] = {
+        0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15
+    };
+    __m512i idx = _mm512_loadu_si512((__m512i_u *)offset);
+    __m512 zmm1 = _mm512_setzero_ps();
+    __m512 zmm2 = _mm512_setzero_ps();
+    
+    for ( ; i < N - 15; i += 16) {
+        __m512 zmm3 = _mm512_loadu_ps(a[i]);
+        __m512 zmm4 = _mm512_loadu_ps(a[i + 8]);
+        __m512 zmm5 = _mm512_shuffle_ps(zmm3, zmm4, 0x88); // a.real
+        __m512 zmm6 = _mm512_shuffle_ps(zmm3, zmm4, 0xDD); // a.imag
+        zmm3 = _mm512_loadu_ps(b + i);
+        zmm4 = _mm512_permutexvar_ps(idx, zmm3);
+        zmm1 = _mm512_fmadd_ps(zmm5, zmm4, zmm1); // c.real
+        zmm2 = _mm512_fmadd_ps(zmm6, zmm4, zmm2); // c.imag
+    }
+    float d[16], e[16];
+    _mm512_storeu_ps(d, zmm1);
+    _mm512_storeu_ps(e, zmm2);
+    (*c)[0] = d[0] + d[1] + d[2] + d[3] + d[4] + d[5] + d[6] + d[7] +
+        d[8] + d[9] + d[10] + d[11] + d[12] + d[13] + d[14] + d[15];
+    (*c)[1] = e[0] + e[1] + e[2] + e[3] + e[4] + e[5] + e[6] + e[7] +
+        e[8] + e[9] + e[10] + e[11] + e[12] + e[13] + e[14] + e[15];
 #else
     (*c)[0] = (*c)[1] = 0.0f;
-#endif // AVX2 
+#endif
     
     for ( ; i < N; i++) {
         (*c)[0] += a[i][0] * b[i];
