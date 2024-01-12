@@ -27,7 +27,7 @@ B_FLL      = (10.0, 2.0)     # band-width of FLL filter (Hz) (wide, narrow)
 SP_CORR    = 0.5             # default correlator spacing (chip)
 MAX_DOP    = 5000.0          # default max Doppler for acquisition (Hz)
 THRES_CN0  = (35.0, 32.0)    # C/N0 threshold (dB-Hz) (lock, lost)
-THRES_SYNC  = 0.03           # threshold for sec-code sync
+THRES_SYNC  = 0.04           # threshold for sec-code sync
 THRES_LOST  = 0.003          # threshold for sec-code lost
 
 # general object classes -------------------------------------------------------
