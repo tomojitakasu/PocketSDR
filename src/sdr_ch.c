@@ -29,7 +29,7 @@
 #define MAX_DOP    5000.0   // default max Doppler for acquisition (Hz) 
 #define THRES_CN0_L 35.0    // C/N0 threshold (dB-Hz) (lock) 
 #define THRES_CN0_U 32.0    // C/N0 threshold (dB-Hz) (lost) 
-#define THRES_SYNC 0.03     // threshold for sec-code sync 
+#define THRES_SYNC 0.04     // threshold for sec-code sync 
 #define THRES_LOST 0.003    // threshold for sec-code lost
 
 #define DPI        (2.0 * PI)
