@@ -16,12 +16,14 @@ ifeq ($(OS),Windows_NT)
 else
     INSTALL = ../linux
     OPTIONS = -DAVX2
+    #OPTIONS = -DAVX512
     LDLIBS = ./librtk.a -lfftw3f
 endif
 
 INCLUDE = -I$(SRC) -I../RTKLIB/src
 #CFLAGS = -Ofast -march=native $(INCLUDE) $(OPTIONS) -Wall -fPIC -g
 CFLAGS = -Ofast -mavx2 -mfma $(INCLUDE) $(OPTIONS) -Wall -fPIC -g
+#CFLAGS = -Ofast -mavx512f $(INCLUDE) $(OPTIONS) -Wall -fPIC -g
 
 OBJ = sdr_cmn.o sdr_func.o sdr_code.o sdr_code_gal.o
 
