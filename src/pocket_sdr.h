@@ -9,6 +9,7 @@
 //  2022-07-08  1.1  modify types, add APIs
 //  2022-07-16  1.2  modify API
 //  2023-12-28  1.3  modify types and APIs
+//  2024-01-12  1.4  modify constants, types and API
 //
 #ifndef POCKET_SDR_H
 #define POCKET_SDR_H
@@ -27,10 +28,14 @@ extern "C" {
 // constants and macro -------------------------------------------------------
 #define PI  3.1415926535897932  // pi 
 #define SDR_MAX_NPRN   256      // max number of PRNs
-#define SDR_MAX_NCH    512      // max number of receiver channels
+#define SDR_MAX_NCH    999      // max number of receiver channels
 #define SDR_MAX_NSYM   18000    // max number of symbols
 #define SDR_MAX_DATA   4096     // max length of navigation data
 #define SDR_N_HIST     10000    // number of P correlator history 
+
+#define STATE_IDLE     1        // channel state idle
+#define STATE_SRCH     2        // channel state search
+#define STATE_LOCK     3        // channel state lock
 
 // type definitions ----------------------------------------------------------
 typedef fftwf_complex sdr_cpx_t; // single precision complex type 
@@ -72,7 +77,7 @@ typedef struct {                // SDR receiver navigation data type
 
 typedef struct {                // SDR receiver channel type 
     int no;                     // channel number
-    const char *state;          // channel state 
+    int state;                  // channel state 
     double time;                // receiver time 
     char sig[16];               // signal ID 
     int prn;                    // PRN number 
@@ -172,7 +177,7 @@ void sdr_decode_conv(const uint8_t *data, int N, uint8_t *dec_data);
 int sdr_decode_rs(uint8_t *syms);
 
 // sdr_ldpc.c
-void sdr_decode_LDPC(const char *type, const uint8_t *syms, int N,
+int sdr_decode_LDPC(const char *type, const uint8_t *syms, int N,
     uint8_t *syms_dec);
 
 #ifdef __cplusplus
