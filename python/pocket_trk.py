@@ -12,6 +12,7 @@
 #  2022-01-20  1.2  improve performance
 #                   add option -3d
 #  2023-12-28  1.3  change receiver channel status format
+#  2024-01-12  1.4  support multiple signals
 #
 import sys, math, time, datetime
 import numpy as np
@@ -25,9 +26,9 @@ CYC_SRCH = 10.0      # signal search cycle (s)
 MAX_BUFF = 32        # max number of IF data buffer
 NCORR_PLOT = 40      # numober of additional correlators for plot
 MIN_LOCK = 2.0       # min lock time to print channel status (s)
-ESC_CLS = '\033[H\033[2J' # ANSI escape erase screen
 ESC_COL = '\033[34m' # ANSI escape color blue
 ESC_RES = '\033[0m'  # ANSI escape reset
+ESC_UCUR = '\033[A'  # ANSI escape cursor up
 
 # global variable --------------------------------------------------------------
 Xp = np.zeros(1)
@@ -80,11 +81,11 @@ def print_head(ch):
             nch += 1
         if ch[i].state == 'SRCH':
             srch = i + 1
-    print('%s TIME(s):%10.2f%61sSRCH: %3d  LOCK:%3d/%3d' % (ESC_CLS, ch[0].time,
-        '', srch, nch, len(ch)))
-    print('%3s %5s %3s %5s %8s %4s %-12s %11s %7s %11s %4s %5s %4s %4s %3s' % (
+    print('\r TIME(s):%10.2f%65sSRCH: %3d  LOCK:%3d/%3d' % (ch[0].time, '',
+        srch, nch, len(ch)))
+    print('%3s %5s %3s %5s %8s %4s %-12s %11s %7s %11s %4s %5s %4s %4s %3s %3s' % (
         'CH', 'SIG', 'PRN', 'STATE', 'LOCK(s)', 'C/N0', '(dB-Hz)', 'COFF(ms)',
-        'DOP(Hz)', 'ADR(cyc)', 'SYNC', '#NAV', '#ERR', '#LOL', 'NER'))
+        'DOP(Hz)', 'ADR(cyc)', 'SYNC', '#NAV', '#ERR', '#LOL', 'NER', 'SEQ'))
 
 # receiver channel sync status -------------------------------------------------
 def sync_stat(ch):
@@ -94,16 +95,24 @@ def sync_stat(ch):
         ('R' if ch.nav.rev else '-'))
 
 # update receiver channel status -----------------------------------------------
-def update_stat(prns, ch):
+def update_stat(prns, ch, ncol):
+    for i in range(ncol):
+        print('%s' % (ESC_UCUR), end='')
+    n = 2
     print_head(ch)
     for i in range(len(prns)):
         if ch[i].state == 'LOCK' and ch[i].lock * ch[i].T >= MIN_LOCK:
-            print('%s%3d %5s %3d %5s %8.2f %4.1f %-13s%11.7f %7.1f %11.1f %s %5d %4d %4d %3d%s' % (
+            print('%s%3d %5s %3d %5s %8.2f %4.1f %-13s%11.7f %7.1f %11.1f %s %5d %4d %4d %3d %3d%s' % (
                 ESC_COL, i + 1, ch[i].sig, prns[i], ch[i].state,
                 ch[i].lock * ch[i].T, ch[i].cn0, cn0_bar(ch[i].cn0),
                 ch[i].coff * 1e3, ch[i].fd, ch[i].adr, sync_stat(ch[i]),
                 ch[i].nav.count[0], ch[i].nav.count[1], ch[i].lost,
-                ch[i].nav.nerr, ESC_RES))
+                ch[i].nav.nerr, ch[i].nav.seq % 1000, ESC_RES))
+            n += 1
+    for i in range(n, ncol):
+        print('%107s' % (''))
+        n += 1
+    return n
 
 # C/N0 bar ---------------------------------------------------------------------
 def cn0_bar(cn0):
@@ -354,18 +363,18 @@ def set_axcolor(ax, color):
 
 # show usage -------------------------------------------------------------------
 def show_usage():
-    print('Usage: pocket_trk.py [-sig sig -prn prn[,...]] [-p] [-e] [-toff toff] [-f freq]')
-    print('           [-fi freq] [-IQ] [-ti tint] [-ts tspan] [-yl ylim] [-log path]')
-    print('           [-q] [file]')
+    print('Usage: pocket_trk.py [-sig sig -prn prn[,...] ...] [-p] [-e] [-toff toff]')
+    print('       [-f freq] [-fi freq] [-IQ] [-ti tint] [-ts tspan] [-yl ylim]')
+    print('       [-log path] [-q] [file]')
     exit()
 
 #-------------------------------------------------------------------------------
 #
 #   Synopsis
 # 
-#     pocket_trk.py [-sig sig -prn prn[,...]] [-p] [-e] [-toff toff] [-f freq]
-#         [-fi freq] [-IQ] [-ti tint] [-ts tspan] [-yl ylim] [-log path]
-#         [-q] [file]
+#     pocket_trk.py [-sig sig -prn prn[,...] ...] [-p] [-e] [-toff toff]
+#         [-f freq] [-fi freq] [-IQ] [-ti tint] [-ts tspan] [-yl ylim]
+#         [-log path] [-q] [file]
 # 
 #   Description
 # 
@@ -377,13 +386,14 @@ def show_usage():
 # 
 #   Options ([]: default)
 #  
-#     -sig sig -prn prn[,...]
+#     -sig sig -prn prn[,...] ...
 #         A GNSS signal type ID (L1CA, L2CM, ...) and a PRN number list of the
 #         signal. For signal type IDs, refer pocket_acq.py manual. The PRN
 #         number list shall be PRN numbers or PRN number ranges like 1-32 with
 #         the start and the end numbers. They are separated by ",". For
 #         GLONASS FDMA signals (G1CA, G2CA), the PRN number is treated as the
-#         FCN (frequency channel number).
+#         FCN (frequency channel number). The pair of a signal type ID and a PRN
+#         number list can be repeated for multiple GNSS signals to be tracked.
 # 
 #     -p
 #         Plot signal tracking status in an integrated window. The window shows
@@ -443,7 +453,8 @@ def show_usage():
 #         from stdin.
 #
 if __name__ == '__main__':
-    sig, prns, plot, env, p3d = 'L1CA', [1], False, False, False
+    sig, plot, env, p3d = 'L1CA', False, False, False
+    sigs, prns = [], []
     fs, fi, IQ, toff, tint, tspan = 12e6, 0.0, 1, 0.0, 0.1, 1.0
     ch = {}
     file, log_file, log_lvl, quiet = '', '', 4, 0
@@ -455,7 +466,9 @@ if __name__ == '__main__':
             sig = sys.argv[i]
         elif sys.argv[i] == '-prn':
             i += 1
-            prns = parse_nums(sys.argv[i])
+            for prn in parse_nums(sys.argv[i]):
+                sigs.append(sig)
+                prns.append(prn)
         elif sys.argv[i] == '-p':
             plot = True
         elif sys.argv[i] == '-e':
@@ -511,11 +524,11 @@ if __name__ == '__main__':
     
     for i in range(len(prns)):
         ncorr = NCORR_PLOT if plot and i == 0 else 0
-        ch[i] = sdr_ch.ch_new(sig, prns[i], fs, fi, add_corr=ncorr)
+        ch[i] = sdr_ch.ch_new(sigs[i], prns[i], fs, fi, add_corr=ncorr)
         ch[i].state = 'SRCH'
     
     if plot:
-        fig, ax, p = init_plot(sig, prns[0], ch[0], env, p3d, file)
+        fig, ax, p = init_plot(sigs[0], prns[0], ch[0], env, p3d, file)
     
     if log_file != '':
         log_open(log_file)
@@ -524,6 +537,7 @@ if __name__ == '__main__':
     N = int(T * fs)
     buff = np.zeros(N * (MAX_BUFF + 1), dtype='complex64')
     ix = 0
+    ncol = 0
     tt = time.time()
     log(3, '$LOG,%.3f,%s,%d,START FILE=%s FS=%.3f FI=%.3f IQ=%d TOFF=%.3f' %
         (0.0, '', 0, file, fs * 1e-6, fi * 1e-6, IQ, toff))
@@ -558,7 +572,7 @@ if __name__ == '__main__':
             
             # update receiver channel status
             if not quiet:
-                update_stat(prns, ch)
+                ncol = update_stat(prns, ch, ncol)
             
             # update plots
             if plot:
