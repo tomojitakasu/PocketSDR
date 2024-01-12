@@ -77,7 +77,7 @@ def test01():
     for prn in range(1, 211):
         code = sdr_code.gen_code('L1CP', prn)
         code_ref = 2 * gnsstools.gps.l1cp.l1cp_code(prn) - 1
-        code_ref = sdr_code.mod_code(code_ref, [1, -1])
+        code_ref = sdr_code.mod_code(code_ref, [-1, 1])
         if not np.all(code == code_ref):
             err = 1
     print('test01 L1CP: %s' % ('NG' if err else 'OK'))
@@ -86,7 +86,7 @@ def test01():
     for prn in range(1, 211):
         code = sdr_code.gen_code('L1CD', prn)
         code_ref = 2 * gnsstools.gps.l1cd.l1cd_code(prn) - 1
-        code_ref = sdr_code.mod_code(code_ref, [1, -1])
+        code_ref = sdr_code.mod_code(code_ref, [-1, 1])
         if not np.all(code == code_ref):
             err = 1
     print('test01 L1CD: %s' % ('NG' if err else 'OK'))
@@ -95,13 +95,13 @@ def test01():
     for prn in range(1, 64):
         code = sdr_code.gen_code('L2CM', prn)
         code_ref = 2 * gnsstools.gps.l2cm.l2cm_code(prn) - 1
-        code_ref = sdr_code.mod_code(code_ref, [1, 0])
+        code_ref = sdr_code.mod_code(code_ref, [-1, 0])
         if not np.all(code == code_ref):
             err = 1
     for prn in range(159, 211):
         code = sdr_code.gen_code('L2CM', prn)
         code_ref = 2 * gnsstools.gps.l2cm.l2cm_code(prn) - 1
-        code_ref = sdr_code.mod_code(code_ref, [1, 0])
+        code_ref = sdr_code.mod_code(code_ref, [-1, 0])
         if not np.all(code == code_ref):
             err = 1
     print('test01 L2CM: %s' % ('NG' if err else 'OK'))
@@ -155,7 +155,7 @@ def test01():
     for prn in range(1, 51):
         code = sdr_code.gen_code('E1B', prn)
         code_ref = 2 * gnsstools.galileo.e1b.e1b_code(prn) - 1
-        code_ref = sdr_code.mod_code(code_ref, [1, -1])
+        code_ref = sdr_code.mod_code(code_ref, [-1, 1])
         if not np.all(code == code_ref):
             err = 1
     print('test01 E1B : %s' % ('NG' if err else 'OK'))
@@ -164,7 +164,7 @@ def test01():
     for prn in range(1, 51):
         code = sdr_code.gen_code('E1C', prn)
         code_ref = 2 * gnsstools.galileo.e1c.e1c_code(prn) - 1
-        code_ref = sdr_code.mod_code(code_ref, [1, -1])
+        code_ref = sdr_code.mod_code(code_ref, [-1, 1])
         if not np.all(code == code_ref):
             err = 1
     print('test01 E1C : %s' % ('NG' if err else 'OK'))
@@ -229,7 +229,7 @@ def test01():
     for prn in range(1, 64):
         code = sdr_code.gen_code('B1CD', prn)
         code_ref = 2 * gnsstools.beidou.b1cd.b1cd_code(prn) - 1
-        code_ref = sdr_code.mod_code(code_ref, [1, -1])
+        code_ref = sdr_code.mod_code(code_ref, [-1, 1])
         if not np.all(code == code_ref):
             err = 1
     print('test01 B1CD: %s' % ('NG' if err else 'OK'))
@@ -238,7 +238,7 @@ def test01():
     for prn in range(1, 64):
         code = sdr_code.gen_code('B1CP', prn)
         code_ref = 2 * gnsstools.beidou.b1cp.b1cp_code(prn) - 1
-        code_ref = sdr_code.mod_code(code_ref, [1, -1])
+        code_ref = sdr_code.mod_code(code_ref, [-1, 1])
         if not np.all(code == code_ref):
             err = 1
     print('test01 B1CP: %s' % ('NG' if err else 'OK'))
