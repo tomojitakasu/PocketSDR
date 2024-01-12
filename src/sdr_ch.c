@@ -9,6 +9,7 @@
 //  2022-07-16  1.1  modify API sdr_ch_new()
 //  2023-12-16  1.2  reduce memory usage
 //  2023-12-28  1.3  support type and API changes.
+//  2024-01-12  1.4  ch->state: const char * -> int
 //
 #include <ctype.h>
 #include <math.h>
@@ -136,7 +137,7 @@ sdr_ch_t *sdr_ch_new(const char *sig, int prn, double fs, double fi,
 {
     sdr_ch_t *ch = (sdr_ch_t *)sdr_malloc(sizeof(sdr_ch_t));
     
-    ch->state = "IDLE";
+    ch->state = STATE_IDLE;
     ch->time = 0.0;
     sig_upper(sig, ch->sig);
     ch->prn = prn;
@@ -192,7 +193,7 @@ static void trk_init(sdr_trk_t *trk)
 // start tracking --------------------------------------------------------------
 static void start_track(sdr_ch_t *ch, double fd, double coff, double cn0)
 {
-    ch->state = "LOCK";
+    ch->state = STATE_LOCK;
     ch->lock = 0;
     ch->fd = fd;
     ch->coff = coff;
@@ -233,7 +234,7 @@ static void search_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff,
                 ch->time, ch->sig, ch->prn, cn0, fd, coff * 1e3);
         }
         else {
-            ch->state = "IDLE";
+            ch->state = STATE_IDLE;
             sdr_log(3, "$LOG,%.3f,%s,%d,SIGNAL NOT FOUND (%.1f)", ch->time,
                 ch->sig, ch->prn, cn0);
         }
@@ -431,7 +432,7 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff,
         sdr_nav_decode(ch);
     }
     if (ch->cn0 < THRES_CN0_U) { // signal lost 
-        ch->state = "IDLE";
+        ch->state = STATE_IDLE;
         ch->lost++;
         sdr_log(3, "$LOG,%.3f,%s,%d,SIGNAL LOST (%s, %.1f)", ch->time, ch->sig,
             ch->prn, ch->sig, ch->cn0);
@@ -449,9 +450,9 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff,
 //  signal code with 2-cycle samples of digitized IF data (which are overlapped
 //  between previous and current). 
 //
-//    'SRCH' : signal acquisition state
-//    'LOCK' : signal tracking state
-//    'IDLE' : waiting for a next signal acquisition cycle
+//    STATE_SRCH : signal acquisition state
+//    STATE_LOCK : signal tracking state
+//    STATE_IDLE : waiting for a next signal acquisition cycle
 //
 //  args:
 //      ch       (I) Receiver channel
@@ -466,13 +467,13 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff,
 void sdr_ch_update(sdr_ch_t *ch, double time, const sdr_cpx_t *buff,
     int len_buff, int ix)
 {
-    if (!strcmp(ch->state, "SRCH")) {
+    if (ch->state == STATE_SRCH) {
         search_sig(ch, time, buff, len_buff, ix);
     }
-    else if (!strcmp(ch->state, "LOCK")) {
+    else if (ch->state == STATE_LOCK) {
         track_sig(ch, time, buff, len_buff, ix);
     }
-    else { // IDLE
+    else { // STATE_IDLE
         ch->time = time;
     }
 }
