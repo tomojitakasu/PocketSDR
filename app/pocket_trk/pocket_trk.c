@@ -10,6 +10,7 @@
 //  2023-12-15  1.2  support multi-threading
 //  2023-12-25  1.3  add -r option for raw SDR device data
 //  2023-12-28  1.4  set binary mode to stdin for Windows
+//  2024-01-12  1.5  update receiver status style
 //
 #include <signal.h>
 #ifdef WIN32
@@ -26,10 +27,9 @@
 #define MAX_BUFF   8000       // max number of IF data buffer
 #define MAX_DOP    5000.0     // default max Doppler for acquisition (Hz) 
 
-#define ESC_CLS    "\033[2J"  // ANSI escape erase screen
-#define ESC_HOME   "\033[H"   // ANSI escape cursor home
 #define ESC_COL    "\033[34m" // ANSI escape color blue
 #define ESC_RES    "\033[0m"  // ANSI escape reset
+#define ESC_UCUR   "\033[A"   // ANSI escape cursor up
 #define ESC_VCUR   "\033[?25h" // ANSI escape show cursor
 #define ESC_HCUR   "\033[?25l" // ANSI escape hide cursor
 
@@ -100,41 +100,47 @@ static void print_head(rcv_t *rcv)
 {
     int nch = 0;
     for (int i = 0; i < rcv->nch; i++) {
-        if (!strcmp(rcv->ch[i]->ch->state, "LOCK")) nch++;
+        if (rcv->ch[i]->ch->state == STATE_LOCK) nch++;
     }
-    printf("%s TIME(s):%10.2f%49s%10s  SRCH:%4d  LOCK:%3d/%3d\n", ESC_HOME,
+    printf("\r TIME(s):%10.2f%53s%10s  SRCH:%4d  LOCK:%3d/%3d\n",
         rcv->ix * T_CYC, "", buff_full(rcv) ? "BUFF-FULL" : "", rcv->ich + 1,
         nch, rcv->nch);
-    printf("%3s %5s %3s %5s %8s %4s %-12s %11s %7s %11s %4s %5s %4s %4s %3s\n",
+    printf("%3s %5s %3s %5s %8s %4s %-12s %11s %7s %11s %4s %5s %4s %4s %3s %3s\n",
         "CH", "SIG", "PRN", "STATE", "LOCK(s)", "C/N0", "(dB-Hz)", "COFF(ms)",
-        "DOP(Hz)", "ADR(cyc)", "SYNC", "#NAV", "#ERR", "#LOL", "NER");
+        "DOP(Hz)", "ADR(cyc)", "SYNC", "#NAV", "#ERR", "#LOL", "NER", "SEQ");
 }
 
 // print receiver channel status -----------------------------------------------
 static void print_ch_stat(sdr_ch_t *ch)
 {
+    static const char *state_str[] = {"", "IDLE", "SRCH", "LOCK"};
     char bar[16], stat[16];
     cn0_bar(ch->cn0, bar);
     sync_stat(ch, stat);
-    printf("%s%3d %5s %3d %5s %8.2f %4.1f %-13s%11.7f %7.1f %11.1f %s %5d %4d %4d %3d%s\n",
-        ESC_COL, ch->no, ch->sig, ch->prn, ch->state, ch->lock * ch->T, ch->cn0,
-        bar, ch->coff * 1e3, ch->fd, ch->adr, stat, ch->nav->count[0],
-        ch->nav->count[1], ch->lost, ch->nav->nerr, ESC_RES);
+    printf("%s%3d %5s %3d %5s %8.2f %4.1f %-13s%11.7f %7.1f %11.1f %s %5d %4d %4d %3d %3d%s\n",
+        ESC_COL, ch->no, ch->sig, ch->prn, state_str[ch->state],
+        ch->lock * ch->T, ch->cn0, bar, ch->coff * 1e3, ch->fd, ch->adr, stat,
+        ch->nav->count[0], ch->nav->count[1], ch->lost, ch->nav->nerr,
+        ch->nav->seq % 1000, ESC_RES);
 }
 
 // print receiver status -------------------------------------------------------
 static int rcv_print_stat(rcv_t *rcv, int ncol)
 {
     int n = 2;
+    for (int i = 0; i < ncol; i++) {
+        printf("%s", ESC_UCUR);
+    }
     print_head(rcv);
     for (int i = 0; i < rcv->nch; i++) {
         sdr_ch_t *ch = rcv->ch[i]->ch;
-        if (strcmp(ch->state, "LOCK") || ch->lock * ch->T < MIN_LOCK) continue;
+        if (ch->state != STATE_LOCK || ch->lock * ch->T < MIN_LOCK) continue;
         print_ch_stat(ch);
         n++;
     }
     for (int i = n; i < ncol; i++) {
-        printf("%*s\n", 103, "");
+        printf("%*s\n", 107, "");
+        n++;
     }
     fflush(stdout);
     return n;
@@ -180,7 +186,7 @@ static void *rcv_ch_thread(void *arg)
             sdr_ch_update(ch->ch, ix * T_CYC, ch->rcv->buff[ch->if_ch],
                 ch->rcv->len_buff, ch->rcv->N * (ix % MAX_BUFF));
             
-            if (!strcmp(ch->ch->state, "LOCK") && ix % LOG_CYC == 0) {
+            if (ch->ch->state == STATE_LOCK && ix % LOG_CYC == 0) {
                 out_log_ch(ch->ch);
             }
             ch->ix = ix; // IF buffer read pointer
@@ -332,14 +338,14 @@ static int rcv_read_data(rcv_t *rcv, int64_t ix, FILE *fp)
 static void rcv_update_srch(rcv_t *rcv)
 {
     // signal search channel busy ?
-    if (rcv->ich >= 0 && !strcmp(rcv->ch[rcv->ich]->ch->state, "SRCH")) {
+    if (rcv->ich >= 0 && rcv->ch[rcv->ich]->ch->state == STATE_SRCH) {
         return;
     }
     // search next IDLE channel
     for (int i = 0; i < rcv->nch; i++) {
         rcv->ich = (rcv->ich + 1) % rcv->nch;
-        if (strcmp(rcv->ch[rcv->ich]->ch->state, "IDLE")) continue;
-        rcv->ch[rcv->ich]->ch->state = "SRCH";
+        if (rcv->ch[rcv->ich]->ch->state != STATE_IDLE) continue;
+        rcv->ch[rcv->ich]->ch->state = STATE_SRCH;
         break;
     }
 }
@@ -362,11 +368,11 @@ static void rcv_exec(rcv_t *rcv, FILE *fp, double tint, int quiet)
     // set all channels search for file input
     if (fp != stdin) {
         for (int i = 0; i < rcv->nch; i++) {
-            rcv->ch[i]->ch->state = "SRCH";
+            rcv->ch[i]->ch->state = STATE_SRCH;
         }
     }
     if (!quiet) {
-        printf("%s%s", ESC_HCUR, ESC_CLS); // clear screen
+        printf("%s", ESC_HCUR);
     }
     for (int64_t ix = 0; !intr ; ix++) {
         if (ix % LOG_CYC == 0) {
