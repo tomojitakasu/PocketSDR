@@ -8,8 +8,8 @@
 #      June 8, 2010
 #  [3] IS-QZSS-PNT-004, Quasi-Zenith Satellite System Interface Specification
 #      Satellite Positioning, Navigation and Timing Service, November 5, 2018
-#  [4] IS-QZSS-L6-001, Quasi-Zenith Satellite System Interface Specification
-#      Centimeter Level Augmentation Service, November 5, 2018
+#  [4] IS-QZSS-L6-005, Quasi-Zenith Satellite System Interface Specification
+#      Centimeter Level Augmentation Service, September 21, 2022
 #  [5] Galileo Open Service Signal In Space Interface Control Document -
 #      Issue 1, February 2010
 #  [6] Galileo E6-B/C Codes Technical Note - Issue 1, January 2019
@@ -64,6 +64,7 @@
 #                   fix L5Q SBAS secondary code
 #  2024-01-06  1.11 add signal I1SD, I1SP
 #  2024-01-07  1.12 add signal G1OCD, G1OCP, G2OCP
+#  2024-01-12  1.13 add API sat_id()
 #
 import numpy as np
 import scipy.fftpack as fft
@@ -375,13 +376,13 @@ L5Q_XB_adv = ( # PRN 1 - 210
     4757,  427, 5452, 5182, 6606, 6531, 4268, 3115, 6835,  862, 4856, 2765,
       37, 1943, 7977, 2512, 4451, 4071)
 
-L6D_R_init = ( # PRN 193 - 201
-    0o00255021, 0o00327455, 0o00531421, 0o00615350, 0o00635477, 0o00000000,
-    0o01715254, 0o01741247, 0o02322713)
+L6D_R_init = ( # PRN 193 - 202
+    0o00255021, 0o00327455, 0o00531421, 0o00615350, 0o00635477, 0o01547457,
+    0o01715254, 0o01741247, 0o02322713, 0o02534561)
 
-L6E_R_init = ( # PRN 203 - 211
-    0o01142153, 0o01723711, 0o03672765, 0o00030404, 0o00000546, 0o00000000,
-    0o03642512, 0o00255043, 0o02020075)
+L6E_R_init = ( # PRN 203 - 212
+    0o01142153, 0o01723711, 0o03672765, 0o00030404, 0o00000546, 0o01306224,
+    0o03642512, 0o00255043, 0o02020075, 0o03571777)
 
 E5AI_X2_init = ( # PRN 1 - 50
     0o30305, 0o14234, 0o27213, 0o20577, 0o23312, 0o33463, 0o15614, 0o12537,
@@ -962,6 +963,53 @@ def sig_freq(sig):
     else:
         return 0.0
 
+#------------------------------------------------------------------------------
+#  Get satellite ID.
+#
+#  args:
+#      sig      (I) Signal type as string ('L1CA', 'L1CB', 'L1CP', ....)
+#      prn      (I) PRN number
+#
+#  returns:
+#      sat      Satellite ID ('???': unknown)
+#
+def sat_id(sig, prn):
+    sat_L1B = (4, 5, 8, 9)
+    sat_L5S = (2, 4, 5, 0, 0, 3, 0, 0, 0, 0, 0, 7, 8)
+    
+    if sig[0] == 'L':
+        if prn >= 1 and prn <= 32: # GPS
+            sat = 'G%02d' % (prn)
+        elif prn >= 120 and prn <= 158: # SBAS
+            sat = 'S%02d' % (prn - 100)
+        elif sig == 'L1CB' and prn >= 203 and prn <= 206:
+            sat = 'J%02d' % (sat_L1B[prn-203])
+        elif (sig == 'L1CA' or sig == 'L1CD' or sig == 'L1CP' or sig == 'L2CM'
+            or sig == 'L5I' or sig == 'L5Q' or sig == 'L6D') and prn >= 193 \
+            and prn <= 202:
+            sat = 'J%02d' % (prn - 192)
+        elif sig == 'L1S' and prn >= 183 and prn <= 191:
+            sat = 'J%02d' % (prn - 182)
+        elif sig[:3] == 'L5S' and prn >= 184 and prn <= 206 and sat_L5S[prn-184]:
+            sat = 'J%02d' % (sat_L5S[prn-184])
+        elif sig == 'L6E' and prn >= 203 and prn <= 212:
+            sat = 'J%02d' % (prn - 202)
+        else:
+            sat = '???'
+    elif sig == 'G1CA' or sig == 'G2CA':
+        sat = 'R%c%d' % ('-' if prn < 0 else '+', -prn if prn < 0 else prn)
+    elif sig[0] == 'G':
+        sat = 'R%02d' % (prn)
+    elif sig[0] == 'E':
+        sat = 'E%02d' % (prn)
+    elif sig[0] == 'B':
+        sat = 'C%02d' % (prn)
+    elif sig[0] == 'I':
+        sat = 'I%02d' % (prn)
+    else:
+        sat = '???'
+    return sat
+
 # generate L1C/A code ([1]) ----------------------------------------------------
 def gen_code_L1CA(prn):
     if prn < 1 or prn > 210:
@@ -1194,7 +1242,7 @@ def sec_code_L5SQV(prn):
 
 # generate L6D code ([4]) ------------------------------------------------------
 def gen_code_L6D(prn):
-    if prn < 193 or prn > 201:
+    if prn < 193 or prn > 202:
         return NONE
     N = 10230
     if prn not in L6D:
@@ -1204,7 +1252,7 @@ def gen_code_L6D(prn):
 
 # generate L6E code ([4]) ------------------------------------------------------
 def gen_code_L6E(prn):
-    if prn < 203 or prn > 211:
+    if prn < 203 or prn > 212:
         return NONE
     N = 10230
     if prn not in L6E:
