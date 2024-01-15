@@ -38,9 +38,9 @@
 #define MIN(x, y)     ((x) < (y) ? (x) : (y))
 
 // global variables ------------------------------------------------------------
-static float carr_tbl[NTBL][2] = {{0}}; // carrier lookup table
+static sdr_cpx_t carr_tbl[NTBL] = {{0}}; // carrier lookup table
 static fftwf_plan fftw_plans[MAX_FFTW_PLAN][2] = {{0}}; // FFTW plan buffer
-static int fftw_size[16] = {0};   // FFTW plan sizes
+static int fftw_size[MAX_FFTW_PLAN] = {0}; // FFTW plan sizes
 static int log_lvl = 3;           // log level
 static stream_t log_str = {0};    // log stream
 
@@ -337,52 +337,56 @@ static void dot_cpx_real(const sdr_cpx_t *a, const float *b, int N, float s,
     int i = 0;
     
 #if defined(AVX2)
-    static const int32_t offset[] = {0, 1, 4, 5, 2, 3, 6, 7};
-    __m256i idx = _mm256_loadu_si256((__m256i_u *)offset);
+    static const int32_t offset1[] = {0, 0, 1, 1, 2, 2, 3, 3};
+    static const int32_t offset2[] = {4, 4, 5, 5, 6, 6, 7, 7};
+    __m256i idx1 = _mm256_loadu_si256((__m256i_u *)offset1);
+    __m256i idx2 = _mm256_loadu_si256((__m256i_u *)offset2);
     __m256 ymm1 = _mm256_setzero_ps();
     __m256 ymm2 = _mm256_setzero_ps();
     
     for ( ; i < N - 7; i += 8) {
         __m256 ymm3 = _mm256_loadu_ps(a[i]);
         __m256 ymm4 = _mm256_loadu_ps(a[i + 4]);
-        __m256 ymm5 = _mm256_shuffle_ps(ymm3, ymm4, 0x88); // a.real
-        __m256 ymm6 = _mm256_shuffle_ps(ymm3, ymm4, 0xDD); // a.imag
-        ymm3 = _mm256_loadu_ps(b + i);
-        ymm4 = _mm256_permutexvar_ps(idx, ymm3);
-        ymm1 = _mm256_fmadd_ps(ymm5, ymm4, ymm1); // c.real
-        ymm2 = _mm256_fmadd_ps(ymm6, ymm4, ymm2); // c.imag
+        __m256 ymm5 = _mm256_loadu_ps(b + i);
+        __m256 ymm6 = _mm256_permutexvar_ps(idx1, ymm5);
+        __m256 ymm7 = _mm256_permutexvar_ps(idx2, ymm5);
+        ymm1 = _mm256_fmadd_ps(ymm3, ymm6, ymm1);
+        ymm2 = _mm256_fmadd_ps(ymm4, ymm7, ymm2);
     }
     float d[8], e[8];
     _mm256_storeu_ps(d, ymm1);
     _mm256_storeu_ps(e, ymm2);
-    (*c)[0] = d[0] + d[1] + d[2] + d[3] + d[4] + d[5] + d[6] + d[7];
-    (*c)[1] = e[0] + e[1] + e[2] + e[3] + e[4] + e[5] + e[6] + e[7];
+    (*c)[0] = d[0] + d[2] + d[4] + d[6] + e[0] + e[2] + e[4] + e[6];
+    (*c)[1] = d[1] + d[3] + d[5] + d[7] + e[1] + e[3] + e[5] + e[7];
     
 #elif defined(AVX512)
-    static const int32_t offset[] = {
-        0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15
+    static const int32_t offset1[] = {
+        0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7
     };
-    __m512i idx = _mm512_loadu_si512((__m512i_u *)offset);
+    static const int32_t offset2[] = {
+        8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15
+    };
+    __m512i idx1 = _mm512_loadu_si512((__m512i_u *)offset1);
+    __m512i idx2 = _mm512_loadu_si512((__m512i_u *)offset2);
     __m512 zmm1 = _mm512_setzero_ps();
     __m512 zmm2 = _mm512_setzero_ps();
     
     for ( ; i < N - 15; i += 16) {
         __m512 zmm3 = _mm512_loadu_ps(a[i]);
         __m512 zmm4 = _mm512_loadu_ps(a[i + 8]);
-        __m512 zmm5 = _mm512_shuffle_ps(zmm3, zmm4, 0x88); // a.real
-        __m512 zmm6 = _mm512_shuffle_ps(zmm3, zmm4, 0xDD); // a.imag
-        zmm3 = _mm512_loadu_ps(b + i);
-        zmm4 = _mm512_permutexvar_ps(idx, zmm3);
-        zmm1 = _mm512_fmadd_ps(zmm5, zmm4, zmm1); // c.real
-        zmm2 = _mm512_fmadd_ps(zmm6, zmm4, zmm2); // c.imag
+        __m512 zmm5 = _mm512_loadu_ps(b + i);
+        __m512 zmm6 = _mm512_permutexvar_ps(idx1, zmm5);
+        __m512 zmm7 = _mm512_permutexvar_ps(idx2, zmm5);
+        zmm1 = _mm512_fmadd_ps(zmm3, zmm6, zmm1);
+        zmm2 = _mm512_fmadd_ps(zmm4, zmm7, zmm2);
     }
     float d[16], e[16];
     _mm512_storeu_ps(d, zmm1);
     _mm512_storeu_ps(e, zmm2);
-    (*c)[0] = d[0] + d[1] + d[2] + d[3] + d[4] + d[5] + d[6] + d[7] +
-        d[8] + d[9] + d[10] + d[11] + d[12] + d[13] + d[14] + d[15];
-    (*c)[1] = e[0] + e[1] + e[2] + e[3] + e[4] + e[5] + e[6] + e[7] +
-        e[8] + e[9] + e[10] + e[11] + e[12] + e[13] + e[14] + e[15];
+    (*c)[0] = d[0] + d[2] + d[4] + d[6] + d[8] + d[10] + d[12] + d[14] +
+        e[0] + e[2] + e[4] + e[6] + e[8] + e[10] + e[12] + e[14];
+    (*c)[1] = d[1] + d[3] + d[5] + d[7] + d[9] + d[11] + d[13] + d[15] +
+        e[1] + e[3] + e[5] + e[7] + e[9] + e[11] + e[13] + e[15];
 #else
     (*c)[0] = (*c)[1] = 0.0f;
 #endif
@@ -424,8 +428,9 @@ void sdr_corr_fft(const sdr_cpx_t *buff, int len_buff, int ix, int N, double fs,
 static void mix_carr(const sdr_cpx_t *buff, int N, double phi, double step,
     sdr_cpx_t *data)
 {
-    for (int i = 0; i < N; i++) {
-        uint8_t j = (uint8_t)(phi + step * i);
+    phi += 1e-6; // to avoid numerical error
+    for (int i = 0; i < N; i++, phi += step) {
+        uint8_t j = (uint8_t)phi;
         data[i][0] = buff[i][0] * carr_tbl[j][0] - buff[i][1] * carr_tbl[j][1];
         data[i][1] = buff[i][0] * carr_tbl[j][1] + buff[i][1] * carr_tbl[j][0];
     }
