@@ -8,8 +8,8 @@
 //      June 8, 2010
 //  [3] IS-QZSS-PNT-004, Quasi-Zenith Satellite System Interface Specification
 //      Satellite Positioning, Navigation and Timing Service, November 5, 2018
-//  [4] IS-QZSS-L6-001, Quasi-Zenith Satellite System Interface Specification
-//      Centimeter Level Augmentation Service, November 5, 2018
+//  [4] IS-QZSS-L6-005, Quasi-Zenith Satellite System Interface Specification
+//      Centimeter Level Augmentation Service, September 21, 2022
 //  [5] Galileo Open Service Signal In Space Interface Control Document -
 //      Issue 1, February 2010
 //  [6] Galileo E6-B/C Codes Technical Note - Issue 1, January 2019
@@ -63,6 +63,7 @@
 //                   fix L5Q SBAS secondary code
 //  2024-01-06  1.11 add signal I1SD, I1SP
 //  2024-01-07  1.12 add signal G1OCD, G1OCP, G2OCP
+//  2024-01-15  1.13 add API sdr_sat_id()
 //
 #include <ctype.h>
 #include "pocket_sdr.h"
@@ -417,14 +418,14 @@ static const uint16_t L5Q_XB_adv[] = { // PRN 1 - 210
       37, 1943, 7977, 2512, 4451, 4071
 };
 
-static const uint32_t L6D_R_init[] = { // PRN 193 - 201
-    00255021, 00327455, 00531421, 00615350, 00635477, 00000000,
-    01715254, 01741247, 02322713
+static const uint32_t L6D_R_init[] = { // PRN 193 - 202
+    00255021, 00327455, 00531421, 00615350, 00635477, 01547457,
+    01715254, 01741247, 02322713, 02534561
 };
 
-static const uint32_t L6E_R_init[] = { // PRN 203 - 211
-    01142153, 01723711, 03672765, 00030404, 00000546, 00000000,
-    03642512, 00255043, 02020075
+static const uint32_t L6E_R_init[] = { // PRN 203 - 212
+    01142153, 01723711, 03672765, 00030404, 00000546, 01306224,
+    03642512, 00255043, 02020075, 03571777
 };
 
 static const uint16_t E5AI_X2_init[] = { // PRN 1 - 50
@@ -798,7 +799,7 @@ static int8_t *gen_code_L1S(int prn, int *N)
 // generate L1C/B code ([3]) ----------------------------------------------------
 static int8_t *gen_code_L1CB(int prn, int *N)
 {
-    if (prn < 203 || prn > 206) {
+    if (prn != 198 && (prn < 202 || prn > 206)) {
         return NULL;
     }
     int8_t *code_L1CA = gen_code_L1CA(prn, N);
@@ -1121,7 +1122,7 @@ static int8_t *gen_code_L6D(int prn, int *N)
 {
     static const int8_t sub_carr[] = {-1, 0}; // TDM
     
-    if (prn < 193 || prn > 201) {
+    if (prn < 193 || prn > 202) {
         return NULL;
     }
     int n = 10230;
@@ -1139,7 +1140,7 @@ static int8_t *gen_code_L6E(int prn, int *N)
 {
     static const int8_t sub_carr[] = {0, -1}; // TDM
     
-    if (prn < 203 || prn > 211) {
+    if (prn < 203 || prn > 212) {
         return NULL;
     }
     int n = 10230;
@@ -2461,6 +2462,72 @@ double sdr_sig_freq(const char *sig)
     return 0.0;
 }
  
+//------------------------------------------------------------------------------
+//  Get satellite ID.
+//
+//  args:
+//      sig      (I) Signal type as string ('L1CA', 'L1CB', 'L1CP', ....)
+//      prn      (I) PRN number
+//      sat      (O) Satellite ID ('???': unknown)
+//
+//  returns:
+//      None
+//
+void sdr_sat_id(const char *sig, int prn, char *sat)
+{
+    static int sat_L1B[] = {4, 5, 8, 9};
+    static int sat_L5S[] = {2, 4, 5, 0, 0, 3, 0, 0, 0, 0, 0, 7, 8};
+    
+    if (sig[0] == 'L') {
+        if (prn >= 1 && prn <= 32) { // GPS
+            sprintf(sat, "G%02d", prn);
+        }
+        else if (prn >= 120 && prn <= 158) { // SBAS
+            sprintf(sat, "S%02d", prn - 100);
+        }
+        else if (!strcmp(sig, "L1CB") && prn >= 203 && prn <= 206) {
+            sprintf(sat, "J%02d", sat_L1B[prn-203]);
+        }
+        else if ((!strcmp(sig, "L1CA") || !strcmp(sig, "L1CD") ||
+            !strcmp(sig, "L1CP") || !strcmp(sig, "L2CM") || !strcmp(sig, "L5I") ||
+            !strcmp(sig, "L5Q") || !strcmp(sig, "L6D")) &&
+            prn >= 193 && prn <= 202) {
+            sprintf(sat, "J%02d", prn - 192);
+        }
+        else if (!strcmp(sig, "L1S") && prn >= 183 && prn <= 191) {
+            sprintf(sat, "J%02d", prn - 182);
+        }
+        else if (!strncmp(sig, "L5S", 3) && prn >= 184 && prn <= 206 &&
+            sat_L5S[prn-184]) {
+            sprintf(sat, "J%02d", sat_L5S[prn-184]);
+        }
+        else if (!strcmp(sig, "L6E") && prn >= 203 && prn <= 212) {
+            sprintf(sat, "J%02d", prn - 202);
+        }
+        else {
+            sprintf(sat, "???");
+        }
+    }
+    else if (!strcmp(sig, "G1CA") || !strcmp(sig, "G2CA")) {
+        sprintf(sat, "R%c%d", prn < 0 ? '-' : '+', prn < 0 ? -prn : prn);
+    }
+    else if (sig[0] == 'G') {
+        sprintf(sat, "R%02d", prn);
+    }
+    else if (sig[0] == 'E') {
+        sprintf(sat, "E%02d", prn);
+    }
+    else if (sig[0] == 'B') {
+        sprintf(sat, "C%02d", prn);
+    }
+    else if (sig[0] == 'I') {
+        sprintf(sat, "I%02d", prn);
+    }
+    else {
+        sprintf(sat, "???");
+    }
+}
+
 //------------------------------------------------------------------------------
 //  Generate resampled and zero-padded code.
 //
