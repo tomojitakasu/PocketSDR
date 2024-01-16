@@ -23,17 +23,23 @@
 //  2022-07-08  1.0  port sdr_ldpc.py to C
 //  2023-01-07  1.1  support IRNV1_SF2 and IRNV1_SF3 in decode_LDPC()
 //  2023-01-09  1.2  support BCNV1_SF2, BCNV1_SF3, BCNV2, BCNV3 in decode_LDPC()
+//  2023-01-16  1.3  fix memory leak and unable decoding of LDPC
 //
 #include "pocket_sdr.h"
 
 // constants -------------------------------------------------------------------
+#define MAX_ITER  250
 #define ERR_PROB  1e-5
 
 // function prototypes of LDPC-codes ([1],[2]) ---------------------------------
+extern int max_iter;
 void *mod2sparse_allocate(int, int);
 void *mod2sparse_insert(void *, int, int);
 void mod2sparse_free(void *);
+void prprp_decode_setup(void);
 unsigned int prprp_decode(void *, double *, char *, char *, double *);
+int check(void *, char *, char *);
+double changed(double *, char *, int);
 
 // global variables ------------------------------------------------------------
 static const double RATIO[] = {
@@ -2231,20 +2237,20 @@ static int decode_B_LDPC(void *H, int m, int n, const uint8_t *syms,
     for (int i = 0; i < n; i++) {
         lratio[i] = RATIO[syms[i]];
     }
+    // setup decoder
+    max_iter = MAX_ITER;
+    prprp_decode_setup();
+    
     // decode LDPC by probability propagation
-    unsigned int iters = prprp_decode(H, lratio, dblk, pchk, bitpr);
+    int niter = (int)prprp_decode(H, lratio, dblk, pchk, bitpr);
+    int valid = check(H, dblk, pchk) == 0;
+    int nerr = (int)changed(lratio, dblk, n);
     
-    //int valid = check(H, dblk, pch) == 0
-    //int chngd = changed(lratio, dblk, pchk, n);
-    //fprintf(stderr, "decode_B_LDPC: iters=%d valid=%d chngd=%d\n", iters,
-    //    valid, chngd);
-    
-    int nerr = 0;
-    for (int i = 0; i < m; i++) {
-        syms_dec[i] = dblk[i];
-        if (syms_dec[i] == syms[i]) nerr++;
-    }
-    return nerr;
+    sdr_free(lratio);
+    sdr_free(dblk);
+    sdr_free(pchk);
+    sdr_free(bitpr);
+    return valid ? nerr : -1;
 }
 
 // generate NB-LDPC parity check matrix ----------------------------------------
