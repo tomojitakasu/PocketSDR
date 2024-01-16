@@ -11,6 +11,7 @@
 //  2023-12-25  1.3  add -r option for raw SDR device data
 //  2023-12-28  1.4  set binary mode to stdin for Windows
 //  2024-01-12  1.5  update receiver status style
+//  2024-01-16  1.6  add -l option, delete -q option
 //
 #include <signal.h>
 #ifdef WIN32
@@ -23,6 +24,7 @@
 #define T_CYC      1e-3       // data read cycle (s)
 #define LOG_CYC    1000       // receiver channel log cycle (* T_CYC)
 #define TH_CYC     10         // receiver channel thread cycle (ms)
+#define T_REACQ    60.0       // re-acquisition timeout (s)
 #define MIN_LOCK   2.0        // min lock time to print channel status (s)
 #define MAX_BUFF   8000       // max number of IF data buffer
 #define MAX_DOP    5000.0     // default max Doppler for acquisition (Hz) 
@@ -102,26 +104,25 @@ static void print_head(rcv_t *rcv)
     for (int i = 0; i < rcv->nch; i++) {
         if (rcv->ch[i]->ch->state == STATE_LOCK) nch++;
     }
-    printf("\r TIME(s):%10.2f%53s%10s  SRCH:%4d  LOCK:%3d/%3d\n",
+    printf("\r TIME(s):%10.2f%52s%10s  SRCH:%4d  LOCK:%3d/%3d\n",
         rcv->ix * T_CYC, "", buff_full(rcv) ? "BUFF-FULL" : "", rcv->ich + 1,
         nch, rcv->nch);
-    printf("%3s %5s %3s %5s %8s %4s %-12s %11s %7s %11s %4s %5s %4s %4s %3s %3s\n",
-        "CH", "SIG", "PRN", "STATE", "LOCK(s)", "C/N0", "(dB-Hz)", "COFF(ms)",
+    printf("%3s %4s %5s %3s %8s %4s %-12s %11s %7s %11s %4s %5s %4s %4s %3s %3s\n",
+        "CH", "SAT", "SIG", "PRN", "LOCK(s)", "C/N0", "(dB-Hz)", "COFF(ms)",
         "DOP(Hz)", "ADR(cyc)", "SYNC", "#NAV", "#ERR", "#LOL", "NER", "SEQ");
 }
 
 // print receiver channel status -----------------------------------------------
 static void print_ch_stat(sdr_ch_t *ch)
 {
-    static const char *state_str[] = {"", "IDLE", "SRCH", "LOCK"};
     char bar[16], stat[16];
     cn0_bar(ch->cn0, bar);
     sync_stat(ch, stat);
-    printf("%s%3d %5s %3d %5s %8.2f %4.1f %-13s%11.7f %7.1f %11.1f %s %5d %4d %4d %3d %3d%s\n",
-        ESC_COL, ch->no, ch->sig, ch->prn, state_str[ch->state],
-        ch->lock * ch->T, ch->cn0, bar, ch->coff * 1e3, ch->fd, ch->adr, stat,
-        ch->nav->count[0], ch->nav->count[1], ch->lost, ch->nav->nerr,
-        ch->nav->seq % 1000, ESC_RES);
+    printf("%s%3d %4s %5s %3d %8.2f %4.1f %-13s%11.7f %7.1f %11.1f %s %5d %4d %4d %3d %3d%s\n",
+        ESC_COL, ch->no, ch->sat, ch->sig, ch->prn, ch->lock * ch->T, ch->cn0,
+        bar, ch->coff * 1e3, ch->fd, ch->adr, stat, ch->nav->count[0],
+        ch->nav->count[1], ch->lost, ch->nav->nerr, ch->nav->seq % 1000,
+        ESC_RES);
 }
 
 // print receiver status -------------------------------------------------------
@@ -168,7 +169,7 @@ static void show_usage(void)
 {
     printf("Usage: pocket_trk [-sig sig -prn prn[,...] ...] [-r] [-toff toff] [-f freq]\n");
     printf("       [-fi freq[,freq]] [-d freq[,freq]] [-IQ|-IQI|-IIQ] [-ti tint]\n");
-    printf("       [-log path] [-w filg] [-q] [file]\n");
+    printf("       [-log path] [-l level] [-w file] [file]\n");
     exit(0);
 }
 
@@ -334,6 +335,31 @@ static int rcv_read_data(rcv_t *rcv, int64_t ix, FILE *fp)
     return 1;
 }
 
+// assist signal search --------------------------------------------------------
+static void assist_srch(rcv_t *rcv, int ich)
+{
+    double time = rcv->ix * T_CYC;
+    sdr_ch_t *ch = rcv->ch[ich]->ch;
+    
+    // re-acquisition
+    if (ch->lock * ch->T >= MIN_LOCK && time <= ch->time + T_REACQ) {
+        ch->acq->fd_ext = ch->fd;
+        sdr_log(4, "$LOG,%.3f,%s,%d,RE-ACQUISITION T=%.1f", time, ch->sig,
+            ch->prn, time - ch->time);
+        return;
+    }
+    // Doppler by same satellite CH
+    for (int i = 0; i < rcv->nch; i++) {
+        sdr_ch_t *ch_i = rcv->ch[i]->ch;
+        if (strcmp(ch->sat, ch_i->sat) || ch_i->state != STATE_LOCK) continue;
+        ch->acq->fd_ext = ch_i->fd * ch->fc / ch_i->fc;
+        sdr_log(4, "$LOG,%.3f,%s,%d,SIGNAL SEARCH ASSISTED (%s,%d)", time,
+            ch->sig, ch->prn, ch_i->sig, ch_i->prn);
+        return;
+    }
+    ch->acq->fd_ext = 0.0f; // no assist
+}
+
 // update signal search channel ------------------------------------------------
 static void rcv_update_srch(rcv_t *rcv)
 {
@@ -345,8 +371,9 @@ static void rcv_update_srch(rcv_t *rcv)
     for (int i = 0; i < rcv->nch; i++) {
         rcv->ich = (rcv->ich + 1) % rcv->nch;
         if (rcv->ch[rcv->ich]->ch->state != STATE_IDLE) continue;
+        assist_srch(rcv, rcv->ich);
         rcv->ch[rcv->ich]->ch->state = STATE_SRCH;
-        break;
+        return;
     }
 }
 
@@ -361,7 +388,7 @@ static void rcv_wait(rcv_t *rcv)
 }
 
 // execute receiver ------------------------------------------------------------
-static void rcv_exec(rcv_t *rcv, FILE *fp, double tint, int quiet)
+static void rcv_exec(rcv_t *rcv, FILE *fp, double tint)
 {
     int ncol = 0;
     
@@ -371,7 +398,7 @@ static void rcv_exec(rcv_t *rcv, FILE *fp, double tint, int quiet)
             rcv->ch[i]->ch->state = STATE_SRCH;
         }
     }
-    if (!quiet) {
+    if (tint > 0) {
         printf("%s", ESC_HCUR);
     }
     for (int64_t ix = 0; !intr ; ix++) {
@@ -385,7 +412,7 @@ static void rcv_exec(rcv_t *rcv, FILE *fp, double tint, int quiet)
         rcv_update_srch(rcv);
         
         // print receiver status
-        if (!quiet && ix % (int)(tint / T_CYC) == 0) {
+        if (tint > 0.0 && ix % (int)(tint / T_CYC) == 0) {
             ncol = rcv_print_stat(rcv, ncol);
         }
         // suspend data reading for file input
@@ -394,7 +421,7 @@ static void rcv_exec(rcv_t *rcv, FILE *fp, double tint, int quiet)
     // stop receiver
     rcv_stop(rcv);
     
-    if (!quiet) {
+    if (tint > 0.0) {
         rcv_print_stat(rcv, ncol);
         printf("%s", ESC_VCUR);
     }
@@ -406,7 +433,7 @@ static void rcv_exec(rcv_t *rcv, FILE *fp, double tint, int quiet)
 //
 //     pocket_trk [-sig sig -prn prn[,...] ...] [-r] [-toff toff] [-f freq]
 //         [-fi freq[,freq]] [-d freq[,freq]] [-IQ|-IQI|-IIQ] [-ti tint]
-//         [-log path] [-w file] [-q] [file]
+//         [-log path] [-l level] [-w file] [-q] [file]
 //
 //   Description
 //
@@ -452,7 +479,8 @@ static void rcv_exec(rcv_t *rcv, FILE *fp, double tint, int quiet)
 //         CH2, -IQI: CH1 only, -IIQ: CH2 only)
 //
 //     -ti tint
-//         Update interval of signal tracking status in s. [0.1]
+//         Update interval of the signal tracking status in s. If 0.0 specified,
+//         the signal tracking status suppressed. [0.1]
 //
 //     -log path
 //         A log stream path to write the signal tracking log. The log includes
@@ -464,11 +492,11 @@ static void rcv_exec(rcv_t *rcv, FILE *fp, double tint, int quiet)
 //         (2) TCP server  :port
 //         (3) TCP client  address:port
 //
+//     -l level
+//         Set log level. [3]
+//
 //     -w file
 //         Specify the FFTW wisdowm file. [../python/fftw_wisdom.txt]
-//
-//     -q
-//         Suppress showing the signal tracking status.
 //
 //     [file]
 //         A file path of the input digital IF data. The format should be a
@@ -481,8 +509,7 @@ static void rcv_exec(rcv_t *rcv, FILE *fp, double tint, int quiet)
 int main(int argc, char **argv)
 {
     FILE *fp = stdin;
-    int prns[SDR_MAX_NCH], nch = 0, fmt = 0, IQ[2] = {1, 1};
-    int log_lvl = 4, quiet = 0;
+    int prns[SDR_MAX_NCH], nch = 0, fmt = 0, IQ[2] = {1, 1}, log_lvl = 3;
     double fs = 12e6, fi[2] = {0}, toff = 0.0, tint = 0.1;
     double dop[2] = {0.0, MAX_DOP};
     char *sig = "L1CA", *sigs[SDR_MAX_NCH];
@@ -536,8 +563,8 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "-log") && i + 1 < argc) {
             log_file = argv[++i];
         }
-        else if (!strcmp(argv[i], "-q")) {
-            quiet = 1;
+        else if (!strcmp(argv[i], "-l") && i + 1 < argc) {
+            log_lvl = atoi(argv[++i]);
         }
         else if (argv[i][0] == '-') {
             show_usage();
@@ -577,14 +604,14 @@ int main(int argc, char **argv)
     rcv_t *rcv = rcv_new(sigs, prns, nch, fs, fi, dop, fmt, IQ);
     
     // execute receiver
-    rcv_exec(rcv, fp, tint, quiet);
+    rcv_exec(rcv, fp, tint);
     
     // free receiver
     rcv_free(rcv);
     
     tt = sdr_get_tick() - tt;
     sdr_log(3, "$LOG,%.3f,%s,%d,END FILE=%s", tt * 1e-3, "", 0, file);
-    if (!quiet) {
+    if (tint > 0.0) {
         printf("  TIME(s) = %.3f\n", tt * 1e-3);
     }
     sdr_log_close();
