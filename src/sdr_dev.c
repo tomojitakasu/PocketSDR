@@ -21,6 +21,10 @@
 // constants and macros --------------------------------------------------------
 #define TO_TRANSFER     3000    // USB transfer timeout (ms)
 #define TO_TR_LIBUSB    10000   // USB transfer timeout for LIBUSB (ms)
+#ifndef WIN32
+#define MEM_SIZE_USB    256     // USB kernel memory size (MB)
+#define MEM_PAR_USB     "/sys/module/usbcore/parameters/usbfs_memory_mb"
+#endif
 
 // quantization lookup table ---------------------------------------------------
 static int8_t LUT[2][2][256];
@@ -256,13 +260,14 @@ sdr_dev_t *sdr_dev_open(int bus, int port)
 #else // WIN32
     sdr_dev_t *dev;
     struct sched_param param = {99};
+    char buff[1024];
     int ret;
-#if 1
-    // increase kernel memory size of USB stacks (16 MB-> 256 MB)
-    if (system("echo 256 > /sys/module/usbcore/parameters/usbfs_memory_mb\n")) {
-        fprintf(stderr, "Kernel memory size setting error\n");
+    
+    // increase kernel memory size for USB FS
+    sprintf(buff, "echo %d > %s\n", MEM_SIZE_USB, MEM_PAR_USB);
+    if (system(buff)) {
+        fprintf(stderr, "Kernel memory size for USB setting error\n");
     }
-#endif
     if (!(dev = (sdr_dev_t *)malloc(sizeof(sdr_dev_t)))) {
         return NULL;
     }
