@@ -10,6 +10,7 @@
 //  2023-12-16  1.2  reduce memory usage
 //  2023-12-28  1.3  support type and API changes.
 //  2024-01-12  1.4  ch->state: const char * -> int
+//  2024-01-16  1.5  add doppler assist for acquisition
 //
 #include <ctype.h>
 #include <math.h>
