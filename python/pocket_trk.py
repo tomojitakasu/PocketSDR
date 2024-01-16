@@ -81,10 +81,10 @@ def print_head(ch):
             nch += 1
         if ch[i].state == 'SRCH':
             srch = i + 1
-    print('\r TIME(s):%10.2f%65sSRCH: %3d  LOCK:%3d/%3d' % (ch[0].time, '',
+    print('\r TIME(s):%10.2f%64sSRCH: %3d  LOCK:%3d/%3d' % (ch[0].time, '',
         srch, nch, len(ch)))
-    print('%3s %5s %3s %5s %8s %4s %-12s %11s %7s %11s %4s %5s %4s %4s %3s %3s' % (
-        'CH', 'SIG', 'PRN', 'STATE', 'LOCK(s)', 'C/N0', '(dB-Hz)', 'COFF(ms)',
+    print('%3s %4s %5s %3s %8s %4s %-12s %11s %7s %11s %4s %5s %4s %4s %3s %3s' % (
+        'CH', 'SAT', 'SIG', 'PRN', 'LOCK(s)', 'C/N0', '(dB-Hz)', 'COFF(ms)',
         'DOP(Hz)', 'ADR(cyc)', 'SYNC', '#NAV', '#ERR', '#LOL', 'NER', 'SEQ'))
 
 # receiver channel sync status -------------------------------------------------
@@ -102,8 +102,8 @@ def update_stat(prns, ch, ncol):
     print_head(ch)
     for i in range(len(prns)):
         if ch[i].state == 'LOCK' and ch[i].lock * ch[i].T >= MIN_LOCK:
-            print('%s%3d %5s %3d %5s %8.2f %4.1f %-13s%11.7f %7.1f %11.1f %s %5d %4d %4d %3d %3d%s' % (
-                ESC_COL, i + 1, ch[i].sig, prns[i], ch[i].state,
+            print('%s%3d %4s %5s %3d %8.2f %4.1f %-13s%11.7f %7.1f %11.1f %s %5d %4d %4d %3d %3d%s' % (
+                ESC_COL, i + 1, ch[i].sat, ch[i].sig, prns[i],
                 ch[i].lock * ch[i].T, ch[i].cn0, cn0_bar(ch[i].cn0),
                 ch[i].coff * 1e3, ch[i].fd, ch[i].adr, sync_stat(ch[i]),
                 ch[i].nav.count[0], ch[i].nav.count[1], ch[i].lost,
