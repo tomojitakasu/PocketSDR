@@ -55,6 +55,7 @@ static sdr_acq_t *acq_new(const int8_t *code, int len_code, double T, double fs,
     
     acq->code_fft = sdr_cpx_malloc(2 * N);
     sdr_gen_code_fft(code, len_code, T, 0.0, fs, N, N, acq->code_fft);
+    acq->fd_ext = 0.0;
     acq->fds = sdr_dop_bins(T, ref_dop, max_dop, &acq->len_fds);
     acq->P_sum = NULL;
     acq->n_sum = 0;
@@ -141,6 +142,7 @@ sdr_ch_t *sdr_ch_new(const char *sig, int prn, double fs, double fi,
     ch->time = 0.0;
     sig_upper(sig, ch->sig);
     ch->prn = prn;
+    sdr_sat_id(ch->sig, prn, ch->sat);
     if (!(ch->code = sdr_gen_code(sig, prn, &ch->len_code)) ||
         !(ch->sec_code = sdr_sec_code(sig, prn, &ch->len_sec_code))) {
         sdr_free(ch);
@@ -191,9 +193,11 @@ static void trk_init(sdr_trk_t *trk)
 }
 
 // start tracking --------------------------------------------------------------
-static void start_track(sdr_ch_t *ch, double fd, double coff, double cn0)
+static void start_track(sdr_ch_t *ch, double time, double fd, double coff,
+    double cn0)
 {
     ch->state = STATE_LOCK;
+    ch->time = time;
     ch->lock = 0;
     ch->fd = fd;
     ch->coff = coff;
@@ -207,36 +211,35 @@ static void start_track(sdr_ch_t *ch, double fd, double coff, double cn0)
 static void search_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff,
     int len_buff, int ix)
 {
-    ch->time = time;
+    float fd_ext = ch->acq->fd_ext; // Doppler assist
+    float *fds = (fd_ext == 0.0) ? ch->acq->fds : &fd_ext;
+    int n = (fd_ext == 0.0) ? ch->acq->len_fds : 1;
     
     if (!ch->acq->P_sum) {
-        ch->acq->P_sum = (float *)sdr_malloc(sizeof(float) * 2 * ch->N *
-            ch->acq->len_fds);
+        ch->acq->P_sum = (float *)sdr_malloc(sizeof(float) * 2 * ch->N * n);
     }
     // parallel code search and non-coherent integration 
     sdr_search_code(ch->acq->code_fft, ch->T, buff, len_buff, ix, 2 * ch->N,
-        ch->fs, ch->fi, ch->acq->fds, ch->acq->len_fds, ch->acq->P_sum);
+        ch->fs, ch->fi, fds, n, ch->acq->P_sum);
     ch->acq->n_sum++;
     
     if (ch->acq->n_sum * ch->T >= T_ACQ) {
         int ix[2];
         
         // search max correlation power 
-        float cn0 = sdr_corr_max(ch->acq->P_sum, 2 * ch->N, ch->N,
-            ch->acq->len_fds, ch->T, ix);
+        float cn0 = sdr_corr_max(ch->acq->P_sum, 2 * ch->N, ch->N, n, ch->T, ix);
         
         if (cn0 >= THRES_CN0_L) {
-            double fd = sdr_fine_dop(ch->acq->P_sum, 2 * ch->N, ch->acq->fds,
-                ch->acq->len_fds, ix);
+            double fd = sdr_fine_dop(ch->acq->P_sum, 2 * ch->N, fds, n, ix);
             double coff = ix[1] / ch->fs;
-            start_track(ch, fd, coff, cn0);
-            sdr_log(3, "$LOG,%.3f,%s,%d,SIGNAL FOUND (%.1f,%.1f,%.7f)",
-                ch->time, ch->sig, ch->prn, cn0, fd, coff * 1e3);
+            start_track(ch, time, fd, coff, cn0);
+            sdr_log(4, "$LOG,%.3f,%s,%d,SIGNAL FOUND (%.1f,%.1f,%.7f)", time,
+                ch->sig, ch->prn, cn0, fd, coff * 1e3);
         }
         else {
             ch->state = STATE_IDLE;
-            sdr_log(3, "$LOG,%.3f,%s,%d,SIGNAL NOT FOUND (%.1f)", ch->time,
-                ch->sig, ch->prn, cn0);
+            sdr_log(4, "$LOG,%.3f,%s,%d,SIGNAL NOT FOUND (%.1f)", time, ch->sig,
+                ch->prn, cn0);
         }
         sdr_free(ch->acq->P_sum);
         ch->acq->P_sum = NULL;
@@ -434,7 +437,7 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff,
     if (ch->cn0 < THRES_CN0_U) { // signal lost 
         ch->state = STATE_IDLE;
         ch->lost++;
-        sdr_log(3, "$LOG,%.3f,%s,%d,SIGNAL LOST (%s, %.1f)", ch->time, ch->sig,
+        sdr_log(4, "$LOG,%.3f,%s,%d,SIGNAL LOST (%s, %.1f)", ch->time, ch->sig,
             ch->prn, ch->sig, ch->cn0);
     }
 }
@@ -472,8 +475,5 @@ void sdr_ch_update(sdr_ch_t *ch, double time, const sdr_cpx_t *buff,
     }
     else if (ch->state == STATE_LOCK) {
         track_sig(ch, time, buff, len_buff, ix);
-    }
-    else { // STATE_IDLE
-        ch->time = time;
     }
 }
