@@ -43,6 +43,7 @@ except:
     exit()
 
 # constants --------------------------------------------------------------------
+MAX_ITER = 250
 ERR_PROB = 1e-5
 RATIO = ((1.0 - ERR_PROB) / ERR_PROB, ERR_PROB / (1.0 - ERR_PROB))
 
@@ -2276,31 +2277,32 @@ def free_LDPC_H(H):
 def decode_B_LDPC(H, m, n, syms):
     if len(syms) != n:
         print('decode_LDPC_H: size error (%d %d)' % (n, len(syms)))
-        return []
+        return [], -1
+    
     lratio = np.zeros(n, dtype='double')
     dblk   = np.zeros(n, dtype='int8')
     pchk   = np.zeros(n, dtype='int8')
     bitpr  = np.zeros(n, dtype='double')
-    
-    for i in range(n):
-        lratio[i] = RATIO[syms[i]]
-    
     p1 = lratio.ctypes.data_as(POINTER(c_double))
     p2 = dblk.ctypes.data_as(POINTER(c_int8))
     p3 = pchk.ctypes.data_as(POINTER(c_int8))
     p4 = bitpr.ctypes.data_as(POINTER(c_double))
     
+    for i in range(n):
+        lratio[i] = RATIO[syms[i]]
+    
+    # setup decoder
+    max_iter = c_int.in_dll(libldpc, "max_iter")
+    max_iter.value = MAX_ITER
+    libldpc.prprp_decode_setup()
+    
     # decode LDPC by probability propagation
-    iters = libldpc.prprp_decode(c_void_p(H), p1, p2, p3, p4)
+    niter = libldpc.prprp_decode(c_void_p(H), p1, p2, p3, p4)
+    valid = libldpc.check(c_void_p(H), p2, p3) == 0
+    libldpc.changed.restype = c_double
+    nerr = int(libldpc.changed(p1, p2, n))
     
-    #valid = libldpc.check(c_void_p(H), p2, p3) == 0
-    #chngd = libldpc.changed(p1, p2, n)
-    #print('decode_B_LDPC: iters=%d valid=%d chngd=%d' % (iters, valid, chngd))
-    
-    syms_c = dblk[:m] ^ 1
-    nerr = np.count_nonzero(syms_c ^ syms[:m])
-    #return syms_c, nerr
-    return syms_c ^ 1, nerr
+    return dblk[:m], nerr if valid else -1
 
 # generate NB-LDPC parity check matrix -----------------------------------------
 def gen_NB_LDPC_H(m, n, H_idx, H_ele):
@@ -2313,7 +2315,7 @@ def gen_NB_LDPC_H(m, n, H_idx, H_ele):
 def decode_NB_LDPC(H, m, n, syms):
     if len(syms) // 6 != n:
         print('decode_NB_LDPC_H: size error (%d %d)' % (n, len(syms)))
-        return []
+        return [], -1
     
     # skip error correction (tentative)
     return syms[:m*6], 0
