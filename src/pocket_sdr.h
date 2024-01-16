@@ -10,6 +10,7 @@
 //  2022-07-16  1.2  modify API
 //  2023-12-28  1.3  modify types and APIs
 //  2024-01-12  1.4  modify constants, types and API
+//  2024-01-16  1.5  update constants, types and API
 //
 #ifndef POCKET_SDR_H
 #define POCKET_SDR_H
@@ -31,7 +32,7 @@ extern "C" {
 #define SDR_MAX_NCH    999      // max number of receiver channels
 #define SDR_MAX_NSYM   18000    // max number of symbols
 #define SDR_MAX_DATA   4096     // max length of navigation data
-#define SDR_N_HIST     10000    // number of P correlator history 
+#define SDR_N_HIST     40       // number of P correlator history 
 
 #define STATE_IDLE     1        // channel state idle
 #define STATE_SRCH     2        // channel state search
@@ -44,6 +45,7 @@ typedef struct {                // signal acquisition type
     sdr_cpx_t *code_fft;        // code FFT 
     float *fds;                 // Doppler bins 
     int len_fds;                // length of Doppler bins 
+    float fd_ext;               // Doppler external assist
     float *P_sum;               // sum of correlation powers 
     int n_sum;                  // number of sum 
 } sdr_acq_t;
@@ -79,6 +81,7 @@ typedef struct {                // SDR receiver channel type
     int no;                     // channel number
     int state;                  // channel state 
     double time;                // receiver time 
+    char sat[16];               // satellite ID 
     char sig[16];               // signal ID 
     int prn;                    // PRN number 
     const int8_t *code;         // primary code 
@@ -153,6 +156,7 @@ int8_t *sdr_sec_code(const char *sig, int prn, int *N);
 double sdr_code_cyc(const char *sig);
 int sdr_code_len(const char *sig);
 double sdr_sig_freq(const char *sig);
+void sdr_sat_id(const char *sig, int prn, char *sat);
 void sdr_res_code(const int8_t *code, int len_code, double T, double coff,
     double fs, int N, int Nz, float *code_res);
 void sdr_gen_code_fft(const int8_t *code, int len_code, double T, double coff,
