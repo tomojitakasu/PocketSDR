@@ -336,6 +336,8 @@ static void dot_cpx_real(const sdr_cpx_t *a, const float *b, int N, float s,
 {
     int i = 0;
     
+    (*c)[0] = (*c)[1] = 0.0f;
+    
 #if defined(AVX2)
     static const int32_t offset1[] = {0, 0, 1, 1, 2, 2, 3, 3};
     static const int32_t offset2[] = {4, 4, 5, 5, 6, 6, 7, 7};
@@ -344,10 +346,10 @@ static void dot_cpx_real(const sdr_cpx_t *a, const float *b, int N, float s,
     __m256 ymm1 = _mm256_setzero_ps();
     __m256 ymm2 = _mm256_setzero_ps();
     
-    for ( ; i < N - 7; i += 8) {
-        __m256 ymm3 = _mm256_loadu_ps(a[i]);
-        __m256 ymm4 = _mm256_loadu_ps(a[i + 4]);
-        __m256 ymm5 = _mm256_loadu_ps(b + i);
+    for ( ; i < N - 7; i += 8, a += 8, b += 8) {
+        __m256 ymm3 = _mm256_loadu_ps((float *)a);
+        __m256 ymm4 = _mm256_loadu_ps((float *)(a + 4));
+        __m256 ymm5 = _mm256_loadu_ps(b);
         __m256 ymm6 = _mm256_permutexvar_ps(idx1, ymm5);
         __m256 ymm7 = _mm256_permutexvar_ps(idx2, ymm5);
         ymm1 = _mm256_fmadd_ps(ymm3, ymm6, ymm1);
@@ -356,8 +358,8 @@ static void dot_cpx_real(const sdr_cpx_t *a, const float *b, int N, float s,
     float d[8], e[8];
     _mm256_storeu_ps(d, ymm1);
     _mm256_storeu_ps(e, ymm2);
-    (*c)[0] = d[0] + d[2] + d[4] + d[6] + e[0] + e[2] + e[4] + e[6];
-    (*c)[1] = d[1] + d[3] + d[5] + d[7] + e[1] + e[3] + e[5] + e[7];
+    (*c)[0] += d[0] + d[2] + d[4] + d[6] + e[0] + e[2] + e[4] + e[6];
+    (*c)[1] += d[1] + d[3] + d[5] + d[7] + e[1] + e[3] + e[5] + e[7];
     
 #elif defined(AVX512)
     static const int32_t offset1[] = {
@@ -371,10 +373,10 @@ static void dot_cpx_real(const sdr_cpx_t *a, const float *b, int N, float s,
     __m512 zmm1 = _mm512_setzero_ps();
     __m512 zmm2 = _mm512_setzero_ps();
     
-    for ( ; i < N - 15; i += 16) {
-        __m512 zmm3 = _mm512_loadu_ps(a[i]);
-        __m512 zmm4 = _mm512_loadu_ps(a[i + 8]);
-        __m512 zmm5 = _mm512_loadu_ps(b + i);
+    for ( ; i < N - 15; i += 16, a += 16, b += 16) {
+        __m512 zmm3 = _mm512_loadu_ps((float *)a);
+        __m512 zmm4 = _mm512_loadu_ps((float *)(a + 8));
+        __m512 zmm5 = _mm512_loadu_ps(b);
         __m512 zmm6 = _mm512_permutexvar_ps(idx1, zmm5);
         __m512 zmm7 = _mm512_permutexvar_ps(idx2, zmm5);
         zmm1 = _mm512_fmadd_ps(zmm3, zmm6, zmm1);
@@ -383,17 +385,14 @@ static void dot_cpx_real(const sdr_cpx_t *a, const float *b, int N, float s,
     float d[16], e[16];
     _mm512_storeu_ps(d, zmm1);
     _mm512_storeu_ps(e, zmm2);
-    (*c)[0] = d[0] + d[2] + d[4] + d[6] + d[8] + d[10] + d[12] + d[14] +
+    (*c)[0] += d[0] + d[2] + d[4] + d[6] + d[8] + d[10] + d[12] + d[14] +
         e[0] + e[2] + e[4] + e[6] + e[8] + e[10] + e[12] + e[14];
-    (*c)[1] = d[1] + d[3] + d[5] + d[7] + d[9] + d[11] + d[13] + d[15] +
+    (*c)[1] += d[1] + d[3] + d[5] + d[7] + d[9] + d[11] + d[13] + d[15] +
         e[1] + e[3] + e[5] + e[7] + e[9] + e[11] + e[13] + e[15];
-#else
-    (*c)[0] = (*c)[1] = 0.0f;
 #endif
-    
-    for ( ; i < N; i++) {
-        (*c)[0] += a[i][0] * b[i];
-        (*c)[1] += a[i][1] * b[i];
+    for ( ; i < N; i++, a++, b++) {
+        (*c)[0] += (*a)[0] * (*b);
+        (*c)[1] += (*a)[1] * (*b);
     }
     (*c)[0] *= s;
     (*c)[1] *= s;
@@ -428,11 +427,14 @@ void sdr_corr_fft(const sdr_cpx_t *buff, int len_buff, int ix, int N, double fs,
 static void mix_carr(const sdr_cpx_t *buff, int N, double phi, double step,
     sdr_cpx_t *data)
 {
-    phi += 1e-6; // to avoid numerical error
-    for (int i = 0; i < N; i++, phi += step) {
-        uint8_t j = (uint8_t)phi;
-        data[i][0] = buff[i][0] * carr_tbl[j][0] - buff[i][1] * carr_tbl[j][1];
-        data[i][1] = buff[i][0] * carr_tbl[j][1] + buff[i][1] * carr_tbl[j][0];
+    double p = phi + 1e-6; // to avoid numerical error
+    
+    for (int i = 0; i < N; i++, p += step, buff++, data++) {
+        uint8_t j = (uint8_t)p;
+        float carr_I = carr_tbl[j][0];
+        float carr_Q = carr_tbl[j][1];
+        (*data)[0] = (*buff)[0] * carr_I - (*buff)[1] * carr_Q;
+        (*data)[1] = (*buff)[0] * carr_Q + (*buff)[1] * carr_I;
     }
 }
 
