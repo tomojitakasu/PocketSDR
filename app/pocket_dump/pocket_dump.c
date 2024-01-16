@@ -108,7 +108,6 @@ static void dump_data(sdr_dev_t *dev, double tsec, int raw, int quiet,
             for (int j = 0; j < dev->max_ch; j++) {
                 if (!fp[j]) continue;
                 fwrite(buff[j], n[j], 1, fp[j]);
-                fflush(fp[j]);
                 byte[j] += n[j];
             }
             sample += size;
