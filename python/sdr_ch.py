@@ -56,6 +56,7 @@ def ch_new(sig, prn, fs, fi, max_dop=MAX_DOP, sp_corr=SP_CORR, add_corr=0,
     ch.time = 0.0                   # receiver time
     ch.sig = sig.upper()            # signal type
     ch.prn = prn                    # PRN number
+    ch.sat = sdr_code.sat_id(ch.sig, ch.prn) # satelltie ID
     ch.code = sdr_code.gen_code(sig, prn) # primary code
     ch.sec_code = sdr_code.sec_code(sig, prn) # secondary code
     ch.fc = sdr_code.sig_freq(sig)  # carrier frequency (Hz)
