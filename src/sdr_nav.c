@@ -249,7 +249,7 @@ static void decode_SBAS_msgs(sdr_ch_t *ch, const uint8_t *bits, int rev)
     else {
         ch->nav->fsync = ch->nav->rev = 0;
         ch->nav->count[1]++;
-        sdr_log(3, "$LOG,%.3f,%s,%d,SBAS FRAME ERROR", time, ch->sig, ch->prn);
+        sdr_log(4, "$LOG,%.3f,%s,%d,SBAS FRAME ERROR", time, ch->sig, ch->prn);
     }
 }
 
@@ -337,7 +337,7 @@ static void decode_LNAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
     else {
         ch->nav->fsync = ch->nav->rev = 0;
         ch->nav->count[1]++;
-        sdr_log(3, "$LOG,%.3f,%s,%d,LNAV PARITY ERROR", time, ch->sig, ch->prn);
+        sdr_log(4, "$LOG,%.3f,%s,%d,LNAV PARITY ERROR", time, ch->sig, ch->prn);
     }
 }
 
@@ -453,7 +453,7 @@ static void decode_CNV2(sdr_ch_t *ch, const uint8_t *syms, int rev, int toi)
     else {
         ch->nav->ssync = ch->nav->fsync = 0;
         ch->nav->count[1]++;
-        sdr_log(3, "$LOG,%.3f,%s,%d,CNV2 FRAME ERROR", time, ch->sig, ch->prn);
+        sdr_log(4, "$LOG,%.3f,%s,%d,CNV2 FRAME ERROR", time, ch->sig, ch->prn);
     }
 }
 
@@ -514,7 +514,7 @@ static void decode_CNAV(sdr_ch_t *ch, const uint8_t *bits, int rev)
     else {
         ch->nav->fsync = ch->nav->rev = 0;
         ch->nav->count[1]++;
-        sdr_log(3, "$LOG,%.3f,%s,%d,CNAV FRAME ERROR", time, ch->sig, ch->prn);
+        sdr_log(4, "$LOG,%.3f,%s,%d,CNAV FRAME ERROR", time, ch->sig, ch->prn);
     }
 }
 
@@ -697,7 +697,7 @@ static void decode_L6_frame(sdr_ch_t *ch, const uint8_t *syms, int N)
     else {
         ch->nav->ssync = ch->nav->fsync = 0;
         ch->nav->count[1]++;
-        sdr_log(3, "$LOG,%.3f,%s,%d,L6FRM RS ERROR", time, ch->sig, ch->prn);
+        sdr_log(4, "$LOG,%.3f,%s,%d,L6FRM RS ERROR", time, ch->sig, ch->prn);
     }
 }
 
@@ -747,7 +747,7 @@ static void decode_glo_str(sdr_ch_t *ch, const uint8_t *syms, int rev)
     else {
         ch->nav->fsync = ch->nav->rev = 0;
         ch->nav->count[1]++;
-        sdr_log(3, "$LOG,%.3f,%s,%d,GSTR HAMMING ERROR", time, ch->sig, ch->prn);
+        sdr_log(4, "$LOG,%.3f,%s,%d,GSTR HAMMING ERROR", time, ch->sig, ch->prn);
     }
 }
 
@@ -811,7 +811,7 @@ static void decode_glo_L3OCD_str(sdr_ch_t *ch, const uint8_t *bits, int rev)
     else {
         ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
         ch->nav->count[1]++;
-        sdr_log(3, "$LOG,%.3f,%s,%d,G3OCD STRING ERROR", time, ch->sig, ch->prn);
+        sdr_log(4, "$LOG,%.3f,%s,%d,G3OCD STRING ERROR", time, ch->sig, ch->prn);
     }
 }
 
@@ -907,7 +907,7 @@ static void decode_gal_INAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
     else {
         ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
         ch->nav->count[1]++;
-        sdr_log(3, "$LOG,%.3f,%s,%d,INAV FRAME ERROR", time, ch->sig, ch->prn);
+        sdr_log(4, "$LOG,%.3f,%s,%d,INAV FRAME ERROR", time, ch->sig, ch->prn);
     }
 }
 
@@ -967,7 +967,7 @@ static void decode_gal_FNAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
     else {
         ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
         ch->nav->count[1]++;
-        sdr_log(3, "$LOG,%.3f,%s,%d,FNAV FRAME ERROR", time, ch->sig, ch->prn);
+        sdr_log(4, "$LOG,%.3f,%s,%d,FNAV FRAME ERROR", time, ch->sig, ch->prn);
     }
 }
 
@@ -1056,7 +1056,7 @@ static void decode_gal_CNAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
     else {
         ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
         ch->nav->count[1]++;
-        sdr_log(3, "$LOG,%.3f,%s,%d,CNAV FRAME ERROR", time, ch->sig, ch->prn);
+        sdr_log(4, "$LOG,%.3f,%s,%d,CNAV FRAME ERROR", time, ch->sig, ch->prn);
     }
 }
 
