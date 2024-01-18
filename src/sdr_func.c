@@ -16,6 +16,7 @@
 //  2023-12-28  1.7  support API changes
 //                   enable escape sequence for Windows console
 //  2024-01-03  1.8  fix AVX2 codes in dot_cpx_real()
+//  2024-01-18  1.9  add API sdr_cpx_mul()
 //
 #include <math.h>
 #include <stdarg.h>
@@ -25,7 +26,7 @@
 #ifdef WIN32
 #include <io.h>
 #endif
-#if defined(AVX2) || defined(AVX512)
+#ifdef AVX2
 #include <immintrin.h>
 #endif
 
@@ -125,6 +126,27 @@ void sdr_cpx_free(sdr_cpx_t *cpx)
 float sdr_cpx_abs(sdr_cpx_t cpx)
 {
     return sqrtf(SQR(cpx[0]) + SQR(cpx[1]));
+}
+
+//------------------------------------------------------------------------------
+//  Multiplication of two complex arrays.
+//  
+//  args:
+//      a, b     (I)  Complex arrays
+//      N        (I)  Size of comlex arrays
+//      s        (I)  Scale
+//      c        (O)  Multiplication of a and b (c[i] = a[i] * b[i] * s)
+//
+//  return:
+//      None
+//
+void sdr_cpx_mul(const sdr_cpx_t *a, const sdr_cpx_t *b, int N, float s,
+    sdr_cpx_t *c)
+{
+    for (int i = 0; i < N; i++) {
+        c[i][0] = (a[i][0] * b[i][0] - a[i][1] * b[i][1]) * s;
+        c[i][1] = (a[i][0] * b[i][1] + a[i][1] * b[i][0]) * s;
+    }
 }
 
 //------------------------------------------------------------------------------
@@ -263,7 +285,7 @@ float sdr_corr_max(const float *P, int N, int Nmax, int M, double T, int *ix)
             ix[1] = j; // index of code offset
         }
     }
-    return (P_ave > 0.0) ? 10.0 * log10f((P_max - P_ave) / P_ave / T) : 0.0;
+    return (P_ave > 0.0f) ? 10.0f * log10f((P_max - P_ave) / P_ave / T) : 0.0f;
 }
 
 // polynomial fitting ----------------------------------------------------------
@@ -330,111 +352,16 @@ float *sdr_dop_bins(double T, float dop, float max_dop, int *len_fds)
     return fds;
 }
 
-// inner product of complex and real -------------------------------------------
-static void dot_cpx_real(const sdr_cpx_t *a, const float *b, int N, float s,
-    sdr_cpx_t *c)
-{
-    int i = 0;
-    
-    (*c)[0] = (*c)[1] = 0.0f;
-    
-#if defined(AVX2)
-    static const int32_t offset1[] = {0, 0, 1, 1, 2, 2, 3, 3};
-    static const int32_t offset2[] = {4, 4, 5, 5, 6, 6, 7, 7};
-    __m256i idx1 = _mm256_loadu_si256((__m256i_u *)offset1);
-    __m256i idx2 = _mm256_loadu_si256((__m256i_u *)offset2);
-    __m256 ymm1 = _mm256_setzero_ps();
-    __m256 ymm2 = _mm256_setzero_ps();
-    
-    for ( ; i < N - 7; i += 8, a += 8, b += 8) {
-        __m256 ymm3 = _mm256_loadu_ps((float *)a);
-        __m256 ymm4 = _mm256_loadu_ps((float *)(a + 4));
-        __m256 ymm5 = _mm256_loadu_ps(b);
-        __m256 ymm6 = _mm256_permutexvar_ps(idx1, ymm5);
-        __m256 ymm7 = _mm256_permutexvar_ps(idx2, ymm5);
-        ymm1 = _mm256_fmadd_ps(ymm3, ymm6, ymm1);
-        ymm2 = _mm256_fmadd_ps(ymm4, ymm7, ymm2);
-    }
-    float d[8], e[8];
-    _mm256_storeu_ps(d, ymm1);
-    _mm256_storeu_ps(e, ymm2);
-    (*c)[0] += d[0] + d[2] + d[4] + d[6] + e[0] + e[2] + e[4] + e[6];
-    (*c)[1] += d[1] + d[3] + d[5] + d[7] + e[1] + e[3] + e[5] + e[7];
-    
-#elif defined(AVX512)
-    static const int32_t offset1[] = {
-        0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7
-    };
-    static const int32_t offset2[] = {
-        8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15
-    };
-    __m512i idx1 = _mm512_loadu_si512((__m512i_u *)offset1);
-    __m512i idx2 = _mm512_loadu_si512((__m512i_u *)offset2);
-    __m512 zmm1 = _mm512_setzero_ps();
-    __m512 zmm2 = _mm512_setzero_ps();
-    
-    for ( ; i < N - 15; i += 16, a += 16, b += 16) {
-        __m512 zmm3 = _mm512_loadu_ps((float *)a);
-        __m512 zmm4 = _mm512_loadu_ps((float *)(a + 8));
-        __m512 zmm5 = _mm512_loadu_ps(b);
-        __m512 zmm6 = _mm512_permutexvar_ps(idx1, zmm5);
-        __m512 zmm7 = _mm512_permutexvar_ps(idx2, zmm5);
-        zmm1 = _mm512_fmadd_ps(zmm3, zmm6, zmm1);
-        zmm2 = _mm512_fmadd_ps(zmm4, zmm7, zmm2);
-    }
-    float d[16], e[16];
-    _mm512_storeu_ps(d, zmm1);
-    _mm512_storeu_ps(e, zmm2);
-    (*c)[0] += d[0] + d[2] + d[4] + d[6] + d[8] + d[10] + d[12] + d[14] +
-        e[0] + e[2] + e[4] + e[6] + e[8] + e[10] + e[12] + e[14];
-    (*c)[1] += d[1] + d[3] + d[5] + d[7] + d[9] + d[11] + d[13] + d[15] +
-        e[1] + e[3] + e[5] + e[7] + e[9] + e[11] + e[13] + e[15];
-#endif
-    for ( ; i < N; i++, a++, b++) {
-        (*c)[0] += (*a)[0] * (*b);
-        (*c)[1] += (*a)[1] * (*b);
-    }
-    (*c)[0] *= s;
-    (*c)[1] *= s;
-}
-
-// mix carrier and standard correlator -----------------------------------------
-void sdr_corr_std(const sdr_cpx_t *buff, int len_buff, int ix, int N, double fs,
-    double fc, double phi, const float *code, const int *pos, int n,
-    sdr_cpx_t *corr)
-{
-    sdr_cpx_t *data = sdr_cpx_malloc(N);
-    
-    sdr_mix_carr(buff, len_buff, ix, N, fs, fc, phi, data);
-    sdr_corr_std_(data, code, N, pos, n, corr);
-    
-    sdr_cpx_free(data);
-}
-
-// mix carrier and FFT correlator (N = 2 * n) ----------------------------------
-void sdr_corr_fft(const sdr_cpx_t *buff, int len_buff, int ix, int N, double fs,
-    double fc, double phi, const sdr_cpx_t *code_fft, sdr_cpx_t *corr)
-{
-    sdr_cpx_t *data = sdr_cpx_malloc(N);
-    
-    sdr_mix_carr(buff, len_buff, ix, N, fs, fc, phi, data);
-    sdr_corr_fft_(data, code_fft, N, corr);
-    
-    sdr_cpx_free(data);
-}
-
 // mix carrier -----------------------------------------------------------------
 static void mix_carr(const sdr_cpx_t *buff, int N, double phi, double step,
     sdr_cpx_t *data)
 {
     double p = phi + 1e-6; // to avoid numerical error
     
-    for (int i = 0; i < N; i++, p += step, buff++, data++) {
+    for (int i = 0; i < N; i++, p += step) {
         uint8_t j = (uint8_t)p;
-        float carr_I = carr_tbl[j][0];
-        float carr_Q = carr_tbl[j][1];
-        (*data)[0] = (*buff)[0] * carr_I - (*buff)[1] * carr_Q;
-        (*data)[1] = (*buff)[0] * carr_Q + (*buff)[1] * carr_I;
+        data[i][0] = buff[i][0] * carr_tbl[j][0] - buff[i][1] * carr_tbl[j][1];
+        data[i][1] = buff[i][0] * carr_tbl[j][1] + buff[i][1] * carr_tbl[j][0];
     }
 }
 
@@ -447,15 +374,51 @@ void sdr_mix_carr(const sdr_cpx_t *buff, int len_buff, int ix, int N, double fs,
     if (ix + N <= len_buff) {
         mix_carr(buff + ix, N, phi, step, data);
     }
-    else {
+    else { // accross IF buffer boundary
         int n = len_buff - ix;
         mix_carr(buff + ix, n, phi, step, data);
         mix_carr(buff, N - n, phi + step * n, step, data + n);
     }
 }
 
+// inner product of complex and real -------------------------------------------
+static void dot_cpx_real(const sdr_cpx_t *a, const float *b, int N, float s,
+    sdr_cpx_t *c)
+{
+    int i = 0;
+    
+    (*c)[0] = (*c)[1] = 0.0f;
+#ifdef AVX2
+    __m256i idx1 = _mm256_set_epi32(3, 3, 2, 2, 1, 1, 0, 0);
+    __m256i idx2 = _mm256_set_epi32(7, 7, 6, 6, 5, 5, 4, 4);
+    __m256 ymm1 = _mm256_setzero_ps();
+    __m256 ymm2 = _mm256_setzero_ps();
+    
+    for ( ; i < N - 7; i += 8) {
+        __m256 ymm3 = _mm256_loadu_ps((float *)(a + i));
+        __m256 ymm4 = _mm256_loadu_ps((float *)(a + i + 4));
+        __m256 ymm5 = _mm256_loadu_ps(b + i);
+        __m256 ymm6 = _mm256_permutexvar_ps(idx1, ymm5);
+        __m256 ymm7 = _mm256_permutexvar_ps(idx2, ymm5);
+        ymm1 = _mm256_fmadd_ps(ymm3, ymm6, ymm1);
+        ymm2 = _mm256_fmadd_ps(ymm4, ymm7, ymm2);
+    }
+    float d[8], e[8];
+    _mm256_storeu_ps(d, ymm1);
+    _mm256_storeu_ps(e, ymm2);
+    (*c)[0] += d[0] + d[2] + d[4] + d[6] + e[0] + e[2] + e[4] + e[6];
+    (*c)[1] += d[1] + d[3] + d[5] + d[7] + e[1] + e[3] + e[5] + e[7];
+#endif
+    for ( ; i < N; i++) {
+        (*c)[0] += a[i][0] * b[i];
+        (*c)[1] += a[i][1] * b[i];
+    }
+    (*c)[0] *= s;
+    (*c)[1] *= s;
+}
+
 // standard correlator ---------------------------------------------------------
-void sdr_corr_std_(const sdr_cpx_t *data, const float *code, int N,
+static void corr_std(const sdr_cpx_t *data, const float *code, int N,
     const int *pos, int n, sdr_cpx_t *corr)
 {
     for (int i = 0; i < n; i++) {
@@ -473,16 +436,15 @@ void sdr_corr_std_(const sdr_cpx_t *data, const float *code, int N,
     }
 }
 
-// multiplication of complex64 (N = 2 * n) -------------------------------------
-static void mul_cpx(const sdr_cpx_t *a, const sdr_cpx_t *b, int N, float s,
-    sdr_cpx_t *c)
+// mix carrier and standard correlator -----------------------------------------
+void sdr_corr_std(const sdr_cpx_t *buff, int len_buff, int ix, int N, double fs,
+    double fc, double phi, const float *code, const int *pos, int n,
+    sdr_cpx_t *corr)
 {
-    for (int i = 0; i < N; i += 2) {
-        c[i  ][0] = (a[i  ][0] * b[i  ][0] - a[i  ][1] * b[i  ][1]) * s;
-        c[i  ][1] = (a[i  ][0] * b[i  ][1] + a[i  ][1] * b[i  ][0]) * s;
-        c[i+1][0] = (a[i+1][0] * b[i+1][0] - a[i+1][1] * b[i+1][1]) * s;
-        c[i+1][1] = (a[i+1][0] * b[i+1][1] + a[i+1][1] * b[i+1][0]) * s;
-    }
+    sdr_cpx_t *data = sdr_cpx_malloc(N);
+    sdr_mix_carr(buff, len_buff, ix, N, fs, fc, phi, data);
+    corr_std(data, code, N, pos, n, corr);
+    sdr_cpx_free(data);
 }
 
 // get FFTW plan ---------------------------------------------------------------
@@ -514,26 +476,33 @@ static int get_fftw_plan(int N, fftwf_plan *plan)
     return 0;
 }
 
-// FFT correlator (N = 2 * n) --------------------------------------------------
-void sdr_corr_fft_(const sdr_cpx_t *data, const sdr_cpx_t *code_fft, int N,
+// FFT correlator --------------------------------------------------------------
+static void corr_fft(const sdr_cpx_t *data, const sdr_cpx_t *code_fft, int N,
     sdr_cpx_t *corr)
 {
     fftwf_plan plan[2];
     
-    // get FFTW plan
-    if (!get_fftw_plan(N, plan)) {
-        return;
-    }
+    if (!get_fftw_plan(N, plan)) return;
     sdr_cpx_t *cpx1 = sdr_cpx_malloc(N);
     sdr_cpx_t *cpx2 = sdr_cpx_malloc(N);
     
     // ifft(fft(data) * code_fft) / N^2 
     fftwf_execute_dft(plan[0], (sdr_cpx_t *)data, cpx1);
-    mul_cpx(cpx1, code_fft, N, 1.0f / N / N, cpx2);
+    sdr_cpx_mul(cpx1, code_fft, N, 1.0f / N / N, cpx2);
     fftwf_execute_dft(plan[1], cpx2, corr);
     
     sdr_cpx_free(cpx1);
     sdr_cpx_free(cpx2);
+}
+
+// mix carrier and FFT correlator ----------------------------------------------
+void sdr_corr_fft(const sdr_cpx_t *buff, int len_buff, int ix, int N, double fs,
+    double fc, double phi, const sdr_cpx_t *code_fft, sdr_cpx_t *corr)
+{
+    sdr_cpx_t *data = sdr_cpx_malloc(N);
+    sdr_mix_carr(buff, len_buff, ix, N, fs, fc, phi, data);
+    corr_fft(data, code_fft, N, corr);
+    sdr_cpx_free(data);
 }
 
 // open log --------------------------------------------------------------------
