@@ -117,6 +117,8 @@ void sdr_func_init(const char *file);
 sdr_cpx_t *sdr_cpx_malloc(int N);
 void sdr_cpx_free(sdr_cpx_t *cpx);
 float sdr_cpx_abs(sdr_cpx_t cpx);
+void sdr_cpx_mul(const sdr_cpx_t *a, const sdr_cpx_t *b, int N, float s,
+    sdr_cpx_t *c);
 sdr_cpx_t *sdr_read_data(const char *file, double fs, int IQ, double T,
     double toff, int *len_data);
 void sdr_search_code(const sdr_cpx_t *code_fft, double T, const sdr_cpx_t *buff,
@@ -134,10 +136,6 @@ void sdr_corr_fft(const sdr_cpx_t *buff, int len_buff, int ix, int N, double fs,
     double fc, double phi, const sdr_cpx_t *code_fft, sdr_cpx_t *corr);
 void sdr_mix_carr(const sdr_cpx_t *buff, int len_buff, int ix, int N, double fs,
     double fc, double phi, sdr_cpx_t *data);
-void sdr_corr_std_(const sdr_cpx_t *data, const float *code, int N,
-    const int *pos, int n, sdr_cpx_t *corr);
-void sdr_corr_fft_(const sdr_cpx_t *data, const sdr_cpx_t *code_fft, int N,
-    sdr_cpx_t *corr);
 int sdr_log_open(const char *path);
 void sdr_log_close(void);
 void sdr_log_level(int level);
