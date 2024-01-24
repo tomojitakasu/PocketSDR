@@ -35,6 +35,8 @@
 #      Service Navigation Signal in L3 frequency band Edition 1.0, 2016
 #  [17] NavIC Signal in Space ICD for Standard Positioning Service in L1
 #      Frequency version 1.0, August, 2023
+#  [18] GLONASS Interface Control Document Code Devision Multiple Access Open
+#      Service Navigation Signal in L1 frequency band Edition 1.0, 2016
 #
 #  Author:
 #  T.TAKASU
@@ -49,6 +51,7 @@
 #  2023-12-28  1.5  fix L1CA_SBAS, L5I, L5I_SBAS, L5SI, G1CA and G3OCD
 #  2024-01-06  1.6  support I1SD
 #  2024-01-12  1.7  support B1CD, B2AD, B2BI
+#  2024-01-19  1.8  support G1OCD
 #
 from math import *
 import numpy as np
@@ -121,6 +124,8 @@ def nav_decode(ch):
         decode_G1CA(ch)
     elif ch.sig == 'G2CA':
         decode_G2CA(ch)
+    elif ch.sig == 'G1OCD':
+        decode_G1OCD(ch)
     elif ch.sig == 'G3OCD':
         decode_G3OCD(ch)
     elif ch.sig == 'E1B':
@@ -551,6 +556,49 @@ def decode_glo_str(ch, syms, rev):
 def decode_G2CA(ch):
     decode_G1CA(ch)
 
+# decode G1OCD nav data ([18]) -------------------------------------------------
+def decode_G1OCD(ch):
+    
+    if not sync_sec_code(ch): # sync secondary code
+        return
+    
+    if ch.nav.fsync > 0: # sync GLONASS L1OCD nav string
+        if ch.lock >= ch.nav.fsync + 1000:
+            search_glo_L1OCD_str(ch)
+        elif ch.lock > ch.nav.fsync + 2000:
+            ch.nav.fsync = ch.nav.rev = 0
+    elif ch.lock > ch.nav.ssync + 1104:
+        search_glo_L1OCD_str(ch)
+
+# search GLONASS L1OCD nav string ----------------------------------------------
+def search_glo_L1OCD_str(ch):
+    preamb = (0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1)
+    
+    # decode 1/2 FEC (552 syms -> 262 + 8 bits)
+    bits = sdr_fec.decode_conv(swap_syms(ch.nav.syms[-552:]) * 255)
+    
+    # search and decode GLONASS L1OCD nav string
+    rev = sync_frame(ch, preamb, bits[:262])
+    if rev >= 0:
+        decode_glo_L1OCD_str(ch, bits[:250] ^ rev, rev)
+
+# decode GLONASS L1OCD nav string ----------------------------------------------
+def decode_glo_L1OCD_str(ch, bits, rev):
+    time = ch.time - 4e-3 * 552
+    
+    if test_CRC16_GLO(bits):
+        ch.nav.fsync = ch.lock
+        ch.nav.rev = rev
+        data = pack_bits(bits) # GLONASS L1OCD nav string (250 bits)
+        ch.nav.seq = sdr_rtk.getbitu(data, 34, 16) # TS
+        ch.nav.data.append((time, data))
+        ch.nav.count[0] += 1
+        log(3, '$G1OCD,%.3f,%s,%d,%s' % (time, ch.sig, ch.prn, hex_str(data)))
+    else:
+        ch.nav.ssync = ch.nav.fsync = ch.nav.rev = 0
+        ch.nav.count[1] += 1
+        log(3, '$LOG,%.3f,%s,%d,G1OCD STRING ERROR' % (time, ch.sig, ch.prn))
+
 # decode G3OCD nav data ([16]) -------------------------------------------------
 def decode_G3OCD(ch):
     
@@ -589,9 +637,10 @@ def decode_glo_L3OCD_str(ch, bits, rev):
     time = ch.time - 1e-3 * 328
     
     if test_CRC(bits):
-        ch.nav.ssync = ch.nav.fsync = ch.lock
+        ch.nav.fsync = ch.lock
         ch.nav.rev = rev
         data = pack_bits(bits) # GLONASS L3OCD nav string (300 bits)
+        ch.nav.seq = sdr_rtk.getbitu(data, 26, 15) # TS
         ch.nav.data.append((time, data))
         ch.nav.count[0] += 1
         log(3, '$G3OCD,%.3f,%s,%d,%s' % (time, ch.sig, ch.prn, hex_str(data)))
@@ -896,6 +945,9 @@ def decode_BCNV1(ch, syms, rev, soh):
     for i in range(22, 25):
        syms2[i*48   :i*48+48] = symsr[i+11 ] # SF2
     
+    #log(3, "SIG=%s,SF2=%s" % (ch.sig, hex_str(pack_bits(syms2))))
+    #log(3, "SIG=%s,SF3=%s" % (ch.sig, hex_str(pack_bits(syms3))))
+    
     # decode LDPC (1200 + 528 syms -> 600 + 264 bits)
     SF2, nerr1 = sdr_ldpc.decode_LDPC('BCNV1_SF2', syms2)
     SF3, nerr2 = sdr_ldpc.decode_LDPC('BCNV1_SF3', syms3)
@@ -948,6 +1000,8 @@ def decode_BCNV2(ch, syms, rev):
     # decode LDPC (576 syms -> 288 bits)
     bits, nerr = sdr_ldpc.decode_LDPC('BCNV2', syms[24:])
     
+    #log(3, 'SIG=%s SF=%s' % (ch.sig, hex_str(pack_bits(syms[24:]))))
+    
     if test_CRC(bits):
         ch.nav.ssync = ch.nav.fsync = ch.lock
         ch.nav.rev = rev
@@ -990,6 +1044,8 @@ def decode_BCNV3(ch, syms, rev):
     
     # decode LDPC (972 syms -> 486 bits)
     bits, nerr = sdr_ldpc.decode_LDPC('BCNV3', syms[28:])
+    
+    #log(3, 'SIG=%s SF=%s' % (ch.sig, hex_str(pack_bits(syms[28:]))))
     
     if test_CRC(bits):
         ch.nav.ssync = ch.nav.fsync = ch.lock
@@ -1170,15 +1226,22 @@ def sync_frame(ch, preamb, bits):
     if np.all(bits[:N] == preamb) and np.all(bits[-N:] == preamb):
         log(4, '$LOG,%.3f,%s,%d,FRAME SYNC (N)' % (ch.time, ch.sig, ch.prn))
         return 0 # normal
-    
+     
     if np.all(bits[:N] != preamb) and np.all(bits[-N:] != preamb):
         log(4, '$LOG,%.3f,%s,%d,FRAME SYNC (R)' % (ch.time, ch.sig, ch.prn))
         return 1 # reversed
     return -1
 
-# test CRC (CRC24Q) ------------------------------------------------------------
+# test CRC24Q ------------------------------------------------------------------
 def test_CRC(bits):
     N = (len(bits) - 24 + 7) // 8 * 8
     buff = pack_bits(bits, N + 24 - len(bits)) # aligned right
     return sdr_rtk.crc24q(buff, N // 8) == sdr_rtk.getbitu(buff, N, 24)
+
+# test CRC(250,234) ([18] 4.4) -------------------------------------------------
+def test_CRC16_GLO(bits):
+    R = 0
+    for i in range(250):
+        R = (((R << 1) & 0xFFFF) | bits[i]) ^ (0x6F63 if R & 0x8000 else 0)
+    return R == 0
 
