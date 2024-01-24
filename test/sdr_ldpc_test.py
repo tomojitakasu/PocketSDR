@@ -88,6 +88,84 @@ def test_04():
         else:
             print('test_04 (%3d) NG: nerr=%3d' % (n, nerr))
 
+# sdr_ldpc.decode_LDPC('BCNV1_SF2') --------------------------------------------
+def test_05():
+    hex = 'E29417E5E488CFF56B7400A6E5A913FFDDFDA2BC2D24FFDE13' + \
+          '646E5871242E58AF0ABB304DEDF129AA1F300113FF63FF5C33' + \
+          'FE285BF9EF7FF77D446CEC29AFFB643FF850009735FF686476' + \
+          '22A2022B600C9CDB862DACD6F7631DCA245DF40282E5EFA760' + \
+          'FEE9B388139C4556285A26804BBB190A362A57170332578BDD' + \
+          '0CC86477BE72F8652E50BFFDC15657AEB45B0CA4D72DF218CA'
+    SF2 = read_hex(hex)
+    
+    for n in range(50):
+        err_data = SF2.copy()
+        err_data[rng.integers(1200, size=n)] ^= 1
+        
+        dec_data, nerr = sdr_ldpc.decode_LDPC('BCNV1_SF2', err_data)
+        
+        if np.all(SF2[:600] == dec_data ^ 1):
+            print('test_05 (%3d) OK: nerr=%3d' % (n, nerr))
+        else:
+            print('test_05 (%3d) NG: nerr=%3d' % (n, nerr))
+
+# sdr_ldpc.decode_LDPC('BCNV1_SF3') --------------------------------------------
+def test_06():
+    hex = 'FBFFF43E4E32A1BB5BCB5F7FEFBF80040FFFFFFB92D8E297F0' + \
+          '8FDFFFFFFF8BAD2ED0ED560D1E7B17EF7E1D466C7E14095B75' + \
+          '3528732B0DBBED18F225F8E1BC388956'
+    SF3 = read_hex(hex)
+    
+    for n in range(30):
+    #for n in (0, 1, 5):
+        err_data = SF3.copy()
+        err_data[rng.integers(528, size=n)] ^= 1
+        
+        dec_data, nerr = sdr_ldpc.decode_LDPC('BCNV1_SF3', err_data)
+        
+        if np.all(SF3[:264] == dec_data ^ 1):
+            print('test_06 (%3d) OK: nerr=%3d' % (n, nerr))
+        else:
+            print('test_06 (%3d) NG: nerr=%3d' % (n, nerr))
+
+# sdr_ldpc.decode_LDPC('BCNV2') ------------------------------------------------
+def test_07():
+    hex = '5CA92F4075A0006DDCC02A522FFD64695BB0008809750F4B6C' + \
+          '0087B26E469E3B6FD2C19F13FAD5D6C360E72ED54C2607B594' + \
+          'A4CF0EDB258BBD81AFDF27A700E0BB872ACAA9B0A73B'
+    SF = read_hex(hex)
+    
+    for n in range(30):
+        err_data = SF.copy()
+        err_data[rng.integers(576, size=n)] ^= 1
+        
+        dec_data, nerr = sdr_ldpc.decode_LDPC('BCNV2', err_data)
+        
+        if np.all(SF[:288] == dec_data):
+            print('test_07 (%3d) OK: nerr=%3d' % (n, nerr))
+        else:
+            print('test_07 (%3d) NG: nerr=%3d' % (n, nerr))
+
+# sdr_ldpc.decode_LDPC('BCNV3') ------------------------------------------------
+def test_08():
+    hex = '79B9BF475BB772627ACA00937800F6435791290D282004101F' + \
+          'FEFC0000011B49C75A03DC08D2F01B2DFE098366E90DF20005' + \
+          'BC17F8265E2D8E02CD89E047DF0CEDC6740BD2CFA83AF11A1F' + \
+          '69B4788A31A3A8C49FBAA27BB5B9798E1F40C9CF58717DA2D4' + \
+          '416B00875AD79686186DAF781D981E0AAA14E7588C1'
+    SF = read_hex(hex)
+    
+    for n in range(50):
+        err_data = SF.copy()
+        err_data[rng.integers(972, size=n)] ^= 1
+        
+        dec_data, nerr = sdr_ldpc.decode_LDPC('BCNV3', err_data)
+        
+        if np.all(SF[:486] == dec_data):
+            print('test_08 (%3d) OK: nerr=%3d' % (n, nerr))
+        else:
+            print('test_08 (%3d) NG: nerr=%3d' % (n, nerr))
+
 # read HEX strings -------------------------------------------------------------
 def read_hex(str):
     N = len(str) * 4
@@ -113,3 +191,7 @@ if __name__ == '__main__':
     test_02()
     test_03()
     test_04()
+    test_05()
+    test_06()
+    test_07()
+    test_08()
