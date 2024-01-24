@@ -95,8 +95,8 @@ def sync_stat(ch):
         ('R' if ch.nav.rev else '-'))
 
 # update receiver channel status -----------------------------------------------
-def update_stat(prns, ch, ncol):
-    for i in range(ncol):
+def update_stat(prns, ch, nrow):
+    for i in range(nrow):
         print('%s' % (ESC_UCUR), end='')
     n = 2
     print_head(ch)
@@ -109,7 +109,7 @@ def update_stat(prns, ch, ncol):
                 ch[i].nav.count[0], ch[i].nav.count[1], ch[i].lost,
                 ch[i].nav.nerr, ch[i].nav.seq % 1000, ESC_RES))
             n += 1
-    for i in range(n, ncol):
+    for i in range(n, nrow):
         print('%107s' % (''))
         n += 1
     return n
@@ -537,7 +537,7 @@ if __name__ == '__main__':
     N = int(T * fs)
     buff = np.zeros(N * (MAX_BUFF + 1), dtype='complex64')
     ix = 0
-    ncol = 0
+    nrow = 0
     tt = time.time()
     log(3, '$LOG,%.3f,%s,%d,START FILE=%s FS=%.3f FI=%.3f IQ=%d TOFF=%.3f' %
         (0.0, '', 0, file, fs * 1e-6, fi * 1e-6, IQ, toff))
@@ -572,7 +572,7 @@ if __name__ == '__main__':
             
             # update receiver channel status
             if not quiet:
-                ncol = update_stat(prns, ch, ncol)
+                nrow = update_stat(prns, ch, nrow)
             
             # update plots
             if plot:
