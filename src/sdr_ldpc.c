@@ -1084,7 +1084,7 @@ static const uint16_t H_CNV2_SF3_T[][2] = { // [3] Table 6.2-13
     {175,175}, {191,191}, {207,207}, {224,224}, {240,240}, {257,257}
 };
 
-// B-CNAV1 LDPC H-matrix table {[4]} -------------------------------------------
+// B-CNAV1 LDPC H-matrix table ([4]) -------------------------------------------
 
 static const uint8_t H_BCNV1_SF2_idx[][4] = { // [4] 6.2.2.2
     { 11, 62,102,150}, {  9, 60,100,148}, {  0, 51,142,197}, { 22, 80,116,154},
@@ -1170,7 +1170,7 @@ static const uint8_t H_BCNV1_SF3_ele[][4] = { // [4] 6.2.2.3
     { 45, 15,  6,  1}, {  1, 44, 30, 24}, {  6,  1, 45, 15}, {  1, 44, 53, 24}
 };
 
-// B-CNAV2 LDPC H-matrix table {[5]} -------------------------------------------
+// B-CNAV2 LDPC H-matrix table ([5]) -------------------------------------------
 
 static const uint8_t H_BCNV2_idx[][4] = { // [5] 6.2.2
     { 19, 46, 49, 76}, {  5, 29, 53, 71}, { 17, 30, 64, 72}, { 22, 36, 59, 82},
@@ -1202,7 +1202,7 @@ static const uint8_t H_BCNV2_ele[][4] = { // [5] 6.2.2
     { 24,  1, 44, 30}, { 24,  1, 44, 30}, {  1, 44, 53, 24}, {  1, 44, 30, 24}
 };
 
-// B-CNAV3 LDPC H-matrix table {[6]} -------------------------------------------
+// B-CNAV3 LDPC H-matrix table ([6]) -------------------------------------------
 
 static const uint8_t H_BCNV3_idx[][4] = { // [6] 6.2.2
     { 19, 67,109,130}, { 27, 71, 85,161}, { 31, 78, 96,122}, {  2, 44, 83,125},
@@ -1210,9 +1210,9 @@ static const uint8_t H_BCNV3_idx[][4] = { // [6] 6.2.2
     { 13, 42,101,146}, { 18, 66,108,129}, { 27, 72,100,153}, { 29, 70, 84,160},
     { 23, 61,113,126}, {  8, 50, 89,131}, { 34, 74,111,157}, { 12, 44,100,145},
     { 22, 60,112,128}, {  0, 49,115,151}, {  6, 47,106,144}, { 33, 53, 82,140},
-	{  3, 45, 84,126}, { 38, 80,109,147}, {  9, 60, 96,141}, {  1, 43, 82,124},
-	{ 20, 77, 88,158}, { 37, 54,122,159}, {  3, 65,104,149}, {  5, 47, 86,128},
-	{  0, 42, 81,123}, { 32, 79, 97,120}, { 35, 72,112,158}, { 15, 57, 93,138},
+    {  3, 45, 84,126}, { 38, 80,109,147}, {  9, 60, 96,141}, {  1, 43, 82,124},
+    { 20, 77, 88,158}, { 37, 54,122,159}, {  3, 65,104,149}, {  5, 47, 86,128},
+    {  0, 42, 81,123}, { 32, 79, 97,120}, { 35, 72,112,158}, { 15, 57, 93,138},
     { 22, 75,107,143}, { 24, 69,102,133}, {  1, 50,116,152}, { 24, 57,119,135},
     { 17, 59, 95,140}, {  7, 45,107,145}, { 34, 51, 83,138}, { 14, 43, 99,144},
     { 21, 77,106,142}, { 16, 58, 94,139}, { 20, 68,110,131}, {  2, 48,114,150},
@@ -2253,36 +2253,6 @@ static int decode_B_LDPC(void *H, int m, int n, const uint8_t *syms,
     return valid ? nerr : -1;
 }
 
-// generate NB-LDPC parity check matrix ----------------------------------------
-static uint8_t *gen_NB_LDPC_H(int m, int n, const uint8_t H_idx[][4],
-    const uint8_t H_ele[][4])
-{
-    uint8_t *H = (uint8_t *)sdr_malloc(m * n);
-    
-    for (int i = 0; i < m; i++) {
-        for (int j = 0; j < 4; j++) {
-            H[H_idx[i][j]*m+i] = H_ele[i][j];
-        }
-    }
-    return H;
-}
-
-// decode NB-LDPC --------------------------------------------------------------
-static int decode_NB_LDPC(void *H, int m, int n, const uint8_t *syms,
-    uint8_t *syms_dec)
-{
-    // skip error correction (tentative)
-    for (int i = 0; i < m * 6; i++) {
-        syms_dec[i] = syms[i];
-    }
-    return 0;
-}
-
-// generate NB-LDPC parity check matrix ----------------------------------------
-static void free_NB_LDPC_H(uint8_t *H)
-{
-    sdr_free(H);
-}
 // decode LDPC(1200,600) of CNAV-2 subframe 2 ----------------------------------
 static int decode_LDPC_CNV2_SF2(const uint8_t *syms, uint8_t *syms_dec)
 {
@@ -2317,50 +2287,41 @@ static int decode_LDPC_CNV2_SF3(const uint8_t *syms, uint8_t *syms_dec)
     return decode_B_LDPC(H_CNV2_SF3, 274, 548, syms, syms_dec);
 }
 
-// decode LDPC(200,100) of B-CNAV1 subframe 2 ----------------------------------
+// decode NB-LDPC(200,100) of B-CNAV1 subframe 2 -------------------------------
 static int decode_LDPC_BCNV1_SF2(const uint8_t *syms, uint8_t *syms_dec)
 {
     uint8_t syms_rev[1200];
     
-    if (!H_BCNV1_SF2) {
-        H_BCNV1_SF2 = gen_NB_LDPC_H(100, 200, H_BCNV1_SF2_idx, H_BCNV1_SF2_ele);
-    }
     for (int i = 0; i < 1200; i++) {
         syms_rev[i] = syms[i] ^ (uint8_t)1;
     }
-    return decode_NB_LDPC(H_BCNV1_SF2, 100, 200, syms_rev, syms_dec);
+    return sdr_decode_NB_LDPC(H_BCNV1_SF2_idx, H_BCNV1_SF2_ele, 100, 200,
+        syms_rev, syms_dec);
 }
 
-// decode LDPC(88,44) of B-CNAV1 subframe 3 ------------------------------------
+// decode NB-LDPC(88,44) of B-CNAV1 subframe 3 ---------------------------------
 static int decode_LDPC_BCNV1_SF3(const uint8_t *syms, uint8_t *syms_dec)
 {
     uint8_t syms_rev[528];
     
-    if (!H_BCNV1_SF3) {
-        H_BCNV1_SF3 = gen_NB_LDPC_H(44, 88, H_BCNV1_SF3_idx, H_BCNV1_SF3_ele);
-    }
     for (int i = 0; i < 528; i++) {
         syms_rev[i] = syms[i] ^ (uint8_t)1;
     }
-    return decode_NB_LDPC(H_BCNV1_SF3, 44, 88, syms_rev, syms_dec);
+    return sdr_decode_NB_LDPC(H_BCNV1_SF3_idx, H_BCNV1_SF3_ele, 44, 88,
+        syms_rev, syms_dec);
 }
 
-// decode LDPC(96,48) of B-CNAV2 frame -----------------------------------------
+// decode NB-LDPC(96,48) of B-CNAV2 frame --------------------------------------
 static int decode_LDPC_BCNV2(const uint8_t *syms, uint8_t *syms_dec)
 {
-    if (!H_BCNV2) {
-        H_BCNV2 = gen_NB_LDPC_H(48, 96, H_BCNV2_idx, H_BCNV2_ele);
-    }
-    return decode_NB_LDPC(H_BCNV2, 48, 96, syms, syms_dec);
+    return sdr_decode_NB_LDPC(H_BCNV2_idx, H_BCNV2_ele, 48, 96, syms, syms_dec);
 }
 
-// decode LDPC(162,81) of B-CNAV3 frame ----------------------------------------
+// decode NB-LDPC(162,81) of B-CNAV3 frame -------------------------------------
 static int decode_LDPC_BCNV3(const uint8_t *syms, uint8_t *syms_dec)
 {
-    if (!H_BCNV3) {
-        H_BCNV3 = gen_NB_LDPC_H(81, 162, H_BCNV3_idx, H_BCNV3_ele);
-    }
-    return decode_NB_LDPC(H_BCNV3, 81, 162, syms, syms_dec);
+    return sdr_decode_NB_LDPC(H_BCNV3_idx, H_BCNV3_ele, 81, 162, syms,
+        syms_dec);
 }
 
 // decode LDPC(1200,600) of NavIC L1-SPS NAV subframe 2 ------------------------
