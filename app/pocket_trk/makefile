@@ -28,7 +28,7 @@ TARGET = pocket_trk fftw_wisdom
 all: $(TARGET)
 
 pocket_trk: pocket_trk.o sdr_cmn.o sdr_func.o sdr_code.o sdr_code_gal.o \
-  sdr_ch.o sdr_nav.o sdr_fec.o sdr_ldpc.o
+  sdr_ch.o sdr_nav.o sdr_fec.o sdr_ldpc.o sdr_nb_ldpc.o
 fftw_wisdom: fftw_wisdom.o sdr_cmn.o sdr_func.o
 
 sdr_cmn.o: $(SRC)/sdr_cmn.c
@@ -47,6 +47,8 @@ sdr_fec.o: $(SRC)/sdr_fec.c
 	$(CC) -c $(CFLAGS) $(SRC)/sdr_fec.c
 sdr_ldpc.o: $(SRC)/sdr_ldpc.c
 	$(CC) -c $(CFLAGS) $(SRC)/sdr_ldpc.c
+sdr_nb_ldpc.o: $(SRC)/sdr_nb_ldpc.c
+	$(CC) -c $(CFLAGS) $(SRC)/sdr_nb_ldpc.c
 
 pocket_trk.o: $(SRC)/pocket_sdr.h
 fftw_wisdom.o: $(SRC)/pocket_sdr.h
@@ -56,6 +58,7 @@ sdr_code.o  : $(SRC)/pocket_sdr.h
 sdr_ch.o    : $(SRC)/pocket_sdr.h
 sdr_nav.o   : $(SRC)/pocket_sdr.h
 sdr_ldpc.o  : $(SRC)/pocket_sdr.h
+sdr_nb_ldpc.o: $(SRC)/pocket_sdr.h
 
 clean:
 	rm -f $(TARGET) *.exe *.o *.stackdump
