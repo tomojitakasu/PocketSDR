@@ -1,28 +1,28 @@
-# **Pocket SDR - An Open-Source GNSS SDR, ver. 0.10**
+# **Pocket SDR - An Open-Source GNSS SDR, ver. 0.11**
 
 ## **Overview**
 
 Pocket SDR is an open-source GNSS (Global Navigation Satellite System) receiver
-based on the SDR (software defined radio) technology. It consists of a RF front-
-end device, some utilities for the device and GNSS-SDR APs (application programs)
+based on the SDR (software defined radio) technology. It consists of an RF front-
+end device, some utilities for the device, and GNSS-SDR APs (application programs)
 written in Python and C. It supports almost all signals for GPS, GLONASS,
-Galileo, QZSS, BeiDou, NavIC and SBAS.
+Galileo, QZSS, BeiDou, NavIC, and SBAS.
 
-The RF front-end device consists of 2 CH Maxim MAX2771 GNSS RF front-end IC
-(LNA, mixer, filter, ADC, frequency synthesizer) and Cypress EZ-USB FX2LP USB
+The RF front-end device consists of 2 CH Maxim MAX2771 GNSS RF front-end ICs
+(LNA, mixer, filter, ADC, frequency synthesizer) and a Cypress EZ-USB FX2LP USB
 2.0 controller to connect to host PCs. The front-end CH1 is dedicated for GNSS
-L1 band (1525 - 1610 MHz) and CH2 is for GNSS L2/L5/L6 band (1160 - 1290 MHz).
-The frequency of the reference oscillator (TCXO) is 24.000 MHz and ADC sampling
+L1 band (1525 - 1610 MHz), and CH2 is for GNSS L2/L5/L6 band (1160 - 1290 MHz).
+The frequency of the reference oscillator (TCXO) is 24.000 MHz, and the ADC sampling
 frequency can be configured up to 32 MHz.
 
 Pocket SDR contains some utility programs for the RF front-end device to
 configure the device, capture and dump the digitized IF (inter-frequency) data.
-These supports Windows, Linux and other environments.
+These utilities support Windows, Linux, and other environments.
 
 Pocket SDR also provides GNSS-SDR APs to show the PSD (power spectrum density)
-of captured IF data, search the GNSS signals, track these signals and decode
+of captured IF data, search the GNSS signals, track these signals, and decode
 navigation data in them. The supported GNSS signals are as follows. For details
-for these signals and signal IDs used in the Pocket SDR APs, refer 
+on these signals and signal IDs used in the Pocket SDR APs, refer 
 [Pocket SDR Signal IDs](/doc/signal_IDs.pdf).
 
 * **GPS**: L1C/A, L1C-D, L1C-P, L2C-M, L5-I, L5-Q
@@ -215,10 +215,10 @@ CH   SIG PRN STATE  LOCK(s) C/N0 (dB-Hz)         COFF(ms) DOP(Hz)    ADR(cyc) SY
 26  L1CA  26  LOCK     4.99 45.8 ||||||||||     0.7427075 -1445.7     -7211.6 -B--     0    0    0   0
 31  L1CA  31  LOCK     4.99 45.0 ||||||||||     0.7491922 -3013.1    -15036.7 -B--     0    0    0   0
 ...
-    $ pocket_trk.py ch1.bin -f 12 -fi 3 -sig E1B -prn 18 -p
-    ...
-    $ pocket_trk.py ch2.bin -f 12 -sig E6B -prn 4 -log trk.log -p -ts 0.2
-    ...
+$ pocket_trk.py ch1.bin -f 12 -fi 3 -sig E1B -prn 18 -p
+...
+$ pocket_trk.py ch2.bin -f 12 -sig E6B -prn 4 -log trk.log -p -ts 0.2
+...
 ``` 
 
 <img src="image/image001.jpg" width=49%>
@@ -270,8 +270,6 @@ c_sharp\controlcenter\bin\Release\CyControl.exe).
 select the F/W image <install_dir>\PocketSDR\FW\pocket_fw.iic and open it.
 * If you see "Programming succeeded." in status bar, the F/W is properly written
 to PocketSDR.
-* To use utility programs for Pocket SDR, you need to reinstall WinUSB driver for
-Pocket SDR. Refer "Installation for Windows" above.
 
 --------------------------------------------------------------------------------
 
@@ -308,4 +306,5 @@ Pocket SDR. Refer "Installation for Windows" above.
 * 2024-01-03  0.9  Add C-version of pocket_snap.py.
                    pocket_trk supports multi-signal and multi-threading
 * 2024-01-12  0.10 Support NavIC L1-SPS-D, L1-SPS-P, GLONASS L1OCd, L1OCp and L2OCp.
-
+* 2024-01-25  0.11 Support decoding of GLONASS L1OCd NAV data
+                   Support NB-LDCP error correction for BDS B1C, B2a and B2b
