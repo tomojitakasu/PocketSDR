@@ -35,6 +35,8 @@
 //      Service Navigation Signal in L3 frequency band Edition 1.0, 2016
 //  [17] NavIC Signal in Space ICD for Standard Positioning Service in L1
 //      Frequency version 1.0, August, 2023
+//  [18] GLONASS Interface Control Document Code Devision Multiple Access Open
+//      Service Navigation Signal in L1 frequency band Edition 1.0, 2016
 //
 //  Author:
 //  T.TAKASU
@@ -44,6 +46,7 @@
 //  2023-12-28  1.1  fix L1CA_SBAS, L5I, L5I_SBAS, L5SI, L5SIV, G1CA and G3OCD
 //  2024-01-06  1.2  support I1SD
 //  2024-01-12  1.3  support B1CD, B2AD, B2BI
+//  2024-01-19  1.4  support G1OCD
 //
 #include "rtklib.h"
 #include "pocket_sdr.h"
@@ -159,13 +162,23 @@ static int sync_frame(sdr_ch_t *ch, const uint8_t *preamb, int n,
     return -1;
 }
 
-// test CRC (CRC24Q) -----------------------------------------------------------
+// test CRC24Q) ----------------------------------------------------------------
 int test_CRC(const uint8_t *bits, int len_bits)
 {
     uint8_t buff[4096];
     int N = (len_bits - 24 + 7) / 8 * 8;
     sdr_pack_bits(bits, len_bits, N + 24 - len_bits, buff); // aligned right
     return rtk_crc24q(buff, N / 8) == getbitu(buff, N, 24);
+}
+
+// test CRC(250,234) ([18] 4.4) ------------------------------------------------
+int test_CRC16_GLO(const uint8_t *bits, int len_bits)
+{
+    uint16_t R = 0;
+    for (int i = 0; i < 250; i++) {
+        R = ((R << 1) | bits[i]) ^ ((R & 0x8000) ? 0x6F63 : 0);
+    }
+    return R == 0;
 }
 
 // to hex string ---------------------------------------------------------------
@@ -435,7 +448,7 @@ static void decode_CNV2(sdr_ch_t *ch, const uint8_t *syms, int rev, int toi)
     int nerr1 = sdr_decode_LDPC("CNV2_SF2", buff, 1200, SF2);
     int nerr2 = sdr_decode_LDPC("CNV2_SF3", buff + 1200, 548, SF3);
     
-    if (test_CRC(SF2, 600) && test_CRC(SF3, 274)) {
+    if (nerr1 >= 0 && nerr2 >= 0 && test_CRC(SF2, 600) && test_CRC(SF3, 274)) {
         sdr_unpack_data(toi, 9, bits);
         memcpy(bits + 9, SF2, 600);
         memcpy(bits + 609, SF3, 274);
@@ -787,6 +800,73 @@ static void decode_G1CA(sdr_ch_t *ch)
 static void decode_G2CA(sdr_ch_t *ch)
 {
     decode_G1CA(ch);
+}
+
+// decode GLONASS L1OCD nav string ---------------------------------------------
+static void decode_glo_L1OCD_str(sdr_ch_t *ch, const uint8_t *bits, int rev)
+{
+    double time = ch->time - 4e-3 * 552;
+    uint8_t buff[250];
+    
+    for (int i = 0; i < 250; i++) {
+        buff[i] = bits[i] ^ (uint8_t)rev;
+    }
+    if (test_CRC16_GLO(buff, 250)) {
+        ch->nav->fsync = ch->lock;
+        ch->nav->rev = rev;
+        sdr_pack_bits(buff, 250, 0, ch->nav->data); // GLONASS L1OCD nav string (250 bits)
+        ch->nav->seq = getbitu(ch->nav->data, 34, 16);
+        ch->nav->time_data = time;
+        ch->nav->count[0]++;
+        char str[256];
+        hex_str(ch->nav->data, 250, str);
+        sdr_log(3, "$G1OCD,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+    }
+    else {
+        ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
+        ch->nav->count[1]++;
+        sdr_log(4, "$LOG,%.3f,%s,%d,G1OCD STRING ERROR", time, ch->sig, ch->prn);
+    }
+}
+
+// search GLONASS L1OCD nav string ---------------------------------------------
+static void search_glo_L1OCD_str(sdr_ch_t *ch)
+{
+    static uint8_t preamb[] = {0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1};
+    uint8_t syms[668], bits[328];
+    
+    // swap convolutional code G1 and G2
+    for (int i = 0; i < 552; i += 2) {
+        syms[i  ] = ch->nav->syms[SDR_MAX_NSYM-552+i+1] * 255;
+        syms[i+1] = ch->nav->syms[SDR_MAX_NSYM-552+i  ] * 255;
+    }
+    // decode 1/2 FEC (552 syms -> 262 + 8 bits)
+    sdr_decode_conv(syms, 552, bits);
+    
+    // search and decode GLONASS L1OCD nav string
+    int rev = sync_frame(ch, preamb, 12, bits, 250);
+    if (rev >= 0) {
+        decode_glo_L1OCD_str(ch, bits, rev);
+    }
+}
+
+// decode G1OCD nav data ([18]) ------------------------------------------------
+static void decode_G1OCD(sdr_ch_t *ch)
+{
+    if (!sync_sec_code(ch)) { // sync secondary code
+        return;
+    }
+    if (ch->nav->fsync > 0) { // sync GLONASS L1OCD nav string
+        if (ch->lock >= ch->nav->fsync + 1000) {
+            search_glo_L1OCD_str(ch);
+        }
+        else if (ch->lock > ch->nav->fsync + 2000) {
+            ch->nav->ssync = ch->nav->fsync = 0;
+        }
+    }
+    else if (ch->lock > ch->nav->ssync + 1104) {
+        search_glo_L1OCD_str(ch);
+    }
 }
 
 // decode GLONASS L3OCD nav string ---------------------------------------------
@@ -1278,7 +1358,7 @@ static void decode_BCNV1(sdr_ch_t *ch, const uint8_t *syms, int rev, int soh)
     memcpy(bits +  14, SF2, 600);
     memcpy(bits + 614, SF3, 264);
      
-    if (test_CRC(SF2, 600) && test_CRC(SF3, 264)) {
+    if (nerr1 >= 0 && nerr2 >= 0 && test_CRC(SF2, 600) && test_CRC(SF3, 264)) {
         ch->nav->ssync = ch->nav->fsync = ch->lock;
         ch->nav->rev = rev;
         ch->nav->seq = soh;
@@ -1347,7 +1427,7 @@ static void decode_BCNV2(sdr_ch_t *ch, const uint8_t *syms, int rev)
     // decode LDPC (576 syms -> 288 bits)
     int nerr = sdr_decode_LDPC("BCNV2", buff + 24, 576, bits);
      
-    if (test_CRC(bits, 288)) {
+    if (nerr >= 0 && test_CRC(bits, 288)) {
         ch->nav->ssync = ch->nav->fsync = ch->lock;
         ch->nav->rev = rev;
         ch->nav->nerr = nerr;
@@ -1410,7 +1490,7 @@ static void decode_BCNV3(sdr_ch_t *ch, const uint8_t *syms, int rev)
     // decode LDPC (972 syms -> 486 bits)
     int nerr = sdr_decode_LDPC("BCNV3", buff + 28, 972, bits);
      
-    if (test_CRC(bits, 486)) {
+    if (nerr >= 0 && test_CRC(bits, 486)) {
         ch->nav->ssync = ch->nav->fsync = ch->lock;
         ch->nav->rev = rev;
         sdr_pack_bits(bits, 486, 0, ch->nav->data); // B-CNAV3 frame (486 bits)
@@ -1516,7 +1596,7 @@ static void decode_IRNV1(sdr_ch_t *ch, const uint8_t *syms, int rev, int toi)
     int nerr1 = sdr_decode_LDPC("IRNV1_SF2", buff, 1200, SF2);
     int nerr2 = sdr_decode_LDPC("IRNV1_SF3", buff + 1200, 548, SF3);
     
-    if (test_CRC(SF2, 600) && test_CRC(SF3, 274)) {
+    if (nerr1 >= 0 && nerr2 >= 0 && test_CRC(SF2, 600) && test_CRC(SF3, 274)) {
         sdr_unpack_data(toi, 9, bits);
         memcpy(bits + 9, SF2, 600);
         memcpy(bits + 609, SF3, 274);
@@ -1678,6 +1758,9 @@ void sdr_nav_decode(sdr_ch_t *ch)
     }
     else if (!strcmp(ch->sig, "G2CA")) {
         decode_G2CA(ch);
+    }
+    else if (!strcmp(ch->sig, "G1OCD")) {
+        decode_G1OCD(ch);
     }
     else if (!strcmp(ch->sig, "G3OCD")) {
         decode_G3OCD(ch);
