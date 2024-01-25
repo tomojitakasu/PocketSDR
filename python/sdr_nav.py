@@ -281,7 +281,7 @@ def decode_CNV2(ch, syms, rev, toi):
     SF2, nerr1 = sdr_ldpc.decode_LDPC('CNV2_SF2', syms_d[:1200])
     SF3, nerr2 = sdr_ldpc.decode_LDPC('CNV2_SF3', syms_d[1200:])
     
-    if test_CRC(SF2) and test_CRC(SF3):
+    if nerr1 >= 0 and nerr2 >= 0 and test_CRC(SF2) and test_CRC(SF3):
         bits = np.hstack([unpack_data(toi, 9), SF2, SF3])
         ch.nav.ssync = ch.nav.fsync = ch.lock
         ch.nav.rev = rev
@@ -953,7 +953,7 @@ def decode_BCNV1(ch, syms, rev, soh):
     SF3, nerr2 = sdr_ldpc.decode_LDPC('BCNV1_SF3', syms3)
     bits = np.hstack([unpack_data(ch.prn, 6), unpack_data(soh, 8), SF2, SF3])
     
-    if test_CRC(SF2) and test_CRC(SF3):
+    if nerr1 >= 0 and nerr2 >= 0 and test_CRC(SF2) and test_CRC(SF3):
         ch.nav.ssync = ch.nav.fsync = ch.lock
         ch.nav.rev = rev
         ch.nav.seq = soh
@@ -1002,7 +1002,7 @@ def decode_BCNV2(ch, syms, rev):
     
     #log(3, 'SIG=%s SF=%s' % (ch.sig, hex_str(pack_bits(syms[24:]))))
     
-    if test_CRC(bits):
+    if nerr >= 0 and test_CRC(bits):
         ch.nav.ssync = ch.nav.fsync = ch.lock
         ch.nav.rev = rev
         data = pack_bits(bits) # B-CNAV2 frame (288 bits)
@@ -1047,7 +1047,7 @@ def decode_BCNV3(ch, syms, rev):
     
     #log(3, 'SIG=%s SF=%s' % (ch.sig, hex_str(pack_bits(syms[28:]))))
     
-    if test_CRC(bits):
+    if nerr >= 0 and test_CRC(bits):
         ch.nav.ssync = ch.nav.fsync = ch.lock
         ch.nav.rev = rev
         data = pack_bits(bits) # B-CNAV3 frame (486 bits)
@@ -1124,7 +1124,7 @@ def decode_IRNV1(ch, syms, rev, toi):
     SF2, nerr1 = sdr_ldpc.decode_LDPC('IRNV1_SF2', syms_d[:1200])
     SF3, nerr2 = sdr_ldpc.decode_LDPC('IRNV1_SF3', syms_d[1200:])
     
-    if test_CRC(SF2) and test_CRC(SF3):
+    if nerr1 >= 0 and nerr2 >= 0 and test_CRC(SF2) and test_CRC(SF3):
         bits = np.hstack([unpack_data(toi, 9), SF2, SF3])
         ch.nav.ssync = ch.nav.fsync = ch.lock
         ch.nav.rev = rev
