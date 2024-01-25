@@ -11,7 +11,7 @@
 #  T.TAKASU
 #
 #  History:
-#  2024-01-23  1.0  new
+#  2024-01-25  1.0  new
 #
 from math import *
 import numpy as np
@@ -19,9 +19,9 @@ import numpy as np
 # constants --------------------------------------------------------------------
 N_GF = 6            # number of GF(q) bits
 Q_GF = 1<<N_GF      # number of GF(q) elements
-MAX_ITER = 10       # max number of iterations
-ERR_PROB = 1e-5     # error rate of input codes
+MAX_ITER = 15       # max number of iterations
 NM_EMS = 4          # LLR truncation size of EMS
+ERR_PROB = 1e-5     # error probability of input codes
 
 # GF(q) tables -----------------------------------------------------------------
 GF_VEC = ( # power -> vector ([1])
@@ -57,7 +57,7 @@ def bin2gf(syms):
             code[i] = (code[i] << 1) + syms[i*N_GF+j]
     return code
 
-# convert GF(q) to binary codes -------------------------------------------------
+# convert GF(q) codes to binary codes ------------------------------------------
 def gf2bin(code):
     n = len(code)
     syms = np.zeros(n * N_GF, dtype='uint8')
@@ -86,8 +86,8 @@ def init_LLR(code, err_prob):
     return L
 
 # parity check -----------------------------------------------------------------
-def check_parity(ie, je, he, code):
-    s = np.zeros(np.max(ie)+1, dtype='uint8')
+def check_parity(ie, je, he, m, code):
+    s = np.zeros(m, dtype='uint8')
     for i in range(len(ie)):
         s[ie[i]] ^= GF_MUL[he[i]][code[je[i]]]
     return np.all(s == 0)
@@ -119,7 +119,7 @@ def ext_min_sum(L1, L2):
         for j in idx2[:NM_EMS]:
             if L1[i] + L2[j] < Ls[i^j]:
                 Ls[i^j] = L1[i] + L2[j]
-    return Ls - np.min(Ls)
+    return Ls
 
 # decode NB-LDPC ---------------------------------------------------------------
 def decode_NB_LDPC(H_idx, H_ele, m, n, syms):
@@ -141,7 +141,8 @@ def decode_NB_LDPC(H_idx, H_ele, m, n, syms):
         V2C[i] = permute_V2C(he[i], L[je[i]])
     
     for iter in range(MAX_ITER):
-        if check_parity(ie, je, he, code):
+        # parity check
+        if check_parity(ie, je, he, m, code):
             syms_dec = gf2bin(code)
             nerr = np.count_nonzero(syms_dec ^ syms)
             return syms_dec[:m*N_GF], nerr
@@ -152,23 +153,25 @@ def decode_NB_LDPC(H_idx, H_ele, m, n, syms):
             for j in range(ne):
                 if ie[i] == ie[j] and i != j:
                     Ls = ext_min_sum(Ls, V2C[j])
+            Ls -= np.min(Ls)
             C2V[i] = permute_C2V(he[i], Ls)
         
         # update variable nodes
         for i in range(ne):
-            Ls = L[je[i]]
+            Ls = L[je[i]].copy()
             for j in range(ne):
                 if je[i] == je[j] and i != j:
                     Ls += C2V[j]
+            Ls -= np.min(Ls)
             V2C[i] = permute_V2C(he[i], Ls)
         
-        # update GF(q) codes
-        for i in range(len(code)):
-            Ls = L[i]
+        # update LLR and GF(q) codes
+        for i in range(n):
             for j in range(ne):
                 if i == je[j]:
-                    Ls += C2V[j]
-            code[i] = np.argmin(Ls)
+                    L[i] += C2V[j]
+            L[i] -= np.min(L[i])
+            code[i] = np.argmin(L[i])
     
     return gf2bin(code)[:m*N_GF], -1
 
