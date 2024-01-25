@@ -2461,6 +2461,36 @@ double sdr_sig_freq(const char *sig)
     }
     return 0.0;
 }
+
+// get satellite ID for QZSS ([3],[4],[15]) ------------------------------------
+static void sat_id_qzss(const char *sig, int prn, char *sat)
+{
+    static int sat_L1B[] = {4, 5, 8, 9};
+    static int sat_L5S[] = {2, 4, 5, 0, 0, 3, 0, 0, 0, 0, 0, 7, 8};
+    
+    if (!strcmp(sig, "L1CB") && prn >= 203 && prn <= 206) {
+        sprintf(sat, "J%02d", sat_L1B[prn-203]);
+    }
+    else if ((!strcmp(sig, "L1CA") || !strcmp(sig, "L1CD") ||
+        !strcmp(sig, "L1CP") || !strcmp(sig, "L2CM") || !strcmp(sig, "L5I") ||
+        !strcmp(sig, "L5Q") || !strcmp(sig, "L6D")) &&
+        prn >= 193 && prn <= 202) {
+        sprintf(sat, "J%02d", prn - 192);
+    }
+    else if (!strcmp(sig, "L1S") && prn >= 183 && prn <= 191) {
+        sprintf(sat, "J%02d", prn - 182);
+    }
+    else if (!strncmp(sig, "L5S", 3) && prn >= 184 && prn <= 206 &&
+        sat_L5S[prn-184]) {
+        sprintf(sat, "J%02d", sat_L5S[prn-184]);
+    }
+    else if (!strcmp(sig, "L6E") && prn >= 203 && prn <= 212) {
+        sprintf(sat, "J%02d", prn - 202);
+    }
+    else {
+        sprintf(sat, "???");
+    }
+}
  
 //------------------------------------------------------------------------------
 //  Get satellite ID.
@@ -2475,52 +2505,30 @@ double sdr_sig_freq(const char *sig)
 //
 void sdr_sat_id(const char *sig, int prn, char *sat)
 {
-    static int sat_L1B[] = {4, 5, 8, 9};
-    static int sat_L5S[] = {2, 4, 5, 0, 0, 3, 0, 0, 0, 0, 0, 7, 8};
-    
     if (sig[0] == 'L') {
-        if (prn >= 1 && prn <= 32) { // GPS
+        if (prn >= 1 && prn <= 63) { // GPS
             sprintf(sat, "G%02d", prn);
         }
         else if (prn >= 120 && prn <= 158) { // SBAS
             sprintf(sat, "S%02d", prn - 100);
         }
-        else if (!strcmp(sig, "L1CB") && prn >= 203 && prn <= 206) {
-            sprintf(sat, "J%02d", sat_L1B[prn-203]);
-        }
-        else if ((!strcmp(sig, "L1CA") || !strcmp(sig, "L1CD") ||
-            !strcmp(sig, "L1CP") || !strcmp(sig, "L2CM") || !strcmp(sig, "L5I") ||
-            !strcmp(sig, "L5Q") || !strcmp(sig, "L6D")) &&
-            prn >= 193 && prn <= 202) {
-            sprintf(sat, "J%02d", prn - 192);
-        }
-        else if (!strcmp(sig, "L1S") && prn >= 183 && prn <= 191) {
-            sprintf(sat, "J%02d", prn - 182);
-        }
-        else if (!strncmp(sig, "L5S", 3) && prn >= 184 && prn <= 206 &&
-            sat_L5S[prn-184]) {
-            sprintf(sat, "J%02d", sat_L5S[prn-184]);
-        }
-        else if (!strcmp(sig, "L6E") && prn >= 203 && prn <= 212) {
-            sprintf(sat, "J%02d", prn - 202);
-        }
-        else {
-            sprintf(sat, "???");
+        else { // QZSS
+            sat_id_qzss(sig, prn ,sat);
         }
     }
-    else if (!strcmp(sig, "G1CA") || !strcmp(sig, "G2CA")) {
+    else if (!strcmp(sig, "G1CA") || !strcmp(sig, "G2CA")) { // GLONASS (FDMA)
         sprintf(sat, "R%c%d", prn < 0 ? '-' : '+', prn < 0 ? -prn : prn);
     }
-    else if (sig[0] == 'G') {
+    else if (sig[0] == 'G') { // GLONASS (CDMA)
         sprintf(sat, "R%02d", prn);
     }
-    else if (sig[0] == 'E') {
+    else if (sig[0] == 'E') { // Galileo
         sprintf(sat, "E%02d", prn);
     }
-    else if (sig[0] == 'B') {
+    else if (sig[0] == 'B') { // BDS
         sprintf(sat, "C%02d", prn);
     }
-    else if (sig[0] == 'I') {
+    else if (sig[0] == 'I') { // NavIC
         sprintf(sat, "I%02d", prn);
     }
     else {
