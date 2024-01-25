@@ -974,28 +974,13 @@ def sig_freq(sig):
 #      sat      Satellite ID ('???': unknown)
 #
 def sat_id(sig, prn):
-    sat_L1B = (4, 5, 8, 9)
-    sat_L5S = (2, 4, 5, 0, 0, 3, 0, 0, 0, 0, 0, 7, 8)
-    
     if sig[0] == 'L':
-        if prn >= 1 and prn <= 32: # GPS
+        if prn >= 1 and prn <= 63: # GPS
             sat = 'G%02d' % (prn)
         elif prn >= 120 and prn <= 158: # SBAS
             sat = 'S%02d' % (prn - 100)
-        elif sig == 'L1CB' and prn >= 203 and prn <= 206:
-            sat = 'J%02d' % (sat_L1B[prn-203])
-        elif (sig == 'L1CA' or sig == 'L1CD' or sig == 'L1CP' or sig == 'L2CM'
-            or sig == 'L5I' or sig == 'L5Q' or sig == 'L6D') and prn >= 193 \
-            and prn <= 202:
-            sat = 'J%02d' % (prn - 192)
-        elif sig == 'L1S' and prn >= 183 and prn <= 191:
-            sat = 'J%02d' % (prn - 182)
-        elif sig[:3] == 'L5S' and prn >= 184 and prn <= 206 and sat_L5S[prn-184]:
-            sat = 'J%02d' % (sat_L5S[prn-184])
-        elif sig == 'L6E' and prn >= 203 and prn <= 212:
-            sat = 'J%02d' % (prn - 202)
-        else:
-            sat = '???'
+        else: # QZSS
+            sat = sat_id_qzss(sig, prn)
     elif sig == 'G1CA' or sig == 'G2CA':
         sat = 'R%c%d' % ('-' if prn < 0 else '+', -prn if prn < 0 else prn)
     elif sig[0] == 'G':
@@ -1006,6 +991,27 @@ def sat_id(sig, prn):
         sat = 'C%02d' % (prn)
     elif sig[0] == 'I':
         sat = 'I%02d' % (prn)
+    else:
+        sat = '???'
+    return sat
+
+# get satellite ID for QZSS ([3],[4],[15]) -------------------------------------
+def sat_id_qzss(sig, prn):
+    sat_L1B = (4, 5, 8, 9)
+    sat_L5S = (2, 4, 5, 0, 0, 3, 0, 0, 0, 0, 0, 7, 8)
+    
+    if sig == 'L1CB' and prn >= 203 and prn <= 206:
+        sat = 'J%02d' % (sat_L1B[prn-203])
+    elif (sig == 'L1CA' or sig == 'L1CD' or sig == 'L1CP' or sig == 'L2CM'
+        or sig == 'L5I' or sig == 'L5Q' or sig == 'L6D') and \
+        prn >= 193 and prn <= 202:
+        sat = 'J%02d' % (prn - 192)
+    elif sig == 'L1S' and prn >= 183 and prn <= 191:
+        sat = 'J%02d' % (prn - 182)
+    elif sig[:3] == 'L5S' and prn >= 184 and prn <= 206 and sat_L5S[prn-184]:
+        sat = 'J%02d' % (sat_L5S[prn-184])
+    elif sig == 'L6E' and prn >= 203 and prn <= 212:
+        sat = 'J%02d' % (prn - 202)
     else:
         sat = '???'
     return sat
