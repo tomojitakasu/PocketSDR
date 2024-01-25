@@ -2286,10 +2286,3 @@ def decode_B_LDPC(H, m, n, syms):
     
     return dblk[:m], nerr if valid else -1
 
-# generate NB-LDPC parity check matrix -----------------------------------------
-def gen_NB_LDPC_H(m, n, H_idx, H_ele):
-    H = np.zeros((m, n), dtype='uint8')
-    for i in range(m):
-        for j in range(4):
-            H[i][H_idx[i][j]] = H_ele[i][j]
-
