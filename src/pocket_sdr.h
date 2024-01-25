@@ -58,6 +58,7 @@ typedef struct {                // signal tracking type
     int sec_sync;               // secondary code sync status 
     int sec_pol;                // secondary code polarity 
     double err_phas;            // phase error (cyc) 
+    double err_code;            // code error (chip) 
     double sumP, sumE, sumL, sumN; // sum of correlations 
     float *code;                // resampled code 
     sdr_cpx_t *code_fft;        // code FFT
@@ -181,6 +182,10 @@ int sdr_decode_rs(uint8_t *syms);
 // sdr_ldpc.c
 int sdr_decode_LDPC(const char *type, const uint8_t *syms, int N,
     uint8_t *syms_dec);
+
+// sdr_nb_ldpc.c
+int sdr_decode_NB_LDPC(const uint8_t H_idx[][4], const uint8_t H_ele[][4],
+    int m, int n, const uint8_t *syms, uint8_t *syms_dec);
 
 #ifdef __cplusplus
 }
