@@ -30,9 +30,9 @@ extern "C" {
 #define PI  3.1415926535897932  // pi 
 #define SDR_MAX_NPRN   256      // max number of PRNs
 #define SDR_MAX_NCH    999      // max number of receiver channels
-#define SDR_MAX_NSYM   18000    // max number of symbols
+#define SDR_MAX_NSYM   2000     // max number of symbols
 #define SDR_MAX_DATA   4096     // max length of navigation data
-#define SDR_N_HIST     40       // number of P correlator history 
+#define SDR_N_HIST     1800     // number of P correlator history 
 
 #define STATE_IDLE     1        // channel state idle
 #define STATE_SRCH     2        // channel state search
