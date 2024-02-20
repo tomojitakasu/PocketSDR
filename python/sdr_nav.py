@@ -59,7 +59,7 @@ from sdr_func import *
 import sdr_fec, sdr_rtk, sdr_code, sdr_ldpc
 
 # constants --------------------------------------------------------------------
-THRES_SYNC  = 0.04      # threshold for symbol sync
+THRES_SYNC  = 0.3       # threshold for symbol sync
 THRES_LOST  = 0.003     # threshold for symbol lost
 
 BCH_CORR_TBL = ( # BCH(15,11,1) error correction table ([7] Table 5-2)
@@ -1193,8 +1193,9 @@ def sync_symb(ch, N):
     code = [-1] * n + [1] * n
     
     if ch.nav.ssync == 0:
-        P = np.dot(ch.trk.P[-2*n:].real, code) / (2 * n)
-        if abs(P) >= THRES_SYNC:
+        P = np.dot(ch.trk.P[-2*n:].real, code)
+        R = np.sum(np.abs(ch.trk.P[-2*n:].real))
+        if abs(P) >= R * THRES_SYNC:
             ch.nav.ssync = ch.lock - n
             log(4, '$LOG,%.3f,%s,%d,SYMBOL SYNC (%.3f)' % (ch.time, ch.sig, ch.prn, P))
     
