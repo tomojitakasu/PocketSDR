@@ -49,10 +49,6 @@ static const double RATIO[] = {
 // LDPC H-matrix cache ---------------------------------------------------------
 static uint8_t *H_CNV2_SF2  = NULL;
 static uint8_t *H_CNV2_SF3  = NULL;
-static uint8_t *H_BCNV1_SF2 = NULL;
-static uint8_t *H_BCNV1_SF3 = NULL;
-static uint8_t *H_BCNV2     = NULL;
-static uint8_t *H_BCNV3     = NULL;
 static uint8_t *H_IRNV1_SF2 = NULL;
 static uint8_t *H_IRNV1_SF3 = NULL;
 
@@ -2246,6 +2242,8 @@ static int decode_B_LDPC(void *H, int m, int n, const uint8_t *syms,
     int valid = check(H, dblk, pchk) == 0;
     int nerr = (int)changed(lratio, dblk, n);
     
+    memcpy(syms_dec, dblk, m);
+    
     sdr_free(lratio);
     sdr_free(dblk);
     sdr_free(pchk);
@@ -2358,7 +2356,26 @@ static int decode_LDPC_IRNV1_SF3(const uint8_t *syms, uint8_t *syms_dec)
     return decode_B_LDPC(H_IRNV1_SF3, 274, 548, syms, syms_dec);
 }
 
-// decode LDPC -----------------------------------------------------------------
+//------------------------------------------------------------------------------
+//  Decode LDPC (Low Density Parity Check) codes and correct errors.
+//
+//  args:
+//      type     (I) LDPC type
+//                     'CNV2_SF2' : GPS/QZSS L1C-D CNAV-2 SF2
+//                     'CNV2_SF3' : GPS/QZSS L1C-D CNAV-2 SF3
+//                     'BCNV1_SF2': BDS B1C-D BCNAV-1 SF2
+//                     'BCNV1_SF3': BDS B1C-D BCNAV-1 SF3
+//                     'BCNV2'    : BDS B2a-D BCNAV-2 SF
+//                     'BCNV3'    : BDS B2b-I BCNAV-3/B2b-PPP SF
+//                     'IRNV1_SF2': NavIC L1-SPS-D NAV SF2
+//                     'IRNV1_SF3': NavIC L1-SPS-D NAV SF3
+//      syms     (I) Binary codes with LDPC parity as uint8_t array (0 or 1)
+//      N        (I) Size of binary codes
+//      syms_dec (O) Decoded binary codes w/o parity as uint8_t array (0 or 1)
+//
+//  returns:
+//      Number of corrected error bits (-1: Unable error correction)
+//
 int sdr_decode_LDPC(const char *type, const uint8_t *syms, int N,
     uint8_t *syms_dec)
 {
