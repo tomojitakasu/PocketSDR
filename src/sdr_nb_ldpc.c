@@ -24,7 +24,7 @@
 #define ERR_PROB    1e-5        // error probability of input codes
 
 #define MAX_H_M     128         // max rows of H-matrix
-#define MAX_H_N     256         // max colums of H-matrix
+#define MAX_H_N     256         // max columns of H-matrix
 #define MAX_EDGE    1024        // max number of Tanner graph edges
 
 // GF(q) tables -----------------------------------------------------------------
@@ -40,7 +40,7 @@ static const uint8_t GF_POW[Q_GF] = { // vector -> power ([1])
      5, 62, 25, 11, 34, 31, 17, 47, 15, 23, 53, 51, 37, 44, 55, 40,
     10, 61, 46, 30, 50, 22, 39, 43, 29, 60, 42, 21, 20, 59, 57, 58
 };
-static uint8_t GF_MUL[Q_GF][Q_GF] = {{0}}; // multipy
+static uint8_t GF_MUL[Q_GF][Q_GF] = {{0}}; // multiply
 
 // get index of min value in array ---------------------------------------------
 static int argmin(const float *L, int n)
@@ -195,32 +195,32 @@ static void permute_C2V(uint8_t h, const float *C2V, float *C2V_p)
     }
 }
 
-// extended-min-sum (EMS) of LLRs (Ls = min(L1 + L2)) ([2]) --------------------
-static void ext_min_sum(const float *L1, const float *L2, float *Ls)
+// extended-min-sum (EMS) of LLRs (L1 = min(L1 + L2)) ([2]) --------------------
+static void ext_min_sum(float *L1, const float *L2)
 {
-    if (L1[0] < 0.0) { // first sum
-        copy_LLR(Ls, L2);
-        return;
-    }
-    float L[Q_GF], maxL;
+    float Ls[Q_GF], maxL;
     int idx1[Q_GF], idx2[Q_GF];
     
+    if (L1[0] < 0.0) { // first sum
+        copy_LLR(L1, L2);
+        return;
+    }
     argsort(L1, Q_GF, idx1);
     argsort(L2, Q_GF, idx2);
     maxL = L1[idx1[NM_EMS-1]] + L2[idx2[NM_EMS-1]];
     
     for (int i = 0; i < Q_GF; i++) {
-        L[i] = maxL;
+        Ls[i] = maxL;
     }
     for (int k = 0; k < NM_EMS; k++) {
         for (int m = 0; m < NM_EMS; m++) {
             int i = idx1[k], j = idx2[m];
-            if (L1[i] + L2[j] < L[i^j]) {
-                L[i^j] = L1[i] + L2[j];
+            if (L1[i] + L2[j] < Ls[i^j]) {
+                Ls[i^j] = L1[i] + L2[j];
             }
         }
     }
-    copy_LLR(Ls, L);
+    copy_LLR(L1, Ls);
 }
 
 // decode NB-LDPC --------------------------------------------------------------
@@ -268,7 +268,7 @@ int sdr_decode_NB_LDPC(const uint8_t H_idx[][4], const uint8_t H_ele[][4],
             Ls[0] = -1.0; // initial LLR
             for (int j = 0; j < ne; j++) {
                 if (ie[i] == ie[j] && i != j) {
-                    ext_min_sum(Ls, V2C[j], Ls);
+                    ext_min_sum(Ls, V2C[j]);
                 }
             }
             norm_LLR(Ls);
