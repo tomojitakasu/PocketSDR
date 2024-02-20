@@ -30,7 +30,7 @@
 #define MAX_DOP    5000.0   // default max Doppler for acquisition (Hz) 
 #define THRES_CN0_L 35.0    // C/N0 threshold (dB-Hz) (lock) 
 #define THRES_CN0_U 32.0    // C/N0 threshold (dB-Hz) (lost) 
-#define THRES_SYNC 0.04     // threshold for sec-code sync 
+#define THRES_SYNC 0.3      // threshold for sec-code sync 
 #define THRES_LOST 0.003    // threshold for sec-code lost
 
 #define DPI        (2.0 * PI)
@@ -204,6 +204,7 @@ static void start_track(sdr_ch_t *ch, double time, double fd, double coff,
     ch->coff = coff;
     ch->adr = 0.0;
     ch->cn0 = cn0;
+    ch->tow = -1.0;
     trk_init(ch->trk);
     sdr_nav_init(ch->nav);
 }
@@ -252,11 +253,12 @@ static void search_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff,
 static void sync_sec_code(sdr_ch_t *ch, int N)
 {
     if (ch->trk->sec_sync == 0) {
-        float P = 0.0;
+        float P = 0.0, R = 0.0;
         for (int i = 0; i < N; i++) {
             P += ch->trk->P[SDR_N_HIST-N+i][0] * ch->sec_code[i];
+            R += fabsf(ch->trk->P[SDR_N_HIST-N+i][0]);
         }
-        if (fabsf(P / N) >= THRES_SYNC) {
+        if (fabsf(P / N) >= R / N * THRES_SYNC) {
             ch->trk->sec_sync = ch->lock;
             ch->trk->sec_pol = (P > 0.0f) ? 1 : -1;
         }
@@ -417,6 +419,7 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff,
     // add P correlator outputs to history 
     sdr_add_buff(ch->trk->P, SDR_N_HIST, ch->trk->C[0], sizeof(sdr_cpx_t));
     ch->lock++;
+    if (ch->tow >= 0.0) ch->tow += ch->T;
     
     // sync and remove secondary code 
     if (ch->len_sec_code >= 2 && ch->lock * ch->T >= T_NPULLIN) {
