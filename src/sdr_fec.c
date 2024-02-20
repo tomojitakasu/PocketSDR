@@ -10,6 +10,7 @@
 //
 //  History:
 //  2022-07-08  1.0  port sdr_fec.py to C
+//  2024-01-26  1.1  sdr_decode_rs() returns number of error bits
 //
 #include "pocket_sdr.h"
 
@@ -72,6 +73,16 @@ void sdr_decode_conv(const uint8_t *data, int N, uint8_t *dec_data)
     sdr_free(bits);
 }
 
+// count bits of "1" -----------------------------------------------------------
+static int count_bits(uint8_t bits)
+{
+    int n = 0;
+    for (int i = 0; i < 8; i++) {
+        if ((bits >> i) & 1) n++;
+    }
+    return n;
+}
+
 //------------------------------------------------------------------------------
 //  Decode Reed-Solomon RS(255,223) code.
 //
@@ -80,11 +91,24 @@ void sdr_decode_conv(const uint8_t *data, int N, uint8_t *dec_data)
 //                    Symbol errors are corrected before returning the function.
 //
 //  return:
-//      Number of error symbols corrected. (-1: too many erros)
+//      Number of error bits corrected. (-1: too many errors)
 //
 int sdr_decode_rs(uint8_t *syms)
 {
+    uint8_t buff[255];
+    int nerr = 0;
+    
+    // save uncorrected symbols
+    memcpy(buff, syms, 255);
+    
     // decode RS-CCSDS (RS(255,223))
-    return decode_rs_ccsds(syms, NULL, 0, 0);
+    if (decode_rs_ccsds(syms, NULL, 0, 0) < 0) {
+        return -1;
+    }
+    // number of error bits corrected
+    for (int i = 0; i < 255; i++) {
+        nerr += count_bits(syms[i] ^ buff[i]);
+    }
+    return nerr;
 }
 
