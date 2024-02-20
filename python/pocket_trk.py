@@ -53,7 +53,7 @@ def print_head(ch):
             nch += 1
         if ch[i].state == 'SRCH':
             srch = i + 1
-    print('\r TIME(s):%10.2f%64sSRCH: %3d  LOCK:%3d/%3d' % (ch[0].time, '',
+    print('\r TIME(s):%10.2f%60sSRCH: %3d  LOCK:%3d/%3d' % (ch[0].time, '',
         srch, nch, len(ch)))
     print('%3s %4s %5s %3s %8s %4s %-12s %11s %7s %11s %4s %5s %4s %4s %3s' % (
         'CH', 'SAT', 'SIG', 'PRN', 'LOCK(s)', 'C/N0', '(dB-Hz)', 'COFF(ms)',
