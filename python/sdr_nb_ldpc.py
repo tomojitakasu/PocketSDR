@@ -124,7 +124,7 @@ def ext_min_sum(L1, L2):
 # decode NB-LDPC ---------------------------------------------------------------
 def decode_NB_LDPC(H_idx, H_ele, m, n, syms):
     
-    # initialze GF(q) tables
+    # initialize GF(q) tables
     init_table()
     
     # convert binary codes to GF(q) codes
