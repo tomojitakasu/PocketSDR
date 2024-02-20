@@ -18,7 +18,7 @@
 #define T_REACQ    60.0         // re-acquisition timeout (s)
 #define MIN_LOCK   2.0          // min lock time to print channel status (s)
 #define MAX_BUFF   8000         // max number of IF data buffer
-#define NCOL       122          // nummber of status columns
+#define NCOL       102          // nummber of status columns
 
 #define ESC_COL    "\033[34m"   // ANSI escape color blue
 #define ESC_RES    "\033[0m"    // ANSI escape reset
@@ -54,34 +54,33 @@ static void sync_stat(sdr_ch_t *ch, char *stat)
 }
 
 // print SDR receiver status header --------------------------------------------
-static int print_head(sdr_rcv_t *rcv, int opt)
+static int print_head(sdr_rcv_t *rcv)
 {
-    int nch = 0, week, nc = NCOL - 77;
-    double tow = time2gpst(utc2gpst(timeget()), &week);
+    int nch = 0, ncol = NCOL;
     
     for (int i = 0; i < rcv->nch; i++) {
         if (rcv->th[i]->ch->state == STATE_LOCK) nch++;
     }
-    if (opt) {
-        nc += 14;
-    }
     printf("\r TIME(s):%10.2f %*s%10s  SRCH:%4d  LOCK:%3d/%3d", rcv->ix * T_CYC,
-        nc, "", buff_full(rcv) ? "BUFF-FULL" : "", rcv->ich + 1, nch, rcv->nch);
-    if (opt) {
-        printf("  %10.3f", tow);
-    }
+        ncol - 55, "", buff_full(rcv) ? "BUFF-FULL" : "", rcv->ich + 1, nch,
+        rcv->nch);
+#ifdef DEBUG
+    int week;
+    double tow = time2gpst(utc2gpst(timeget()), &week);
+    printf("        %4d-%11.3f", week, tow);
+#endif
     printf("\n%3s %4s %5s %3s %8s %4s %-12s %11s %7s %11s %4s %5s %4s %4s %3s",
         "CH", "SAT", "SIG", "PRN", "LOCK(s)", "C/N0", "(dB-Hz)", "COFF(ms)",
         "DOP(Hz)", "ADR(cyc)", "SYNC", "#NAV", "#ERR", "#LOL", "NER");
-    if (opt) {
-        printf(" %3s %3s %3s %11s", "ERP", "ERC", "MT", "TOW(s)");
-    }
+#ifdef DEBUG
+    printf(" %3s %3s %3s %11s", "ERP", "ERC", "MT", "TOW(s)");
+#endif
     printf("\n");
     return 2;
 }
 
 // print SDR receiver channel status -------------------------------------------
-static int print_ch_stat(sdr_ch_t *ch, int opt)
+static int print_ch_stat(sdr_ch_t *ch)
 {
     char bar[16], stat[16];
     cn0_bar(ch->cn0, bar);
@@ -90,29 +89,32 @@ static int print_ch_stat(sdr_ch_t *ch, int opt)
         ESC_COL, ch->no, ch->sat, ch->sig, ch->prn, ch->lock * ch->T, ch->cn0,
         bar, ch->coff * 1e3, ch->fd, ch->adr, stat, ch->nav->count[0],
         ch->nav->count[1], ch->lost, ch->nav->nerr);
-    if (opt) {
-        printf(" %3.0f %3.0f %3d %11.3f", ch->trk->err_phas * 100.0,
-            ch->trk->err_code * 1e8, ch->nav->mt, ch->tow);
-    }
+#ifdef DEBUG
+    printf(" %3.0f %3.0f %3d %11.3f", ch->trk->err_phas * 100.0,
+        ch->trk->err_code * 1e8, ch->nav->mt, ch->tow);
+#endif
     printf("%s\n", ESC_RES);
     return 1;
 }
 
 // print SDR receiver status ---------------------------------------------------
-static int print_rcv_stat(sdr_rcv_t *rcv, int opt, int nrow)
+static int print_rcv_stat(sdr_rcv_t *rcv, int nrow)
 {
-    int n = 0;
+    int n = 0, ncol = NCOL;
     for (int i = 0; i < nrow; i++) {
         printf("%s", ESC_UCUR);
     }
-    n += print_head(rcv, opt);
+    n += print_head(rcv);
     for (int i = 0; i < rcv->nch; i++) {
         sdr_ch_t *ch = rcv->th[i]->ch;
         if (ch->state != STATE_LOCK || ch->lock * ch->T < MIN_LOCK) continue;
-        n += print_ch_stat(ch, opt);
+        n += print_ch_stat(ch);
     }
+#ifdef DEBUG
+    ncol += 27;
+#endif
     for ( ; n < nrow; n++) {
-        printf("%*s\n", NCOL, "");
+        printf("%*s\n", ncol, "");
     }
     fflush(stdout);
     return n;
@@ -194,7 +196,6 @@ static int ch_th_start(sdr_ch_th_t *th)
 // stop SDR receiver channel ---------------------------------------------------
 static void ch_th_stop(sdr_ch_th_t *th)
 {
-    if (!th->state) return;
     th->state = 0;
     pthread_join(th->thread, NULL);
 }
@@ -214,7 +215,7 @@ static void ch_th_stop(sdr_ch_th_t *th)
 //      fmt      (I) IF data format
 //                     SDR_FMT_INT8: int8
 //                     SDR_FMT_RAW : packed raw
-//      IQ       (I) sampling types of IF data (1:I-sampling, 2:I/Q-sampling)
+//      IQ       (I) sampling types of IF data (1:I-sampling, 2:IQ-sampling)
 //                     IQ[0]: CH1
 //                     IQ[1]: CH2 (packed raw format only)
 //
@@ -314,7 +315,7 @@ static int rcv_read_data(sdr_rcv_t *rcv, int64_t ix, FILE *fp)
             rcv->buff[0][i][1] = 0.0f;
         }
     }
-    else if (rcv->IQ[0] == 2) { // I/Q-sampling
+    else if (rcv->IQ[0] == 2) { // IQ-sampling
         for (int j = 0; j < rcv->N; i++, j++) {
             rcv->buff[0][i][0] =  rcv->raw[j*2  ];
             rcv->buff[0][i][1] = -rcv->raw[j*2+1];
@@ -362,7 +363,6 @@ static void rcv_update_srch(sdr_rcv_t *rcv)
         
         // re-acquisition, assisted-acquisition or short code cycle
         if (re_acq(rcv, ch) || assist_acq(rcv, ch) || ch->T <= 5e-3) {
-        //if (re_acq(rcv, ch) || assist_acq(rcv, ch)) {
             ch->state = STATE_SRCH;
             break;
         }
@@ -383,7 +383,10 @@ static void rcv_wait(sdr_rcv_t *rcv)
 static void *rcv_thread(void *arg)
 {
     sdr_rcv_t *rcv = (sdr_rcv_t *)arg;
-    int nrow = 0, opt = 1;
+    int nrow = 0;
+    
+    sdr_log(3, "$LOG,%.3f,%s,%d,START NCH=%d FMT=%d IQ=%d,%d", 0.0, "", 0,
+        rcv->nch, rcv->fmt, rcv->IQ[0], rcv->IQ[1]);
     
     if (rcv->tint[0] > 0.0) {
         printf("%s", ESC_HCUR);
@@ -393,14 +396,17 @@ static void *rcv_thread(void *arg)
             out_log_time(ix * T_CYC);
         }
         // read IF data
-        if (!rcv_read_data(rcv, ix, rcv->fp)) break;
-        
+        if (!rcv_read_data(rcv, ix, rcv->fp)) {
+            sdr_sleep_msec(500);
+            rcv->state = 0;
+            break;
+        }
         // update signal search channel
         rcv_update_srch(rcv);
         
         // print receiver status
         if (rcv->tint[0] > 0.0 && ix % (int)(rcv->tint[0] / T_CYC) == 0) {
-            nrow = print_rcv_stat(rcv, opt, nrow);
+            nrow = print_rcv_stat(rcv, nrow);
         }
         // suspend data reading for file input
         if (rcv->fp != stdin) {
@@ -408,9 +414,10 @@ static void *rcv_thread(void *arg)
         }
     }
     if (rcv->tint[0] > 0.0) {
-        print_rcv_stat(rcv, opt, nrow);
+        print_rcv_stat(rcv, nrow);
         printf("%s", ESC_VCUR);
     }
+    sdr_log(3, "$LOG,%.3f,%s,%d,STOP", rcv->ix * T_CYC, "", 0);
     return NULL;
 }
 
@@ -457,7 +464,6 @@ int sdr_rcv_start(sdr_rcv_t *rcv, FILE *fp, double *tint)
 //
 void sdr_rcv_stop(sdr_rcv_t *rcv)
 {
-    if (!rcv->state) return;
     for (int i = 0; i < rcv->nch; i++) {
         ch_th_stop(rcv->th[i]);
     }
