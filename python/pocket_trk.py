@@ -13,13 +13,12 @@
 #                   add option -3d
 #  2023-12-28  1.3  change receiver channel status format
 #  2024-01-12  1.4  support multiple signals
+#  2024-02-06  1.5  separate plot functions to sdr_ch_plot.py
 #
 import sys, math, time, datetime
 import numpy as np
-import matplotlib as mpl
-import matplotlib.pyplot as plt
 from sdr_func import *
-import sdr_code, sdr_ch
+import sdr_code, sdr_ch, sdr_ch_plot
 
 # constants --------------------------------------------------------------------
 CYC_SRCH = 10.0      # signal search cycle (s)
@@ -29,33 +28,6 @@ MIN_LOCK = 2.0       # min lock time to print channel status (s)
 ESC_COL = '\033[34m' # ANSI escape color blue
 ESC_RES = '\033[0m'  # ANSI escape reset
 ESC_UCUR = '\033[A'  # ANSI escape cursor up
-
-# global variable --------------------------------------------------------------
-Xp = np.zeros(1)
-Yp = np.zeros(1) * np.nan
-Zp = np.zeros(1) * np.nan
-Xt = np.zeros(1)
-Yt = np.zeros(1) * np.nan
-Zt = np.zeros(1) * np.nan
-
-# plot settings ----------------------------------------------------------------
-window = 'PocketSDR - GNSS SIGNAL TRACKING'
-size   = (9, 6)
-ylim   = 0.3
-fc, bc, lc, gc = 'darkblue', 'w', 'k', 'grey'
-#fc, bc, lc, gc = 'darkgreen', 'w', '#404040', 'grey'
-#fc, bc, lc, gc = 'yellow', '#000040', 'silver', 'grey'
-mpl.rcParams['toolbar'] = 'None'
-mpl.rcParams['font.size'] = 9
-mpl.rcParams['text.color'] = lc
-mpl.rcParams['axes.facecolor'] = bc
-mpl.rcParams['axes.edgecolor'] = lc
-rect0  = [0.080, 0.040, 0.840, 0.910]
-rect1  = [0.080, 0.568, 0.560, 0.380]
-rect2  = [0.652, 0.568, 0.280, 0.380]
-rect3  = [0.080, 0.198, 0.840, 0.320]
-rect4  = [0.080, 0.040, 0.840, 0.110]
-rect5  = [-.430, 0.000, 1.800, 1.160]
 
 # read IF data -----------------------------------------------------------------
 def read_data(fp, N, IQ, buff, ix):
@@ -83,9 +55,9 @@ def print_head(ch):
             srch = i + 1
     print('\r TIME(s):%10.2f%64sSRCH: %3d  LOCK:%3d/%3d' % (ch[0].time, '',
         srch, nch, len(ch)))
-    print('%3s %4s %5s %3s %8s %4s %-12s %11s %7s %11s %4s %5s %4s %4s %3s %3s' % (
+    print('%3s %4s %5s %3s %8s %4s %-12s %11s %7s %11s %4s %5s %4s %4s %3s' % (
         'CH', 'SAT', 'SIG', 'PRN', 'LOCK(s)', 'C/N0', '(dB-Hz)', 'COFF(ms)',
-        'DOP(Hz)', 'ADR(cyc)', 'SYNC', '#NAV', '#ERR', '#LOL', 'NER', 'SEQ'))
+        'DOP(Hz)', 'ADR(cyc)', 'SYNC', '#NAV', '#ERR', '#LOL', 'NER'))
 
 # receiver channel sync status -------------------------------------------------
 def sync_stat(ch):
@@ -93,6 +65,13 @@ def sync_stat(ch):
         ('B' if ch.nav.ssync > 0 else '-') +
         ('F' if ch.nav.fsync > 0 else '-') +
         ('R' if ch.nav.rev else '-'))
+
+# print receiver channel status ------------------------------------------------
+def print_stat(no, ch):
+    print('%s%3d %4s %5s %3d %8.2f %4.1f %-13s%11.7f %7.1f %11.1f %s %5d %4d %4d %3d%s' % (
+        ESC_COL, no, ch.sat, ch.sig, ch.prn, ch.lock * ch.T, ch.cn0,
+        cn0_bar(ch.cn0), ch.coff * 1e3, ch.fd, ch.adr, sync_stat(ch),
+        ch.nav.count[0], ch.nav.count[1], ch.lost, ch.nav.nerr, ESC_RES))
 
 # update receiver channel status -----------------------------------------------
 def update_stat(prns, ch, nrow):
@@ -102,12 +81,7 @@ def update_stat(prns, ch, nrow):
     print_head(ch)
     for i in range(len(prns)):
         if ch[i].state == 'LOCK' and ch[i].lock * ch[i].T >= MIN_LOCK:
-            print('%s%3d %4s %5s %3d %8.2f %4.1f %-13s%11.7f %7.1f %11.1f %s %5d %4d %4d %3d %3d%s' % (
-                ESC_COL, i + 1, ch[i].sat, ch[i].sig, prns[i],
-                ch[i].lock * ch[i].T, ch[i].cn0, cn0_bar(ch[i].cn0),
-                ch[i].coff * 1e3, ch[i].fd, ch[i].adr, sync_stat(ch[i]),
-                ch[i].nav.count[0], ch[i].nav.count[1], ch[i].lost,
-                ch[i].nav.nerr, ch[i].nav.seq % 1000, ESC_RES))
+            print_stat(i + 1, ch[i])
             n += 1
     for i in range(n, nrow):
         print('%107s' % (''))
@@ -117,249 +91,6 @@ def update_stat(prns, ch, nrow):
 # C/N0 bar ---------------------------------------------------------------------
 def cn0_bar(cn0):
     return '|' * np.min([int((cn0 - 30.0) / 1.5), 13])
-
-# initialize plot --------------------------------------------------------------
-def init_plot(sig, prn, ch, env, p3d, file):
-    fig = plt.figure(window, figsize=size, facecolor=bc)
-    ax0 = fig.add_axes(rect0)
-    ax0.axis('off')
-    ax0.set_title('SIG = %s, PRN = %3d, FILE = %s' % (sig, prn, file),
-        fontsize=10)
-    pos = np.array(ch.trk.pos) / ch.fs
-    if p3d:
-        ax1, p1 = plot_corr_3d(fig, rect5, env, pos)
-        ax2 = ax3 = ax4 = p2 = p3 = p4 = None
-        text = 'SQRT(I^2+Q^2)' if env else 'I * sign(IP)'
-        ax0.text(0.97, 0.85, text, color=fc, ha='right', va='top')
-        p1 = (ax0.text(0.03, 0.95, '', ha='left', va='top'),
-              ax0.text(0.03, 0.05, '', ha='left', va='bottom'),
-              ax0.text(0.97, 0.10, '', color=fc, ha='right', va='bottom'))
-    else:
-        Tc = ch.T / sdr_code.code_len(sig)
-        ax1, p1 = plot_corr_env (fig, rect1, env, pos, pos / Tc)
-        ax2, p2 = plot_corr_IQ  (fig, rect2)
-        ax3, p3 = plot_corr_time(fig, rect3)
-        ax4, p4 = plot_nav_data (fig, rect4)
-    return fig, (ax0, ax1, ax2, ax3, ax4), ([], p1, p2, p3, p4)
-
-# update plot -----------------------------------------------------------------
-def update_plot(fig, ax, p, ch, env, p3d, toff, tspan):
-    if p3d:
-        update_corr_3d(ax[1], p[1], ch, env, toff, tspan)
-    else:
-        update_corr_env (ax[1], p[1], ch, env)
-        update_corr_IQ  (ax[2], p[2], ch, tspan)
-        update_corr_time(ax[3], p[3], ch, toff, tspan)
-        update_nav_data (ax[4], p[4], ch)
-    plt.pause(1e-3)
-
-# plot correlation envelope ---------------------------------------------------
-def plot_corr_env(fig, rect, env, pos, chip):
-    ax = fig.add_axes(rect)
-    p0 = ax.plot([], [], '-', color=gc, lw=0.4)
-    p1 = ax.plot([], [], '.', color=fc, ms=2)
-    p2 = ax.plot([], [], '.', color=fc, ms=10)
-    xl = [pos[4] * 1e3, pos[-1] * 1e3]
-    if env:
-        yl = [0, ylim]
-        text = 'SQRT(I^2+Q^2)'
-    else:
-        yl = [-ylim / 3.0, ylim]
-        text = 'I * sign(IP)'
-    ax.set_xlim(xl)
-    ax.set_ylim(yl)
-    ax.plot(0.0, 0.0, '.', color=lc, ms=6)
-    ax.grid(True, lw=0.4)
-    set_axcolor(ax, lc)
-    ax.text(0.03, 0.95, text, ha='left', va='top', transform=ax.transAxes)
-    ax.text(0.97, 0.05, '(ms)', ha='right', va='bottom', transform=ax.transAxes)
-    p3 = ax.text(0.97, 0.95, '', color=fc, ha='right', va='top',
-        transform=ax.transAxes)
-    ax2 = ax.twiny()
-    ax2.set_xticks(range(-100, 101))
-    ax2.xaxis.set_ticklabels([])
-    ax2.xaxis.set_tick_params(direction='in', bottom=True, top=False)
-    xl = [chip[4], chip[-1]]
-    ax2.set_xlim(xl)
-    ax2.plot([0, 0], yl, '-', lw=0.4, color=lc)
-    ax2.plot(xl, [0, 0], '-', lw=0.4, color=lc)
-    ax2.plot(0, 0, '.', ms=6, color=lc)
-    return ax, (p0, p1, p2, p3)
-
-# update correlation envelope --------------------------------------------------
-def update_corr_env(ax, p, ch, env):
-    Tc = ch.T / sdr_code.code_len(sig)
-    x0 = ch.coff * 1e3
-    x = x0 + np.array(ch.trk.pos) / ch.fs * 1e3
-    if env:
-        y = np.abs(ch.trk.C.real)
-    else:
-        y = ch.trk.C.real * np.sign(ch.trk.C[0].real)
-    p[0][0].set_data(x[4:], y[4:])
-    p[1][0].set_data(x[4:], y[4:])
-    p[2][0].set_data(x[:3], y[:3])
-    p[3].set_text('E=%6.3f P=%6.3f L=%6.3f' % (y[1], y[0], y[2]))
-    ax.set_xlim(x[4], x[-1])
-
-# plot correlation 3D ---------------------------------------------------------
-def plot_corr_3d(fig, rect, env, pos):
-    ax = fig.add_axes(rect, projection='3d', facecolor='None')
-    yl = [pos[4] * 1e3, pos[-1] * 1e3]
-    zl = [ylim * 0.01, ylim]
-    ax.set_ylim(yl)
-    ax.set_zlim(zl)
-    ax.set_xlabel('Time (s)')
-    ax.set_ylabel('Code Offset (ms)')
-    ax.set_zlabel('Correlation')
-    ax.set_box_aspect((3, 2.5, 0.6))
-    ax.xaxis.pane.set_visible(False)
-    ax.yaxis.pane.set_visible(False)
-    ax.zaxis.pane.set_visible(False)
-    ax.grid(False)
-    ax.view_init(35, -50)
-    return ax, ()
-
-# update correlation 3D --------------------------------------------------------
-def update_corr_3d(ax, p, ch, env, toff, tspan):
-    global Xp, Yp, Zp, Xt, Yt, Zt
-    
-    for line in ax.lines:
-        line.remove()
-    N = int(tspan / ch.T)
-    time = ch.time + np.arange(-N+1, 1) * ch.T
-    t0 = toff if ch.lock < N else ch.time - N * ch.T
-    xl = [t0, t0 + N * ch.T]
-    Tc = ch.T / sdr_code.code_len(ch.sig)
-    x = np.full(len(ch.trk.pos), ch.time)
-    y0 = 0.0
-    #y0 = ch.coff * 1e3
-    y = y0 + np.array(ch.trk.pos) / ch.fs * 1e3
-    if env:
-        z = np.abs(ch.trk.C)
-    else:
-        z = ch.trk.C.real * np.sign(ch.trk.C[0].real)
-    ix = np.max(np.array(np.where(Xp <= xl[0])))
-    Xp = np.hstack([Xp[ix:], x[4:], np.nan])
-    Yp = np.hstack([Yp[ix:], y[4:], np.nan])
-    Zp = np.hstack([Zp[ix:], z[4:], np.nan])
-    ix = np.where(Xt >= xl[0])
-    Xt = np.hstack([Xt[ix], ch.time])
-    Yt = np.hstack([Yt[ix], y[0]])
-    Zt = np.hstack([Zt[ix], z[0]])
-    y1 = Yt[len(Yt)//2]
-    yl = [y1 + ch.trk.pos[4] / ch.fs * 1.3e3, y1 + ch.trk.pos[-1] / ch.fs * 1.3e3]
-    ax.plot(Xt, Yt, np.zeros(len(Zt)), '.', color=gc, ms=2)
-    ax.plot(Xt, Yt, Zt, '.', color=fc, ms=4)
-    ax.plot(Xp, Yp, Zp, '-', color=fc, lw=0.4)
-    ax.plot(x[4:], y[4:], z[4:], '-', color=fc, lw=0.8)
-    ax.plot(x[:3], y[:3], z[:3], '.', color=fc, ms=10)
-    ax.set_xlim(xl)
-    ax.set_ylim(yl)
-    ax.set_xbound(xl)
-    ax.set_ybound(yl)
-    p[0].set_text('COFF=%10.7f ms DOP=%8.1f Hz ADR=%10.1f cyc C/N0=%5.1f dB-Hz' %
-        (ch.coff * 1e3, ch.fd, ch.adr, ch.cn0))
-    p[1].set_text('SYNC=%s #NAV=%4d #ERR=%2d #LOL=%2d NER=%2d SEQ=%6d' %
-        (sync_stat(ch), ch.nav.count[0], ch.nav.count[1], ch.lost, ch.nav.nerr,
-        ch.nav.seq))
-    p[2].set_text('E=%6.3f P=%6.3f L=%6.3f' % (z[1], z[0], z[2]))
-
-# plot correlation I-Q ---------------------------------------------------------
-def plot_corr_IQ(fig, rect):
-    ax = fig.add_axes(rect)
-    p0 = ax.plot([], [], '.', color=gc, ms=1)
-    p1 = ax.plot([], [], '.', color=fc, ms=10)
-    ax.grid(True, lw=0.4)
-    ax.grid(True, lw=0.4)
-    ax.vlines(0.0, -ylim, ylim, color=lc, lw=0.4)
-    ax.hlines(0.0, -ylim, ylim, color=lc, lw=0.4)
-    ax.plot(0.0, 0.0, '.', color=lc, ms=6)
-    ax.set_xlim([-ylim, ylim])
-    ax.set_ylim([-ylim, ylim])
-    ax.set_aspect('equal')
-    ax.yaxis.set_ticklabels([])
-    set_axcolor(ax, lc)
-    ax.text(0.05, 0.95, 'IP - QP', ha='left', va='top', transform=ax.transAxes)
-    p2 = ax.text(0.95, 0.95, '', ha='right', va='top', color=fc,
-        transform=ax.transAxes)
-    return ax, (p0, p1, p2)
-
-# update correlation I-Q -------------------------------------------------------
-def update_corr_IQ(ax, p, ch, tspan):
-    N = np.min([int(tspan / ch.T), len(ch.trk.P)])
-    p[0][0].set_data(ch.trk.P[-N:].real, ch.trk.P[-N:].imag)
-    p[1][0].set_data(ch.trk.P[-1].real, ch.trk.P[-1].imag)
-    p[2].set_text('IP=%6.3f\nQP=%6.3f' % (ch.trk.P[-1].real, ch.trk.P[-1].imag))
-
-# plot correlation to time ------------------------------------------------------
-def plot_corr_time(fig, rect):
-    ax = fig.add_axes(rect)
-    p0 = ax.plot([], [], '-', color=gc, lw=0.3, ms=2)
-    p1 = ax.plot([], [], '-', color=fc, lw=0.5, ms=2)
-    p2 = ax.plot([], [], '.', color=gc, ms=10)
-    p3 = ax.plot([], [], '.', color=fc, ms=10)
-    p4 = ax.plot([], [], '.', color='r', ms=3)
-    ax.grid(True, lw=0.4)
-    ax.set_ylim(-ylim, ylim)
-    set_axcolor(ax, lc)
-    ax.text(0.955, 0.95, 'IP', ha='right', va='top', color=fc,
-        transform=ax.transAxes)
-    ax.text(0.985, 0.95, 'QP', ha='right', va='top', color=gc,
-        transform=ax.transAxes)
-    ax.text(0.985, 0.05, '(s)', ha='right', va='bottom', transform=ax.transAxes)
-    p5 = ax.text(0.015, 0.95, '', ha='left', va='top', transform=ax.transAxes)
-    p6 = ax.text(0.015, 0.05, '', ha='left', va='bottom', transform=ax.transAxes)
-    return ax, (p0, p1, p2, p3, p4, p5, p6)
-
-# update correlation to time ----------------------------------------------------
-def update_corr_time(ax, p, ch, toff, tspan):
-    N = np.min([int(tspan / ch.T), len(ch.trk.P)])
-    time = ch.time + np.arange(-N+1, 1) * ch.T
-    P = ch.trk.P[-N:]
-    p[0][0].set_data(time, P.imag)
-    p[1][0].set_data(time, P.real)
-    p[2][0].set_data(ch.time, P[-1].imag)
-    p[3][0].set_data(ch.time, P[-1].real)
-    #p[4][0].set_data(ch.nav.tsyms, np.zeros(len(ch.nav.tsyms))) # for debug
-    p[5].set_text(('COFF=%10.7f ms DOP=%8.1f Hz ADR=%10.1f cyc ' +
-        'C/N0=%5.1f dB-Hz') % (ch.coff * 1e3, ch.fd, ch.adr, ch.cn0))
-    p[6].set_text('SYNC=%s #NAV=%4d #ERR=%2d #LOL=%2d NER=%2d SEQ=%6d' % (
-         sync_stat(ch), ch.nav.count[0], ch.nav.count[1], ch.lost, ch.nav.nerr,
-         ch.nav.seq))
-    t0 = toff if ch.lock < N else ch.time - N * ch.T
-    ax.set_xlim(t0, t0 + N * ch.T * 1.008)
-
-# plot nav data ----------------------------------------------------------------
-def plot_nav_data(fig, rect):
-    ax = fig.add_axes(rect)
-    ax.grid(False)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    p0 = ax.text(-0.035, 0.48, 'NAV\nDATA', ha='center', va='center',
-        transform=ax.transAxes)
-    p1 = ax.text(0.01, 0.92, '', ha='left', va='top', color=fc,
-        transform=ax.transAxes, fontname='monospace')
-    return ax, (p0, p1)
-
-# update nav data --------------------------------------------------------------
-def update_nav_data(ax, p, ch):
-    N = len(ch.nav.data)
-    text = ''
-    for i in range(0 if N <= 4 else N - 4, N):
-        text += '%7.2f: ' % (ch.nav.data[i][0])
-        for j in range(len(ch.nav.data[i][1])):
-            text += '%02X' % (ch.nav.data[i][1][j])
-            if j >= 42:
-                text += '...'
-                break
-        text += '\n'
-    p[1].set_text(text)
-
-# set axes colors --------------------------------------------------------------
-def set_axcolor(ax, color):
-    ax.tick_params(color=color)
-    plt.setp(ax.get_xticklabels(), color=color)
-    plt.setp(ax.get_yticklabels(), color=color)
 
 # show usage -------------------------------------------------------------------
 def show_usage():
@@ -455,9 +186,10 @@ def show_usage():
 if __name__ == '__main__':
     sig, plot, env, p3d = 'L1CA', False, False, False
     sigs, prns = [], []
-    fs, fi, IQ, toff, tint, tspan = 12e6, 0.0, 1, 0.0, 0.1, 1.0
+    fs, fi, IQ, toff, tint, tspan, ylim = 12e6, 0.0, 1, 0.0, 0.1, 1.0, 0.3
     ch = {}
     file, log_file, log_lvl, quiet = '', '', 4, 0
+    fig = None
     
     i = 1
     while i < len(sys.argv):
@@ -528,7 +260,7 @@ if __name__ == '__main__':
         ch[i].state = 'SRCH'
     
     if plot:
-        fig, ax, p = init_plot(sigs[0], prns[0], ch[0], env, p3d, file)
+        fig = sdr_ch_plot.init(env, p3d, toff, tspan, ylim)
     
     if log_file != '':
         log_open(log_file)
@@ -567,6 +299,13 @@ if __name__ == '__main__':
                         ch[ix].state = 'SRCH'
                         break
             
+            # update log
+            if int(time_rcv * 1000) % 1000 == 0:
+                t = datetime.datetime.now(datetime.timezone.utc)
+                log(3, '$TIME,%.3f,%d,%d,%d,%d,%d,%.6f,UTC' % (time_rcv, t.year,
+                    t.month, t.day, t.hour, t.minute, t.second + t.microsecond
+                    * 1e-6))
+            
             if (i - 1) % int(tint / T) != 0:
                 continue
             
@@ -575,15 +314,10 @@ if __name__ == '__main__':
                 nrow = update_stat(prns, ch, nrow)
             
             # update plots
-            if plot:
-                ax[0].set_title('SIG = %s, PRN = %3d, FILE = %s, T = %7.2f s' %
-                    (ch[0].sig, ch[0].prn, file, ch[0].time), fontsize=10)
-                update_plot(fig, ax, p, ch[0], env, p3d, toff, tspan)
-            
-            # update log
-            t = datetime.datetime.now(datetime.timezone.utc)
-            log(3, '$TIME,%d,%d,%d,%d,%d,%.6f' % (t.year, t.month, t.day, t.hour,
-                t.minute, t.second + t.microsecond * 1e-6))
+            if fig:
+                sdr_ch_plot.update(fig, ch[0])
+                sdr_ch_plot.title(fig, 'SIG = %s, PRN = %3d, FILE = %s, T = %7.2f s' % (
+                    ch[0].sig, ch[0].prn, file, ch[0].time))
             
             for j in range(len(prns)):
                 if ch[j].state != 'LOCK':
@@ -607,5 +341,5 @@ if __name__ == '__main__':
     if log_file != '':
         log_close()
     
-    if plot and plt.figure(window) == fig:
-        plt.show()
+    if fig:
+        sdr_ch_plot.update(fig)
