@@ -12,20 +12,19 @@ SRC = ../../src
 ifeq ($(OS),Windows_NT)
     INSTALL = ../win32
     OPTIONS = -DWIN32 -DAVX2
-    LDLIBS = ./librtk.so -lfftw3f -lwinmm
+    LDLIBS = ./librtk.so ./libfec.so ./libldpc.so -lfftw3f -lwinmm
 else
     INSTALL = ../linux
     OPTIONS = -DAVX2
-    #OPTIONS = -DAVX512
-    LDLIBS = ./librtk.a -lfftw3f
+    LDLIBS = ./librtk.a ./libfec.a ./libldpc.a -lfftw3f
 endif
 
 INCLUDE = -I$(SRC) -I../RTKLIB/src
 #CFLAGS = -Ofast -march=native $(INCLUDE) $(OPTIONS) -Wall -fPIC -g
 CFLAGS = -Ofast -mavx2 -mfma $(INCLUDE) $(OPTIONS) -Wall -fPIC -g
-#CFLAGS = -Ofast -mavx512f $(INCLUDE) $(OPTIONS) -Wall -fPIC -g
 
-OBJ = sdr_cmn.o sdr_func.o sdr_code.o sdr_code_gal.o
+OBJ = sdr_cmn.o sdr_func.o sdr_code.o sdr_code_gal.o sdr_ch.o \
+      sdr_nav.o sdr_rcv.o sdr_fec.o sdr_ldpc.o sdr_nb_ldpc.o
 
 TARGET = libsdr.so
 
@@ -46,9 +45,33 @@ sdr_code.o : $(SRC)/sdr_code.c
 sdr_code_gal.o : $(SRC)/sdr_code_gal.c
 	$(CC) -c $(CFLAGS) $(SRC)/sdr_code_gal.c
 
+sdr_ch.o   : $(SRC)/sdr_ch.c
+	$(CC) -c $(CFLAGS) $(SRC)/sdr_ch.c
+
+sdr_nav.o  : $(SRC)/sdr_nav.c
+	$(CC) -c $(CFLAGS) $(SRC)/sdr_nav.c
+
+sdr_rcv.o  : $(SRC)/sdr_rcv.c
+	$(CC) -c $(CFLAGS) $(SRC)/sdr_rcv.c
+
+sdr_fec.o  : $(SRC)/sdr_fec.c
+	$(CC) -c $(CFLAGS) $(SRC)/sdr_fec.c
+
+sdr_ldpc.o : $(SRC)/sdr_ldpc.c
+	$(CC) -c $(CFLAGS) $(SRC)/sdr_ldpc.c
+
+sdr_nb_ldpc.o : $(SRC)/sdr_nb_ldpc.c
+	$(CC) -c $(CFLAGS) $(SRC)/sdr_nb_ldpc.c
+
 sdr_cmn.o  : $(SRC)/pocket_sdr.h
 sdr_func.o : $(SRC)/pocket_sdr.h
 sdr_code.o : $(SRC)/pocket_sdr.h
+sdr_ch.o   : $(SRC)/pocket_sdr.h
+sdr_nav.o  : $(SRC)/pocket_sdr.h
+sdr_rcv.o  : $(SRC)/pocket_sdr.h
+sdr_fec.o  : $(SRC)/pocket_sdr.h
+sdr_ldpc.o : $(SRC)/pocket_sdr.h
+sdr_nb_ldpc.o: $(SRC)/pocket_sdr.h
 
 clean:
 	rm -f $(TARGET) *.o
