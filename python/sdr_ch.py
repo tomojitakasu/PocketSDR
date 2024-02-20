@@ -27,7 +27,7 @@ B_FLL      = (10.0, 2.0)     # band-width of FLL filter (Hz) (wide, narrow)
 SP_CORR    = 0.5             # default correlator spacing (chip)
 MAX_DOP    = 5000.0          # default max Doppler for acquisition (Hz)
 THRES_CN0  = (35.0, 32.0)    # C/N0 threshold (dB-Hz) (lock, lost)
-THRES_SYNC  = 0.04           # threshold for sec-code sync
+THRES_SYNC  = 0.3            # threshold for sec-code sync
 THRES_LOST  = 0.003          # threshold for sec-code lost
 
 # general object classes -------------------------------------------------------
@@ -162,7 +162,7 @@ def search_sig(ch, time, buff, ix):
             coff = ix[1] / ch.fs
             start_track(ch, fd, coff, cn0)
             log(3, '$LOG,%.3f,%s,%d,SIGNAL FOUND (%.1f,%.1f,%.7f)' % (ch.time,
-                ch.sig, ch.prn, cn0, fd, coff))
+                ch.sig, ch.prn, cn0, fd, coff * 1e3))
         else:
             ch.state = 'IDLE'
             log(3, '$LOG,%.3f,%s,%d,SIGNAL NOT FOUND (%.1f)' % (ch.time, ch.sig,
@@ -233,9 +233,10 @@ def track_sig(ch, time, buff, ix):
 
 # sync and remove secondary code -----------------------------------------------
 def sync_sec_code(ch, N):
-    if ch.trk.sec_sync == 0:
+    if ch.trk.sec_sync == 0 and ch.lock > 3:
         P = np.dot(ch.trk.P[-N:].real, ch.sec_code) / N
-        if np.abs(P) >= THRES_SYNC:
+        R = np.mean(np.abs(ch.trk.P[-N:].real))
+        if  np.abs(P) >= R * THRES_SYNC:
             ch.trk.sec_sync = ch.lock
             ch.trk.sec_pol = 1 if P > 0.0 else -1
     elif (ch.lock - ch.trk.sec_sync) % N == 0:
