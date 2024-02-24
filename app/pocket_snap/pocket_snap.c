@@ -595,7 +595,6 @@ int main(int argc, char **argv)
         if (norm(rr, 3) == 0) {
             // position by doppler
             if (!pos_dop(data, n, spos, rr)) {
-                sdr_cpx_free(dif);
                 continue;
             }
             // force height = 0
