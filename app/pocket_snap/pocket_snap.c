@@ -6,6 +6,8 @@
 //
 //  History:
 //  2022-08-04  1.0  port pocket_snap.py to C
+//  2024-02-24  1.1  QZSS signal: L1CP -> L1CA
+//                   mask health for QZSS L6
 //
 #include "rtklib.h"
 #include "pocket_sdr.h"
@@ -64,6 +66,7 @@ static double sel_sat(gtime_t time, int sys, int prn, const double *rr,
     double rs[6] = {0}, dts[2], var, rho, e[3], pos[3], azel[2];
     int svh = 0;
     satpos(time, time, satno(sys, prn), EPHOPT_BRDC, nav, rs, dts, &var, &svh);
+    if (sys == SYS_QZS) svh &= 0xFE; // L6 mask
     if (norm(rs, 3) < 1e-3 || svh) {
         return 0.0;
     }
@@ -82,6 +85,7 @@ static void sat_pos(gtime_t time, const data_t *data, int N, const nav_t *nav,
         double rs[6] = {0}, dts[2], var;
         int svh = 0;
         satpos(time, time, data[i].sat, EPHOPT_BRDC, nav, rs, dts, &var, &svh);
+        if (satsys(data[i].sat, NULL) == SYS_QZS) svh &= 0xFE; // L6 mask
         if (svh != 0) {
             memset(rs, 0, sizeof(double) * 6);
         }
@@ -201,7 +205,7 @@ static int search_sigs(gtime_t time, int ssys, const sdr_cpx_t *dif, int len_dif
             double el, rrate = 0.0;
             el = sel_sat(time, SYS_QZS, prn, rr, nav, &rrate);
             if (el >= EL_MASK * D2R) {
-                n += search_sig(data + n, "L1CP", SYS_QZS, prn, dif, len_dif, fs,
+                n += search_sig(data + n, "L1CA", SYS_QZS, prn, dif, len_dif, fs,
                     fi, rrate);
             }
         }
@@ -235,7 +239,7 @@ static void drdot_dx(const double *rs, const double *vs, const double *x,
 static int pos_dop(const data_t *data, int N, double spos[][8], double *rr)
 {
     if (VERP) {
-        printf("pos_dop\n");
+        printf("pos_dop N=%d\n", N);
     }
     double x[4] = {0};
     
@@ -325,6 +329,7 @@ static int pos_coff(gtime_t time, const data_t *data, int N, double *rr,
             double rs[6] = {0}, dts[2], var, rho, e[3], azel[2];
             int svh = 0;
             satpos(ts, time, data[j].sat, EPHOPT_BRDC, nav, rs, dts, &var, &svh);
+            if (satsys(data[j].sat, NULL) == SYS_QZS) svh &= 0xFE; // L6 mask
             rho = geodist(rs, x, e);
             satazel(pos, e, azel);
             if (norm(rs, 3) > 1e-3 && svh == 0 && azel[1] >= EL_MASK * D2R) {
