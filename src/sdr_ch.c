@@ -11,6 +11,7 @@
 //  2023-12-28  1.3  support type and API changes.
 //  2024-01-12  1.4  ch->state: const char * -> int
 //  2024-01-16  1.5  add doppler assist for acquisition
+//  2024-03-20  1.6  modify API sdr_ch_update()
 //
 #include <ctype.h>
 #include <math.h>
@@ -100,7 +101,7 @@ static sdr_trk_t *trk_new(const char *sig, int prn, const int8_t *code,
         sdr_gen_code_fft(code, len_code, T, 0.0, fs, N, 0, trk->code_fft);
     }
     else {
-        trk->code = (float *)sdr_malloc(sizeof(float) * N);
+        trk->code = (int8_t *)sdr_malloc(sizeof(int8_t) * N);
         sdr_res_code(code, len_code, T, 0.0, fs, N, 0, trk->code);
     }
     return trk;
@@ -210,8 +211,8 @@ static void start_track(sdr_ch_t *ch, double time, double fd, double coff,
 }
 
 // search signal ---------------------------------------------------------------
-static void search_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff,
-    int len_buff, int ix)
+static void search_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff,
+    int ix)
 {
     float fd_ext = ch->acq->fd_ext; // Doppler assist
     float *fds = (fd_ext == 0.0) ? ch->acq->fds : &fd_ext;
@@ -221,8 +222,8 @@ static void search_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff,
         ch->acq->P_sum = (float *)sdr_malloc(sizeof(float) * 2 * ch->N * n);
     }
     // parallel code search and non-coherent integration 
-    sdr_search_code(ch->acq->code_fft, ch->T, buff, len_buff, ix, 2 * ch->N,
-        ch->fs, ch->fi, fds, n, ch->acq->P_sum);
+    sdr_search_code(ch->acq->code_fft, ch->T, buff, ix, 2 * ch->N, ch->fs,
+        ch->fi, fds, n, ch->acq->P_sum);
     ch->acq->n_sum++;
     
     if (ch->acq->n_sum * ch->T >= T_ACQ) {
@@ -385,8 +386,7 @@ static void CSK(sdr_ch_t *ch, const sdr_cpx_t *corr)
 }
 
 // track signal ----------------------------------------------------------------
-static void track_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff,
-    int len_buff, int ix)
+static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
 {
     double tau = time - ch->time;   // time interval (s) 
     double fc = ch->fi + ch->fd;    // IF carrier frequency with Doppler (Hz) 
@@ -403,7 +403,7 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff,
         sdr_cpx_t *corr = sdr_cpx_malloc(ch->N);
         
         // FFT correlator 
-        sdr_corr_fft(buff, len_buff, ix + i, ch->N, ch->fs, fc, phi,
+        sdr_corr_fft(buff, ix + i, ch->N, ch->fs, fc, phi,
             ch->trk->code_fft, corr);
         
         // decode L6 CSK 
@@ -413,8 +413,8 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff,
     }
     else {
         // standard correlator 
-        sdr_corr_std(buff, len_buff, ix + i, ch->N, ch->fs, fc, phi,
-            ch->trk->code, ch->trk->pos, ch->trk->npos, ch->trk->C);
+        sdr_corr_std(buff, ix + i, ch->N, ch->fs, fc, phi, ch->trk->code,
+            ch->trk->pos, ch->trk->npos, ch->trk->C);
     }
     // add P correlator outputs to history 
     sdr_add_buff(ch->trk->P, SDR_N_HIST, ch->trk->C[0], sizeof(sdr_cpx_t));
@@ -465,20 +465,18 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_cpx_t *buff,
 //  args:
 //      ch       (I) Receiver channel
 //      time     (I) Sampling time of the end of digitized IF data (s)
-//      buff     (I) buffer of digitized IF data as complex64 ndarray
-//      len_buff (I) length of buffer
+//      buff     (I) IF buffer
 //      ix       (I) index of IF data
 //
 //  return:
 //      none
 //
-void sdr_ch_update(sdr_ch_t *ch, double time, const sdr_cpx_t *buff,
-    int len_buff, int ix)
+void sdr_ch_update(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
 {
     if (ch->state == STATE_SRCH) {
-        search_sig(ch, time, buff, len_buff, ix);
+        search_sig(ch, time, buff, ix);
     }
     else if (ch->state == STATE_LOCK) {
-        track_sig(ch, time, buff, len_buff, ix);
+        track_sig(ch, time, buff, ix);
     }
 }
