@@ -64,6 +64,7 @@
 //  2024-01-06  1.11 add signal I1SD, I1SP
 //  2024-01-07  1.12 add signal G1OCD, G1OCP, G2OCP
 //  2024-01-15  1.13 add API sdr_sat_id()
+//  2024-03-20  1.14 modify API sdr_res_code()
 //
 #include <ctype.h>
 #include "pocket_sdr.h"
@@ -2547,17 +2548,17 @@ void sdr_sat_id(const char *sig, int prn, char *sat)
 //      fs       (I) Sampling frequency (Hz)
 //      N        (I) Number of samples
 //      Nz       (I) Number of zero-padding
-//      code_res (O) Resampled and zero-padded code as float array (N + Nz)
+//      code_res (O) Resampled and zero-padded code as int8_t array (N + Nz)
 //
 //  return:
 //      none
 //
 void sdr_res_code(const int8_t *code, int len_code, double T, double coff,
-    double fs, int N, int Nz, float *code_res)
+    double fs, int N, int Nz, int8_t *code_res)
 {
     double dx = len_code / T / fs;
     
-    memset(code_res, 0, sizeof(float) * (N + Nz));
+    memset(code_res, 0, sizeof(int8_t) * (N + Nz));
     
     for (int i = 0; i < N; i++) {
         code_res[i] = code[(int)((coff * fs + i) * dx) % len_code];
@@ -2587,13 +2588,12 @@ void sdr_gen_code_fft(const int8_t *code, int len_code, double T, double coff,
     static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
     static fftwf_plan plan = NULL;
     static int N_plan = 0;
-    float *code_res_f = (float *)sdr_malloc(sizeof(float) * (N + Nz));
+    double dx = len_code / T / fs;
     sdr_cpx_t *code_res = sdr_cpx_malloc(N + Nz);
     
-    sdr_res_code(code, len_code, T, coff, fs, N, Nz, code_res_f);
-    for (int i = 0; i < N + Nz; i++) {
-        code_res[i][0] = code_res_f[i];
-        code_res[i][1] = 0.0;
+    memset(code_res, 0, sizeof(sdr_cpx_t) * (N + Nz));
+    for (int i = 0; i < N; i++) {
+        code_res[i][0] = code[(int)((coff * fs + i) * dx) % len_code];
     }
     pthread_mutex_lock(&mtx);
     if (N + Nz != N_plan) {
@@ -2612,7 +2612,6 @@ void sdr_gen_code_fft(const int8_t *code, int len_code, double T, double coff,
     for (int i = 0; i < N + Nz; i++) {
         code_fft[i][1] = -code_fft[i][1];
     }
-    sdr_free(code_res_f);
     sdr_cpx_free(code_res);
 }
 
