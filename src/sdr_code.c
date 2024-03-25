@@ -2548,20 +2548,22 @@ void sdr_sat_id(const char *sig, int prn, char *sat)
 //      fs       (I) Sampling frequency (Hz)
 //      N        (I) Number of samples
 //      Nz       (I) Number of zero-padding
-//      code_res (O) Resampled and zero-padded code as int8_t array (N + Nz)
+//      code_res (O) Resampled and zero-padded code as sdr_cpx16_t array
+//                   (N + Nz)
 //
 //  return:
 //      none
 //
 void sdr_res_code(const int8_t *code, int len_code, double T, double coff,
-    double fs, int N, int Nz, int8_t *code_res)
+    double fs, int N, int Nz, sdr_cpx16_t *code_res)
 {
     double dx = len_code / T / fs;
     
-    memset(code_res, 0, sizeof(int8_t) * (N + Nz));
+    memset(code_res, 0, sizeof(sdr_cpx16_t) * (N + Nz));
     
     for (int i = 0; i < N; i++) {
-        code_res[i] = code[(int)((coff * fs + i) * dx) % len_code];
+        int8_t c = code[(int)((coff * fs + i) * dx) % len_code];
+        code_res[i].I = code_res[i].Q = c;
     }
 }
 
