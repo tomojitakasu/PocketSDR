@@ -253,7 +253,7 @@ sdr_rcv_t *sdr_rcv_new(int dev, void *dp, char **sigs, const int *prns,
         rcv->buff[i] = sdr_buff_new(rcv->N * MAX_BUFF, IQ[i]);
     }
     int ns = (fmt == SDR_FMT_INT8 && IQ[0] == 2) ? 2 : 1;
-    rcv->raw = (int8_t *)sdr_malloc(rcv->N * ns);
+    rcv->raw = (uint8_t *)sdr_malloc(rcv->N * ns);
     
     for (int i = 0; i < n && rcv->nch < SDR_MAX_NCH; i++) {
         sdr_ch_th_t *th = ch_th_new(sigs[i], prns[i], fi[i], fs, dop, rcv);
@@ -297,8 +297,8 @@ static void gen_LUT(int IQ0, int IQ1, int8_t LUT[][256])
     static const int8_t val[] = {1, 3, -1, -3};
     
     for (int i = 0; i < 256; i++) {
-        LUT[0][i] = CPX8(val[(i>>0) & 0x3], IQ0 == 1 ? 0 : -val[(i>>2) & 0x3]);
-        LUT[1][i] = CPX8(val[(i>>4) & 0x3], IQ1 == 1 ? 0 : -val[(i>>6) & 0x3]);
+        LUT[0][i] = SDR_CPX8(val[(i>>0) & 0x3], IQ0 == 1 ? 0 : -val[(i>>2) & 0x3]);
+        LUT[1][i] = SDR_CPX8(val[(i>>4) & 0x3], IQ1 == 1 ? 0 : -val[(i>>6) & 0x3]);
     }
 }
 
@@ -329,12 +329,12 @@ static int rcv_read_data(sdr_rcv_t *rcv, int64_t ix)
     }
     else if (rcv->buff[0]->IQ == 1) { // I-sampling
         for (int j = 0; j < rcv->N; i++, j++) {
-            rcv->buff[0]->data[i] = CPX8(rcv->raw[j], 0);
+            rcv->buff[0]->data[i] = SDR_CPX8(rcv->raw[j], 0);
         }
     }
     else if (rcv->buff[0]->IQ == 2) { // IQ-sampling
         for (int j = 0; j < rcv->N; i++, j++) {
-            rcv->buff[0]->data[i] = CPX8(rcv->raw[j*2], -rcv->raw[j*2+1]);
+            rcv->buff[0]->data[i] = SDR_CPX8(rcv->raw[j*2], -rcv->raw[j*2+1]);
         }
     }
     rcv->ix = ix; // IF buffer write pointer
