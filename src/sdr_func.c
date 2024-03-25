@@ -20,6 +20,7 @@
 //  2024-03-20  1.10 add API sdr_buff_new(), sdr_buff_free()
 //                   modify API sdr_read_data(), sdr_search_code(),
 //                   sdr_mix_carr(), sdr_corr_std(), sdr_corr_fft()
+//  2024-03-25  1.11 optimized
 //
 #include <math.h>
 #include <stdarg.h>
@@ -154,7 +155,21 @@ float sdr_cpx_abs(sdr_cpx_t cpx)
 void sdr_cpx_mul(const sdr_cpx_t *a, const sdr_cpx_t *b, int N, float s,
     sdr_cpx_t *c)
 {
-    for (int i = 0; i < N; i++) {
+    int i = 0;
+#ifdef AVX2
+    __m256 yr = _mm256_set_ps(-1, 1, -1, 1, -1, 1, -1, 1);
+    __m256 ys = _mm256_set1_ps(s);
+    
+    for ( ; i < N - 3; i += 4) {
+         __m256 ya = _mm256_loadu_ps((float *)(a + i));
+         __m256 yb = _mm256_loadu_ps((float *)(b + i));
+         __m256 yc = _mm256_mul_ps(ya, _mm256_mul_ps(yb, yr));
+         __m256 yd = _mm256_mul_ps(ya, _mm256_permute_ps(yb, 0xB1));
+         __m256 ye = _mm256_permute_ps(_mm256_hadd_ps(yc, yd), 0xD8);
+         _mm256_storeu_ps((float *)(c + i), _mm256_mul_ps(ye, ys));
+    }
+#endif
+    for ( ; i < N; i++) {
         c[i][0] = (a[i][0] * b[i][0] - a[i][1] * b[i][1]) * s;
         c[i][1] = (a[i][0] * b[i][1] + a[i][1] * b[i][0]) * s;
     }
@@ -404,15 +419,15 @@ static void mix_carr(const sdr_buff_t *buff, int ix, int N, double phi,
     uint32_t p = (uint32_t)(phi * scale), s = (uint32_t)(step * scale);
     int i = 0;
 #ifdef AVX2
-    __m256i yphi = _mm256_set_epi32(p+s*7, p+s*6, p+s*5, p+s*4, p+s*3, p+s*2, p+s, p);
-    __m256i ystp = _mm256_set_epi32(s*8, s*8, s*8, s*8, s*8, s*8, s*8, s*8);
+    __m256i yp = _mm256_set_epi32(p+s*7, p+s*6, p+s*5, p+s*4, p+s*3, p+s*2, p+s, p);
+    __m256i ys = _mm256_set1_epi32(s*8);
     
     for ( ; i < N - 16; i += 8) {
         int idx[8];
         __m128i xdas = _mm_loadu_si128((__m128i *)(data + i));
         __m256i ydat = _mm256_cvtepu8_epi32(xdas);
         __m256i yidx = _mm256_add_epi32(_mm256_slli_epi32(ydat, 8),
-            _mm256_srli_epi32(yphi, 24));
+            _mm256_srli_epi32(yp, 24));
         _mm256_storeu_si256((__m256i *)idx, yidx);
         IQ[i  ] = mix_tbl[idx[0]];
         IQ[i+1] = mix_tbl[idx[1]];
@@ -422,7 +437,7 @@ static void mix_carr(const sdr_buff_t *buff, int ix, int N, double phi,
         IQ[i+5] = mix_tbl[idx[5]];
         IQ[i+6] = mix_tbl[idx[6]];
         IQ[i+7] = mix_tbl[idx[7]];
-        yphi = _mm256_add_epi32(yphi, ystp);
+        yp = _mm256_add_epi32(yp, ys);
     }
 #endif
     for (p += s * i; i < N; i++, p += s) {
