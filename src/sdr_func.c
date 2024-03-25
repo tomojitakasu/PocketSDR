@@ -34,10 +34,10 @@
 #endif
 
 // constants and macros --------------------------------------------------------
-#define NTBL          256 // carrier-mixed-data LUT size
-#define CSCALE        28.0f // carrier scale (3 * sqrt(2) * scale < 127)
-#define DOP_STEP      0.5 // Doppler frequency search step (* 1 / code cycle)
-#define MAX_FFTW_PLAN 32  // max number of FFTW plans
+#define NTBL          256   // carrier-mixed-data LUT size
+#define CSCALE        10.0f // carrier scale (max(IQ) * sqrt(2) * scale < 127)
+#define DOP_STEP      0.5   // Doppler frequency search step (* 1 / code cycle)
+#define MAX_FFTW_PLAN 32    // max number of FFTW plans
 #define FFTW_FLAG     FFTW_ESTIMATE // FFTW flag
 
 #define SQR(x)        ((x) * (x))
@@ -45,7 +45,8 @@
 #define ROUND(x)      floor(x + 0.5)
 
 // global variables ------------------------------------------------------------
-static int8_t mix_tbl[NTBL][256][2] = {{{0}}}; // carrier-mixed-data LUT
+static int32_t mix_tbl_I[NTBL*256] = {0}; // carrier_I-mixed-data LUT
+static int32_t mix_tbl_Q[NTBL*256] = {0}; // carrier_Q-mixed-data LUT
 static fftwf_plan fftw_plans[MAX_FFTW_PLAN][2] = {{0}}; // FFTW plan buffer
 static int fftw_size[MAX_FFTW_PLAN] = {0}; // FFTW plan sizes
 static int log_lvl = 3;           // log level
@@ -82,8 +83,8 @@ void sdr_func_init(const char *file)
         int8_t carr_Q = (int8_t)ROUND(sin(-2.0 * PI * i / NTBL) * CSCALE);
         for (int j = 0; j < 256; j++) {
             int8_t I = CPX8_I((uint8_t)j), Q = CPX8_Q((uint8_t)j);
-            mix_tbl[i][j][0] = I * carr_I - Q * carr_Q; // I
-            mix_tbl[i][j][1] = I * carr_Q + Q * carr_I; // Q
+            mix_tbl_I[(j << 8) + i] = I * carr_I - Q * carr_Q;
+            mix_tbl_Q[(j << 8) + i] = I * carr_Q + Q * carr_I;
         }
     }
     // enable escape sequence for Windows console
@@ -306,6 +307,9 @@ void sdr_search_code(const sdr_cpx_t *code_fft, double T,
         for (int j = 0; j < N; j++) {
             P[i*N+j] += SQR(C[j][0]) + SQR(C[j][1]); // abs(C[j]) ** 2
         }
+        if (i % 22 == 21) { // release cpu
+            sdr_sleep_msec(1);
+        }
     }
     sdr_cpx_free(C);
 }
@@ -396,13 +400,36 @@ float *sdr_dop_bins(double T, float dop, float max_dop, int *len_fds)
 static void mix_carr(const sdr_buff_t *buff, int ix, int N, double phi,
     double step, int8_t *I, int8_t *Q)
 {
-    const uint8_t *buff_data = buff->data + ix;
+    const uint8_t *data = buff->data + ix;
     double p = phi + 1e-6;
+    int i = 0;
+#ifdef AVX2
+    __m256d yphi = _mm256_set_pd(p + step * 3, p + step * 2, p + step, p);
+    __m256d ystp = _mm256_set_pd(step * 4, step * 4, step * 4, step * 4);
+    __m128i xmsk = _mm_set_epi32(0xFF, 0xFF, 0xFF, 0xFF);
     
-    for (int i = 0; i < N; i++, p += step) {
-        uint8_t j = (uint8_t)p;
-        I[i] = mix_tbl[j][buff_data[i]][0];
-        Q[i] = mix_tbl[j][buff_data[i]][1];
+    for ( ; i < N - 16; i += 4) {
+        int idx[4];
+        __m128i xdas = _mm_loadu_si128((__m128i *)(data + i));
+        __m128i xdat = _mm_cvtepu8_epi32(xdas);
+        __m128i xphi = _mm_and_si128(_mm256_cvtpd_epi32(yphi), xmsk);
+        __m128i xidx = _mm_add_epi32(_mm_slli_si128(xdat, 1), xphi);
+        _mm_storeu_si128((__m128i *)idx, xidx);
+        I[i  ] = mix_tbl_I[idx[0]];
+        I[i+1] = mix_tbl_I[idx[1]];
+        I[i+2] = mix_tbl_I[idx[2]];
+        I[i+3] = mix_tbl_I[idx[3]];
+        Q[i  ] = mix_tbl_Q[idx[0]];
+        Q[i+1] = mix_tbl_Q[idx[1]];
+        Q[i+2] = mix_tbl_Q[idx[2]];
+        Q[i+3] = mix_tbl_Q[idx[3]];
+        yphi = _mm256_add_pd(yphi, ystp);
+    }
+#endif
+    for (p += step * i; i < N; i++, p += step) {
+        int idx = ((int)data[i] << 8) + (uint8_t)p;
+        I[i] = mix_tbl_I[idx];
+        Q[i] = mix_tbl_Q[idx];
     }
 }
 
@@ -422,52 +449,49 @@ void sdr_mix_carr(const sdr_buff_t *buff, int ix, int N, double fs, double fc,
     }
 }
 
-// add sum of ymm1,2 to c and clear ymm1,2 -------------------------------------
-#define SUM_YMM12() { \
-    int16_t d[16], e[16]; \
-    _mm256_storeu_si256((__m256i *)d, ymm1); \
-    _mm256_storeu_si256((__m256i *)e, ymm2); \
-    for (int j = 0; j < 16; j++) { \
-        (*c)[0] += d[j]; \
-        (*c)[1] += e[j]; \
-    } \
-    ymm1 = _mm256_setzero_si256(); \
-    ymm2 = _mm256_setzero_si256(); \
+// sum 16 bit x 16 fields ------------------------------------------------------
+#define sum_16x16(ymm, sum) { \
+    int16_t s[16]; \
+    _mm256_storeu_si256((__m256i *)s, ymm); \
+    ymm = _mm256_setzero_si256(); \
+    sum += s[0] + s[1] + s[2] + s[3] + s[4] + s[5] + s[6] + s[7] + s[8] + s[9] \
+        + s[10] + s[11] + s[12] + s[13] + s[14] + s[15]; \
 }
 
-// inner product of IQ and code ------------------------------------------------
+// inner product of IQ data and code -------------------------------------------
 static void dot_IQ_code(const int8_t *I, const int8_t *Q, const int8_t *code,
     int N, float s, sdr_cpx_t *c)
 {
     int i = 0;
-    
     (*c)[0] = (*c)[1] = 0.0f;
 #ifdef AVX2
-    __m256i ymm1 = _mm256_setzero_si256();
-    __m256i ymm2 = _mm256_setzero_si256();
-    __m256i ymm3 = _mm256_set_epi8(1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,
+    __m256i ysumI = _mm256_setzero_si256();
+    __m256i ysumQ = _mm256_setzero_si256();
+    __m256i yone = _mm256_set_epi8(1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,
         1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1);
     
-    for ( ; i < N - 31; i += 32) {
-        __m256i ymm4 = _mm256_loadu_si256((__m256i *)(I + i));
-        __m256i ymm5 = _mm256_loadu_si256((__m256i *)(Q + i));
-        __m256i ymm6 = _mm256_loadu_si256((__m256i *)(code + i)); // {-1,0,1}
-        ymm4 = _mm256_sign_epi8(ymm4, ymm6); // I[] * code[]
-        ymm5 = _mm256_sign_epi8(ymm5, ymm6); // Q[] * code[]
-        ymm4 = _mm256_maddubs_epi16(ymm3, ymm4); // 8 + 8 bit -> 16 bit
-        ymm5 = _mm256_maddubs_epi16(ymm3, ymm5);
-        ymm1 = _mm256_add_epi16(ymm4, ymm1); // sum(I * code)
-        ymm2 = _mm256_add_epi16(ymm5, ymm2); // sum(Q * code)
-        if (i % (32 * 256) == 0) SUM_YMM12()
+    for ( ; i < N - 31; i += 32, I += 32, Q += 32, code += 32) {
+        __m256i ycode = _mm256_loadu_si256((__m256i *)code); // {-1,0,1}
+        __m256i ydatI = _mm256_loadu_si256((__m256i *)I);
+        __m256i ymulI = _mm256_sign_epi8(ydatI, ycode); // I * code
+        ysumI = _mm256_add_epi16(ysumI, _mm256_maddubs_epi16(yone, ymulI));
+        __m256i ydatQ = _mm256_loadu_si256((__m256i *)Q);
+        __m256i ymulQ = _mm256_sign_epi8(ydatQ, ycode); // Q * code
+        ysumQ = _mm256_add_epi16(ysumQ, _mm256_maddubs_epi16(yone, ymulQ));
+        if (i % (32 * 128) == 0) {
+            sum_16x16(ysumI, (*c)[0])
+            sum_16x16(ysumQ, (*c)[1])
+        }
     }
-    SUM_YMM12()
+    sum_16x16(ysumI, (*c)[0])
+    sum_16x16(ysumQ, (*c)[1])
 #endif
-    for ( ; i < N; i++) {
-        (*c)[0] += I[i] * code[i];
-        (*c)[1] += Q[i] * code[i];
+    for ( ; i < N; i++, I++, Q++, code++) {
+        (*c)[0] += *I * (*code);
+        (*c)[1] += *Q * (*code);
     }
-    (*c)[0] *= s / CSCALE;
-    (*c)[1] *= s / CSCALE;
+    (*c)[0] *= s;
+    (*c)[1] *= s;
 }
 
 // standard correlator ---------------------------------------------------------
@@ -477,14 +501,15 @@ static void corr_std(const int8_t *I, const int8_t *Q, const int8_t *code,
     for (int i = 0; i < n; i++) {
         if (pos[i] > 0) {
             int M = N - pos[i];
-            dot_IQ_code(I + pos[i], Q + pos[i], code, M, 1.0f / M, corr + i);
+            dot_IQ_code(I + pos[i], Q + pos[i], code, M, 1.0f / M / CSCALE,
+                corr + i);
         }
         else if (pos[i] < 0) {
             int M = N + pos[i];
-            dot_IQ_code(I, Q, code - pos[i], M, 1.0f / M, corr + i);
+            dot_IQ_code(I, Q, code - pos[i], M, 1.0f / M / CSCALE, corr + i);
         }
         else {
-            dot_IQ_code(I, Q, code, N, 1.0f / N, corr + i);
+            dot_IQ_code(I, Q, code, N, 1.0f / N / CSCALE, corr + i);
         }
     }
 }
@@ -493,10 +518,9 @@ static void corr_std(const int8_t *I, const int8_t *Q, const int8_t *code,
 void sdr_corr_std(const sdr_buff_t *buff, int ix, int N, double fs, double fc,
     double phi, const int8_t *code, const int *pos, int n, sdr_cpx_t *corr)
 {
-    int8_t *IQ = sdr_malloc(sizeof(int8_t) * N * 2);
+    int8_t IQ[N * 2];
     sdr_mix_carr(buff, ix, N, fs, fc, phi, IQ, IQ + N);
     corr_std(IQ, IQ + N, code, N, pos, n, corr);
-    sdr_free(IQ);
 }
 
 // get FFTW plan ---------------------------------------------------------------
@@ -552,10 +576,9 @@ static void corr_fft(const int8_t *I, const int8_t *Q,
 void sdr_corr_fft(const sdr_buff_t *buff, int ix, int N, double fs, double fc,
     double phi, const sdr_cpx_t *code_fft, sdr_cpx_t *corr)
 {
-    int8_t *IQ = sdr_malloc(sizeof(int8_t) * N * 2);
+    int8_t IQ[N * 2];
     sdr_mix_carr(buff, ix, N, fs, fc, phi, IQ, IQ + N);
     corr_fft(IQ, IQ + N, code_fft, N, corr);
-    sdr_free(IQ);
 }
 
 // open log --------------------------------------------------------------------
