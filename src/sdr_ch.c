@@ -101,7 +101,7 @@ static sdr_trk_t *trk_new(const char *sig, int prn, const int8_t *code,
         sdr_gen_code_fft(code, len_code, T, 0.0, fs, N, 0, trk->code_fft);
     }
     else {
-        trk->code = (int8_t *)sdr_malloc(sizeof(int8_t) * N);
+        trk->code = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N);
         sdr_res_code(code, len_code, T, 0.0, fs, N, 0, trk->code);
     }
     return trk;
