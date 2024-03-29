@@ -14,12 +14,16 @@ else
     INSTALL = ../linux
 endif
 
+ifeq ($(shell uname -m),aarch64)
+    CONF_OPT = --build=arm
+endif
+
 TARGET = libfec.so libfec.a
 
 all :
 	DIR=`pwd`; \
 	cd $(SRC); \
-	./configure; \
+	./configure $(CONF_OPT); \
 	sed 's/-lc//' < makefile > makefile.p; \
 	mv makefile.p makefile; \
 	make; \

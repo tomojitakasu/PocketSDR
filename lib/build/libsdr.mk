@@ -11,17 +11,20 @@ SRC = ../../src
 
 ifeq ($(OS),Windows_NT)
     INSTALL = ../win32
-    OPTIONS = -DWIN32 -DAVX2
+    OPTIONS = -DWIN32 -DAVX2 -mavx2 -mfma
     LDLIBS = ./librtk.so ./libfec.so ./libldpc.so -lfftw3f -lwinmm
 else
     INSTALL = ../linux
-    OPTIONS = -DAVX2
+    OPTIONS = -DAVX2 -mavx2 -mfma
     LDLIBS = ./librtk.a ./libfec.a ./libldpc.a -lfftw3f
+endif
+ifeq ($(shell uname -m),aarch64)
+    OPTIONS = -DNEON
 endif
 
 INCLUDE = -I$(SRC) -I../RTKLIB/src
 #CFLAGS = -Ofast -march=native $(INCLUDE) $(OPTIONS) -Wall -fPIC -g
-CFLAGS = -Ofast -mavx2 -mfma $(INCLUDE) $(OPTIONS) -Wall -fPIC -g
+CFLAGS = -Ofast $(INCLUDE) $(OPTIONS) -Wall -fPIC -g
 
 OBJ = sdr_cmn.o sdr_func.o sdr_code.o sdr_code_gal.o sdr_ch.o \
       sdr_nav.o sdr_rcv.o sdr_fec.o sdr_ldpc.o sdr_nb_ldpc.o
