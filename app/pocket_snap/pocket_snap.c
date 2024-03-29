@@ -109,7 +109,7 @@ static double fine_coff(const char *sig, double fs, const float *P, int N,
 
 // search signal ----------------------------------------------------------------
 static int search_sig(data_t *data, const char *sig, int sys, int prn,
-    const sdr_cpx_t *dif, int len_dif, double fs, double fi, double rrate)
+    const sdr_buff_t *dif, double fs, double fi, double rrate)
 {
     int sat = satno(sys, prn);
     double T = sdr_code_cyc(sig);
@@ -134,9 +134,9 @@ static int search_sig(data_t *data, const char *sig, int sys, int prn,
     // parallel code search
     float *P = (float *)sdr_malloc(sizeof(float) * 2 * N * len_fds);
     
-    for (int i = 0; i < len_dif - 2 * N + 1; i += N) {
-        sdr_search_code(code_fft[sat-1], T, dif, len_dif, i, 2 * N, fs, fi, fds,
-            len_fds, P);
+    for (int i = 0; i < dif->N - 2 * N + 1; i += N) {
+        sdr_search_code(code_fft[sat-1], T, dif, i, 2 * N, fs, fi, fds, len_fds,
+            P);
     }
     // max correlation power
     int ix[2] = {0};
@@ -163,8 +163,8 @@ static int search_sig(data_t *data, const char *sig, int sys, int prn,
 }
 
 // search signals ---------------------------------------------------------------
-static int search_sigs(gtime_t time, int ssys, const sdr_cpx_t *dif, int len_dif,
-    double fs, double fi, const double *rr, const nav_t *nav, data_t *data)
+static int search_sigs(gtime_t time, int ssys, const sdr_buff_t *dif, double fs,
+    double fi, const double *rr, const nav_t *nav, data_t *data)
 {
     if (VERP) {
         printf("search_sigs\n");
@@ -175,8 +175,8 @@ static int search_sigs(gtime_t time, int ssys, const sdr_cpx_t *dif, int len_dif
             double el, rrate = 0.0;
             el = sel_sat(time, SYS_GPS, prn, rr, nav, &rrate);
             if (el >= EL_MASK * D2R) {
-                n += search_sig(data + n, "L1CA", SYS_GPS, prn, dif, len_dif, fs,
-                    fi, rrate);
+                n += search_sig(data + n, "L1CA", SYS_GPS, prn, dif, fs, fi,
+                    rrate);
             }
         }
     }
@@ -185,8 +185,8 @@ static int search_sigs(gtime_t time, int ssys, const sdr_cpx_t *dif, int len_dif
             double el, rrate = 0.0;
             el = sel_sat(time, SYS_GAL, prn, rr, nav, &rrate);
             if (el >= EL_MASK * D2R) {
-                n += search_sig(data + n, "E1C", SYS_GAL, prn, dif, len_dif, fs,
-                    fi, rrate);
+                n += search_sig(data + n, "E1C", SYS_GAL, prn, dif, fs, fi,
+                    rrate);
             }
         }
     }
@@ -195,8 +195,8 @@ static int search_sigs(gtime_t time, int ssys, const sdr_cpx_t *dif, int len_dif
             double el, rrate = 0.0;
             el = sel_sat(time, SYS_CMP, prn, rr, nav, &rrate);
             if (el >= EL_MASK * D2R) {
-                n += search_sig(data + n, "B1CP", SYS_CMP, prn, dif, len_dif, fs,
-                    fi, rrate);
+                n += search_sig(data + n, "B1CP", SYS_CMP, prn, dif, fs, fi,
+                    rrate);
             }
         }
     }
@@ -205,8 +205,8 @@ static int search_sigs(gtime_t time, int ssys, const sdr_cpx_t *dif, int len_dif
             double el, rrate = 0.0;
             el = sel_sat(time, SYS_QZS, prn, rr, nav, &rrate);
             if (el >= EL_MASK * D2R) {
-                n += search_sig(data + n, "L1CA", SYS_QZS, prn, dif, len_dif, fs,
-                    fi, rrate);
+                n += search_sig(data + n, "L1CA", SYS_QZS, prn, dif, fs, fi,
+                    rrate);
             }
         }
     }
@@ -581,17 +581,17 @@ int main(int argc, char **argv)
             break;
         }
         // read DIF data
-        int N, IQ = (fi > 0) ? 1 : 2;
-        sdr_cpx_t *dif = sdr_read_data(file, fs, IQ, tint, toff + ti * i, &N);
+        int IQ = (fi > 0) ? 1 : 2;
+        sdr_buff_t *dif = sdr_read_data(file, fs, IQ, tint, toff + ti * i);
         if (!dif) {
             break;
         }
         // search signals
-        int n = search_sigs(tt, ssys, dif, N, fs, fi, rr, &nav, data);
+        int n = search_sigs(tt, ssys, dif, fs, fi, rr, &nav, data);
         if (n <= 0) {
             continue;
         }
-        sdr_cpx_free(dif);
+        sdr_buff_free(dif);
         
         // satellite position and velocity
         double spos[MAX_SAT][8];
