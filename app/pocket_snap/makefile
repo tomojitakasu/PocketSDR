@@ -13,16 +13,19 @@ INCLUDE = -I$(SRC) -I$(LIB)/RTKLIB/src
 ifeq ($(OS),Windows_NT)
     #LDLIBS = $(LIB)/win32/librtk.a -lfftw3f -lwinmm -lws2_32
     LDLIBS = $(LIB)/win32/librtk.a -lfftw3f -lfftw3f_threads -lwinmm -lws2_32
-    OPTIONS = -DWIN32 -DAVX2 -Wno-unused-but-set-variable
+    OPTIONS = -DWIN32 -DAVX2 -mavx2 -mfma
 else
     LDLIBS = $(LIB)/linux/librtk.a -lfftw3f -lfftw3f_threads -lpthread -lm
-    OPTIONS = -DAVX2 -Wno-unused-but-set-variable
+    OPTIONS = -DAVX2 -mavx2 -mfma
+endif
+ifeq ($(shell uname -m),aarch64)
+    OPTIONS = -DNEON
 endif
 
-WARNOPT = -Wall -Wextra -Wno-unused-parameter
+WARNOPT = -Wall -Wextra -Wno-unused-parameter -Wno-unused-but-set-variable
 
 #CFLAGS = -Ofast -march=native $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
-CFLAGS = -Ofast -mavx2 -mfma $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
+CFLAGS = -Ofast $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
 
 TARGET = pocket_snap
 
