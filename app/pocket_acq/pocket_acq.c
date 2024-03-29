@@ -26,9 +26,9 @@ static void show_usage(void)
 }
 
 // search signal ---------------------------------------------------------------
-int search_sig(const char *sig, int prn, const sdr_cpx_t *data, int len_data,
-    double fs, double fi, float ref_dop, float max_dop, const int *opt,
-    double *dop, double *coff, float *cn0)
+int search_sig(const char *sig, int prn, const sdr_buff_t *buff, double fs,
+    double fi, float ref_dop, float max_dop, const int *opt, double *dop,
+    double *coff, float *cn0)
 {
     int8_t *code;
     int len_code;
@@ -52,9 +52,8 @@ int search_sig(const char *sig, int prn, const sdr_cpx_t *data, int len_data,
     
     // parallel code search and non-coherent integration
     float *P = (float *)sdr_malloc(sizeof(float) * (N + Nz) * len_fds);
-    for (int i = 0; i < len_data - 2 * N + 1; i += N) {
-        sdr_search_code(code_fft, T, data, len_data, i, N + Nz, fs, fi, fds,
-            len_fds, P);
+    for (int i = 0; i < buff->N - 2 * N + 1; i += N) {
+        sdr_search_code(code_fft, T, buff, i, N + Nz, fs, fi, fds, len_fds, P);
     }
     // max correlation power and C/N0
     int ix[2] = {0};
@@ -183,10 +182,8 @@ int main(int argc, char **argv)
     sdr_func_init(fftw_wisdom);
     
     // read IF data
-    sdr_cpx_t *data;
-    int len_data;
-    if (!(data = sdr_read_data(file, fs, (fi > 0) ? 1 : 2, T + Tcode, toff,
-        &len_data))) {
+    sdr_buff_t *buff;
+    if (!(buff = sdr_read_data(file, fs, (fi > 0) ? 1 : 2, T + Tcode, toff))) {
         exit(-1);
     }
     uint32_t tick = sdr_get_tick();
@@ -196,8 +193,8 @@ int main(int argc, char **argv)
         double dop, coff;
         float cn0;
         
-        if (!search_sig(sig, prns[i], data, len_data, fs, fi, ref_dop, max_dop,
-                opt, &dop, &coff, &cn0)) {
+        if (!search_sig(sig, prns[i], buff, fs, fi, ref_dop, max_dop, opt, &dop,
+                &coff, &cn0)) {
             continue;
         }
         printf("%sSIG= %-4s, %s= %3d, COFF= %8.5f ms, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz%s\n",
