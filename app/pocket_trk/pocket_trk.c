@@ -192,7 +192,7 @@ int main(int argc, char **argv)
             sscanf(argv[++i], "%lf,%lf", dop, dop + 1);
         }
         else if (!strcmp(argv[i], "-r")) {
-            fmt = SDR_FMT_RAW;
+            fmt = SDR_FMT_RAW8;
         }
         else if (!strcmp(argv[i], "-IQ")) {
             IQ[0] = IQ[1] = 2;
@@ -237,7 +237,7 @@ int main(int argc, char **argv)
             fprintf(stderr, "file open error: %s\n", file);
             exit(-1);
         }
-        int ns = (fmt == SDR_FMT_RAW || IQ[0] == 1) ? 1 : 2;
+        int ns = (fmt == SDR_FMT_RAW8 || IQ[0] == 1) ? 1 : 2;
         fseek(fp, (long)(toff * fs * ns), SEEK_SET);
     }
 #ifdef WIN32 // set binary mode to stdin for Windows
@@ -255,10 +255,11 @@ int main(int argc, char **argv)
     uint32_t tt = sdr_get_tick();
     
     // new SDR receiver
-    sdr_rcv_t *rcv = sdr_rcv_new(sigs, prns, fi, nch, fs, dop, fmt, IQ);
+    sdr_rcv_t *rcv = sdr_rcv_new(SDR_DEV_FILE, fp, sigs, prns, fi, nch, fs, dop,
+        fmt, IQ);
     
     // start SDR receiver
-    sdr_rcv_start(rcv, fp, tint);
+    sdr_rcv_start(rcv, tint);
     
     while (!intr && rcv->state) { // wait for interrupt or file end
         sdr_sleep_msec(10);
