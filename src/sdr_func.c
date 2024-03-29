@@ -21,22 +21,24 @@
 //                   modify API sdr_read_data(), sdr_search_code(),
 //                   sdr_mix_carr(), sdr_corr_std(), sdr_corr_fft()
 //  2024-03-25  1.11 optimized
+//  2024-03-29  1.12 support ARM and NEON
 //
 #include <math.h>
 #include <stdarg.h>
 #include "rtklib.h"
 #include "pocket_sdr.h"
 
-#ifdef WIN32
+#if defined(WIN32)
 #include <io.h>
 #endif
-#ifdef AVX2
+#if defined(AVX2)
 #include <immintrin.h>
+#elif defined(NEON)
+#include <arm_neon.h>
 #endif
 
 // constants and macros --------------------------------------------------------
 #define NTBL          256   // carrier-mixed-data LUT size
-#define CSCALE        10.0f // carrier scale (max(IQ) * sqrt(2) * scale < 127)
 #define DOP_STEP      0.5   // Doppler frequency search step (* 1 / code cycle)
 #define MAX_FFTW_PLAN 32    // max number of FFTW plans
 #define FFTW_FLAG     FFTW_ESTIMATE // FFTW flag
@@ -79,8 +81,8 @@ void sdr_func_init(const char *file)
     }
     // generate carrier-mixed-data LUT
     for (int i = 0; i < NTBL; i++) {
-        int8_t carr_I = (int8_t)ROUND(cos(-2.0 * PI * i / NTBL) * CSCALE);
-        int8_t carr_Q = (int8_t)ROUND(sin(-2.0 * PI * i / NTBL) * CSCALE);
+        int8_t carr_I = (int8_t)ROUND(cos(-2.0 * PI * i / NTBL) / SDR_CSCALE);
+        int8_t carr_Q = (int8_t)ROUND(sin(-2.0 * PI * i / NTBL) / SDR_CSCALE);
         for (int j = 0; j < 256; j++) {
             int8_t I = SDR_CPX8_I(j), Q = SDR_CPX8_Q(j);
             mix_tbl[(j << 8) + i].I = I * carr_I - Q * carr_Q;
@@ -156,7 +158,7 @@ void sdr_cpx_mul(const sdr_cpx_t *a, const sdr_cpx_t *b, int N, float s,
     sdr_cpx_t *c)
 {
     int i = 0;
-#ifdef AVX2
+#if defined(AVX2)
     __m256 yr = _mm256_set_ps(-1, 1, -1, 1, -1, 1, -1, 1);
     __m256 ys = _mm256_set1_ps(s);
     
@@ -416,9 +418,9 @@ static void mix_carr(const sdr_buff_t *buff, int ix, int N, double phi,
 {
     const uint8_t *data = buff->data + ix;
     double scale = 1 << 24;
-    uint32_t p = (uint32_t)(phi * scale), s = (uint32_t)(step * scale);
+    uint32_t p = (uint32_t)(phi * scale), s = (uint32_t)(int)(step * scale);
     int i = 0;
-#ifdef AVX2
+#if defined(AVX2)
     __m256i yp = _mm256_set_epi32(p+s*7, p+s*6, p+s*5, p+s*4, p+s*3, p+s*2, p+s, p);
     __m256i ys = _mm256_set1_epi32(s*8);
     
@@ -450,7 +452,7 @@ void sdr_mix_carr(const sdr_buff_t *buff, int ix, int N, double fs, double fc,
     double phi, sdr_cpx16_t *IQ)
 {
     double step = fc / fs * NTBL;
-    phi = fmod(phi, 1.0) * NTBL;
+    phi = (phi - floor(phi)) * NTBL;
     
     if (ix + N <= buff->N) {
         mix_carr(buff, ix, N, phi, step, IQ);
@@ -463,13 +465,22 @@ void sdr_mix_carr(const sdr_buff_t *buff, int ix, int N, double fs, double fc,
 }
 
 // sum 16 bit x 16 fields ------------------------------------------------------
-#define sum_16x16(ymm, sum) { \
+#if defined(AVX2)
+#define sum_s16(ymm, sum) { \
     int16_t s[16]; \
     _mm256_storeu_si256((__m256i *)s, ymm); \
     ymm = _mm256_setzero_si256(); \
     sum += s[0] + s[1] + s[2] + s[3] + s[4] + s[5] + s[6] + s[7] + s[8] + s[9] \
         + s[10] + s[11] + s[12] + s[13] + s[14] + s[15]; \
 }
+#elif defined(NEON)
+#define sum_s16(ymm, sum) { \
+    int16_t s[8]; \
+    vst1q_s16(s, ymm); \
+    ymm = vdupq_n_s16(0); \
+    sum += s[0] + s[1] + s[2] + s[3] + s[4] + s[5] + s[6] + s[7]; \
+}
+#endif
 
 // inner product of IQ data and code -------------------------------------------
 static void dot_IQ_code(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
@@ -477,7 +488,7 @@ static void dot_IQ_code(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
 {
     int i = 0;
     (*c)[0] = (*c)[1] = 0.0f;
-#ifdef AVX2
+#if defined(AVX2)
     __m256i ysumI = _mm256_setzero_si256();
     __m256i ysumQ = _mm256_setzero_si256();
     __m256i yextI = _mm256_set_epi8(0,1,0,1,0,1,0,1, 0,1,0,1,0,1,0,1,
@@ -492,19 +503,35 @@ static void dot_IQ_code(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
         ysumI = _mm256_add_epi16(ysumI, _mm256_maddubs_epi16(yextI, ycorr));
         ysumQ = _mm256_add_epi16(ysumQ, _mm256_maddubs_epi16(yextQ, ycorr));
         if (i % (16 * 256) == 0) {
-            sum_16x16(ysumI, (*c)[0])
-            sum_16x16(ysumQ, (*c)[1])
+            sum_s16(ysumI, (*c)[0])
+            sum_s16(ysumQ, (*c)[1])
         }
     }
-    sum_16x16(ysumI, (*c)[0])
-    sum_16x16(ysumQ, (*c)[1])
+    sum_s16(ysumI, (*c)[0])
+    sum_s16(ysumQ, (*c)[1])
+#elif defined(NEON)
+    int16x8_t ysumI = vdupq_n_s16(0);
+    int16x8_t ysumQ = vdupq_n_s16(0);
+    
+    for ( ; i < N - 7; i += 8) {
+        int8x8x2_t ydata = vld2_s8((int8_t *)(IQ + i));
+        int8x8x2_t ycode = vld2_s8((int8_t *)(code + i));
+        ysumI = vmlal_s8(ysumI, ydata.val[0], ycode.val[0]);
+        ysumQ = vmlal_s8(ysumQ, ydata.val[1], ycode.val[1]);
+        if (i % (8 * 256) == 0) {
+            sum_s16(ysumI, (*c)[0])
+            sum_s16(ysumQ, (*c)[1])
+        }
+    }
+    sum_s16(ysumI, (*c)[0])
+    sum_s16(ysumQ, (*c)[1])
 #endif
     for ( ; i < N; i++) {
         (*c)[0] += IQ[i].I * code[i].I;
         (*c)[1] += IQ[i].Q * code[i].Q;
     }
-    (*c)[0] *= s / CSCALE;
-    (*c)[1] *= s / CSCALE;
+    (*c)[0] *= s * SDR_CSCALE;
+    (*c)[1] *= s * SDR_CSCALE;
 }
 
 // standard correlator ---------------------------------------------------------
@@ -573,8 +600,8 @@ static void corr_fft(const sdr_cpx16_t *IQ, const sdr_cpx_t *code_fft, int N,
     if (!get_fftw_plan(N, plan)) return;
     sdr_cpx_t *cpx = sdr_cpx_malloc(N * 2);
     for (int i = 0; i < N; i++) {
-        cpx[i][0] = IQ[i].I / CSCALE;
-        cpx[i][1] = IQ[i].Q / CSCALE;
+        cpx[i][0] = IQ[i].I * SDR_CSCALE;
+        cpx[i][1] = IQ[i].Q * SDR_CSCALE;
     }
     // ifft(fft(data) * code_fft) / N^2 
     fftwf_execute_dft(plan[0], cpx, cpx + N);
@@ -727,9 +754,13 @@ int sdr_gen_fftw_wisdom(const char *file, int N)
     
     sdr_cpx_t *cpx1 = sdr_cpx_malloc(N);
     sdr_cpx_t *cpx2 = sdr_cpx_malloc(N);
+#if defined(NEON)
+    plan[0] = fftwf_plan_dft_1d(N, cpx1, cpx2, FFTW_FORWARD,  FFTW_MEASURE);
+    plan[1] = fftwf_plan_dft_1d(N, cpx2, cpx1, FFTW_BACKWARD, FFTW_MEASURE);
+#else
     plan[0] = fftwf_plan_dft_1d(N, cpx1, cpx2, FFTW_FORWARD,  FFTW_PATIENT);
     plan[1] = fftwf_plan_dft_1d(N, cpx2, cpx1, FFTW_BACKWARD, FFTW_PATIENT);
-    
+#endif
     int stat = fftwf_export_wisdom_to_filename(file);
     
     fftwf_destroy_plan(plan[0]);
