@@ -36,6 +36,7 @@ extern "C" {
 #define SDR_MAX_NSYM   2000     // max number of symbols
 #define SDR_MAX_DATA   4096     // max length of navigation data
 #define SDR_N_HIST     1800     // number of P correlator history 
+#define SDR_CSCALE     (1/10.0f) // carrier scale (max(IQ)*sqrt(2)/scale<127)
 
 #define SDR_DEV_FILE   1        // SDR device: file
 #define SDR_DEV_USB    2        // SDR device: USB device
