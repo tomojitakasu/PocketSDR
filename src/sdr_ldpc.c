@@ -32,6 +32,9 @@
 #define ERR_PROB  1e-5
 
 // function prototypes of LDPC-codes ([1],[2]) ---------------------------------
+#ifdef __cplusplus
+extern "C" {
+#endif
 extern int max_iter;
 void *mod2sparse_allocate(int, int);
 void *mod2sparse_insert(void *, int, int);
@@ -40,6 +43,9 @@ void prprp_decode_setup(void);
 unsigned int prprp_decode(void *, double *, char *, char *, double *);
 int check(void *, char *, char *);
 double changed(double *, char *, int);
+#ifdef __cplusplus
+}
+#endif
 
 // global variables ------------------------------------------------------------
 static const double RATIO[] = {
@@ -47,10 +53,10 @@ static const double RATIO[] = {
 };
 
 // LDPC H-matrix cache ---------------------------------------------------------
-static uint8_t *H_CNV2_SF2  = NULL;
-static uint8_t *H_CNV2_SF3  = NULL;
-static uint8_t *H_IRNV1_SF2 = NULL;
-static uint8_t *H_IRNV1_SF3 = NULL;
+static void *H_CNV2_SF2  = NULL;
+static void *H_CNV2_SF3  = NULL;
+static void *H_IRNV1_SF2 = NULL;
+static void *H_IRNV1_SF3 = NULL;
 
 // CNAV-2 LDPC H-matrix table ([3]) --------------------------------------------
 

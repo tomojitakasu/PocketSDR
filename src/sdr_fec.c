@@ -15,6 +15,9 @@
 #include "pocket_sdr.h"
 
 // function prototype of LIBFEC ([1]) ------------------------------------------
+#ifdef __cplusplus
+extern "C" {
+#endif
 int decode_rs_ccsds(uint8_t *data, int *eras_pos, int no_eras, int pad);
 void *create_viterbi27(int len);
 void set_viterbi27_polynomial(int polys[2]);
@@ -23,6 +26,9 @@ int update_viterbi27_blk(void *vp, unsigned char sym[], int npairs);
 int chainback_viterbi27(void *vp, unsigned char *data, unsigned int nbits,
     unsigned int endstate);
 void delete_viterbi27(void *vp);
+#ifdef __cplusplus
+}
+#endif
 
 //------------------------------------------------------------------------------
 //  Decode convolution code (K=7, R=1/2, Poly=G1:0x4F,G2:0x6D).
