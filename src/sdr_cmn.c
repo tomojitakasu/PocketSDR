@@ -104,7 +104,7 @@ uint32_t sdr_get_tick(void)
 #ifdef WIN32
     return (uint32_t)timeGetTime();
 #else
-    struct timeval tv = {0};
+    struct timeval tv = {0, 0};
     
     gettimeofday(&tv, NULL);
     return tv.tv_sec * 1000u + tv.tv_usec / 1000u;
@@ -125,7 +125,7 @@ void sdr_sleep_msec(int msec)
 #ifdef WIN32
     Sleep(msec < 5 ? 1 : msec);
 #else
-    struct timespec ts = {0};
+    struct timespec ts = {0, 0};
     
     if (msec <= 0) return;
     ts.tv_nsec = (long)(msec * 1000000);
