@@ -21,7 +21,8 @@
 //                   modify API sdr_read_data(), sdr_search_code(),
 //                   sdr_mix_carr(), sdr_corr_std(), sdr_corr_fft()
 //  2024-03-25  1.11 optimized
-//  2024-03-29  1.12 support ARM and NEON
+//  2024-03-29  1.12 add API sdr_corr_std_cpx(), sdr_corr_fft_cpx()
+//                   support ARM and NEON
 //
 #include <math.h>
 #include <stdarg.h>
@@ -48,11 +49,11 @@
 #define ROUND(x)      floor(x + 0.5)
 
 // global variables ------------------------------------------------------------
-static sdr_cpx16_t mix_tbl[NTBL*256] = {{0}}; // carrier-mixed-data LUT
+static sdr_cpx16_t mix_tbl[NTBL*256] = {{0,0}}; // carrier-mixed-data LUT
 static fftwf_plan fftw_plans[MAX_FFTW_PLAN][2] = {{0}}; // FFTW plan buffer
 static int fftw_size[MAX_FFTW_PLAN] = {0}; // FFTW plan sizes
 static int log_lvl = 3;           // log level
-static stream_t log_str = {0};    // log stream
+static stream_t log_str;          // log stream
 
 // enable escape sequence for Windows console ----------------------------------
 static void enable_console_esc(void)
@@ -245,7 +246,7 @@ sdr_buff_t *sdr_read_data(const char *file, double fs, int IQ, double T,
     fgetpos(fp, &pos);
     size_t size = (size_t)pos;
 #else
-    fpos_t pos = {0};
+    fpos_t pos;
     fgetpos(fp, &pos);
     size_t size = (size_t)(pos.__pos);
 #endif
@@ -417,8 +418,9 @@ static void mix_carr(const sdr_buff_t *buff, int ix, int N, double phi,
     double step, sdr_cpx16_t *IQ)
 {
     const uint8_t *data = buff->data + ix;
-    double scale = 1 << 24;
-    uint32_t p = (uint32_t)(phi * scale), s = (uint32_t)(int)(step * scale);
+    double scale = (double)(1 << 24) * NTBL;
+    uint32_t p = (uint32_t)((phi - floor(phi)) * scale);
+    uint32_t s = (uint32_t)(int)(step * scale);
     int i = 0;
 #if defined(AVX2)
     __m256i yp = _mm256_set_epi32(p+s*7, p+s*6, p+s*5, p+s*4, p+s*3, p+s*2, p+s, p);
@@ -451,8 +453,7 @@ static void mix_carr(const sdr_buff_t *buff, int ix, int N, double phi,
 void sdr_mix_carr(const sdr_buff_t *buff, int ix, int N, double fs, double fc,
     double phi, sdr_cpx16_t *IQ)
 {
-    double step = fc / fs * NTBL;
-    phi = (phi - floor(phi)) * NTBL;
+    double step = fc / fs;
     
     if (ix + N <= buff->N) {
         mix_carr(buff, ix, N, phi, step, IQ);
@@ -464,7 +465,19 @@ void sdr_mix_carr(const sdr_buff_t *buff, int ix, int N, double fs, double fc,
     }
 }
 
-// sum 16 bit x 16 fields ------------------------------------------------------
+// mix carrier for complex buffer ----------------------------------------------
+static void mix_carr_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N,
+    double fs, double fc, double phi, sdr_cpx16_t *IQ)
+{
+    sdr_buff_t *buff_cpx8 = sdr_buff_new(N, 2);
+    for (int i = 0, j = ix; i < N; i++, j = (j + 1) % len_buff) {
+        buff_cpx8->data[i] = SDR_CPX8((int8_t)buff[j][0], (int8_t)buff[j][1]);
+    }
+    mix_carr(buff_cpx8, 0, N, phi, fc / fs, IQ);
+    sdr_buff_free(buff_cpx8);
+}
+
+// sum of int16 fields ---------------------------------------------------------
 #if defined(AVX2)
 #define sum_s16(ymm, sum) { \
     int16_t s[16]; \
@@ -562,6 +575,19 @@ void sdr_corr_std(const sdr_buff_t *buff, int ix, int N, double fs, double fc,
     corr_std(IQ, code, N, pos, n, corr);
 }
 
+// mix carrier and standard correlator for complex buffer ----------------------
+void sdr_corr_std_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N,
+    double fs, double fc, double phi, const float *code, const int *pos, int n,
+    sdr_cpx_t *corr)
+{
+    sdr_cpx16_t IQ[N], code_cpx16[N];
+    mix_carr_cpx(buff, len_buff, ix, N, fs, fc, phi, IQ);
+    for (int i = 0; i < N; i++) {
+        code_cpx16[i].I = code_cpx16[i].Q = (int8_t)code[i];
+    }
+    corr_std(IQ, code_cpx16, N, pos, n, corr);
+}
+
 // get FFTW plan ---------------------------------------------------------------
 static int get_fftw_plan(int N, fftwf_plan *plan)
 {
@@ -617,6 +643,16 @@ void sdr_corr_fft(const sdr_buff_t *buff, int ix, int N, double fs, double fc,
 {
     sdr_cpx16_t IQ[N];
     sdr_mix_carr(buff, ix, N, fs, fc, phi, IQ);
+    corr_fft(IQ, code_fft, N, corr);
+}
+
+// mix carrier and FFT correlator for complex input ----------------------------
+void sdr_corr_fft_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N,
+    double fs, double fc, double phi, const sdr_cpx_t *code_fft,
+    sdr_cpx_t *corr)
+{
+    sdr_cpx16_t IQ[N];
+    mix_carr_cpx(buff, len_buff, ix, N, fs, fc, phi, IQ);
     corr_fft(IQ, code_fft, N, corr);
 }
 
@@ -701,8 +737,8 @@ int sdr_parse_nums(const char *str, int *prns)
 // add item to buffer ----------------------------------------------------------
 void sdr_add_buff(void *buff, int len_buff, void *item, size_t size_item)
 {
-    memmove(buff, buff + size_item, size_item * (len_buff - 1));
-    memcpy(buff + size_item * (len_buff - 1), item, size_item);
+    memmove(buff, (uint8_t *)buff + size_item, size_item * (len_buff - 1));
+    memcpy((uint8_t *)buff + size_item * (len_buff - 1), item, size_item);
 }
 
 // pack bit array to uint8_t array ---------------------------------------------
