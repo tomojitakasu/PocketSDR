@@ -6,13 +6,14 @@
 #! $ pacman -S mingw-w64-x86_64-fftw (MINGW64)
 #! $ sudo apt install libfftw3-dev   (Ubuntu)
 
-CC  = gcc
+CC  = g++
 SRC = ../../src
 
 ifeq ($(OS),Windows_NT)
     INSTALL = ../win32
     OPTIONS = -DWIN32 -DAVX2 -mavx2 -mfma
-    LDLIBS = ./librtk.so ./libfec.so ./libldpc.so -lfftw3f -lwinmm
+    LDLIBS = ./librtk.so ./libfec.so ./libldpc.so -lfftw3f -lwinmm \
+             ../cyusb/CyAPI.a -lsetupapi -lavrt
 else
     INSTALL = ../linux
     OPTIONS = -DAVX2 -mavx2 -mfma
@@ -22,12 +23,13 @@ ifeq ($(shell uname -m),aarch64)
     OPTIONS = -DNEON
 endif
 
-INCLUDE = -I$(SRC) -I../RTKLIB/src
+INCLUDE = -I$(SRC) -I../RTKLIB/src -I../cyusb
 #CFLAGS = -Ofast -march=native $(INCLUDE) $(OPTIONS) -Wall -fPIC -g
 CFLAGS = -Ofast $(INCLUDE) $(OPTIONS) -Wall -fPIC -g
 
 OBJ = sdr_cmn.o sdr_func.o sdr_code.o sdr_code_gal.o sdr_ch.o \
-      sdr_nav.o sdr_rcv.o sdr_fec.o sdr_ldpc.o sdr_nb_ldpc.o
+      sdr_nav.o sdr_rcv.o sdr_fec.o sdr_ldpc.o sdr_nb_ldpc.o \
+      sdr_usb.o sdr_dev.o
 
 TARGET = libsdr.so
 
@@ -66,6 +68,12 @@ sdr_ldpc.o : $(SRC)/sdr_ldpc.c
 sdr_nb_ldpc.o : $(SRC)/sdr_nb_ldpc.c
 	$(CC) -c $(CFLAGS) $(SRC)/sdr_nb_ldpc.c
 
+sdr_usb.o : $(SRC)/sdr_usb.c
+	$(CC) -c $(CFLAGS) $(SRC)/sdr_usb.c
+
+sdr_dev.o : $(SRC)/sdr_dev.c
+	$(CC) -c $(CFLAGS) $(SRC)/sdr_dev.c
+
 sdr_cmn.o  : $(SRC)/pocket_sdr.h
 sdr_func.o : $(SRC)/pocket_sdr.h
 sdr_code.o : $(SRC)/pocket_sdr.h
@@ -75,6 +83,8 @@ sdr_rcv.o  : $(SRC)/pocket_sdr.h
 sdr_fec.o  : $(SRC)/pocket_sdr.h
 sdr_ldpc.o : $(SRC)/pocket_sdr.h
 sdr_nb_ldpc.o: $(SRC)/pocket_sdr.h
+sdr_usb.o  : $(SRC)/pocket_dev.h
+sdr_dev.o  : $(SRC)/pocket_dev.h
 
 clean:
 	rm -f $(TARGET) *.o
