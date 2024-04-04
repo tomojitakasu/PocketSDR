@@ -20,6 +20,7 @@
 #ifdef WIN32
 #include <fcntl.h>
 #endif
+#include "pocket_sdr.h"
 #include "pocket_dev.h"
 
 // constants and macros --------------------------------------------------------
@@ -251,6 +252,7 @@ int main(int argc, char **argv)
     }
     signal(SIGTERM, sig_func);
     signal(SIGINT, sig_func);
+    sdr_sleep_msec(500);
     
     dump_data(dev, tsec, raw, quiet, fp);
     
