@@ -3045,7 +3045,7 @@
         (effects (font (size 0.726968 0.726968) (thickness 0.085832)) (justify left bottom))
       (tstamp f1c5b9c4-1910-424c-9de8-4ea88d8827eb)
     )
-    (fp_text value "C1005" (at 0 0) (layer "F.Fab") hide
+    (fp_text value "100pF" (at 0 0) (layer "F.Fab") hide
         (effects (font (size 1.27 1.27) (thickness 0.15)))
       (tstamp 2b2babf0-c98a-4404-94fe-8947c3ce37a3)
     )

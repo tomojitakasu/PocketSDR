@@ -5605,7 +5605,7 @@
     (property "Reference" "C36" (at 50.165 271.145 0)
       (effects (font (size 1.27 1.0795)) (justify left bottom))
     )
-    (property "Value" "C1005" (at 50.165 276.225 0)
+    (property "Value" "100pF" (at 50.165 276.225 0)
       (effects (font (size 1.27 1.0795)) (justify left bottom))
     )
     (property "Footprint" "pocket_sdr_v2.3:C1005" (at 49.53 273.05 0)
