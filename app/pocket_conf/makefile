@@ -26,7 +26,7 @@ TARGET = pocket_conf
 
 all: $(TARGET)
 
-pocket_conf: pocket_conf.o sdr_usb.o sdr_dev.o sdr_conf.o
+pocket_conf: pocket_conf.o sdr_usb.o sdr_dev.o sdr_conf.o sdr_cmn.o
 
 sdr_usb.o: $(SRC)/sdr_usb.c
 	$(CC) -c $(CFLAGS) $(SRC)/sdr_usb.c
@@ -34,11 +34,14 @@ sdr_dev.o: $(SRC)/sdr_dev.c
 	$(CC) -c $(CFLAGS) $(SRC)/sdr_dev.c
 sdr_conf.o: $(SRC)/sdr_conf.c
 	$(CC) -c $(CFLAGS) $(SRC)/sdr_conf.c
+sdr_cmn.o: $(SRC)/sdr_cmn.c
+	$(CC) -c $(CFLAGS) $(SRC)/sdr_cmn.c
 
 pocket_conf.o: $(SRC)/pocket_dev.h
 sdr_usb.o    : $(SRC)/pocket_dev.h
 sdr_dev.o    : $(SRC)/pocket_dev.h
 sdr_conf.o   : $(SRC)/pocket_dev.h
+sdr_cmn.o    : $(SRC)/pocket_sdr.h
 
 clean:
 	rm -f $(TARGET) *.exe *.o *.stackdump
