@@ -557,7 +557,7 @@ static int statexserial(serial_t *serial, char *msg)
     p+=sprintf(p,"serial:\n");
     p+=sprintf(p,"  state   = %d\n",state);
     if (!state) return 0;
-    p+=sprintf(p,"  dev     = %p\n",serial->dev);
+    p+=sprintf(p,"  dev     = %d\n",(int)(int64_t)serial->dev);
     p+=sprintf(p,"  error   = %d\n",serial->error);
 #ifdef WIN32
     p+=sprintf(p,"  buffsize= %d\n",serial->buffsize);
@@ -793,6 +793,10 @@ static int statexfile(file_t *file, char *msg)
 /* read file -----------------------------------------------------------------*/
 static int readfile(file_t *file, uint8_t *buff, int nmax, char *msg)
 {
+#ifndef WIN32
+    struct timeval tv={0};
+    fd_set rs;
+#endif
     uint64_t fpos_8B;
     uint32_t t,tick,fpos_4B;
     long pos,n;
