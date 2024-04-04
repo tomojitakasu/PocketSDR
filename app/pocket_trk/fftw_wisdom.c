@@ -34,7 +34,7 @@
 int main(int argc, char **argv)
 {
     int N = 48000;
-    char *file = FFTW_WISDOM;
+    const char *file = FFTW_WISDOM;
     
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-n") && i + 1 < argc) {
