@@ -11,6 +11,7 @@
 //  2022-01-20  1.2  add API mix_carr(), corr_std(), corr_fft()
 //  2023-12-24  1.3  SDR_MAX_CH: 2 -> 8
 //                   support USB context
+//  2024-04-04  1.4  update constants and types
 //
 #ifndef POCKET_DEV_H
 #define POCKET_DEV_H
@@ -49,13 +50,8 @@ extern "C" {
 #define SDR_MAX_CH      8       // max number of channels in a SDR device 
 #define SDR_MAX_REG     11      // max number of registers in a SDR device 
 
-#ifdef WIN32
-#define SDR_MAX_BUFF    1536    // number of digital IF data buffer 
+#define SDR_MAX_BUFF    192     // number of digital IF data buffer 
 #define SDR_SIZE_BUFF   (1<<16) // size of digital IF data buffer (bytes) 
-#else
-#define SDR_MAX_BUFF    1536    // number of digital IF data buffer 
-#define SDR_SIZE_BUFF   (1<<16) // size of digital IF data buffer (bytes) 
-#endif // WIN32
 
 // type definitions ----------------------------------------------------------
 
@@ -64,36 +60,33 @@ extern "C" {
 typedef CCyUSBDevice sdr_usb_t;  // USB device type 
 typedef CCyBulkEndPoint sdr_ep_t; // USB bulk endpoint type 
 
-typedef struct {                // SDR device type 
-    sdr_usb_t *usb;             // USB device 
-    sdr_ep_t *ep;               // bulk endpoint 
-    uint8_t *buff[SDR_MAX_BUFF]; // data buffers 
+typedef struct {                // SDR device type
+    sdr_usb_t *usb;             // USB device
+    sdr_ep_t *ep;               // bulk endpoint
+    uint8_t *buff;              // IF data buffer
     int max_ch;                 // max number of channels
-    int IQ[SDR_MAX_CH];         // sampling types 
-    int rp, wp;                 // read/write pointer of data buffers 
-    int state;                  // state of event handler 
-    HANDLE thread;              // event handler thread 
+    int IQ[SDR_MAX_CH];         // sampling types
+    int64_t rp, wp;             // read/write pointer of IF data buffer
+    int state;                  // state of USB event handler
+    HANDLE thread;              // USB event handler thread
 } sdr_dev_t;
 
 #else
 
-typedef struct {                // USB device type 
+typedef struct {                // USB device type
     libusb_context *ctx;        // USB context
     libusb_device_handle *h;    // USB device handle
 } sdr_usb_t;
 
-typedef struct libusb_transfer sdr_transfer_t; // USB transfer type 
-
-typedef struct {                // SDR device type 
-    sdr_usb_t *usb;             // USB device 
-    sdr_transfer_t *transfer[SDR_MAX_BUFF]; // USB transfers 
-    uint8_t *data[SDR_MAX_BUFF]; // USB transfer data 
+typedef struct {                // SDR device type
+    sdr_usb_t *usb;             // USB device
+    struct libusb_transfer *transfer[SDR_MAX_BUFF]; // USB transfers
+    uint8_t *buff;              // data buffer
     int max_ch;                 // max number of channels
-    int IQ[SDR_MAX_CH];         // sampling types 
-    pthread_t thread;           // USB event handler thread 
-    int state;                  // state of USB event handler 
-    int rp, wp;                 // read/write pointer of ring-buffer 
-    uint8_t *buff[SDR_MAX_BUFF]; // ring-buffer 
+    int IQ[SDR_MAX_CH];         // sampling types
+    int64_t rp, wp;             // read/write pointer of ring-buffer
+    int state;                  // state of USB event handler
+    pthread_t thread;           // USB event handler thread
 } sdr_dev_t;
 
 #endif // WIN32 
@@ -113,6 +106,7 @@ int sdr_write_settings(const char *file, int bus, int port, int opt);
 // sdr_dev.c
 sdr_dev_t *sdr_dev_open(int bus, int port);
 void sdr_dev_close(sdr_dev_t *dev);
+int sdr_dev_read(sdr_dev_t *dev, uint8_t *buff, int n);
 int sdr_dev_data(sdr_dev_t *dev, int8_t **buff, int *n);
 
 #ifdef __cplusplus
