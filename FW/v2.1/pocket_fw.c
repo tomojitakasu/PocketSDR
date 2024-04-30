@@ -288,12 +288,12 @@ void loop(void) {
 //  Get device Info         0x40  I  -           6  Device info and status
 //  Read MAX2771 register   0x41  I  CH + addr*  4  Register value
 //  Write MAX2771 register  0x42  O  CH + addr*  4  Register value
-//  Start bulk transfer     0x43  O  -           0  -
-//  Stop bulk transfer      0x44  O  -           0  -
-//  Reset device            0x45  O  -           0  -
-//  Save settings to EEPROM 0x46  O  -           0  -
-//  Read EEPROM             0x47  I  address     n  data (n <= 64)
-//  Write EEPROM            0x48  O  address     n  data (n <= 64)
+//  Start bulk transfer     0x44  O  -           0  -
+//  Stop bulk transfer      0x45  O  -           0  -
+//  Reset device            0x46  O  -           0  -
+//  Save settings to EEPROM 0x47  O  -           0  -
+//  Read EEPROM             0x48  I  address     n  data (n <= 64)
+//  Write EEPROM            0x49  O  address     n  data (n <= 64)
 //
 //  * bit15-8= MAX2771 CH (0:CH1,1:CH2), bit7-0= MAX2771 register address
 //
