@@ -2222,10 +2222,12 @@ static void *gen_B_LDPC_H(int m, int n, int g, const uint16_t H_A[][2],
 }
 
 // free binary LDPC parity check matrix ----------------------------------------
+#if 0
 static void free_B_LDPC_H(void *H)
 {
     mod2sparse_free(H);
 }
+#endif
 
 // decode binary LDPC ----------------------------------------------------------
 static int decode_B_LDPC(void *H, int m, int n, const uint8_t *syms,
@@ -2244,7 +2246,7 @@ static int decode_B_LDPC(void *H, int m, int n, const uint8_t *syms,
     prprp_decode_setup();
     
     // decode LDPC by probability propagation
-    int niter = (int)prprp_decode(H, lratio, dblk, pchk, bitpr);
+    prprp_decode(H, lratio, dblk, pchk, bitpr);
     int valid = check(H, dblk, pchk) == 0;
     int nerr = (int)changed(lratio, dblk, n);
     
