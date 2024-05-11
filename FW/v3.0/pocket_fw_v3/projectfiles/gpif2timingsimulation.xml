@@ -1,8 +1,0 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
-<GPIFIITimingSimulation version="1">
-  <Clock>100</Clock>
-  <BufferSize>1024</BufferSize>
-  <WaterMark>0</WaterMark>
-  <Macro Name="MACRO1" DisplayName="MACRO1" RepeatCount="1" />
-  <Scenario Name="SCENARIO0" CurrentThread="Thread0" />
-</GPIFIITimingSimulation>
