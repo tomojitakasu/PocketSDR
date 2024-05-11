@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<section name="Workbench">
+	<list key="installedFeatures">
+		<item value="com.zylin.cdt.feature:4.18.1"/>
+		<item value="ilg.gnuarmeclipse.debug.gdbjtag.jlink:2.2.1.201411261616"/>
+		<item value="ilg.gnuarmeclipse.debug.gdbjtag.openocd:2.1.1.201411261616"/>
+		<item value="ilg.gnuarmeclipse.doc.user:1.1.1.201411261616"/>
+		<item value="ilg.gnuarmeclipse.managedbuild.cross:1.11.1.201411261616"/>
+		<item value="ilg.gnuarmeclipse.packs:2.2.1.201411261616"/>
+		<item value="ilg.gnuarmeclipse.templates.cortexm:1.2.2.201411261616"/>
+		<item value="ilg.gnuarmeclipse.templates.freescale:2.2.2.201411261616"/>
+		<item value="ilg.gnuarmeclipse.templates.stm:2.2.2.201411261616"/>
+		<item value="org.eclipse.cdt.cross.arm.gnu:0.5.4.201202210114"/>
+		<item value="org.eclipse.cdt.debug.gdbjtag:8.3.0.201402142303"/>
+	</list>
+	<section name="ChooseWorkspaceDialogSettings">
+		<item value="394" key="DIALOG_Y_ORIGIN"/>
+		<item value="415" key="DIALOG_X_ORIGIN"/>
+	</section>
+	<section name="ExternalProjectImportWizard">
+		<item value="false" key="WizardProjectsImportPage.STORE_ARCHIVE_SELECTED"/>
+		<item value="true" key="WizardProjectsImportPage.STORE_COPY_PROJECT_ID"/>
+		<item value="false" key="WizardProjectsImportPage.STORE_NESTED_PROJECTS"/>
+		<list key="WizardProjectsImportPage.STORE_DIRECTORIES">
+			<item value="D:\FX3_test\UsbSpiGpioMode"/>
+		</list>
+		<list key="WizardProjectsImportPage.STORE_ARCHIVES">
+			<item value=""/>
+		</list>
+	</section>
+	<section name="WORKBENCH_SETTINGS">
+		<list key="ENABLED_TRANSFERS">
+		</list>
+	</section>
+	<section name="CleanDialogSettings">
+		<item value="662" key="DIALOG_WIDTH"/>
+		<item value="true" key="BUILD_NOW"/>
+		<item value="true" key="BUILD_ALL"/>
+		<item value="362" key="DIALOG_Y_ORIGIN"/>
+		<item value="2747" key="DIALOG_X_ORIGIN"/>
+		<item value="498" key="DIALOG_HEIGHT"/>
+		<item value="true" key="TOGGLE_SELECTED"/>
+	</section>
+</section>
