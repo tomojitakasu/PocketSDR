@@ -55,6 +55,14 @@ extern "C" {
 #define EXPORT
 #endif
 
+#define ENAGLO
+#define ENAGAL
+#define ENAQZS
+#define ENACMP
+#define ENAIRN
+#define NFREQ  5
+#define NEXOBS 6
+
 /* constants -----------------------------------------------------------------*/
 
 #define VER_RTKLIB  "2.4.3"             /* library version */
@@ -293,7 +301,7 @@ extern "C" {
 #define CODE_L1N    6                   /* obs code: L1codeless,B1codeless (GPS,BDS) */
 #define CODE_L1S    7                   /* obs code: L1C(D)     (GPS,QZS) */
 #define CODE_L1L    8                   /* obs code: L1C(P)     (GPS,QZS) */
-#define CODE_L1E    9                   /* (not used) */
+#define CODE_L1E    9                   /* obs code: L1C/B      (QZS) */
 #define CODE_L1A    10                  /* obs code: E1A,B1A    (GAL,BDS) */
 #define CODE_L1B    11                  /* obs code: E1B        (GAL) */
 #define CODE_L1X    12                  /* obs code: E1B+C,L1C(D+P),B1D+P (GAL,QZS,BDS) */
@@ -353,7 +361,9 @@ extern "C" {
 #define CODE_L4A    66                  /* obs code: G1aL1OCd   (GLO) */
 #define CODE_L4B    67                  /* obs code: G1aL1OCd   (GLO) */
 #define CODE_L4X    68                  /* obs code: G1al1OCd+p (GLO) */
-#define MAXCODE     68                  /* max number of obs code */
+#define CODE_L6D    69                  /* obs code: B3A(D)     (BDS) */
+#define CODE_L6P    70                  /* obs code: B3A(P)     (BDS) */
+#define MAXCODE     70                  /* max number of obs code */
 
 #define PMODE_SINGLE 0                  /* positioning mode: single */
 #define PMODE_DGPS   1                  /* positioning mode: DGPS/DGNSS */
