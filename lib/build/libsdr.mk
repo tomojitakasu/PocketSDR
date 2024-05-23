@@ -28,15 +28,18 @@ INCLUDE = -I$(SRC) -I../RTKLIB/src -I../cyusb
 CFLAGS = -Ofast $(INCLUDE) $(OPTIONS) -Wall -fPIC -g
 
 OBJ = sdr_cmn.o sdr_func.o sdr_code.o sdr_code_gal.o sdr_ch.o \
-      sdr_nav.o sdr_rcv.o sdr_fec.o sdr_ldpc.o sdr_nb_ldpc.o \
-      sdr_usb.o sdr_dev.o
+      sdr_nav.o sdr_pvt.o sdr_rcv.o sdr_fec.o sdr_ldpc.o sdr_nb_ldpc.o \
+      sdr_usb.o sdr_dev.o sdr_conf.o
 
-TARGET = libsdr.so
+TARGET = libsdr.so libsdr.a
 
 all : $(TARGET)
 
 libsdr.so: $(OBJ)
 	$(CC) -shared -o $@ $(OBJ) $(LDLIBS)
+
+libsdr.a: $(OBJ)
+	$(AR) r $@ $(OBJ)
 
 sdr_cmn.o : $(SRC)/sdr_cmn.c
 	$(CC) -c $(CFLAGS) $(SRC)/sdr_cmn.c
@@ -56,6 +59,9 @@ sdr_ch.o   : $(SRC)/sdr_ch.c
 sdr_nav.o  : $(SRC)/sdr_nav.c
 	$(CC) -c $(CFLAGS) $(SRC)/sdr_nav.c
 
+sdr_pvt.o  : $(SRC)/sdr_pvt.c
+	$(CC) -c $(CFLAGS) $(SRC)/sdr_pvt.c
+
 sdr_rcv.o  : $(SRC)/sdr_rcv.c
 	$(CC) -c $(CFLAGS) $(SRC)/sdr_rcv.c
 
@@ -74,17 +80,22 @@ sdr_usb.o : $(SRC)/sdr_usb.c
 sdr_dev.o : $(SRC)/sdr_dev.c
 	$(CC) -c $(CFLAGS) $(SRC)/sdr_dev.c
 
+sdr_conf.o : $(SRC)/sdr_conf.c
+	$(CC) -c $(CFLAGS) $(SRC)/sdr_conf.c
+
 sdr_cmn.o  : $(SRC)/pocket_sdr.h
 sdr_func.o : $(SRC)/pocket_sdr.h
 sdr_code.o : $(SRC)/pocket_sdr.h
 sdr_ch.o   : $(SRC)/pocket_sdr.h
 sdr_nav.o  : $(SRC)/pocket_sdr.h
+sdr_pvt.o  : $(SRC)/pocket_sdr.h
 sdr_rcv.o  : $(SRC)/pocket_sdr.h
 sdr_fec.o  : $(SRC)/pocket_sdr.h
 sdr_ldpc.o : $(SRC)/pocket_sdr.h
 sdr_nb_ldpc.o: $(SRC)/pocket_sdr.h
 sdr_usb.o  : $(SRC)/pocket_dev.h
 sdr_dev.o  : $(SRC)/pocket_dev.h
+sdr_conf.o : $(SRC)/pocket_dev.h
 
 clean:
 	rm -f $(TARGET) *.o
