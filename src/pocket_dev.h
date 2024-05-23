@@ -12,6 +12,7 @@
 //  2023-12-24  1.3  SDR_MAX_CH: 2 -> 8
 //                   support USB context
 //  2024-04-04  1.4  update constants and types
+//  2024-04-28  1.5  update constants, types and APIs
 //
 #ifndef POCKET_DEV_H
 #define POCKET_DEV_H
@@ -36,60 +37,50 @@ extern "C" {
 // constants and macro -------------------------------------------------------
 #define SDR_DEV_NAME    "Pocket SDR" // SDR device name 
 #define SDR_DEV_VID     0x04B4  // SDR device vendor ID 
-#define SDR_DEV_PID     0x1004  // SDR device product ID 
+#define SDR_DEV_PID1    0x1004  // SDR device product ID (EZ-USB FX2LP)
+#define SDR_DEV_PID2    0x00F1  // SDR device product ID (EZ-USB FX3)
 #define SDR_DEV_IF      0       // SDR device interface number 
 #define SDR_DEV_EP      0x86    // SDR device end point for bulk transter 
 
-#define SDR_VR_STAT     0x40    // SDR vendor request: Get status 
-#define SDR_VR_REG_READ 0x41    // SDR vendor request: Read register 
-#define SDR_VR_REG_WRITE 0x42   // SDR vendor request: Write register 
-#define SDR_VR_SAVE     0x47    // SDR vendor request: Save settings 
+#define SDR_VR_STAT     0x40    // SDR vendor request: Get status
+#define SDR_VR_REG_READ 0x41    // SDR vendor request: Read register
+#define SDR_VR_REG_WRITE 0x42   // SDR vendor request: Write register
+#define SDR_VR_START    0x44    // SDR vendor request: Start bulk transfer
+#define SDR_VR_STOP     0x45    // SDR vendor request: Stop bulk transfer
+#define SDR_VR_RESET    0x46    // SDR vendor request: Reset device
+#define SDR_VR_SAVE     0x47    // SDR vendor request: Save settings
 
-#define SDR_FREQ_TCXO   24.000  // SDR frequency of TCXO (MHz) 
+#define SDR_FREQ_TCXO   24.000  // SDR frequency of TCXO (MHz)
 
-#define SDR_MAX_CH      8       // max number of channels in a SDR device 
-#define SDR_MAX_REG     11      // max number of registers in a SDR device 
+#define SDR_MAX_CH      8       // max number of channels in a SDR device
+#define SDR_MAX_REG     11      // max number of registers in a SDR device
 
-#define SDR_MAX_BUFF    192     // number of digital IF data buffer 
-#define SDR_SIZE_BUFF   (1<<16) // size of digital IF data buffer (bytes) 
+#define SDR_MAX_BUFF    96      // number of digital IF data buffer
+#define SDR_SIZE_BUFF   (1<<16) // size of digital IF data buffer (bytes)
 
 // type definitions ----------------------------------------------------------
 
 #ifdef WIN32
-
-typedef CCyUSBDevice sdr_usb_t;  // USB device type 
-typedef CCyBulkEndPoint sdr_ep_t; // USB bulk endpoint type 
-
-typedef struct {                // SDR device type
-    sdr_usb_t *usb;             // USB device
-    sdr_ep_t *ep;               // bulk endpoint
-    uint8_t *buff;              // IF data buffer
-    int max_ch;                 // max number of channels
-    int IQ[SDR_MAX_CH];         // sampling types
-    int64_t rp, wp;             // read/write pointer of IF data buffer
-    int state;                  // state of USB event handler
-    HANDLE thread;              // USB event handler thread
-} sdr_dev_t;
-
+typedef CCyUSBDevice sdr_usb_t; // USB device type 
 #else
-
 typedef struct {                // USB device type
     libusb_context *ctx;        // USB context
     libusb_device_handle *h;    // USB device handle
 } sdr_usb_t;
+#endif
 
 typedef struct {                // SDR device type
     sdr_usb_t *usb;             // USB device
-    struct libusb_transfer *transfer[SDR_MAX_BUFF]; // USB transfers
-    uint8_t *buff;              // data buffer
-    int max_ch;                 // max number of channels
-    int IQ[SDR_MAX_CH];         // sampling types
-    int64_t rp, wp;             // read/write pointer of ring-buffer
     int state;                  // state of USB event handler
+    int64_t rp, wp;             // read/write pointer of data buffer
+    uint8_t *buff;              // data buffer
+#ifdef WIN32
+    HANDLE thread;              // USB event handler thread
+#else
+    struct libusb_transfer *transfer[SDR_MAX_BUFF]; // USB transfers
     pthread_t thread;           // USB event handler thread
+#endif
 } sdr_dev_t;
-
-#endif // WIN32 
 
 // function prototypes -------------------------------------------------------
 
@@ -97,7 +88,7 @@ typedef struct {                // SDR device type
 sdr_usb_t *sdr_usb_open(int bus, int port, uint16_t vid, uint16_t pid);
 void sdr_usb_close(sdr_usb_t *usb);
 int sdr_usb_req(sdr_usb_t *usb, int mode, uint8_t req, uint16_t val,
-        uint8_t *data, int size);
+    uint8_t *data, int size);
 
 // sdr_conf.c
 int sdr_read_settings(const char *file, int bus, int port, int opt);
@@ -106,8 +97,10 @@ int sdr_write_settings(const char *file, int bus, int port, int opt);
 // sdr_dev.c
 sdr_dev_t *sdr_dev_open(int bus, int port);
 void sdr_dev_close(sdr_dev_t *dev);
-int sdr_dev_read(sdr_dev_t *dev, uint8_t *buff, int n);
-int sdr_dev_data(sdr_dev_t *dev, int8_t **buff, int *n);
+int sdr_dev_start(sdr_dev_t *dev);
+int sdr_dev_stop(sdr_dev_t *dev);
+int sdr_dev_read(sdr_dev_t *dev, uint8_t *buff, int size);
+int sdr_dev_info(sdr_dev_t *dev, double *fs, double *fo, int *IQ);
 
 #ifdef __cplusplus
 }
