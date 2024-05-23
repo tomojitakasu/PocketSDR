@@ -11,13 +11,13 @@
 //  2022-07-08  1.2  add API sdr_get_time()
 //                   move API sdr_cpx_malloc(), sdr_cpx_free() to sdr_func.c
 //
+#include "pocket_sdr.h"
 #ifdef WIN32
 #include <windows.h>
 #else
 #include <time.h>
 #include <sys/time.h>
 #endif
-#include "pocket_sdr.h"
 
 //------------------------------------------------------------------------------
 //  Allocate memory. If no memory allocated, it exits the AP immediately with
