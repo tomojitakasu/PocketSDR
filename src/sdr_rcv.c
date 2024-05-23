@@ -8,21 +8,21 @@
 //  2024-02-08  1.0  separated from pocket_trk.c
 //  2024-03-25  1.1  modify API sdr_rcv_new(), sdr_rcv_start()
 //  2024-04-04  1.2  modify API sdr_rcv_new(), sdr_rcv_start()
+//  2024-04-28  1.3  support Pocket SDR FE 4CH and PVT
 //
-#include "rtklib.h"
-#include "pocket_dev.h"
 #include "pocket_sdr.h"
+#include "pocket_dev.h"
 
 // constants --------------------------------------------------------------------
-#define SP_CORR    0.5          // correlator spacing (chip) 
-#define T_CYC      1e-3         // IF data read cycle (s)
-#define LOG_CYC    1000         // receiver channel log cycle (* T_CYC)
-#define TH_CYC     50           // receiver channel thread cycle (ms)
-#define T_REACQ    60.0         // re-acquisition timeout (s)
-#define MIN_LOCK   2.0          // min lock time to print channel status (s)
-#define MAX_BUFF   8000         // max number of IF data buffer (cycles)
-#define MAX_ROW    110          // max number of status rows
-#define NCOL       102          // nummber of status columns
+#define SP_CORR    0.25         // correlator spacing (chip) 
+#define MAX_BUFF   8000         // max number of IF data buffer (* SDR_CYC)
+#define LOG_CYC    1000         // receiver channel log cycle (* SDR_CYC)
+#define TH_CYC     10           // receiver channel thread cycle (ms)
+#define TO_REACQ   60.0         // re-acquisition timeout (s)
+#define MIN_LOCK   2.0          // min lock time to show channel status (s)
+#define MAX_ROW    108          // max number of channel status rows
+#define NUM_COL    110          // number of channel status columns
+#define MAX_ACQ    4e-3         // max code length w/o acqusition assist (s)
 
 #define ESC_COL    "\033[34m"   // ANSI escape color blue
 #define ESC_RES    "\033[0m"    // ANSI escape reset
@@ -49,7 +49,7 @@ static void cn0_bar(float cn0, char *bar)
     }
 }
 
-// channel sync status ---------------------------------------------------------
+// SDR receiver channel sync status --------------------------------------------
 static void sync_stat(sdr_ch_t *ch, char *stat)
 {
     sprintf(stat, "%s%s%s%s", (ch->trk->sec_sync > 0) ? "S" : "-",
@@ -58,75 +58,62 @@ static void sync_stat(sdr_ch_t *ch, char *stat)
 }
 
 // print SDR receiver status header --------------------------------------------
-static int print_head(sdr_rcv_t *rcv)
+static int print_head(FILE *fp, sdr_rcv_t *rcv)
 {
-    int nch = 0, ncol = NCOL;
-    
+    char solstr[128];
+    int nch = 0;
     for (int i = 0; i < rcv->nch; i++) {
-        if (rcv->th[i]->ch->state == STATE_LOCK) nch++;
+        if (rcv->th[i]->ch->state != SDR_STATE_LOCK) continue;
+        nch++;
     }
-    printf("\r TIME(s):%10.2f %*s%10s  SRCH:%4d  LOCK:%3d/%3d", rcv->ix * T_CYC,
-        ncol - 55, "", buff_full(rcv) ? "BUFF-FULL" : "", rcv->ich + 1, nch,
-        rcv->nch);
-#ifdef DEBUG
-    int week;
-    double tow = time2gpst(utc2gpst(timeget()), &week);
-    printf("        %4d-%11.3f", week, tow);
-#endif
-    printf("\n%3s %4s %5s %3s %8s %4s %-12s %11s %7s %11s %4s %5s %4s %4s %3s",
-        "CH", "SAT", "SIG", "PRN", "LOCK(s)", "C/N0", "(dB-Hz)", "COFF(ms)",
-        "DOP(Hz)", "ADR(cyc)", "SYNC", "#NAV", "#ERR", "#LOL", "NER");
-#ifdef DEBUG
-    printf(" %3s %3s %3s %11s", "ERP", "ERC", "MT", "TOW(s)");
-#endif
-    printf("\n");
+    sdr_pvt_solstr(rcv->pvt, solstr);
+    fprintf(fp, "\r %-*s %9s SRCH:%3d LOCK:%3d/%3d\n", NUM_COL - 38, solstr,
+        buff_full(rcv) ? "BUFF-FULL" : "", rcv->ich + 1, nch, rcv->nch);
+    fprintf(fp, "%3s %2s %4s %5s %3s %8s %4s %-12s %11s %7s %11s %4s %5s %4s "
+        "%4s %3s\n", "CH", "RF", "SAT", "SIG", "PRN", "LOCK(s)", "C/N0",
+        "(dB-Hz)", "COFF(ms)", "DOP(Hz)", "ADR(cyc)", "SYNC", "#NAV", "#ERR",
+        "#LOL", "FEC");
     return 2;
 }
 
 // print SDR receiver channel status -------------------------------------------
-static int print_ch_stat(sdr_ch_t *ch)
+static int print_ch_stat(FILE *fp, sdr_ch_t *ch)
 {
     char bar[16], stat[16];
     cn0_bar(ch->cn0, bar);
     sync_stat(ch, stat);
-    printf("%s%3d %4s %5s %3d %8.2f %4.1f %-13s%11.7f %7.1f %11.1f %s %5d %4d %4d %3d",
-        ESC_COL, ch->no, ch->sat, ch->sig, ch->prn, ch->lock * ch->T, ch->cn0,
-        bar, ch->coff * 1e3, ch->fd, ch->adr, stat, ch->nav->count[0],
-        ch->nav->count[1], ch->lost, ch->nav->nerr);
-#ifdef DEBUG
-    printf(" %3.0f %3.0f %3d %11.3f", ch->trk->err_phas * 100.0,
-        ch->trk->err_code * 1e8, ch->nav->mt, ch->tow);
-#endif
-    printf("%s\n", ESC_RES);
+    fprintf(fp, "%s%3d %2d %4s %5s %3d %8.2f %4.1f %-13s%11.7f %7.1f %11.1f %s "
+        "%5d %4d %4d %3d%s\n", ESC_COL, ch->no, ch->if_ch + 1, ch->sat, ch->sig,
+        ch->prn, ch->lock * ch->T, ch->cn0, bar, ch->coff * 1e3, ch->fd,
+        ch->adr, stat, ch->nav->count[0], ch->nav->count[1], ch->lost,
+        ch->nav->nerr, ESC_RES);
     return 1;
 }
 
 // print SDR receiver status ---------------------------------------------------
-static int print_rcv_stat(sdr_rcv_t *rcv, int nrow)
+static int print_rcv_stat(FILE *fp, sdr_rcv_t *rcv, int nrow)
 {
-    int n = 0, ncol = NCOL;
+    int n = 0;
+    
     for (int i = 0; i < nrow; i++) {
-        printf("%s", ESC_UCUR);
+        fprintf(fp, "%s", ESC_UCUR);
     }
-    n += print_head(rcv);
+    n += print_head(fp, rcv);
     for (int i = 0; i < rcv->nch; i++) {
         sdr_ch_t *ch = rcv->th[i]->ch;
-        if (ch->state != STATE_LOCK || ch->lock * ch->T < MIN_LOCK) continue;
+        if (ch->state != SDR_STATE_LOCK || ch->lock * ch->T < MIN_LOCK) continue;
         if (n < MAX_ROW - 1) {
-            n += print_ch_stat(ch);
+            n += print_ch_stat(fp, ch);
         }
         else if (n == MAX_ROW - 1) {
-            printf("...\n");
+            fprintf(fp, "... ....\n");
             n++;
         }
     }
-#ifdef DEBUG
-    ncol += 27;
-#endif
     for ( ; n < nrow; n++) {
-        printf("%*s\n", ncol, "");
+        fprintf(fp, "%*s\n", NUM_COL, "");
     }
-    fflush(stdout);
+    fflush(fp);
     return n;
 }
 
@@ -154,11 +141,10 @@ static sdr_ch_th_t *ch_th_new(const char *sig, int prn, double fi, double fs,
     sdr_ch_th_t *th = (sdr_ch_th_t *)sdr_malloc(sizeof(sdr_ch_th_t));
     double sp = SP_CORR;
     
-    if (!(th->ch = sdr_ch_new(sig, prn, fs, fi, sp, 0, dop[0], dop[1], ""))) {
+    if (!(th->ch = sdr_ch_new(sig, prn, fs, fi, sp, 0, dop[0], dop[1]))) {
         sdr_free(th);
         return NULL;
     }
-    th->if_ch = (rcv->fmt == SDR_FMT_RAW8 && sdr_sig_freq(sig) < 1.5e9) ? 1 : 0;
     th->rcv = rcv;
     return th;
 }
@@ -175,20 +161,23 @@ static void ch_th_free(sdr_ch_th_t *th)
 static void *ch_thread(void *arg)
 {
     sdr_ch_th_t *th = (sdr_ch_th_t *)arg;
-    int n = th->ch->N / th->rcv->N;
-    int64_t ix = 0;
+    sdr_ch_t *ch = th->ch;
+    int n = ch->N / th->rcv->N;
     
     while (th->state) {
-        for ( ; ix + 2 * n <= th->rcv->ix + 1; ix += n) {
+        for ( ; th->ix + 2 * n <= th->rcv->ix && th->state; th->ix += n) {
             
             // update SDR receiver channel
-            sdr_ch_update(th->ch, ix * T_CYC, th->rcv->buff[th->if_ch],
-                th->rcv->N * (ix % MAX_BUFF));
+            sdr_ch_update(ch, th->ix * SDR_CYC, th->rcv->buff[ch->if_ch],
+                th->rcv->N * (int)(th->ix % MAX_BUFF));
             
-            if (th->ch->state == STATE_LOCK && ix % LOG_CYC == 0) {
-                out_log_ch(th->ch);
+            // update SDR obs and nav data
+            sdr_pvt_udobs(th->rcv->pvt, th->ix, ch);
+            
+            // output channel log
+            if (ch->state == SDR_STATE_LOCK && th->ix % LOG_CYC == 0) {
+                out_log_ch(ch);
             }
-            th->ix = ix; // IF buffer read pointer
         }
         sdr_sleep_msec(TH_CYC);
     }
@@ -215,6 +204,7 @@ static void ch_th_stop(sdr_ch_th_t *th)
 //  args:
 //      sigs     (I) signal types as a string array {sig_1, sig_2, ..., sig_n}
 //      prns     (I) PRN numbers as int array {prn_1, prn_2, ..., prn_n}
+//      if_ch    (I) IF CHs (0:CH1,1:CH2, ...) {if_ch_1, if_ch_2, ..., if_ch_n}
 //      fi       (I) IF frequencies (Hz) {fi_1, fi_2, ..., fi_n}
 //      n        (I) number of signal types, PRN numbers and IF frequencies
 //      fs       (I) sampling freqency of IF data (Hz)
@@ -222,34 +212,38 @@ static void ch_th_stop(sdr_ch_th_t *th)
 //                     dop[0]: center frequency to search (Hz)
 //                     dop[1]: lower and upper limits to search (Hz)
 //      fmt      (I) IF data format
-//                     SDR_FMT_INT8 : int8
-//                     SDR_FMT_RAW8 : packed 8 bit raw
-//                     SDR_FMT_RAW16: packed 16 bit raw
+//                     SDR_FMT_INT8 : 8 bits int
+//                     SDR_FMT_CPX16: 16(8+8) bits complex
+//                     SDR_FMT_RAW8 : packed 8(4x2) bits raw
+//                     SDR_FMT_RAW16: packed 16(4x4) bits raw
 //      IQ       (I) sampling types of IF data (1:I-sampling, 2:IQ-sampling)
 //                     IQ[0]: CH1
-//                     IQ[1]: CH2 (packed 8 or 16 bit raw format only)
-//                     IQ[2]: CH3 (packed 16 bit raw format only)
-//                     IQ[3]: CH4 (packed 16 bit raw format only)
+//                     IQ[1]: CH2 (SDR_FMT_RAW8 or SDR_FMT_RAW16)
+//                     IQ[2]: CH3 (SDR_FMT_RAW16)
+//                     IQ[3]: CH4 (SDR_FMT_RAW16)
 //
 //  returns:
 //      SDR receiver (NULL: error)
 //
-sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, const double *fi,
-    int n, double fs, const double *dop, int fmt, const int *IQ)
+sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, const int *if_ch, 
+    const double *fi, int n, double fs, const double *dop, int fmt,
+    const int *IQ)
 {
+    int nbuff = (fmt == SDR_FMT_RAW16) ? 4 : ((fmt == SDR_FMT_RAW8) ? 2 : 1);
+    
     sdr_rcv_t *rcv = (sdr_rcv_t *)sdr_malloc(sizeof(sdr_rcv_t));
     rcv->ich = -1;
-    rcv->N = (int)(T_CYC * fs);
+    rcv->N = (int)(SDR_CYC * fs);
     rcv->fmt = fmt;
-    rcv->nbuff = (fmt == SDR_FMT_RAW16) ? 4 :
-                ((fmt == SDR_FMT_RAW8 || IQ[0] == 2) ? 2 : 1);
-    for (int i = 0; i < rcv->nbuff; i++) {
+    rcv->nbuff = nbuff;
+    for (int i = 0; i < nbuff; i++) {
         rcv->buff[i] = sdr_buff_new(rcv->N * MAX_BUFF, IQ[i]);
     }
     for (int i = 0; i < n && rcv->nch < SDR_MAX_NCH; i++) {
         sdr_ch_th_t *th = ch_th_new(sigs[i], prns[i], fi[i], fs, dop, rcv);
         if (th) {
             th->ch->no = rcv->nch + 1;
+            th->ch->if_ch = if_ch[i];
             rcv->th[rcv->nch++] = th;
         }
         else {
@@ -275,7 +269,7 @@ void sdr_rcv_free(sdr_rcv_t *rcv)
     for (int i = 0; i < rcv->nch; i++) {
         ch_th_free(rcv->th[i]);
     }
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < rcv->nbuff; i++) {
         sdr_buff_free(rcv->buff[i]);
     }
     sdr_free(rcv);
@@ -321,28 +315,28 @@ static void write_buff(sdr_rcv_t *rcv, const uint8_t *raw, int64_t ix)
     if (!LUT[0][0] && (rcv->fmt == SDR_FMT_RAW8 || rcv->fmt == SDR_FMT_RAW16)) {
         gen_LUT(rcv->buff, rcv->nbuff, LUT);
     }
-    if (rcv->fmt == SDR_FMT_RAW8) { // packed 8 bit raw
+    if (rcv->fmt == SDR_FMT_INT8) { // 8 bits int
+        for (int j = 0; j < rcv->N; i++, j++) {
+            rcv->buff[0]->data[i] = SDR_CPX8(raw[j], 0);
+        }
+    }
+    else if (rcv->fmt == SDR_FMT_CPX16) { // 16(8x2) bits complex
+        for (int j = 0; j < rcv->N * 2; i++, j += 2) {
+            rcv->buff[0]->data[i] = SDR_CPX8(raw[j], -raw[j+1]);
+        }
+    }
+    else if (rcv->fmt == SDR_FMT_RAW8) { // packed 8(4x2) bits raw
         for (int j = 0; j < rcv->N; i++, j++) {
             rcv->buff[0]->data[i] = LUT[0][raw[j]];
             rcv->buff[1]->data[i] = LUT[1][raw[j]];
         }
     }
-    else if (rcv->fmt == SDR_FMT_RAW16) { // packed 16 bit raw
+    else if (rcv->fmt == SDR_FMT_RAW16) { // packed 16(4x4) bits raw
         for (int j = 0; j < rcv->N * 2; i++, j += 2) {
             rcv->buff[0]->data[i] = LUT[0][raw[j  ]];
             rcv->buff[1]->data[i] = LUT[1][raw[j  ]];
             rcv->buff[2]->data[i] = LUT[2][raw[j+1]];
             rcv->buff[3]->data[i] = LUT[3][raw[j+1]];
-        }
-    }
-    else if (rcv->buff[0]->IQ == 1) { // int8-I
-        for (int j = 0; j < rcv->N; i++, j++) {
-            rcv->buff[0]->data[i] = SDR_CPX8(raw[j], 0);
-        }
-    }
-    else if (rcv->buff[0]->IQ == 2) { // int8-IQ
-        for (int j = 0; j < rcv->N * 2; i++, j += 2) {
-            rcv->buff[0]->data[i] = SDR_CPX8(raw[j], -raw[j+1]);
         }
     }
     rcv->ix = ix; // update IF data buffer write pointer
@@ -351,19 +345,20 @@ static void write_buff(sdr_rcv_t *rcv, const uint8_t *raw, int64_t ix)
 // re-acquisition --------------------------------------------------------------
 static int re_acq(sdr_rcv_t *rcv, sdr_ch_t *ch)
 {
-    if (ch->lock * ch->T >= MIN_LOCK && rcv->ix * T_CYC - ch->time + T_REACQ) {
+    if (ch->lock * ch->T >= MIN_LOCK &&
+        rcv->ix * SDR_CYC < ch->time + TO_REACQ) {
         ch->acq->fd_ext = ch->fd;
         return 1;
     }
     return 0;
 }
 
-// assisted-acquisition --------------------------------------------------------
+// assisted acquisition --------------------------------------------------------
 static int assist_acq(sdr_rcv_t *rcv, sdr_ch_t *ch)
 {
     for (int i = 0; i < rcv->nch; i++) {
         sdr_ch_t *ch_i = rcv->th[i]->ch;
-        if (strcmp(ch->sat, ch_i->sat) || ch_i->state != STATE_LOCK ||
+        if (strcmp(ch->sat, ch_i->sat) || ch_i->state != SDR_STATE_LOCK ||
             ch_i->lock * ch_i->T < MIN_LOCK) continue;
         ch->acq->fd_ext = ch_i->fd * ch->fc / ch_i->fc;
         return 1;
@@ -374,19 +369,23 @@ static int assist_acq(sdr_rcv_t *rcv, sdr_ch_t *ch)
 // update signal search channel ------------------------------------------------
 static void rcv_update_srch(sdr_rcv_t *rcv)
 {
+    // IF buffer full ?
+    if (buff_full(rcv)) {
+        return;
+    }
     // signal search channel busy ?
-    if (rcv->ich >= 0 && rcv->th[rcv->ich]->ch->state == STATE_SRCH) {
+    if (rcv->ich >= 0 && rcv->th[rcv->ich]->ch->state == SDR_STATE_SRCH) {
         return;
     }
     for (int i = 0; i < rcv->nch; i++) {
         // search next IDLE channel
         rcv->ich = (rcv->ich + 1) % rcv->nch;
         sdr_ch_t *ch = rcv->th[rcv->ich]->ch;
-        if (ch->state != STATE_IDLE) continue;
+        if (ch->state != SDR_STATE_IDLE) continue;
         
         // re-acquisition, assisted-acquisition or short code cycle
-        if (re_acq(rcv, ch) || assist_acq(rcv, ch) || ch->T <= 5e-3) {
-            ch->state = STATE_SRCH;
+        if (re_acq(rcv, ch) || assist_acq(rcv, ch) || ch->T <= MAX_ACQ) {
+            ch->state = SDR_STATE_SRCH;
             break;
         }
     }
@@ -405,8 +404,9 @@ static void rcv_wait(sdr_rcv_t *rcv)
 // SDR receiver thread ---------------------------------------------------------
 static void *rcv_thread(void *arg)
 {
+    FILE *fp = stdout; // SDR receiver status output
     sdr_rcv_t *rcv = (sdr_rcv_t *)arg;
-    int ns = (rcv->fmt == SDR_FMT_RAW8 || rcv->buff[0]->IQ == 1) ? 1 : 2;
+    int ns = (rcv->fmt == SDR_FMT_INT8 || rcv->fmt == SDR_FMT_RAW8) ? 1 : 2;
     int nrow = 0;
     uint8_t raw[ns * rcv->N];
     
@@ -416,12 +416,15 @@ static void *rcv_thread(void *arg)
     if (rcv->dev == SDR_DEV_FILE && (FILE *)rcv->dp == stdin) {
         fflush((FILE *)rcv->dp);
     }
-    if (rcv->tint[0] > 0.0) {
-        printf("%s", ESC_HCUR);
+    else if (rcv->dev == SDR_DEV_USB) {
+        sdr_dev_start((sdr_dev_t *)rcv->dp);
+    }
+    if (rcv->tint > 0.0) {
+        fprintf(fp, "%s", ESC_HCUR);
     }
     for (int64_t ix = 0; rcv->state; ix++) {
         if (ix % LOG_CYC == 0) {
-            out_log_time(ix * T_CYC);
+            out_log_time(ix * SDR_CYC);
         }
         // read IF data
         if (!read_data(rcv, raw, ns * rcv->N)) {
@@ -435,20 +438,26 @@ static void *rcv_thread(void *arg)
         // update signal search channel
         rcv_update_srch(rcv);
         
+        // update PVT solution
+        sdr_pvt_udsol(rcv->pvt, ix);
+        
         // print receiver status
-        if (rcv->tint[0] > 0.0 && ix % (int)(rcv->tint[0] / T_CYC) == 0) {
-            nrow = print_rcv_stat(rcv, nrow);
+        if (rcv->tint > 0.0 && ix % (int)(rcv->tint / SDR_CYC) == 0) {
+            nrow = print_rcv_stat(fp, rcv, nrow);
         }
         // suspend data if reading file
         if (rcv->dev == SDR_DEV_FILE && (FILE *)(rcv->dp) != stdin) {
             rcv_wait(rcv);
         }
     }
-    if (rcv->tint[0] > 0.0) {
-        print_rcv_stat(rcv, nrow);
-        printf("%s", ESC_VCUR);
+    if (rcv->dev == SDR_DEV_USB) {
+        sdr_dev_stop((sdr_dev_t *)rcv->dp);
     }
-    sdr_log(3, "$LOG,%.3f,%s,%d,STOP", rcv->ix * T_CYC, "", 0);
+    if (rcv->tint > 0.0) {
+        print_rcv_stat(fp, rcv, nrow);
+        fprintf(fp, "%s", ESC_VCUR);
+    }
+    sdr_log(3, "$LOG,%.3f,%s,%d,STOP", rcv->ix * SDR_CYC, "", 0);
     return NULL;
 }
 
@@ -463,31 +472,31 @@ static void *rcv_thread(void *arg)
 //      dp       (I) SDR device pointer
 //                     file pointer       (dev = SDR_DEV_FILE)
 //                     SDR device pointer (dev = SDR_DEV_USB)
-//      tint     (I) output intervals (s) (0: no output)
-//                     tint[0]: status print
-//                     tint[1]: NMEA PVT solutions      (to be implemented)
-//                     tint[2]: RTCM3 OBS and NAV data  (to be implemented)
+//      strs     (I) output streams (s) (NULL: no output)
+//                     str[0]: NMEA PVT solutions stream
+//                     str[1]: RTCM3 OBS and NAV data stream
+//      tint     (I) status print intervals (s) (0: no output)
 //
 //  returns:
 //      Status (1:OK, 0:error)
 //
-int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, const double *tint)
+int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, stream_t **strs,
+    double tint)
 {
     if (rcv->state) return 0;
     
     for (int i = 0; i < rcv->nch; i++) {
         // set all channels search for file input
         if (dev == SDR_DEV_FILE && (FILE *)dp != stdin) {
-            rcv->th[i]->ch->state = STATE_SRCH;
+            rcv->th[i]->ch->state = SDR_STATE_SRCH;
         }
         ch_th_start(rcv->th[i]);
     }
     rcv->dev = dev;
     rcv->dp = dp;
+    rcv->pvt = sdr_pvt_new(strs);
+    rcv->tint = tint;
     rcv->state = 1;
-    rcv->tint[0] = tint[0];
-    rcv->tint[1] = tint[1];
-    rcv->tint[2] = tint[2];
     return !pthread_create(&rcv->thread, NULL, rcv_thread, rcv);
 }
 
@@ -510,4 +519,5 @@ void sdr_rcv_stop(sdr_rcv_t *rcv)
     }
     rcv->state = 0;
     pthread_join(rcv->thread, NULL);
+    sdr_pvt_free(rcv->pvt);
 }
