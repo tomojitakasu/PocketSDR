@@ -23,10 +23,10 @@
 //  2024-03-25  1.11 optimized
 //  2024-03-29  1.12 add API sdr_corr_std_cpx(), sdr_corr_fft_cpx()
 //                   support ARM and NEON
+//  2024-05-13  1.13 add API sdr_str_open(), sdr_str_close()
 //
 #include <math.h>
 #include <stdarg.h>
-#include "rtklib.h"
 #include "pocket_sdr.h"
 
 #if defined(WIN32)
@@ -53,7 +53,7 @@ static sdr_cpx16_t mix_tbl[NTBL*256] = {{0,0}}; // carrier-mixed-data LUT
 static fftwf_plan fftw_plans[MAX_FFTW_PLAN][2] = {{0}}; // FFTW plan buffer
 static int fftw_size[MAX_FFTW_PLAN] = {0}; // FFTW plan sizes
 static int log_lvl = 3;           // log level
-static stream_t log_str;          // log stream
+static stream_t *log_str = NULL;  // log stream
 
 // enable escape sequence for Windows console ----------------------------------
 static void enable_console_esc(void)
@@ -74,7 +74,6 @@ void sdr_func_init(const char *file)
 {
     // initilize log stream
     strinitcom();
-    strinit(&log_str);
     
     // import FFTW wisdom 
     if (*file && !fftwf_import_wisdom_from_filename(file)) {
@@ -656,31 +655,53 @@ void sdr_corr_fft_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N,
     corr_fft(IQ, code_fft, N, corr);
 }
 
+// open stream -----------------------------------------------------------------
+stream_t *sdr_str_open(const char *path)
+{
+    const char *p = strchr(path, ':');
+    stream_t *str = (stream_t *)sdr_malloc(sizeof(stream_t));
+    int stat = 0;
+    
+    strinit(str);
+    
+    if (!p || *(p + 1) == ':' ) { // file (path = file[::opt...])
+        stat = stropen(str, STR_FILE, STR_MODE_W, path);
+    }
+    else if (p == path) { // TCP server (path = :port)
+        stat = stropen(str, STR_TCPSVR, STR_MODE_W, path);
+    }
+    else { // TCP client (path = addr:port)
+        stat = stropen(str, STR_TCPCLI, STR_MODE_W, path);
+    }
+    if (!stat) {
+        sdr_free(str);
+        return NULL;
+    }
+    return str;
+}
+
+// close stream ----------------------------------------------------------------
+void sdr_str_close(stream_t *str)
+{
+    if (!str) return;
+    strclose(str);
+}
+
 // open log --------------------------------------------------------------------
 int sdr_log_open(const char *path)
 {
-    const char *p = strchr(path, ':');
-    int stat;
-    
-    if (!p || *(p + 1) == ':' ) { // file (path = file[::opt...])
-        stat = stropen(&log_str, STR_FILE, STR_MODE_W, path);
-    }
-    else if (p == path) { // TCP server (path = :port)
-        stat = stropen(&log_str, STR_TCPSVR, STR_MODE_W, path);
-    }
-    else { // TCP client (path = addr:port)
-        stat = stropen(&log_str, STR_TCPCLI, STR_MODE_W, path);
-    }
-    if (!stat) {
+    if (!(log_str = sdr_str_open(path))) {
         fprintf(stderr, "log stream open error %s\n", path);
+        return 0;
     }
-    return stat;
+    return 1;
 }
 
 // close log -------------------------------------------------------------------
 void sdr_log_close(void)
 {
-    strclose(&log_str);
+    sdr_str_close(log_str);
+    log_str = NULL;
 }
 
 // set log level ---------------------------------------------------------------
@@ -699,12 +720,12 @@ void sdr_log(int level, const char *msg, ...)
     if (log_lvl == 0) {
         vprintf(msg, ap);
     }
-    else if (level <= log_lvl) {
+    else if (level <= log_lvl && log_str) {
         char buff[1024];
         int len = vsnprintf(buff, sizeof(buff) - 2, msg, ap);
         len = MIN(len, (int)sizeof(buff) - 3);
         sprintf(buff + len, "\r\n");
-        strwrite(&log_str, (uint8_t *)buff, len + 2);
+        strwrite(log_str, (uint8_t *)buff, len + 2);
     }
     va_end(ap);
 }
