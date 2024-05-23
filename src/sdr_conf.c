@@ -9,18 +9,18 @@
 //  2022-01-04  1.0  support C++
 //  2022-05-23  1.1  change coding style
 //  2022-08-08  1.2  support Spider SDR
+//  2024-04-20  1.3  support Pocket SDR FE 4CH
 //
 #include "pocket_dev.h"
 
 // constants -------------------------------------------------------------------
 #define POCKET_DEV_NAME SDR_DEV_NAME
 #define SPIDER_DEV_NAME "Spider SDR"
-#define POCKET_MAX_CH  2       // number of channels in Pocket SDR
-#define POCKET_MAX_REG 11      // number of registers in Pocket SDR
-#define SPIDER_MAX_CH  8       // number of channels in Spider SDR
-#define SPIDER_MAX_REG 10      // number of registers in Spider SDR
-#define POCKET_FREQ_TCXO 24.0  // TCXO frequency for Pocket SDR (MHz)
-#define SPIDER_FREQ_TCXO 10.0  // TCXO frequency for Spider SDR (MHz)
+#define TYPE_POCKET_2CH 0      // device type: Pocket SDR FE 2CH
+#define TYPE_POCKET_4CH 1      // device type: Pocket SDR FE 4CH
+#define TYPE_SPIDER     2      // device type: Spider SDR
+#define MAX_REG_MAX2771 11     // number of registers of MAX2771
+#define MAX_REG_MAX2769 10     // number of registers of MAX2769
 
 // type definitions ------------------------------------------------------------
 typedef struct {       // register field definition type
@@ -39,8 +39,8 @@ static const reg_t MAX2771_field[] = { // MAX2771 register field definitions
     {"CHIPEN"         , 0x0,  1, 31, {1, 1}, {1, 1}, "Chip enable (0:disable,1:enable)"},
     {"IDLE"           , 0x0,  1, 30, {1, 1}, {0, 0}, "Idle enable (0:operating-mode,1:idle-mode)"},
     {"MIXPOLE"        , 0x0,  1, 17, {1, 1}, {0, 0}, "Mixer pole selection (0:13MHz,1:36MHz)"},
-    {"LNAMODE"        , 0x0,  2, 15, {1, 1}, {0, 1}, "LNA mode selection (0:high-band,1:low-band,2:disable)"},
-    {"MIXERMODE"      , 0x0,  2, 13, {1, 1}, {0, 1}, "Mixer mode selection (0:high-band,1:low-band,2:disable)"},
+    {"LNAMODE"        , 0x0,  2, 15, {0, 0}, {0, 1}, "LNA mode selection (0:high-band,1:low-band,2:disable)"},
+    {"MIXERMODE"      , 0x0,  2, 13, {0, 0}, {0, 1}, "Mixer mode selection (0:high-band,1:low-band,2:disable)"},
     {"FCEN"           , 0x0,  7,  6, {0, 0}, {0, 0}, "IF filter center frequency: (128-FCEN)/2*{0.195|0.66|0.355} MHz"},
     {"FBW"            , 0x0,  3,  3, {0, 0}, {0, 0}, "IF filter BW (0:2.5MHz,1:8.7MHz,2:4.2MHz,3:23.4MHz,4:36MHz,7:16.4MHz)"},
     {"F3OR5"          , 0x0,  1,  2, {0, 0}, {0, 0}, "Filter order selection (0:5th,1:3rd)"},
@@ -68,7 +68,7 @@ static const reg_t MAX2771_field[] = { // MAX2771 register field definitions
     {"TIMESYNCEN"     , 0x2,  1,  2, {1, 1}, {0, 0}, "Enable output of time sync pulse when streaming enabled by STRMEN"},
     {"DATASYNCEN"     , 0x2,  1,  1, {1, 1}, {0, 0}, "Enable sync pulse at DATASYNC"},
     {"STRMRST"        , 0x2,  1,  0, {1, 1}, {0, 0}, "Reset all counters"},
-    {"LOBAND"         , 0x3,  1, 28, {1, 1}, {0, 1}, "Local oscillator band selection (0:L1,1:L2/L5)"},
+    {"LOBAND"         , 0x3,  1, 28, {0, 0}, {0, 1}, "Local oscillator band selection (0:L1,1:L2/L5)"},
     {"REFOUTEN"       , 0x3,  1, 24, {1, 1}, {1, 1}, "Output clock buffer enable (0:disable,1:enable)"},
     {"IXTAL"          , 0x3,  2, 19, {1, 1}, {1, 1}, "Current programing for XTAL (1:normal,3:high-current)"},
     {"ICP"            , 0x3,  1,  9, {1, 1}, {0, 0}, "Charge pump current selection (0:0.5mA,1:1mA)"},
@@ -77,7 +77,7 @@ static const reg_t MAX2771_field[] = { // MAX2771 register field definitions
     {"NDIV"           , 0x4, 15, 13, {0, 0}, {0, 0}, "PLL integer division ratio (36-32767): F_LO=F_XTAL/RDIV*(NDIV+FDIV/2^20)"},
     {"RDIV"           , 0x4, 10,  3, {0, 0}, {0, 0}, "PLL reference division ratio (1-1023)"},
     {"FDIV"           , 0x5, 20,  8, {0, 0}, {0, 0}, "PLL fractional division ratio (0-1048575)"},
-    {"EXTADCCLK"      , 0x7,  1, 28, {1, 1}, {0, 1}, "External ADC clock selection (0:internal,1:ADC_CLKIN)"},
+    {"EXTADCCLK"      , 0x7,  1, 28, {0, 0}, {0, 1}, "External ADC clock selection (0:internal,1:ADC_CLKIN)"},
     {"PREFRACDIV_SEL" , 0xA,  1,  3, {0, 1}, {0, 0}, "Clock pre-divider selection (0:bypass,1:enable)"},
     {"REFCLK_L_CNT"   , 0x7, 12, 16, {0, 1}, {0, 0}, "Clock pre-divider L counter value (0-4095): L_CNT/(4096-M_CNT+L_CNT)"},
     {"REFCLK_M_CNT"   , 0x7, 12,  4, {0, 1}, {0, 0}, "Clock pre-divider M counter value (0-4095)"},
@@ -142,6 +142,28 @@ static const reg_t MAX2769B_field[] = { // MAX2769B register field definitions
     {"", 0, 0, 0, {0}, {0}, ""} // terminator
 };
 
+// max number of channels ------------------------------------------------------
+static int max_ch(int type)
+{
+    switch (type) {
+        case TYPE_POCKET_2CH: return 2;
+        case TYPE_POCKET_4CH: return 4;
+        case TYPE_SPIDER    : return 8;
+    }
+    return 0;
+}
+
+// max number of registers -----------------------------------------------------
+static int max_reg(int type)
+{
+    switch (type) {
+        case TYPE_POCKET_2CH:
+        case TYPE_POCKET_4CH: return MAX_REG_MAX2771;
+        case TYPE_SPIDER    : return MAX_REG_MAX2769;
+    }
+    return 0;
+}
+
 // bit mask --------------------------------------------------------------------
 static uint32_t bit_mask(const reg_t *reg)
 {
@@ -154,24 +176,25 @@ static uint32_t bit_mask(const reg_t *reg)
     return mask;
 }
 
-// read device type ------------------------------------------------------------
-static int read_dev_type(sdr_usb_t *usb)
+// read device type and TCXO frequency -----------------------------------------
+static int read_dev_type(sdr_usb_t *usb, double *fx)
 {
     uint8_t data[6];
     
     // read device info and status
     if (!sdr_usb_req(usb, 0, SDR_VR_STAT, 0, data, 6)) {
-       return 0;
+       return -1;
     }
-    return (data[3] >> 4) & 1; // 0: Pocket SDR, 1: Spider SDR
+    *fx = (((uint16_t)data[1] << 8) + data[2]) * 1e3;
+    if ((data[3] >> 4) &  1) return TYPE_SPIDER;
+    if ((data[0] >> 4) <= 2) return TYPE_POCKET_2CH;
+    else                     return TYPE_POCKET_4CH;
 }
 
 // read settings from configuration file in hexadecimal format -----------------
-static void read_config_hex(FILE *fp, uint32_t regs[][SDR_MAX_REG], int opt)
+static void read_config_hex(FILE *fp, int type, uint32_t regs[][SDR_MAX_REG])
 {
     char buff[128];
-    int max_ch  = (opt & 8) ? SPIDER_MAX_CH  : POCKET_MAX_CH;
-    int max_reg = (opt & 8) ? SPIDER_MAX_REG : POCKET_MAX_REG;
     
     while (fgets(buff, sizeof(buff), fp)) {
         uint32_t addr, val;
@@ -180,11 +203,11 @@ static void read_config_hex(FILE *fp, uint32_t regs[][SDR_MAX_REG], int opt)
         
         if ((p = strchr(buff, '#'))) *p = '\0';
         if (sscanf(buff, "%d 0x%X 0x%X", &ch, &addr, &val) < 3) continue;
-        if (ch < 1 || ch > max_ch) {
+        if (ch < 1 || ch > max_ch(type)) {
             fprintf(stderr, "Invalid channel: CH=%d\n", ch);
             continue;
         }
-        if ((int)addr > max_reg) {
+        if ((int)addr > max_reg(type)) {
             fprintf(stderr, "Invalid address: ADDR=0x%X\n", addr);
             continue;
         }
@@ -193,11 +216,12 @@ static void read_config_hex(FILE *fp, uint32_t regs[][SDR_MAX_REG], int opt)
 }
 
 // read settings from configuration file in keyword = value format -------------
-static void read_config_key(FILE *fp, uint32_t regs[][SDR_MAX_REG], int opt)
+static void read_config_key(FILE *fp, int type, uint32_t regs[][SDR_MAX_REG])
 {
-    const reg_t *reg_field = (opt & 8) ? MAX2769B_field : MAX2771_field;
+    const reg_t *reg_field =
+        (type == TYPE_SPIDER) ? MAX2769B_field : MAX2771_field;
     char buff[128];
-    int ch = 1, max_ch = (opt & 8) ? SPIDER_MAX_CH : POCKET_MAX_CH;
+    int ch = 1;
     
     while (fgets(buff, sizeof(buff), fp)) {
         uint32_t val, mask;
@@ -205,7 +229,7 @@ static void read_config_key(FILE *fp, uint32_t regs[][SDR_MAX_REG], int opt)
         
         if ((p = strchr(buff, '#'))) *p = '\0';
         if (sscanf(buff, "[CH%d]", &ch) == 1) continue;
-        if (ch < 1 || ch > max_ch) continue;
+        if (ch < 1 || ch > max_ch(type)) continue;
         if (!(p = strchr(buff, '='))) continue;
         *p++ = '\0';
         if (sscanf(buff, "%31s", key) < 1) continue;
@@ -232,7 +256,8 @@ static void read_config_key(FILE *fp, uint32_t regs[][SDR_MAX_REG], int opt)
 }
 
 // read settings from configuration file ---------------------------------------
-static int read_config(const char *file, uint32_t regs[][SDR_MAX_REG], int opt)
+static int read_config(const char *file, int type, uint32_t regs[][SDR_MAX_REG],
+    int opt)
 {
     FILE *fp;
     
@@ -241,17 +266,17 @@ static int read_config(const char *file, uint32_t regs[][SDR_MAX_REG], int opt)
         return 0;
     }
     if (opt & 4) {
-        read_config_hex(fp, regs, opt);
+        read_config_hex(fp, type, regs);
     }
     else {
-        read_config_key(fp, regs, opt);
+        read_config_key(fp, type, regs);
     }
     fclose(fp);
     return 1;
 }
 
 // write MAX2771 channel status ------------------------------------------------
-static void write_MAX2771_stat(FILE *fp, int ch, uint32_t *reg)
+static void write_MAX2771_stat(FILE *fp, double fx, int ch, uint32_t *reg)
 {
     static double f_bw[8] = {2.5, 8.7, 4.2, 23.4, 36.0, 0.0, 0.0, 16.4};
     static double f_step[8] = {0.195, 0.66, 0.355};
@@ -275,9 +300,9 @@ static void write_MAX2771_stat(FILE *fp, int ch, uint32_t *reg)
     uint32_t ADCCLK_M   = (reg[0xA] >>  4) & 0xFFF;
     uint32_t PREFRACDIV = (reg[0xA] >>  3) & 0x1;
     
-    double f_lo = POCKET_FREQ_TCXO / RDIV;
+    double f_lo = fx / RDIV;
     f_lo *= INT_PLL ? NDIV : NDIV + FDIV / 1048576.0;
-    double f_adc = EXTADCCLK ? 0.0 : POCKET_FREQ_TCXO;
+    double f_adc = (ch != 0 && EXTADCCLK) ? 0.0 : fx;
     f_adc *= !PREFRACDIV ? 1.0 : REFCLK_L / (4096.0 - REFCLK_M + REFCLK_L);
     f_adc *= ADCCLK      ? 1.0 : ratio[REFDIV];
     f_adc *= !FCLKIN     ? 1.0 : ADCCLK_L / (4096.0 - ADCCLK_M + ADCCLK_L);
@@ -298,7 +323,7 @@ static uint32_t flip_bits(uint32_t reg, int nbit)
 }
 
 // write MAX2769B channel status -----------------------------------------------
-static void write_MAX2769B_stat(FILE *fp, int ch, uint32_t *reg)
+static void write_MAX2769B_stat(FILE *fp, double fx, int ch, uint32_t *reg)
 {
     static double f_bw[8] = {2.5, 9.66, 4.2, 0.0};
     static double f_step[8] = {0.195, 0.66, 0.355, 0.0};
@@ -318,9 +343,9 @@ static void write_MAX2769B_stat(FILE *fp, int ch, uint32_t *reg)
     uint32_t FCLKIN     = (reg[0x7] >>  3) & 0x1;
     uint32_t ADCCLK     = (reg[0x7] >>  2) & 0x1;
     
-    double f_lo = SPIDER_FREQ_TCXO / RDIV;
+    double f_lo = fx / RDIV;
     f_lo *= INT_PLL ? NDIV : NDIV + FDIV / 1048576.0;
-    double f_adc = SPIDER_FREQ_TCXO * (ADCCLK ? 1.0 : ratio[REFDIV]);
+    double f_adc = fx * (ADCCLK ? 1.0 : ratio[REFDIV]);
     f_adc *= !FCLKIN ? 1.0 : L_CNT / (4096.0 - M_CNT + L_CNT);
     double f_cen = FCENX ? (128 - flip_bits(FCEN, 7)) / 2.0 * f_step[FBW] : 0.0;
     fprintf(fp, "#  [CH%d] F_LO =%9.3f MHz, F_ADC =%7.3f MHz (%-2s), "
@@ -329,57 +354,55 @@ static void write_MAX2769B_stat(FILE *fp, int ch, uint32_t *reg)
 }
 
 // write device channel status -------------------------------------------------
-static void write_stat(FILE *fp, int ch, uint32_t *reg, int opt)
+static void write_stat(FILE *fp, int type, double fx, int ch, uint32_t *reg)
 {
-    if (opt & 8) { // Spider SDR
-        write_MAX2769B_stat(fp, ch, reg);
+    if (type == TYPE_SPIDER) {
+        write_MAX2769B_stat(fp, fx, ch, reg);
     }
-    else { // Pocket SDR
-        write_MAX2771_stat(fp, ch, reg);
+    else {
+        write_MAX2771_stat(fp, fx, ch, reg);
     }
 }
 
 // write settings to configuration file in hexadecimal format ------------------
-static void write_config_hex(FILE *fp, uint32_t regs[][SDR_MAX_REG], int opt)
+static void write_config_hex(FILE *fp, int type, uint32_t regs[][SDR_MAX_REG])
 {
-    int max_ch  = (opt & 8) ? SPIDER_MAX_CH  : POCKET_MAX_CH;
-    int max_reg = (opt & 8) ? SPIDER_MAX_REG : POCKET_MAX_REG;
-    
     fprintf(fp, "#%2s  %4s  %10s\n", "CH", "ADDR", "VALUE");
     
-    for (int i = 0; i < max_ch; i++) {
-        for (int j = 0; j < max_reg; j++) {
+    for (int i = 0; i < max_ch(type); i++) {
+        for (int j = 0; j < max_reg(type); j++) {
             fprintf(fp, "%3d  0x%02X  0x%08X\n", i + 1, j, regs[i][j]);
         }
     }
 }
 
 // write settings to configuration file in keyword = value format --------------
-static void write_config_key(FILE *fp, uint32_t regs[][SDR_MAX_REG], int opt)
+static void write_config_key(FILE *fp, int type, double fx,
+    uint32_t regs[][SDR_MAX_REG], int opt)
 {
-    const reg_t *reg_field = (opt & 8) ? MAX2769B_field : MAX2771_field;
-    int max_ch = (opt & 8) ? SPIDER_MAX_CH : POCKET_MAX_CH;
+    const reg_t *reg_field =
+        (type == TYPE_SPIDER) ? MAX2769B_field : MAX2771_field;
     
     fprintf(fp, "#\n#  %s device settings (%s)\n#\n",
-        (opt & 8) ? SPIDER_DEV_NAME : POCKET_DEV_NAME,
-        (opt & 8) ? "MAX2769B" : "MAX2771");
+        (type == TYPE_SPIDER) ? SPIDER_DEV_NAME : POCKET_DEV_NAME,
+        (type == TYPE_SPIDER) ? "MAX2769B" : "MAX2771");
     
-    for (int i = 0; i < max_ch; i++) {
-        write_stat(fp, i, regs[i], opt);
+    for (int i = 0; i < max_ch(type); i++) {
+        write_stat(fp, type, fx, i, regs[i]);
     }
-    for (int i = 0; i < max_ch; i++) {
+    for (int i = 0; i < max_ch(type); i++) {
         fprintf(fp, "\n[CH%d]\n", i + 1);
         
         for (int j = 0; *reg_field[j].field; j++) {
             uint32_t val, mask;
             
             if (!(opt & 1)) {
-                 if (opt & 8) { // Spider SDR
-                     if (reg_field[j].fix[0]) continue;
-                 }
-                 else { // Pocket SDR
-                     if (reg_field[j].fix[i]) continue;
-                 }
+                if (type == TYPE_SPIDER) {
+                    if (reg_field[j].fix[0]) continue;
+                }
+                else {
+                    if (reg_field[j].fix[i >= 1 ? 1 : 0]) continue;
+                }
             }
             mask = bit_mask(reg_field + j);
             val = (regs[i][reg_field[j].addr] & mask) >> reg_field[j].pos;
@@ -390,7 +413,8 @@ static void write_config_key(FILE *fp, uint32_t regs[][SDR_MAX_REG], int opt)
 }
 
 // write settings to configuration file ----------------------------------------
-static int write_config(const char *file, uint32_t regs[][SDR_MAX_REG], int opt)
+static int write_config(const char *file, int type, double fx,
+    uint32_t regs[][SDR_MAX_REG], int opt)
 {
     FILE *fp = stdout;
     
@@ -399,10 +423,10 @@ static int write_config(const char *file, uint32_t regs[][SDR_MAX_REG], int opt)
         return 0;
     }
     if (opt & 4) {
-        write_config_hex(fp, regs, opt);
+        write_config_hex(fp, type, regs);
     }
     else {
-        write_config_key(fp, regs, opt);
+        write_config_key(fp, type, fx, regs, opt);
     }
     fclose(fp);
     return 1;
@@ -441,34 +465,34 @@ static void write_reg(sdr_usb_t *usb, int ch, int addr, uint32_t val)
 }
 
 // read settings from device registers -----------------------------------------
-static void read_regs(sdr_usb_t *usb, uint32_t regs[][SDR_MAX_REG], int opt)
+static void read_regs(sdr_usb_t *usb, int type, uint32_t regs[][SDR_MAX_REG])
 {
-    int max_ch  = (opt & 8) ? SPIDER_MAX_CH  : POCKET_MAX_CH;
-    int max_reg = (opt & 8) ? SPIDER_MAX_REG : POCKET_MAX_REG;
-    
-    for (int i = 0; i < max_ch; i++) {
-        for (int j = 0; j < max_reg; j++) {
+    for (int i = 0; i < max_ch(type); i++) {
+        for (int j = 0; j < max_reg(type); j++) {
             regs[i][j] = read_reg(usb, i, j);
         }
     }
 }
 
 // set fixed value of settings -------------------------------------------------
-static void set_fixed(uint32_t regs[][SDR_MAX_REG], int opt)
+static void set_fixed(int type, uint32_t regs[][SDR_MAX_REG])
 {
-    const reg_t *reg_field = (opt & 8) ? MAX2769B_field : MAX2771_field;
-    int max_ch = (opt & 8) ? SPIDER_MAX_CH : POCKET_MAX_CH;
+    const reg_t *reg_field =
+        (type == TYPE_SPIDER) ? MAX2769B_field : MAX2771_field;
     
     for (int i = 0; *reg_field[i].field; i++) {
-        for (int j = 0; j < max_ch; j++) {
+        for (int j = 0; j < max_ch(type); j++) {
             uint32_t val;
-            if (opt & 8) { // Spider SDR
+            if (type == TYPE_SPIDER) {
                 if (!reg_field[i].fix[0]) continue;
                 val = reg_field[i].val[0];
             }
-            else { // Pocket SDR
-                if (!reg_field[i].fix[j]) continue;
-                val = reg_field[i].val[j];
+            else if (!strcmp(reg_field[i].field, "EXTADCCLK")) {
+                val = (type == TYPE_POCKET_2CH && j == 0) ? 0 : 1; // 0:int,1:ext
+            }
+            else {
+                if (!reg_field[i].fix[j >= 1 ? 1 : 0]) continue;
+                val = reg_field[i].val[j >= 1 ? 1 : 0];
             }
             uint32_t mask = bit_mask(reg_field + i);
             regs[j][reg_field[i].addr] &= ~mask;
@@ -478,15 +502,12 @@ static void set_fixed(uint32_t regs[][SDR_MAX_REG], int opt)
 }
 
 // write settings to device registers ------------------------------------------
-static void write_regs(sdr_usb_t *usb, uint32_t regs[][SDR_MAX_REG], int opt)
+static void write_regs(sdr_usb_t *usb, int type, uint32_t regs[][SDR_MAX_REG])
 {
-    int max_ch  = (opt & 8) ? SPIDER_MAX_CH  : POCKET_MAX_CH;
-    int max_reg = (opt & 8) ? SPIDER_MAX_REG : POCKET_MAX_REG;
-    
-    for (int i = 0; i < max_ch; i++) {
-        for (int j = 0; j < max_reg; j++) {
+    for (int i = 0; i < max_ch(type); i++) {
+        for (int j = 0; j < max_reg(type); j++) {
             // write register except reserved or test reg
-            if (opt & 8) { // Spider SDR
+            if (type == TYPE_SPIDER) {
                 if (j == 6 || j == 8) continue;
             }
             else { // Pocket SDR
@@ -522,21 +543,25 @@ static void save_regs(sdr_usb_t *usb)
 int sdr_read_settings(const char *file, int bus, int port, int opt)
 {
     sdr_usb_t *usb;
+    double fx = 0.0;
     
-    if (!(usb = sdr_usb_open(bus, port, SDR_DEV_VID, SDR_DEV_PID))) {
+    if (!(usb = sdr_usb_open(bus, port, SDR_DEV_VID, SDR_DEV_PID1)) &&
+        !(usb = sdr_usb_open(bus, port, SDR_DEV_VID, SDR_DEV_PID2))) {
         return 0;
     }
     uint32_t regs[SDR_MAX_CH][SDR_MAX_REG] = {{0}};
     
-    // read device type
-    if (read_dev_type(usb)) {
-        opt |= 8; // Spider SDR
+    // read device type and TCXO frequency
+    int type = read_dev_type(usb, &fx);
+    if (type < 0) {
+        sdr_usb_close(usb);
+        return 0;
     }
     // read settings from device registers
-    read_regs(usb, regs, opt);
+    read_regs(usb, type, regs);
     
     // write settings to configuration file
-    if (!write_config(file, regs, opt)) {
+    if (!write_config(file, type, fx * 1e-6, regs, opt)) {
         sdr_usb_close(usb);
         return 0;
     }
@@ -561,29 +586,36 @@ int sdr_read_settings(const char *file, int bus, int port, int opt)
 int sdr_write_settings(const char *file, int bus, int port, int opt)
 {
     sdr_usb_t *usb;
+    double fx;
     
-    if (!(usb = sdr_usb_open(bus, port, SDR_DEV_VID, SDR_DEV_PID))) {
+    if (!(usb = sdr_usb_open(bus, port, SDR_DEV_VID, SDR_DEV_PID1)) &&
+        !(usb = sdr_usb_open(bus, port, SDR_DEV_VID, SDR_DEV_PID2))) {
+        fprintf(stderr, "No device found. BUS=%d PORT=%d ID=%04X:%04X/%04X\n",
+            bus, port, SDR_DEV_VID, SDR_DEV_PID1, SDR_DEV_PID2);
         return 0;
     }
     uint32_t regs[SDR_MAX_CH][SDR_MAX_REG] = {{0}};
     
-    // read device type
-    if (read_dev_type(usb)) {
-        opt |= 8; // Spider SDR
+    // read device type and TCXO frequency
+    int type = read_dev_type(usb, &fx);
+    if (type < 0) {
+        fprintf(stderr, "No proper device found. BUS=%d PORT=%d ID=%04X:%04X/%04X\n",
+            bus, port, SDR_DEV_VID, SDR_DEV_PID1, SDR_DEV_PID2);
+        return 0;
     }
     // read settings from device registers
-    read_regs(usb, regs, opt);
+    read_regs(usb, type, regs);
     
     // set fixed value of settings
-    set_fixed(regs, opt);
+    set_fixed(type, regs);
     
     // read settings from configuration file
-    if (!read_config(file, regs, opt)) {
+    if (!read_config(file, type, regs, opt)) {
         sdr_usb_close(usb);
         return 0;
     }
     // write settings to device registers
-    write_regs(usb, regs, opt);
+    write_regs(usb, type, regs);
     
     if (opt & 1) {
         // save device registers to EEPROM
