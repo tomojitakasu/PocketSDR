@@ -12,6 +12,7 @@
 //  2024-01-12  1.4  ch->state: const char * -> int
 //  2024-01-16  1.5  add doppler assist for acquisition
 //  2024-03-20  1.6  modify API sdr_ch_update()
+//  2024-04-28  1.7  modify API sdr_ch_new()
 //
 #include <ctype.h>
 #include <math.h>
@@ -23,15 +24,14 @@
 #define T_CN0      1.0      // averaging time for C/N0 (s) 
 #define T_FPULLIN  1.0      // frequency pullin time (s) 
 #define T_NPULLIN  1.5      // navigation data pullin time (s) 
-#define B_DLL      0.5      // band-width of DLL filter (Hz) 
-#define B_PLL      10.0     // band-width of PLL filter (Hz) 
+#define B_DLL      0.25     // band-width of DLL filter (Hz) 
+#define B_PLL      5.0      // band-width of PLL filter (Hz) 
 #define B_FLL_W    10.0     // band-width of FLL filter (Hz) (wide) 
 #define B_FLL_N    2.0      // band-width of FLL filter (Hz) (narrow) 
-#define SP_CORR    0.5      // default correlator spacing (chip) 
 #define MAX_DOP    5000.0   // default max Doppler for acquisition (Hz) 
 #define THRES_CN0_L 35.0    // C/N0 threshold (dB-Hz) (lock) 
 #define THRES_CN0_U 32.0    // C/N0 threshold (dB-Hz) (lost) 
-#define THRES_SYNC 0.3      // threshold for sec-code sync 
+#define THRES_SYNC 0.03     // threshold for sec-code sync 
 #define THRES_LOST 0.003    // threshold for sec-code lost
 
 #define DPI        (2.0 * PI)
@@ -129,18 +129,16 @@ static void trk_free(sdr_trk_t *trk)
 //      add_corr (I) Number of additional correlator for plot
 //      ref_dop  (I) Reference Doppler frequency for acquisition (Hz)
 //      max_dop  (I) Max Doppler frequency for acquisition (Hz)
-//      nav_opt  (I) Navigation data options
 //
 //  return:
 //      Receiver channel (NULL: error)
 //
 sdr_ch_t *sdr_ch_new(const char *sig, int prn, double fs, double fi,
-    double sp_corr, int add_corr, double ref_dop, double max_dop,
-    const char *nav_opt)
+    double sp_corr, int add_corr, double ref_dop, double max_dop)
 {
     sdr_ch_t *ch = (sdr_ch_t *)sdr_malloc(sizeof(sdr_ch_t));
     
-    ch->state = STATE_IDLE;
+    ch->state = SDR_STATE_IDLE;
     ch->time = 0.0;
     sig_upper(sig, ch->sig);
     ch->prn = prn;
@@ -162,7 +160,7 @@ sdr_ch_t *sdr_ch_new(const char *sig, int prn, double fs, double fi,
         max_dop);
     ch->trk = trk_new(ch->sig, ch->prn, ch->code, ch->len_code, ch->T, fs,
         sp_corr, add_corr);
-    ch->nav = sdr_nav_new(nav_opt);
+    ch->nav = sdr_nav_new();
     return ch;
 }
 
@@ -198,14 +196,15 @@ static void trk_init(sdr_trk_t *trk)
 static void start_track(sdr_ch_t *ch, double time, double fd, double coff,
     double cn0)
 {
-    ch->state = STATE_LOCK;
+    ch->state = SDR_STATE_LOCK;
     ch->time = time;
     ch->lock = 0;
     ch->fd = fd;
     ch->coff = coff;
     ch->adr = 0.0;
     ch->cn0 = cn0;
-    ch->tow = -1.0;
+    ch->week = 0;
+    ch->tow = -1;
     trk_init(ch->trk);
     sdr_nav_init(ch->nav);
 }
@@ -240,7 +239,8 @@ static void search_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff,
                 ch->sig, ch->prn, cn0, fd, coff * 1e3);
         }
         else {
-            ch->state = STATE_IDLE;
+            sdr_sleep_msec(100);
+            ch->state = SDR_STATE_IDLE;
             sdr_log(4, "$LOG,%.3f,%s,%d,SIGNAL NOT FOUND (%.1f)", time, ch->sig,
                 ch->prn, cn0);
         }
@@ -256,10 +256,10 @@ static void sync_sec_code(sdr_ch_t *ch, int N)
     if (ch->trk->sec_sync == 0) {
         float P = 0.0, R = 0.0;
         for (int i = 0; i < N; i++) {
-            P += ch->trk->P[SDR_N_HIST-N+i][0] * ch->sec_code[i];
-            R += fabsf(ch->trk->P[SDR_N_HIST-N+i][0]);
+            P += ch->trk->P[SDR_N_HIST-N+i][0] * ch->sec_code[i] / N;
+            R += fabsf(ch->trk->P[SDR_N_HIST-N+i][0]) / N;
         }
-        if (fabsf(P / N) >= R / N * THRES_SYNC) {
+        if (fabsf(P) >= R && R >= THRES_SYNC) {
             ch->trk->sec_sync = ch->lock;
             ch->trk->sec_pol = (P > 0.0f) ? 1 : -1;
         }
@@ -267,9 +267,9 @@ static void sync_sec_code(sdr_ch_t *ch, int N)
     else if ((ch->lock - ch->trk->sec_sync) % N == 0) {
         float P = 0.0;
         for (int i = 0; i < N; i++) {
-            P += ch->trk->P[SDR_N_HIST-N+i][0];
+            P += ch->trk->P[SDR_N_HIST-N+i][0] / N;
         }
-        if (fabsf(P / N) < THRES_LOST) {
+        if (fabsf(P) < THRES_LOST) {
             ch->trk->sec_sync = ch->trk->sec_pol = 0;
         }
     }
@@ -419,7 +419,7 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
     // add P correlator outputs to history 
     sdr_add_buff(ch->trk->P, SDR_N_HIST, ch->trk->C[0], sizeof(sdr_cpx_t));
     ch->lock++;
-    if (ch->tow >= 0.0) ch->tow += ch->T;
+    if (ch->tow >= 0) ch->tow += (int)(ch->T / SDR_CYC);
     
     // sync and remove secondary code 
     if (ch->len_sec_code >= 2 && ch->lock * ch->T >= T_NPULLIN) {
@@ -440,7 +440,7 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
         sdr_nav_decode(ch);
     }
     if (ch->cn0 < THRES_CN0_U) { // signal lost 
-        ch->state = STATE_IDLE;
+        ch->state = SDR_STATE_IDLE;
         ch->lost++;
         sdr_log(4, "$LOG,%.3f,%s,%d,SIGNAL LOST (%s, %.1f)", ch->time, ch->sig,
             ch->prn, ch->sig, ch->cn0);
@@ -458,25 +458,25 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
 //  signal code with 2-cycle samples of digitized IF data (which are overlapped
 //  between previous and current). 
 //
-//    STATE_SRCH : signal acquisition state
-//    STATE_LOCK : signal tracking state
-//    STATE_IDLE : waiting for a next signal acquisition cycle
+//    SDR_STATE_SRCH : signal acquisition state
+//    SDR_STATE_LOCK : signal tracking state
+//    SDR_STATE_IDLE : waiting for a next signal acquisition cycle
 //
 //  args:
 //      ch       (I) Receiver channel
 //      time     (I) Sampling time of the end of digitized IF data (s)
-//      buff     (I) IF buffer
-//      ix       (I) index of IF data
+//      buff     (I) IF data buffer
+//      ix       (I) index of IF data buffer
 //
 //  return:
 //      none
 //
 void sdr_ch_update(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
 {
-    if (ch->state == STATE_SRCH) {
+    if (ch->state == SDR_STATE_SRCH) {
         search_sig(ch, time, buff, ix);
     }
-    else if (ch->state == STATE_LOCK) {
+    else if (ch->state == SDR_STATE_LOCK) {
         track_sig(ch, time, buff, ix);
     }
 }
