@@ -9,13 +9,13 @@ LIB = ../../lib
 BIN = ../../bin
 
 ifeq ($(OS),Windows_NT)
-    INCLUDE = -I$(SRC) -I$(LIB)/cyusb
+    INCLUDE = -I$(SRC) -I$(LIB)/cyusb -I$(LIB)/RTKLIB/src
     OPTIONS = -DWIN32
-    LDLIBS = -static $(LIB)/cyusb/CyAPI.a -lsetupapi -lavrt -lwinmm
+    LDLIBS = -static $(LIB)/win32/libsdr.a $(LIB)/cyusb/CyAPI.a -lsetupapi -lavrt -lwinmm
 else
-    INCLUDE = -I$(SRC)
+    INCLUDE = -I$(SRC) -I$(LIB)/RTKLIB/src
     OPTIONS =
-    LDLIBS = -lusb-1.0 -lpthread
+    LDLIBS = $(LIB)/linux/libsdr.a -lusb-1.0 -lpthread
 endif
 
 WARNOPT = -Wall -Wextra -Wno-missing-field-initializers -Wno-unused-parameter
@@ -26,22 +26,9 @@ TARGET = pocket_dump
 
 all: $(TARGET)
 
-pocket_dump: pocket_dump.o sdr_usb.o sdr_dev.o sdr_conf.o sdr_cmn.o
-
-sdr_usb.o: $(SRC)/sdr_usb.c
-	$(CC) -c $(CFLAGS) $(SRC)/sdr_usb.c
-sdr_dev.o: $(SRC)/sdr_dev.c
-	$(CC) -c $(CFLAGS) $(SRC)/sdr_dev.c
-sdr_conf.o: $(SRC)/sdr_conf.c
-	$(CC) -c $(CFLAGS) $(SRC)/sdr_conf.c
-sdr_cmn.o: $(SRC)/sdr_cmn.c
-	$(CC) -c $(CFLAGS) $(SRC)/sdr_cmn.c
+pocket_dump: pocket_dump.o
 
 pocket_dump.o: $(SRC)/pocket_dev.h
-sdr_usb.o    : $(SRC)/pocket_dev.h
-sdr_dev.o    : $(SRC)/pocket_dev.h
-sdr_conf.o   : $(SRC)/pocket_dev.h
-sdr_cmn.o    : $(SRC)/pocket_sdr.h
 
 clean:
 	rm -f $(TARGET) *.exe *.o *.stackdump
