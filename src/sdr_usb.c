@@ -48,9 +48,6 @@ sdr_usb_t *sdr_usb_open(int bus, int port, uint16_t vid, uint16_t pid)
         usb->Close();
     }
     delete usb;
-    
-    fprintf(stderr, "No device found. BUS=%d PORT=%d ID=%04X:%04X\n", bus,
-        port, vid, pid);
     return NULL;
 #else
     libusb_device **devs;
@@ -78,8 +75,6 @@ sdr_usb_t *sdr_usb_open(int bus, int port, uint16_t vid, uint16_t pid)
         }
     }
     if (i >= n) {
-        fprintf(stderr, "No device found. BUS=%d PORT=%d ID=%04X:%04X\n", bus,
-            port, vid, pid);
         libusb_free_device_list(devs, 0);
         libusb_exit(usb->ctx);
         free(usb);
