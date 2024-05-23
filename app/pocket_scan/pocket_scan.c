@@ -73,7 +73,7 @@ static int scan_usb(int ep)
         
         for (int j = 0; j < usb->EndPointCount(); j++) {
             CCyUSBEndPoint *ep = usb->EndPoints[j];
-            printf("%5sIF=%2d ALT=%2d EP=%2d DIR=%s MAXSIZE=%4d\n", "",
+            printf("%5sIF=%2d ALT=%2d EP=%2d DIR=%s MAXSIZE=%5d\n", "",
                 0, 0, ep->Address & 0xF, (ep->Address & 0x80) ? "IN " : "OUT",
                 ep->MaxPktSize);
         }
