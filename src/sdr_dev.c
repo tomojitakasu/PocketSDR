@@ -13,93 +13,19 @@
 //  2022-08-08  1.3  support Spider SDR
 //  2023-12-25  1.3  modify taskname for AvSetMmThreadCharacteristicsA()
 //  2024-04-04  1.4  refactored
+//  2024-04-13  1.5  suppport Pocket SDR FE 4CH
 //
-#include "pocket_dev.h"
 #include "pocket_sdr.h"
+#include "pocket_dev.h"
 #ifdef WIN32
 #include <avrt.h>
 #endif
 
 // constants and macros --------------------------------------------------------
+#define BUFF_SIZE       (SDR_SIZE_BUFF * SDR_MAX_BUFF)
 #define TO_TRANSFER     3000    // USB transfer timeout (ms)
-#define TO_TR_LIBUSB    10000   // USB transfer timeout for LIBUSB (ms)
-
-// quantization lookup table ---------------------------------------------------
-static int8_t LUT[2][2][256];
-
-// generate quantization lookup table ------------------------------------------
-static void gen_LUT(void)
-{
-    static const int8_t val[] = {+1, +3, -1, -3}; // 2bit, sign + magnitude
-    
-    if (LUT[0][0][0]) return;
-    
-    for (int i = 0; i < 256; i++) {
-        LUT[0][0][i] = val[(i>>0) & 0x3]; // CH1 I
-        LUT[0][1][i] = val[(i>>2) & 0x3]; // CH1 Q
-        LUT[1][0][i] = val[(i>>4) & 0x3]; // CH2 I
-        LUT[1][1][i] = val[(i>>6) & 0x3]; // CH2 Q
-    }
-}
-
-// read sampling type ----------------------------------------------------------
-static int read_sample_type(sdr_dev_t *dev)
-{
-    uint8_t data[6];
-    
-    // read device info and status
-    if (!sdr_usb_req(dev->usb, 0, SDR_VR_STAT, 0, data, 6)) {
-       return 0;
-    }
-    if ((data[3] >> 4) & 1) { // Spider SDR
-        dev->max_ch = data[3] & 0xF;
-        for (int i = 0; i < dev->max_ch; i++) {
-            dev->IQ[i] = 3; // 16 bit-I
-        }
-    }
-    else { // Pocket SDR
-        dev->max_ch = 2;
-        for (int i = 0; i < dev->max_ch; i++) {
-            // read MAX2771 ENIQ field
-            if (!sdr_usb_req(dev->usb, 0, SDR_VR_REG_READ,
-                    (uint16_t)((i << 8) + 1), data, 4)) {
-               return 0;
-            }
-            dev->IQ[i] = ((data[0] >> 3) & 1) ? 2 : 1; // 1:8bit-I,2:8bit-IQ
-        }
-    }
-    return 1;
-}
-
-// read buffer -----------------------------------------------------------------
-static uint8_t *read_buff(sdr_dev_t *dev)
-{
-    int64_t rp = dev->rp, wp = dev->wp;
-    
-    if (rp >= wp) {
-        return NULL;
-    }
-    if (wp > rp + SDR_SIZE_BUFF * SDR_MAX_BUFF) {
-        fprintf(stderr, "bulk transfer buffer overflow\n");
-    }
-    dev->rp = rp + SDR_SIZE_BUFF;
-    return dev->buff + rp % (SDR_SIZE_BUFF * SDR_MAX_BUFF);
-}
 
 #ifdef WIN32
-
-// get bulk transfer endpoint --------------------------------------------------
-static sdr_ep_t *get_bulk_ep(sdr_usb_t *usb, int ep)
-{
-    for (int i = 0; i < usb->EndPointCount(); i++) {
-        if (usb->EndPoints[i]->Attributes == 2 &&
-            usb->EndPoints[i]->Address == ep) {
-            return (sdr_ep_t *)usb->EndPoints[i];
-        }
-    }
-    fprintf(stderr, "No bulk end point ep=%02X\n", ep);
-    return NULL;
-}
 
 // rise process/thread priority ------------------------------------------------
 static void rise_pri(void)
@@ -123,10 +49,23 @@ static void rise_pri(void)
     }
 }
 
+// get bulk transfer endpoint --------------------------------------------------
+static CCyBulkEndPoint *get_bulk_ep(sdr_usb_t *usb, int ep)
+{
+    for (int i = 0; i < usb->EndPointCount(); i++) {
+        if (usb->EndPoints[i]->Attributes == 2 &&
+            usb->EndPoints[i]->Address == ep) {
+            return (CCyBulkEndPoint *)usb->EndPoints[i];
+        }
+    }
+    return NULL;
+}
+
 // USB event handler thread ----------------------------------------------------
 static DWORD WINAPI event_handler(void *arg)
 {
     sdr_dev_t *dev = (sdr_dev_t *)arg;
+    CCyBulkEndPoint *ep;
     uint8_t *ctx[SDR_MAX_BUFF] = {0};
     OVERLAPPED ov[SDR_MAX_BUFF] = {{0,0,0,0,0}};
     long len = SDR_SIZE_BUFF;
@@ -134,25 +73,34 @@ static DWORD WINAPI event_handler(void *arg)
     // rise process/thread priority
     rise_pri();
     
+    if (!(ep = get_bulk_ep(dev->usb, SDR_DEV_EP))) {
+        fprintf(stderr, "bulk endpoint get error ep=0x%02X\n", SDR_DEV_EP);
+        return 0;
+    }
+    ep->SetXferSize(SDR_SIZE_BUFF);
     for (int i = 0; i < SDR_MAX_BUFF; i++) {
         ov[i].hEvent = CreateEvent(NULL, false, false, NULL);
-        ctx[i] = dev->ep->BeginDataXfer(dev->buff + len * i, len, &ov[i]); 
+        ctx[i] = ep->BeginDataXfer(dev->buff + len * i, len, &ov[i]); 
     }
+    (void)sdr_usb_req(dev->usb, 0, SDR_VR_START, 0, NULL, 0);
+    
     for (int i = 0; dev->state; ) {
-        if (!dev->ep->WaitForXfer(&ov[i], TO_TRANSFER)) {
+        if (!ep->WaitForXfer(&ov[i], TO_TRANSFER)) {
             fprintf(stderr, "bulk transfer timeout\n");
             continue;
         }
-        if (!dev->ep->FinishDataXfer(dev->buff + len * i, len, &ov[i], ctx[i])) {
+        if (!ep->FinishDataXfer(dev->buff + len * i, len, &ov[i], ctx[i])) {
             fprintf(stderr, "bulk transfer error\n");
             break;
         }
-        ctx[i] = dev->ep->BeginDataXfer(dev->buff + len * i, len, &ov[i]);
+        ctx[i] = ep->BeginDataXfer(dev->buff + len * i, len, &ov[i]);
         dev->wp += len;
         i = (i + 1) % SDR_MAX_BUFF;
     }
+    (void)sdr_usb_req(dev->usb, 0, SDR_VR_STOP, 0, NULL, 0);
+    
     for (int i = 0; i < SDR_MAX_BUFF; i++) {
-        dev->ep->FinishDataXfer(dev->buff + len * i, len, &ov[i], ctx[i]);
+        ep->FinishDataXfer(dev->buff + len * i, len, &ov[i], ctx[i]);
         CloseHandle(ov[i].hEvent);
     }
     return 0;
@@ -178,21 +126,25 @@ static void *event_handler(void *arg)
     sdr_dev_t *dev = (sdr_dev_t *)arg;
     struct sched_param param = {99};
     struct timeval to = {0, 100000};
+    int ret;
     
     // set thread scheduling real-time
     if (pthread_setschedparam(dev->thread, SCHED_RR, &param)) {
         fprintf(stderr, "set thread scheduling error\n");
     }
     for (int i = 0; i < SDR_MAX_BUFF; i++) {
-        int ret = libusb_submit_transfer(dev->transfer[i]);
-        if (ret) {
+        if ((ret = libusb_submit_transfer(dev->transfer[i]))) {
             fprintf(stderr, "libusb_submit_transfer(%d) error (%d)\n", i, ret);
             return NULL;
         }
     }
+    (void)sdr_usb_req(dev->usb, 0, SDR_VR_START, 0, NULL, 0);
+    
     while (dev->state) {
         if (libusb_handle_events_timeout(NULL, &to)) continue;
     }
+    (void)sdr_usb_req(dev->usb, 0, SDR_VR_STOP, 0, NULL, 0);
+    
     for (int i = 0; i < SDR_MAX_BUFF; i++) {
         libusb_cancel_transfer(dev->transfer[i]);
     }
@@ -213,70 +165,31 @@ static void *event_handler(void *arg)
 //
 sdr_dev_t *sdr_dev_open(int bus, int port)
 {
-#ifdef WIN32
-    sdr_dev_t *dev = new sdr_dev_t;
+    sdr_dev_t *dev = (sdr_dev_t *)sdr_malloc(sizeof(sdr_dev_t));
     
-    if (!(dev->usb = sdr_usb_open(bus, port, SDR_DEV_VID, SDR_DEV_PID))) {
-        delete dev;
+    if (!(dev->usb = sdr_usb_open(bus, port, SDR_DEV_VID, SDR_DEV_PID1)) &&
+        !(dev->usb = sdr_usb_open(bus, port, SDR_DEV_VID, SDR_DEV_PID2))) {
+        fprintf(stderr, "No device found. BUS=%d PORT=%d ID=%04X:%04X/%04X\n",
+            bus, port, SDR_DEV_VID, SDR_DEV_PID1, SDR_DEV_PID2);
+        sdr_free(dev);
         return NULL;
     }
-    if (!(dev->ep = get_bulk_ep(dev->usb, SDR_DEV_EP))) {
-        sdr_usb_close(dev->usb);
-        delete dev;
-        return NULL;
-    }
-    if (!read_sample_type(dev)) {
-        sdr_usb_close(dev->usb);
-        delete dev;
-        fprintf(stderr, "Read sampling type error\n");
-        return NULL;
-    }
-    dev->buff = new uint8_t[SDR_SIZE_BUFF * SDR_MAX_BUFF];
-    dev->ep->SetXferSize(SDR_SIZE_BUFF);
-    gen_LUT();
+    dev->buff = (uint8_t *)sdr_malloc(BUFF_SIZE);
     
-    dev->state = 1;
-    dev->rp = dev->wp = 0;
-    dev->thread = CreateThread(NULL, 0, event_handler, dev, 0, NULL);
-    return dev;
-    
-#else // WIN32
-    sdr_dev_t *dev;
-    
-    if (!(dev = (sdr_dev_t *)malloc(sizeof(sdr_dev_t)))) {
-        return NULL;
-    }
-    if (!(dev->usb = sdr_usb_open(bus, port, SDR_DEV_VID, SDR_DEV_PID))) {
-        free(dev);
-        return NULL;
-    }
-    if (!read_sample_type(dev)) {
-        sdr_usb_close(dev->usb);
-        free(dev);
-        fprintf(stderr, "Read sampling type error\n");
-        return NULL;
-    }
-    dev->buff = (uint8_t *)malloc(SDR_SIZE_BUFF * SDR_MAX_BUFF);
+#ifndef WIN32
     for (int i = 0; i < SDR_MAX_BUFF; i++) {
-        dev->transfer[i] = libusb_alloc_transfer(0);
-        if (!dev->transfer[i]) {
+        if (!(dev->transfer[i] = libusb_alloc_transfer(0))) {
             fprintf(stderr, "libusb_alloc_transfer(%d) error\n", i);
             sdr_usb_close(dev->usb);
-            free(dev);
+            sdr_free(dev);
             return NULL;
         }
         libusb_fill_bulk_transfer(dev->transfer[i], dev->usb->h, SDR_DEV_EP,
             dev->buff + SDR_SIZE_BUFF * i, SDR_SIZE_BUFF, transfer_cb, dev,
-            TO_TR_LIBUSB);
+            TO_TRANSFER);
     }
-    gen_LUT();
-    
-    dev->state = 1;
-    dev->rp = dev->wp = 0;
-    pthread_create(&dev->thread, NULL, event_handler, dev);
+#endif
     return dev;
-
-#endif // WIN32
 }
 
 //------------------------------------------------------------------------------
@@ -290,101 +203,206 @@ sdr_dev_t *sdr_dev_open(int bus, int port)
 //
 void sdr_dev_close(sdr_dev_t *dev)
 {
+    sdr_usb_close(dev->usb);
+#ifndef WIN32
+    for (int i = 0; i < SDR_MAX_BUFF; i++) {
+        libusb_free_transfer(dev->transfer[i]);
+    }
+#endif
+    sdr_free(dev->buff);
+    sdr_free(dev);
+}
+
+//------------------------------------------------------------------------------
+//  Start the SDR device.
+//
+//  args:
+//      dev         (I)   USB device pointer
+//
+//  return
+//      status (1: OK, 0: error)
+//
+int sdr_dev_start(sdr_dev_t *dev)
+{
+    if (dev->state) return 0;
+    dev->state = 1;
+    dev->rp = dev->wp = 0;
+#ifdef WIN32
+    dev->thread = CreateThread(NULL, 0, event_handler, dev, 0, NULL);
+#else
+    pthread_create(&dev->thread, NULL, event_handler, dev);
+#endif
+    return 1;
+}
+
+//------------------------------------------------------------------------------
+//  Stop the SDR device.
+//
+//  args:
+//      dev         (I)   USB device pointer
+//
+//  return
+//      status (1: OK, 0: error)
+//
+int sdr_dev_stop(sdr_dev_t *dev)
+{
+    if (!dev->state) return 0;
 #ifdef WIN32
     dev->state = 0;
     WaitForSingleObject(dev->thread, 10000);
     CloseHandle(dev->thread);
-    delete [] dev->buff;
-    sdr_usb_close(dev->usb);
-    delete dev;
 #else
     dev->state = 0;
     pthread_join(dev->thread, NULL);
-    sdr_usb_close(dev->usb);
-    for (int i = 0; i < SDR_MAX_BUFF; i++) {
-        libusb_free_transfer(dev->transfer[i]);
-    }
-    free(dev->buff);
-    free(dev);
-#endif // WIN32
+#endif
+    return 1;
 }
 
-// copy digital IF data --------------------------------------------------------
-static int copy_data(const uint8_t *data, int ch, int IQ, int8_t *buff)
+//------------------------------------------------------------------------------
+//  Read of IF data (non-block). Immediately returned with return value 0 if
+//  insufficient data received.
+//
+//  args:
+//      dev         (I)   USB device pointer
+//      buff        (O)   IF data buffer
+//      size        (I)   IF data size to be read (bytes)
+//
+//  return
+//      data size read (0: insufficent data) (bytes)
+//
+int sdr_dev_read(sdr_dev_t *dev, uint8_t *buff, int size)
 {
-    int size = SDR_SIZE_BUFF;
+    int rp = (int)(dev->rp % BUFF_SIZE);
     
-    if (IQ == 0) { // raw
-        if (ch != 0) return 0;
-        memcpy(buff, data, size);
-    }
-    else if (IQ == 1) { // 8 bit I sampling
-        for (int i = 0; i < size; i += 4) {
-            buff[i  ] = LUT[ch][0][data[i  ]];
-            buff[i+1] = LUT[ch][0][data[i+1]];
-            buff[i+2] = LUT[ch][0][data[i+2]];
-            buff[i+3] = LUT[ch][0][data[i+3]];
-        }
-    }
-    else if (IQ == 2) { // 8 bit I/Q sampling
-        size *= 2;
-        for (int i = 0, j = 0; i < size; i += 8, j += 4) {
-            buff[i  ] = LUT[ch][0][data[j  ]];
-            buff[i+1] = LUT[ch][1][data[j  ]];
-            buff[i+2] = LUT[ch][0][data[j+1]];
-            buff[i+3] = LUT[ch][1][data[j+1]];
-            buff[i+4] = LUT[ch][0][data[j+2]];
-            buff[i+5] = LUT[ch][1][data[j+2]];
-            buff[i+6] = LUT[ch][0][data[j+3]];
-            buff[i+7] = LUT[ch][1][data[j+3]];
-        }
-    }
-    else if (IQ == 3) { // 16 bit I sampling
-        int n = ch / 2 % 2, m = ch % 2;
-        size /= 2;
-        for (int i = 0, j = ch / 4; i < size; i += 4, j += 8) {
-            buff[i  ] = LUT[n][m][data[j  ]];
-            buff[i+1] = LUT[n][m][data[j+2]];
-            buff[i+2] = LUT[n][m][data[j+4]];
-            buff[i+3] = LUT[n][m][data[j+6]];
-        }
-    }
-    return size;
-}
-
-// read raw IF data -----------------------------------------------------------
-int sdr_dev_read(sdr_dev_t *dev, uint8_t *buff, int n)
-{
-    int size = SDR_SIZE_BUFF * SDR_MAX_BUFF, rp = (int)(dev->rp % size);
-    
-    if (dev->wp < dev->rp + n) {
+    if (dev->wp < dev->rp + size) {
         return 0;
     }
-    if (rp + n <= size) {
-        memcpy(buff, dev->buff + rp, n);
+    if (rp + size <= BUFF_SIZE) {
+        memcpy(buff, dev->buff + rp, size);
     }
     else {
-        memcpy(buff, dev->buff + rp, size - rp);
-        memcpy(buff + size - rp, dev->buff, n - size + rp);
+        memcpy(buff, dev->buff + rp, BUFF_SIZE - rp);
+        memcpy(buff + BUFF_SIZE - rp, dev->buff, size - BUFF_SIZE + rp);
     }
-    dev->rp += n;
-    return n;
+    dev->rp += size;
+    return size;
 }
 
-// read decoded IF data --------------------------------------------------------
-int sdr_dev_data(sdr_dev_t *dev, int8_t **buff, int *n)
+// read MAX2771 status ---------------------------------------------------------
+static int read_MAX2771_stat(sdr_dev_t *dev, int ch, double fx, double *fs,
+    double *fo, int *IQ)
 {
-    uint8_t *data;
-    int size = 0;
+    static const double ratio[8] = {2.0, 0.25, 0.5, 1.0, 4.0};
+    uint8_t data[4];
+    uint32_t reg[11], ENIQ, INT_PLL, NDIV, RDIV, FDIV, REFDIV, FCLKIN, ADCCLK;
+    uint32_t REFCLK_L, REFCLK_M, ADCCLK_L, ADCCLK_M, PREFRACDIV;
     
-    for (int i = 0; i < dev->max_ch; i++) {
-        n[i] = 0;
-    }
-    while ((data = read_buff(dev)) && size < SDR_SIZE_BUFF * SDR_MAX_BUFF) {
-        for (int i = 0; i < dev->max_ch; i++) {
-            n[i] += copy_data(data, i, dev->IQ[i], buff[i] + n[i]);
+    for (int i = 0; i < 11; i++) {
+        if (!sdr_usb_req(dev->usb, 0, SDR_VR_REG_READ, (ch << 8) + i, data,
+            4)) {
+            return 0;
         }
-        size += SDR_SIZE_BUFF;
+        for (int j = 0; j < 4; j++) { // swap bytes
+            *((uint8_t *)(reg + i) + j) = data[3 - j];
+        }
     }
-    return size;
+    ENIQ     = (reg[ 1] >> 27) & 0x1;
+    INT_PLL  = (reg[ 3] >>  3) & 0x1;
+    NDIV     = (reg[ 4] >> 13) & 0x7FFF;
+    RDIV     = (reg[ 4] >>  3) & 0x3FF;
+    FDIV     = (reg[ 5] >>  8) & 0xFFFFF;
+    REFDIV   = (reg[ 3] >> 29) & 0x7;
+    FCLKIN   = (reg[ 7] >>  3) & 0x1;
+    ADCCLK   = (reg[ 7] >>  2) & 0x1;
+    REFCLK_L = (reg[ 7] >> 16) & 0xFFF;
+    REFCLK_M = (reg[ 7] >>  4) & 0xFFF;
+    ADCCLK_L = (reg[10] >> 16) & 0xFFF;
+    ADCCLK_M = (reg[10] >>  4) & 0xFFF;
+    PREFRACDIV = (reg[0xA] >>  3) & 0x1;
+    *fs = !PREFRACDIV ? fx : fx * REFCLK_L / (4096.0 - REFCLK_M + REFCLK_L);
+    *fs *= ADCCLK  ? 1.0 : ratio[REFDIV];
+    *fs *= !FCLKIN ? 1.0 : ADCCLK_L / (4096.0 - ADCCLK_M + ADCCLK_L);
+    *fo = fx / RDIV * (INT_PLL ? NDIV : NDIV + FDIV / 1048576.0);
+    *IQ = ENIQ ? 2 : 1;
+    return 1;
+}
+
+// read MAX2769B status --------------------------------------------------------
+static int read_MAX2769B_stat(sdr_dev_t *dev, int ch, double fx, double *fs,
+    double *fo, int *IQ)
+{
+    static const double ratio[8] = {2.0, 0.25, 0.5, 1.0};
+    uint8_t data[4];
+    uint32_t reg[8], ENIQ, INT_PLL, NDIV, RDIV, FDIV, REFDIV, L_CNT, M_CNT;
+    uint32_t FCLKIN, ADCCLK;
+    
+    for (int i = 0; i < 8; i++) {
+        if (!sdr_usb_req(dev->usb, 0, SDR_VR_REG_READ, (ch << 8) + i, data,
+            4)) {
+            return 0;
+        }
+        for (int j = 0; j < 4; j++) { // swap bytes
+            *((uint8_t *)(reg + i) + j) = data[3 - j];
+        }
+    }
+    ENIQ    = (reg[1] >> 27) & 0x1;
+    INT_PLL = (reg[3] >>  3) & 0x1;
+    NDIV    = (reg[4] >> 13) & 0x7FFF;
+    RDIV    = (reg[4] >>  3) & 0x3FF;
+    FDIV    = (reg[5] >>  8) & 0xFFFFF;
+    REFDIV  = (reg[3] >> 21) & 0x3;
+    L_CNT   = (reg[7] >> 16) & 0xFFF;
+    M_CNT   = (reg[7] >>  4) & 0xFFF;
+    FCLKIN  = (reg[7] >>  3) & 0x1;
+    ADCCLK  = (reg[7] >>  2) & 0x1;
+    *fs = fx * (ADCCLK ? 1.0 : ratio[REFDIV]);
+    *fs *= !FCLKIN ? 1.0 : L_CNT / (4096.0 - M_CNT + L_CNT);
+    *fo = fx / RDIV * (INT_PLL ? NDIV : NDIV + FDIV / 1048576.0);
+    *IQ = ENIQ ? 2 : 1;
+    return 1;
+}
+
+//------------------------------------------------------------------------------
+//  Read device status and info.
+//
+//  args:
+//      dev         (I)   USB device pointer
+//      fs          (O)   sampling frequency (Hz)
+//      fo          (O)   LO frequencies for each IF data channels (Hz)
+//      IQ          (O)   sampling type for each IF data channels (1:I, 2:I/Q)
+//
+//  return
+//      IF data format (0: error)
+//        SDR_FMT_RAW8  : packed 8(4x2) bits raw  (Pocket SDR FE 2CH)
+//        SDR_FMT_RAW16 : packed 16(4x4) bits raw (Pocket SDR FE 4CH)
+//        SDR_FMT_RAW16I: packed 16(2x8) bits raw (Spider SDR)
+//
+int sdr_dev_info(sdr_dev_t *dev, double *fs, double *fo, int *IQ)
+{
+    uint8_t data[6];
+    
+    // read device info and status
+    if (!sdr_usb_req(dev->usb, 0, SDR_VR_STAT, 0, data, 6)) {
+        fprintf(stderr, "Device info read error\n");
+        return 0;
+    }
+    int type = (data[3] >> 4) & 1; // 0: Pocket SDR, 1: Spider SDR
+    double fx = (((uint16_t)data[1] << 8) + data[2]) * 1e3, fs_;
+    
+    if (type == 1) { // Spider SDR
+        int nch = data[3] & 0xF;
+        for (int i = 0; i < nch; i++) {
+            if (!read_MAX2769B_stat(dev, i, fx, &fs_, fo + i, IQ + i)) return 0;
+            if (i == 0) *fs = fs_;
+        }
+        return SDR_FMT_RAW16I;
+    }
+    else { // Pocket SDR
+        int ver = data[0] >> 4, nch = (ver <= 2) ? 2 : 4;
+        for (int i = 0; i < nch; i++) {
+            if (!read_MAX2771_stat(dev, i, fx, &fs_, fo + i, IQ + i)) return 0;
+            if (i == 0) *fs = fs_;
+        }
+        return (ver <= 2) ? SDR_FMT_RAW8 : SDR_FMT_RAW16; // 2CH : 4CH
+    }
 }
