@@ -171,7 +171,7 @@ static void *ch_thread(void *arg)
             sdr_ch_update(ch, th->ix * SDR_CYC, th->rcv->buff[ch->if_ch],
                 th->rcv->N * (int)(th->ix % MAX_BUFF));
             
-            // update SDR obs and nav data
+            // update observation and navigation data
             sdr_pvt_udobs(th->rcv->pvt, th->ix, ch);
             
             // output channel log
