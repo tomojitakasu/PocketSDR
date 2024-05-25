@@ -10,7 +10,7 @@
 #include "pocket_sdr.h"
 
 // constants and macros --------------------------------------------------------
-#define LAG_EPOCH  0.15         // PVT epoch lag (s)
+#define LAG_EPOCH  0.25         // PVT epoch lag (s)
 #define FILE_NAV   "pocket.nav" // navigation data file
 
 #define ROUND(x)   (int)floor((x) + 0.5)
@@ -115,7 +115,7 @@ static void out_rtcm3_obs(rtcm_t *rtcm, const obs_t *obs, stream_t *str)
             obsd_t *data = obs->data + j;
             if (sys_idx(data->sat) != i) continue;
             
-            // separate messages if nsat} x nsig > 64
+            // separate messages if nsat x nsig > 64
             if ((rtcm->obs.n + 1) * nsig[i] > 64) {
                 if (gen_rtcm3(rtcm, msgs[i], 0, 1)) {
                     strwrite(str, rtcm->buff, rtcm->nbyte);
@@ -201,6 +201,7 @@ void sdr_pvt_free(sdr_pvt_t *pvt)
     sdr_free(pvt->nav->geph);
     sdr_free(pvt->nav);
     sdr_free(pvt->sol);
+    sdr_free(pvt->ssat);
     free_rtcm(pvt->rtcm);
     sdr_free(pvt->rtcm);
     sdr_free(pvt);
@@ -236,14 +237,14 @@ static double gen_prng(gtime_t time, const sdr_ch_t *ch)
     if (ch->week > 0) {
         tau = (week - ch->week) * 86400.0 * 7 + tow - ch->tow * 1e-3 + ch->coff;
     }
-    else { // resolve 100 ms ambiguity w/o week number (0.06 <= tau < 0.16)
+    else { // resolve 100 ms ambiguity w/o week number (0.05 <= tau < 0.15)
         tau = tow - ch->tow * 1e-3 + ch->coff + ch->nav->coff;
         tau -= floor(tau / 0.1) * 0.1;
-        if (tau < 0.06) tau += 0.1;
+        if (tau < 0.05) tau += 0.1;
     }
 #if 1 // for debug
-    trace(2, "%s %5s %3d %4d %10.3f %12.9f %12.9f\n", ch->sat, ch->sig, ch->prn,
-        ch->week, ch->tow * 1e-3, ch->coff, tau);
+    trace(2, "%s %-5s %3d %4d %10.3f %12.9f %12.9f\n", ch->sat, ch->sig,
+        ch->prn, ch->week, ch->tow * 1e-3, ch->coff, tau);
 #endif
     return CLIGHT * tau;
 }
@@ -366,16 +367,17 @@ static void update_sol(sdr_pvt_t *pvt)
 #if 1 // for debug
     double pos[3];
     ecef2pos(pvt->sol->rr, pos);
-    trace(2, "TIME=%s POS=%12.8f %13.8f %8.1f NS=%2d Q=%d DTR=%6.1f %6.1f %6.1f %6.1f MSG=%s\n",
-        time_str(pvt->sol->time, 0), pos[0] * R2D, pos[1] * R2D, pos[2], pvt->sol->ns,
-        pvt->sol->stat, pvt->sol->dtr[0] * 1e9, pvt->sol->dtr[1] * 1e9,
+    trace(2, "TIME=%s POS=%12.8f %13.8f %8.2f Q=%d NS=%2d DTR=%6.1f %6.1f %6.1f MSG=%s\n",
+        time_str(pvt->sol->time, 9), pos[0] * R2D, pos[1] * R2D, pos[2],
+        pvt->sol->stat, pvt->sol->ns, pvt->sol->dtr[1] * 1e9,
         pvt->sol->dtr[2] * 1e9, pvt->sol->dtr[3] * 1e9, msg);
     
     for (int i = 0; i < MAXSAT; i++) {
-        if (pvt->ssat[i].resp[0] == 0.0) continue;
+        if (pvt->ssat[i].azel[1] <= 0.0) continue;
         char sat[16];
         satno2id(i+1, sat);
-        trace(2, "%2s VS=%d AZ=%5.1f EL=%4.1f RES=%12.3f\n", sat, pvt->ssat[i].vs,
+        trace(2, "SAT=%s VS=%d SNR=%4.1f AZ=%5.1f EL=%4.1f RESP=%12.3f\n", sat,
+            pvt->ssat[i].vs, pvt->ssat[i].snr[0] * SNR_UNIT,
             pvt->ssat[i].azel[0] * R2D, pvt->ssat[i].azel[1] * R2D,
             pvt->ssat[i].resp[0]);
     }
