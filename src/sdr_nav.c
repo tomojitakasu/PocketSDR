@@ -52,8 +52,8 @@
 #include "pocket_sdr.h"
 
 // constants -------------------------------------------------------------------
-#define THRES_SYNC  0.03      // threshold for symbol sync
-#define THRES_LOST  0.003     // threshold for symbol lost
+#define THRES_SYNC  0.02      // threshold for symbol sync
+#define THRES_LOST  0.002     // threshold for symbol lost
 #define GPST_OFF_W  2048      // GPST offset (week) (2019-4-7 ~ 2038-11-20)
 #define GPST_GST_W  1024      // GPST - GST (week)
 #define GPST_BDT_W  1356      // GPST - BDT (week)
@@ -69,7 +69,7 @@
 #define TOFF_L5I    0.440     // time offset (s) L5I
 #define TOFF_L5Q    0.440     // time offset (s) L5Q ?
 #define TOFF_L5I_S  1.088     // time offset (s) L5I SBAS
-#define TOFF_L6DE   1.017     // time offset (s) L6D/E
+#define TOFF_L6DE   1.0175    // time offset (s) L6D/E
 #define TOFF_G1CA   2.000     // time offset (s) G1CA
 #define TOFF_G1OCD  2.207     // time offset (s) G1OCD ?
 #define TOFF_G3OCD  0.328     // time offset (s) G3OCD ?
@@ -229,14 +229,7 @@ static void hex_str(const uint8_t *data, int nbits, char *str)
 // update tow ------------------------------------------------------------------
 static void update_tow(sdr_ch_t *ch, double tow)
 {
-    if (ch->tow > 0) return;
-    ch->tow = (int)(tow / 1e-3);
-    ch->tow += (int)(floor(ch->coff / ch->T) * ch->T / 1e-3);
-    
-#if 1 // for debug
-    trace(2, "update_tow: sat=%s sig=%s tow=%.3f coff=%.9f -> tow=%.3f\n",
-        ch->sat, ch->sig, tow, ch->coff, ch->tow * 1e-3);
-#endif
+    if (ch->tow <= 0) ch->tow = (int)(tow / 1e-3);
 }
 
 // new nav data ----------------------------------------------------------------
@@ -745,6 +738,9 @@ static void decode_L5I(sdr_ch_t *ch)
 // decode L5Q nav data ([13]) --------------------------------------------------
 static void decode_L5Q(sdr_ch_t *ch)
 {
+    if (ch->prn >= 120 && ch->prn <= 158) { // SBAS
+        return;
+    }
     if (ch->trk->sec_sync == 0) {
         ch->tow = -1;
     }
@@ -774,7 +770,6 @@ static void decode_L5SIV(sdr_ch_t *ch)
 // decode L5SQV nav data ([6]) -------------------------------------------------
 static void decode_L5SQV(sdr_ch_t *ch)
 {
-    decode_L5Q(ch);
 }
 
 // sync and decode L6 frame ([5]) ----------------------------------------------
