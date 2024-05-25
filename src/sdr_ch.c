@@ -31,8 +31,8 @@
 #define MAX_DOP    5000.0   // default max Doppler for acquisition (Hz) 
 #define THRES_CN0_L 35.0    // C/N0 threshold (dB-Hz) (lock) 
 #define THRES_CN0_U 32.0    // C/N0 threshold (dB-Hz) (lost) 
-#define THRES_SYNC 0.03     // threshold for sec-code sync 
-#define THRES_LOST 0.003    // threshold for sec-code lost
+#define THRES_SYNC 0.02     // threshold for sec-code sync 
+#define THRES_LOST 0.002    // threshold for sec-code lost
 
 #define DPI        (2.0 * PI)
 #define SQR(x)     ((x) * (x)) 
@@ -394,9 +394,23 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
     ch->coff -= ch->fd / ch->fc * tau; // carrier-aided code offset (s) 
     ch->time = time;
     
+    // adjust code offset within 1 cycle range (0 <= ch->coff < ch->T)
+    if (ch->coff >= ch->T) {
+        ch->coff -= ch->T;
+        if (ch->tow >= 0) ch->tow -= (int)(ch->T / 1e-3);
+        ch->lock--;
+        memmove(ch->trk->P + 1, ch->trk->P, sizeof(sdr_cpx_t) *
+            (SDR_N_HIST - 1));
+    }
+    else if (ch->coff < 0.0) {
+        ch->coff += ch->T;
+        if (ch->tow >= 0) ch->tow += (int)(ch->T / 1e-3);
+        ch->lock++;
+        memmove(ch->trk->P, ch->trk->P + 1, sizeof(sdr_cpx_t) *
+            (SDR_N_HIST - 1));
+    }
     // code position (samples) and carrier phase (cyc) 
-    int i = (int)(ch->coff * ch->fs + 0.5) % ch->N;
-    if (i < 0) i += ch->N;
+    int i = (int)(ch->coff * ch->fs);
     double phi = ch->fi * tau + ch->adr + fc * i / ch->fs;
     
     if (!strcmp(ch->sig, "L6D") || !strcmp(ch->sig, "L6E")) {
