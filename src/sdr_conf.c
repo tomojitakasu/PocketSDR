@@ -435,7 +435,7 @@ static int write_config(const char *file, int type, double fx,
 // read device register --------------------------------------------------------
 static uint32_t read_reg(sdr_usb_t *usb, int ch, int addr)
 {
-    uint8_t data[4];
+    uint8_t data[4] = {0};
     
     if (!sdr_usb_req(usb, 0, SDR_VR_REG_READ, (uint16_t)((ch << 8) + addr),
              data, 4)) {
