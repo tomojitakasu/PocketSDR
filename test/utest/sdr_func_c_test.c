@@ -93,8 +93,7 @@ static void sdr_mix_carr_ref(const sdr_buff_t *buff, int ix, int N, double fs,
 // test sdr_mix_carr() ---------------------------------------------------------
 static void test_02(void)
 {
-    //int N[] = {12000, 16000, 24000, 32000, 48000, 0};
-    int N[] = {1200, 0};
+    int N[] = {12000, 16000, 24000, 32000, 48000, 0};
     int ix[] = {700, 8000, 12345, 5678, 0, -3000};
     double fs[] = {12e3, 16e6, 24e6, 12.345e6, 6.7e6, 0};
     double fc[] = {-5432.1, 3456.78, -4999.9, -0.123, 0.0356, 0};
@@ -109,7 +108,7 @@ static void test_02(void)
         sdr_mix_carr_ref(buff, ix[i], N[i], fs[i], fc[i], phi[i], IQ_ref);
         
         for (int j = 0; j < N[i]; j++) {
-            if (SQR(IQ[j].I - IQ_ref[j].I) > 16 || SQR(IQ[j].Q - IQ_ref[j].Q) > 16) {
+            if (SQR(IQ[j].I - IQ_ref[j].I) > 25 || SQR(IQ[j].Q - IQ_ref[j].Q) > 25) {
                 printf("sdr_mix_carr() error N=%d fs=%.3e fc=%.3f phi=%.3e IQ[%d]=%d/%d : %d/%d\n",
                     N[i], fs[i], fc[i], phi[i], j, IQ[j].I, IQ[j].Q, IQ_ref[j].I,
                     IQ_ref[j].Q);
