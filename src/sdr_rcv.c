@@ -9,12 +9,14 @@
 //  2024-03-25  1.1  modify API sdr_rcv_new(), sdr_rcv_start()
 //  2024-04-04  1.2  modify API sdr_rcv_new(), sdr_rcv_start()
 //  2024-04-28  1.3  support Pocket SDR FE 4CH and PVT
+//  2024-05-28  1.4  modify API sdr_rcv_new(), sdr_rcv_start()
 //
 #include "pocket_sdr.h"
 #include "pocket_dev.h"
 
 // constants --------------------------------------------------------------------
 #define SP_CORR    0.25         // correlator spacing (chip) 
+#define MAX_DOP    5000.0       // max Doppler frequency for acquisition (Hz) 
 #define MAX_BUFF   8000         // max number of IF data buffer (* SDR_CYC)
 #define LOG_CYC    1000         // receiver channel log cycle (* SDR_CYC)
 #define TH_CYC     10           // receiver channel thread cycle (ms)
@@ -23,21 +25,12 @@
 #define MAX_ROW    108          // max number of channel status rows
 #define NUM_COL    110          // number of channel status columns
 #define MAX_ACQ    4e-3         // max code length w/o acqusition assist (s)
-
+#define MAX_BUFF_USE 90         // max buffer usage rate (%)
 #define ESC_COL    "\033[34m"   // ANSI escape color blue
 #define ESC_RES    "\033[0m"    // ANSI escape reset
 #define ESC_UCUR   "\033[A"     // ANSI escape cursor up
 #define ESC_VCUR   "\033[?25h"  // ANSI escape show cursor
 #define ESC_HCUR   "\033[?25l"  // ANSI escape hide cursor
-
-// test IF buffer full ---------------------------------------------------------
-static int buff_full(sdr_rcv_t *rcv)
-{
-    for (int i = 0; i < rcv->nch; i++) {
-        if (rcv->ix + 1 - rcv->th[i]->ix >= MAX_BUFF) return 1;
-    }
-    return 0;
-}
 
 // C/N0 bar --------------------------------------------------------------------
 static void cn0_bar(float cn0, char *bar)
@@ -67,8 +60,8 @@ static int print_head(FILE *fp, sdr_rcv_t *rcv)
         nch++;
     }
     sdr_pvt_solstr(rcv->pvt, solstr);
-    fprintf(fp, "\r %-*s %9s SRCH:%3d LOCK:%3d/%3d\n", NUM_COL - 38, solstr,
-        buff_full(rcv) ? "BUFF-FULL" : "", rcv->ich + 1, nch, rcv->nch);
+    fprintf(fp, "\r %-*s BUFF:%3d%% SRCH:%3d LOCK:%3d/%3d\n", NUM_COL - 38,
+        solstr, rcv->buff_use, rcv->ich + 1, nch, rcv->nch);
     fprintf(fp, "%3s %2s %4s %5s %3s %8s %4s %-12s %11s %7s %11s %4s %5s %4s "
         "%4s %3s\n", "CH", "RF", "SAT", "SIG", "PRN", "LOCK(s)", "C/N0",
         "(dB-Hz)", "COFF(ms)", "DOP(Hz)", "ADR(cyc)", "SYNC", "#NAV", "#ERR",
@@ -136,12 +129,12 @@ static void out_log_ch(sdr_ch_t *ch)
 
 // new SDR receiver channel thread ---------------------------------------------
 static sdr_ch_th_t *ch_th_new(const char *sig, int prn, double fi, double fs,
-    const double *dop, sdr_rcv_t *rcv)
+    sdr_rcv_t *rcv)
 {
     sdr_ch_th_t *th = (sdr_ch_th_t *)sdr_malloc(sizeof(sdr_ch_th_t));
     double sp = SP_CORR;
     
-    if (!(th->ch = sdr_ch_new(sig, prn, fs, fi, sp, 0, dop[0], dop[1]))) {
+    if (!(th->ch = sdr_ch_new(sig, prn, fs, fi, sp, 0, 0.0, MAX_DOP))) {
         sdr_free(th);
         return NULL;
     }
@@ -171,7 +164,12 @@ static void *ch_thread(void *arg)
             sdr_ch_update(ch, th->ix * SDR_CYC, th->rcv->buff[ch->if_ch],
                 th->rcv->N * (int)(th->ix % MAX_BUFF));
             
-            // update observation and navigation data
+            // update navigation data
+            if (ch->nav->stat) {
+                sdr_pvt_udnav(th->rcv->pvt, ch);
+                ch->nav->stat = 0;
+            }
+            // update observation data
             sdr_pvt_udobs(th->rcv->pvt, th->ix, ch);
             
             // output channel log
@@ -226,8 +224,7 @@ static void ch_th_stop(sdr_ch_th_t *th)
 //      SDR receiver (NULL: error)
 //
 sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, const int *if_ch, 
-    const double *fi, int n, double fs, const double *dop, int fmt,
-    const int *IQ)
+    const double *fi, int n, double fs, int fmt, const int *IQ)
 {
     int nbuff = (fmt == SDR_FMT_RAW16) ? 4 : ((fmt == SDR_FMT_RAW8) ? 2 : 1);
     
@@ -240,7 +237,7 @@ sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, const int *if_ch,
         rcv->buff[i] = sdr_buff_new(rcv->N * MAX_BUFF, IQ[i]);
     }
     for (int i = 0; i < n && rcv->nch < SDR_MAX_NCH; i++) {
-        sdr_ch_th_t *th = ch_th_new(sigs[i], prns[i], fi[i], fs, dop, rcv);
+        sdr_ch_th_t *th = ch_th_new(sigs[i], prns[i], fi[i], fs, rcv);
         if (th) {
             th->ch->no = rcv->nch + 1;
             th->ch->if_ch = if_ch[i];
@@ -366,11 +363,20 @@ static int assist_acq(sdr_rcv_t *rcv, sdr_ch_t *ch)
     return 0;
 }
 
-// update signal search channel ------------------------------------------------
-static void rcv_update_srch(sdr_rcv_t *rcv)
+// update IF data buffer usage rate --------------------------------------------
+static void update_buff_use(sdr_rcv_t *rcv)
 {
-    // IF buffer full ?
-    if (buff_full(rcv)) {
+    rcv->buff_use = 0;
+    for (int i = 0; i < rcv->nch; i++) {
+        int use = (rcv->ix + 1 - rcv->th[i]->ix) * 100 / MAX_BUFF + 1;
+        if (use > rcv->buff_use) rcv->buff_use = use;
+    }
+}
+
+// update signal search channel ------------------------------------------------
+static void update_srch_ch(sdr_rcv_t *rcv)
+{
+    if (rcv->buff_use > MAX_BUFF_USE) { // IF data buffer full ?
         return;
     }
     // signal search channel busy ?
@@ -424,6 +430,7 @@ static void *rcv_thread(void *arg)
     }
     for (int64_t ix = 0; rcv->state; ix++) {
         if (ix % LOG_CYC == 0) {
+            update_buff_use(rcv);
             out_log_time(ix * SDR_CYC);
         }
         // read IF data
@@ -436,7 +443,7 @@ static void *rcv_thread(void *arg)
         write_buff(rcv, raw, ix);
         
         // update signal search channel
-        rcv_update_srch(rcv);
+        update_srch_ch(rcv);
         
         // update PVT solution
         sdr_pvt_udsol(rcv->pvt, ix);
@@ -472,18 +479,21 @@ static void *rcv_thread(void *arg)
 //      dp       (I) SDR device pointer
 //                     file pointer       (dev = SDR_DEV_FILE)
 //                     SDR device pointer (dev = SDR_DEV_USB)
-//      strs     (I) output streams (s) (NULL: no output)
-//                     str[0]: NMEA PVT solutions stream
-//                     str[1]: RTCM3 OBS and NAV data stream
+//      paths    (I) output stream paths ("": no output)
+//                     paths[0]: log stream
+//                     paths[1]: NMEA PVT solutions stream
+//                     paths[2]: RTCM3 OBS and NAV data stream
 //      tint     (I) status print intervals (s) (0: no output)
 //
 //  returns:
 //      Status (1:OK, 0:error)
 //
-int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, stream_t **strs,
+int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, const char **paths,
     double tint)
 {
     if (rcv->state) return 0;
+    
+    sdr_log_open(paths[0]);
     
     for (int i = 0; i < rcv->nch; i++) {
         // set all channels search for file input
@@ -494,7 +504,9 @@ int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, stream_t **strs,
     }
     rcv->dev = dev;
     rcv->dp = dp;
-    rcv->pvt = sdr_pvt_new(strs);
+    rcv->pvt = sdr_pvt_new(rcv);
+    rcv->strs[0] = sdr_str_open(paths[1]);
+    rcv->strs[1] = sdr_str_open(paths[2]);
     rcv->tint = tint;
     rcv->state = 1;
     return !pthread_create(&rcv->thread, NULL, rcv_thread, rcv);
@@ -519,5 +531,8 @@ void sdr_rcv_stop(sdr_rcv_t *rcv)
     }
     rcv->state = 0;
     pthread_join(rcv->thread, NULL);
+    sdr_str_close(rcv->strs[0]);
+    sdr_str_close(rcv->strs[1]);
     sdr_pvt_free(rcv->pvt);
+    sdr_log_close();
 }
