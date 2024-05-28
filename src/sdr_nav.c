@@ -229,7 +229,27 @@ static void hex_str(const uint8_t *data, int nbits, char *str)
 // update tow ------------------------------------------------------------------
 static void update_tow(sdr_ch_t *ch, double tow)
 {
-    if (ch->tow <= 0) ch->tow = (int)(tow / 1e-3);
+    if (ch->tow <= 0) {
+        ch->tow = (int)(tow / 1e-3);
+    }
+    else if (ch->tow == (int)(tow / 1e-3)) {
+        ch->tow_v = 1; // tow valid
+    }
+    else { // TOW mismatch
+        trace(2, "tow mismatch: sat=%s sig=%s tow=%.3f -> %.3f\n", ch->sat,
+            ch->sig, ch->tow * 1e-3, tow);
+        ch->tow = -1;
+        ch->tow_v = 0; // tow invalid
+    }
+}
+
+// unsync navigation message ---------------------------------------------------
+static void unsync_nav(sdr_ch_t *ch)
+{
+    ch->nav->fsync = ch->nav->ssync = ch->nav->rev = 0;
+    ch->nav->coff = 0.0;
+    ch->tow = -1;
+    ch->tow_v = 0;
 }
 
 // new nav data ----------------------------------------------------------------
@@ -289,7 +309,8 @@ static void decode_SBAS_msgs(sdr_ch_t *ch, const uint8_t *bits, int rev)
     if (test_CRC(buff, 250)) {
         ch->nav->fsync = ch->lock;
         ch->nav->rev = rev;
-        update_tow(ch, toff);
+        ch->tow = (int)(toff / 1e-3);
+        ch->tow_v = 2;
         int off = !strcmp(ch->sig, "L1CA") ? 8 : 6;
         ch->nav->type = getbitu(ch->nav->data, off, 6); // SBAS message type
         sdr_pack_bits(buff, 250, 0, ch->nav->data); // SBAS message (250 bits)
@@ -300,8 +321,7 @@ static void decode_SBAS_msgs(sdr_ch_t *ch, const uint8_t *bits, int rev)
         sdr_log(3, "$SBAS,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
     }
     else {
-        ch->nav->fsync = ch->nav->rev = 0;
-        ch->tow = -1;
+        unsync_nav(ch);
         ch->nav->count[1]++;
         sdr_log(4, "$LOG,%.3f,%s,%d,SBAS FRAME ERROR", time, ch->sig, ch->prn);
     }
@@ -336,8 +356,7 @@ static void decode_SBAS(sdr_ch_t *ch)
             search_SBAS_msgs(ch);
         }
         else if (ch->lock > ch->nav->fsync + 1000) {
-            ch->nav->fsync = ch->nav->rev = 0;
-            ch->tow = -1;
+            unsync_nav(ch);
         }
     }
     else if (ch->lock > 1088 + 1000) {
@@ -398,8 +417,7 @@ static void decode_LNAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
         sdr_log(3, "$LNAV,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
     }
     else {
-        ch->nav->fsync = ch->nav->rev = 0;
-        ch->tow = -1;
+        unsync_nav(ch);
         ch->nav->count[1]++;
         sdr_log(4, "$LOG,%.3f,%s,%d,LNAV PARITY ERROR", time, ch->sig, ch->prn);
     }
@@ -427,8 +445,7 @@ static void decode_L1CA(sdr_ch_t *ch)
             }
         }
         else if (ch->lock > ch->nav->fsync + 6000) {
-            ch->nav->fsync = ch->nav->rev = 0;
-            ch->tow = -1;
+            unsync_nav(ch);
         }
     }
     else if (ch->lock >= 20 * 308 + 1000) {
@@ -520,8 +537,7 @@ static void decode_CNV2(sdr_ch_t *ch, const uint8_t *syms, int rev, int toi)
         sdr_log(3, "$CNV2,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
     }
     else {
-        ch->nav->ssync = ch->nav->fsync = 0;
-        ch->tow = -1;
+        unsync_nav(ch);
         ch->nav->count[1]++;
         sdr_log(4, "$LOG,%.3f,%s,%d,CNV2 FRAME ERROR", time, ch->sig, ch->prn);
     }
@@ -545,8 +561,7 @@ static void decode_L1CD(sdr_ch_t *ch)
             }
         }
         else if (ch->lock > ch->nav->fsync + 1800) {
-            ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
-            ch->tow = -1;
+            unsync_nav(ch);
         }
     }
     else if (ch->lock >= 1852 + 100) {
@@ -567,9 +582,11 @@ static void decode_L1CP(sdr_ch_t *ch)
 {
     if (ch->trk->sec_sync == 0) {
         ch->tow = -1;
+        ch->tow_v = 0;
     }
     else if ((ch->lock - ch->trk->sec_sync) % ch->len_sec_code == 0) {
-        update_tow(ch, TOFF_L1CP);
+        ch->tow = (int)(TOFF_L1CP / 1e-3);
+        ch->tow_v = 2; // amb-unresolved
     }
 }
 
@@ -601,8 +618,7 @@ static void decode_CNAV(sdr_ch_t *ch, const uint8_t *bits, int rev)
         sdr_log(3, "$CNAV,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
     }
     else {
-        ch->nav->fsync = ch->nav->rev = 0;
-        ch->tow = -1;
+        unsync_nav(ch);
         ch->nav->count[1]++;
         sdr_log(4, "$LOG,%.3f,%s,%d,CNAV FRAME ERROR", time, ch->sig, ch->prn);
     }
@@ -639,8 +655,7 @@ static void decode_L2CM(sdr_ch_t *ch)
             search_CNAV_frame(ch);
         }
         else if (ch->lock > ch->nav->fsync + 600) {
-            ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
-            ch->tow = -1;
+            unsync_nav(ch);
         }
     }
     else if (ch->lock > 644 + 50) {
@@ -702,8 +717,7 @@ static void decode_L5_SBAS(sdr_ch_t *ch)
             search_L5_SBAS_msgs(ch);
         }
         else if (ch->lock > ch->nav->fsync + 1000) {
-            ch->nav->fsync = ch->nav->rev = 0;
-            ch->tow = -1;
+            unsync_nav(ch);
         }
     }
     else if (ch->lock >= 3093 + 1000) {
@@ -726,8 +740,7 @@ static void decode_L5I(sdr_ch_t *ch)
             search_CNAV_frame(ch);
         }
         else if (ch->lock > ch->nav->fsync + 6000) {
-            ch->nav->fsync = ch->nav->rev = 0;
-            ch->tow = -1;
+            unsync_nav(ch);
         }
     }
     else if (ch->lock > 6440 + 1000) {
@@ -743,9 +756,11 @@ static void decode_L5Q(sdr_ch_t *ch)
     }
     if (ch->trk->sec_sync == 0) {
         ch->tow = -1;
+        ch->tow_v = 0;
     }
     else if ((ch->lock - ch->trk->sec_sync) % ch->len_sec_code == 0) {
-        update_tow(ch, TOFF_L5Q);
+        ch->tow = (int)(TOFF_L5Q / 1e-3);
+        ch->tow_v = 2;
     }
 }
 
@@ -788,7 +803,7 @@ static void decode_L6_frame(sdr_ch_t *ch, const uint8_t *syms, int N)
         if ((uint8_t)(syms[i+N] - syms[0]) == (uint8_t)(preamb[i] - preamb[0])) n2++;
     }
     if (n1 + n2 < 9) { // test # of symbol matchs
-        ch->nav->ssync = ch->nav->fsync = 0;
+        unsync_nav(ch);
         return;
     }
     // restore symbols
@@ -805,7 +820,8 @@ static void decode_L6_frame(sdr_ch_t *ch, const uint8_t *syms, int N)
     
     if (ch->nav->nerr >= 0) {
         ch->nav->ssync = ch->nav->fsync = ch->lock;
-        update_tow(ch, TOFF_L6DE);
+        ch->tow = (int)(TOFF_L6DE / 1e-3);
+        ch->tow_v = 2;
         ch->nav->coff = off * ch->T / 10230;
         ch->nav->type = getbitu(data, 40, 5); // L6 vender + facility ID
         memcpy(ch->nav->data, data, 250); // L6 frame (2000 bits)
@@ -817,9 +833,7 @@ static void decode_L6_frame(sdr_ch_t *ch, const uint8_t *syms, int N)
             ch->nav->nerr, str);
     }
     else {
-        ch->nav->ssync = ch->nav->fsync = 0;
-        ch->tow = -1;
-        ch->nav->coff = 0.0;
+        unsync_nav(ch);
         ch->nav->count[1]++;
         sdr_log(4, "$LOG,%.3f,%s,%d,L6FRM RS ERROR", time, ch->sig, ch->prn);
     }
@@ -833,6 +847,9 @@ static void decode_L6D(sdr_ch_t *ch)
     if (ch->nav->fsync > 0) { // sync L6 frame
         if (ch->lock == ch->nav->fsync + 250) {
             decode_L6_frame(ch, syms, 250);
+        }
+        else if (ch->lock > ch->nav->fsync + 250) {
+            unsync_nav(ch);
         }
     }
     else if (ch->lock >= 255) { // sync and decode L6 frame
@@ -869,6 +886,7 @@ static void decode_glo_str(sdr_ch_t *ch, const uint8_t *syms, int rev)
             double tod = getbitu(data, 9, 5) * 3600.0 +
                 getbitu(data, 14, 6) * 60.0 + getbitu(data, 20, 1) * 30.0;
             update_tow(ch, tod + GPST_GLOT + TOFF_G1CA);
+            ch->tow_v = 2;
         }
         if (sno >= 1 && sno <= 5) { // GLO string w/o mark and hamming (77 bits)
             ch->nav->type = sno; // GLO string number
@@ -881,8 +899,7 @@ static void decode_glo_str(sdr_ch_t *ch, const uint8_t *syms, int rev)
         sdr_log(3, "$GSTR,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
     }
     else {
-        ch->nav->fsync = ch->nav->rev = 0;
-        ch->tow = -1;
+        unsync_nav(ch);
         ch->nav->count[1]++;
         sdr_log(4, "$LOG,%.3f,%s,%d,GSTR HAMMING ERROR", time, ch->sig, ch->prn);
     }
@@ -908,8 +925,7 @@ static void decode_G1CA(sdr_ch_t *ch)
             }
         }
         else if (ch->lock > ch->nav->fsync + 2000) {
-            ch->nav->fsync = ch->nav->rev = 0;
-            ch->tow = -1;
+            unsync_nav(ch);
         }
     }
     else if (ch->lock >= 2300 + 2000) {
@@ -941,6 +957,7 @@ static void decode_glo_L1OCD_str(sdr_ch_t *ch, const uint8_t *bits, int rev)
         ch->nav->rev = rev;
         sdr_pack_bits(buff, 250, 0, data);
         update_tow(ch, getbitu(data, 34, 16) * 2.0 + TOFF_G1OCD + GPST_GLOT);
+        ch->tow_v = 2;
         ch->nav->type = getbitu(data, 12, 6); // L1OCD nav string type
         memcpy(ch->nav->data, data, 32); // L1OCD nav string (250 bits)
         ch->nav->stat = 1;
@@ -950,8 +967,7 @@ static void decode_glo_L1OCD_str(sdr_ch_t *ch, const uint8_t *bits, int rev)
         sdr_log(3, "$G1OCD,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
     }
     else {
-        ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
-        ch->tow = -1;
+        unsync_nav(ch);
         ch->nav->count[1]++;
         sdr_log(4, "$LOG,%.3f,%s,%d,G1OCD STRING ERROR", time, ch->sig, ch->prn);
     }
@@ -989,8 +1005,7 @@ static void decode_G1OCD(sdr_ch_t *ch)
             search_glo_L1OCD_str(ch);
         }
         else if (ch->lock > ch->nav->fsync + 1000) {
-            ch->nav->ssync = ch->nav->fsync = 0;
-            ch->tow = -1;
+            unsync_nav(ch);
         }
     }
     else if (ch->lock > ch->nav->ssync + 1104) {
@@ -1018,6 +1033,7 @@ static void decode_glo_L3OCD_str(sdr_ch_t *ch, const uint8_t *bits, int rev)
         ch->nav->rev = rev;
         sdr_pack_bits(buff, 300, 0, data);
         update_tow(ch, getbitu(data, 26, 15) * 3.0 + TOFF_G3OCD + GPST_GLOT);
+        ch->tow_v = 2;
         ch->nav->type = getbitu(data, 20, 6); // GLO L3OCD nav string type
         memcpy(ch->nav->data, data, 38); // GLO L3OCD nav string (300 bits)
         ch->nav->stat = 1;
@@ -1027,8 +1043,7 @@ static void decode_glo_L3OCD_str(sdr_ch_t *ch, const uint8_t *bits, int rev)
         sdr_log(3, "$G3OCD,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
     }
     else {
-        ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
-        ch->tow = -1;
+        unsync_nav(ch);
         ch->nav->count[1]++;
         sdr_log(4, "$LOG,%.3f,%s,%d,G3OCD STRING ERROR", time, ch->sig, ch->prn);
     }
@@ -1068,8 +1083,7 @@ static void decode_G3OCD(sdr_ch_t *ch)
             search_glo_L3OCD_str(ch);
         }
         else if (ch->lock > ch->nav->fsync + 3000) {
-            ch->nav->ssync = ch->nav->fsync = 0;
-            ch->tow = -1;
+            unsync_nav(ch);
         }
     }
     else if (ch->lock > ch->nav->ssync + 6680) {
@@ -1141,8 +1155,7 @@ static void decode_gal_INAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
         sdr_log(3, "$INAV,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
     }
     else {
-        ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
-        ch->tow = -1;
+        unsync_nav(ch);
         ch->nav->count[1]++;
         sdr_log(4, "$LOG,%.3f,%s,%d,INAV FRAME ERROR", time, ch->sig, ch->prn);
     }
@@ -1166,8 +1179,7 @@ static void decode_E1B(sdr_ch_t *ch)
             }
         }
         else if (ch->lock > ch->nav->fsync + 500) {
-            ch->nav->fsync = ch->nav->rev = 0;
-            ch->tow = -1;
+            unsync_nav(ch);
         }
     }
     else if (ch->lock >= 510 + 250) {
@@ -1184,9 +1196,11 @@ static void decode_E1C(sdr_ch_t *ch)
 {
     if (ch->trk->sec_sync == 0) {
         ch->tow = -1;
+        ch->tow_v = 0;
     }
     else if ((ch->lock - ch->trk->sec_sync) % ch->len_sec_code == 0) {
-        update_tow(ch, TOFF_E1C);
+        ch->tow = (int)(TOFF_E1C / 1e-3);
+        ch->tow_v = 2;
     }
 }
 
@@ -1226,8 +1240,7 @@ static void decode_gal_FNAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
         sdr_log(3, "$FNAV,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
     }
     else {
-        ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
-        ch->tow = -1;
+        unsync_nav(ch);
         ch->nav->count[1]++;
         sdr_log(4, "$LOG,%.3f,%s,%d,FNAV FRAME ERROR", time, ch->sig, ch->prn);
     }
@@ -1251,8 +1264,7 @@ static void decode_E5AI(sdr_ch_t *ch)
             }
         }
         else if (ch->lock > ch->nav->fsync + 10000) {
-            ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
-            ch->tow = -1;
+            unsync_nav(ch);
         }
     }
     else if (ch->lock >= ch->len_sec_code * 512 + 250) {
@@ -1269,9 +1281,11 @@ static void decode_E5AQ(sdr_ch_t *ch)
 {
     if (ch->trk->sec_sync == 0) {
         ch->tow = -1;
+        ch->tow_v = 0;
     }
     else if ((ch->lock - ch->trk->sec_sync) % ch->len_sec_code == 0) {
-        update_tow(ch, TOFF_E5AQ);
+        ch->tow = (int)(TOFF_E5AQ / 1e-3);
+        ch->tow_v = 2;
     }
 }
 
@@ -1293,8 +1307,7 @@ static void decode_E5BI(sdr_ch_t *ch)
             }
         }
         else if (ch->lock > ch->nav->fsync + 2000) {
-            ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
-            ch->tow = -1;
+            unsync_nav(ch);
         }
     }
     else if (ch->lock >= ch->len_sec_code * 510 + 250) {
@@ -1311,9 +1324,11 @@ static void decode_E5BQ(sdr_ch_t *ch)
 {
     if (ch->trk->sec_sync == 0) {
         ch->tow = -1;
+        ch->tow_v = 0;
     }
     else if ((ch->lock - ch->trk->sec_sync) % ch->len_sec_code == 0) {
-        update_tow(ch, TOFF_E5BQ);
+        ch->tow = (int)(TOFF_E5BQ / 1e-3);
+        ch->tow_v = 2;
     }
 }
 
@@ -1333,7 +1348,8 @@ static void decode_gal_CNAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
         ch->nav->ssync = ch->nav->fsync = ch->lock;
         ch->nav->rev = rev;
         sdr_pack_bits(bits, 486, 0, data);
-        update_tow(ch, TOFF_E6B);
+        ch->tow = (int)(TOFF_E6B / 1e-3);
+        ch->tow_v = 2;
         ch->nav->type = getbitu(data, 20, 5); // C/NAV HAS message ID
         memcpy(ch->nav->data, data, 61); // C/NAV frame (486 bits)
         ch->nav->stat = 1;
@@ -1343,8 +1359,7 @@ static void decode_gal_CNAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
         sdr_log(3, "$CNAV,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
     }
     else {
-        ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
-        ch->tow = -1;
+        unsync_nav(ch);
         ch->nav->count[1]++;
         sdr_log(4, "$LOG,%.3f,%s,%d,CNAV FRAME ERROR", time, ch->sig, ch->prn);
     }
@@ -1369,8 +1384,7 @@ static void decode_E6B(sdr_ch_t *ch)
             }
         }
         else if (ch->lock > ch->nav->fsync + 1000) {
-            ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
-            ch->tow = -1;
+            unsync_nav(ch);
         }
     }
     else if (ch->lock >= 1016 + 1000) {
@@ -1387,9 +1401,11 @@ static void decode_E6C(sdr_ch_t *ch)
 {
     if (ch->trk->sec_sync == 0) {
         ch->tow = -1;
+        ch->tow_v = 0;
     }
     else if ((ch->lock - ch->trk->sec_sync) % ch->len_sec_code == 0) {
-        update_tow(ch, TOFF_E6C);
+        ch->tow = (int)(TOFF_E6C / 1e-3);
+        ch->tow_v = 2;
     }
 }
 
@@ -1484,8 +1500,7 @@ static void decode_B1I_D1(sdr_ch_t *ch)
             }
         }
         else if (ch->lock > ch->nav->fsync + 6000) {
-            ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
-            ch->tow = -1;
+            unsync_nav(ch);
         }
     }
     else if (ch->lock >= ch->len_sec_code * 311 + 1000) {
@@ -1515,8 +1530,7 @@ static void decode_B1I_D2(sdr_ch_t *ch)
             }
         }
         else if (ch->lock > ch->nav->fsync + 600) {
-            ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
-            ch->tow = -1;
+            unsync_nav(ch);
         }
     }
     else if (ch->lock >= 2 * 311 + 1000) {
@@ -1625,8 +1639,7 @@ static void decode_BCNV1(sdr_ch_t *ch, const uint8_t *syms, int rev, int soh)
         sdr_log(3, "$BCNV1,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
     }
     else {
-        ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
-        ch->tow = -1;
+        unsync_nav(ch);
         ch->nav->count[1]++;
         sdr_log(3, "$LOG,%.3f,%s,%d,BCNV1 FRAME ERROR", time, ch->sig, ch->prn);
     }
@@ -1649,8 +1662,7 @@ static void decode_B1CD(sdr_ch_t *ch)
             }
         }
         else if (ch->lock > ch->nav->fsync + 1800) {
-            ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
-            ch->tow = -1;
+            unsync_nav(ch);
         }
     }
     else if (ch->lock >= 1872 + 100) {
@@ -1670,9 +1682,11 @@ static void decode_B1CP(sdr_ch_t *ch)
 {
     if (ch->trk->sec_sync == 0) {
         ch->tow = -1;
+        ch->tow_v = 0;
     }
     else if ((ch->lock - ch->trk->sec_sync) % ch->len_sec_code == 0) {
-        update_tow(ch, TOFF_B1CP);
+        ch->tow = (int)(TOFF_B1CP / 1e-3);
+        ch->tow_v = 2;
     }
 }
 
@@ -1713,8 +1727,7 @@ static void decode_BCNV2(sdr_ch_t *ch, const uint8_t *syms, int rev)
         sdr_log(3, "$BCNV2,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
     }
     else {
-        ch->nav->fsync = ch->nav->rev = 0;
-        ch->tow = -1;
+        unsync_nav(ch);
         ch->nav->count[1]++;
         sdr_log(3, "$LOG,%.3f,%s,%d,BCNV2 FRAME ERROR", time, ch->sig, ch->prn);
     }
@@ -1740,8 +1753,7 @@ static void decode_B2AD(sdr_ch_t *ch)
             }
         }
         else if (ch->lock > ch->nav->fsync + 3000) {
-            ch->nav->ssync = ch->nav->fsync = 0;
-            ch->tow = -1;
+            unsync_nav(ch);
         }
     }
     else if (ch->lock >= ch->len_sec_code * 624 + 1000) {
@@ -1758,9 +1770,11 @@ static void decode_B2AP(sdr_ch_t *ch)
 {
     if (ch->trk->sec_sync == 0) {
         ch->tow = -1;
+        ch->tow_v = 0;
     }
     else if ((ch->lock - ch->trk->sec_sync) % ch->len_sec_code == 0) {
-        update_tow(ch, TOFF_B2AP);
+        ch->tow = (int)(TOFF_B2AP / 1e-3);
+        ch->tow_v = 2;
     }
 }
 
@@ -1789,7 +1803,8 @@ static void decode_BCNV3(sdr_ch_t *ch, const uint8_t *syms, int rev)
             update_tow(ch, getbitu(data, 6, 20) + TOFF_B2BI + GPST_BDT);
         }
         else { // PPP-B2b
-            update_tow(ch, TOFF_B2BI + GPST_BDT);
+            ch->tow = (int)((TOFF_B2BI + GPST_BDT) / 1e-3);
+            ch->tow_v = 2;
         }
         ch->nav->type = type; // B-CNAV3 message type
         memcpy(ch->nav->data, data, 61); // B-CNAV3 message (486 bits)
@@ -1800,8 +1815,7 @@ static void decode_BCNV3(sdr_ch_t *ch, const uint8_t *syms, int rev)
         sdr_log(3, "$BCNV3,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
     }
     else {
-        ch->nav->fsync = ch->nav->rev = 0;
-        ch->tow = -1;
+        unsync_nav(ch);
         ch->nav->count[1]++;
         sdr_log(3, "$LOG,%.3f,%s,%d,BCNV3 FRAME ERROR", time, ch->sig, ch->prn);
     }
@@ -1825,8 +1839,7 @@ static void decode_B2BI(sdr_ch_t *ch)
             }
         }
         else if (ch->lock > ch->nav->fsync + 1000) {
-            ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
-            ch->tow = -1;
+            unsync_nav(ch);
         }
     }
     else if (ch->lock >= 1022 + 1000) {
@@ -1909,8 +1922,7 @@ static void decode_IRNV1(sdr_ch_t *ch, const uint8_t *syms, int rev, int toi)
         sdr_log(3, "$IRNV1,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
     }
     else {
-        ch->nav->ssync = ch->nav->fsync = 0;
-        ch->tow = -1;
+        unsync_nav(ch);
         ch->nav->count[1]++;
         sdr_log(3, "$LOG,%.3f,%s,%d,IRNV1 FRAME ERROR", time, ch->sig, ch->prn);
     }
@@ -1933,8 +1945,7 @@ static void decode_I1SD(sdr_ch_t *ch)
             }
         }
         else if (ch->lock > ch->nav->fsync + 1800) {
-            ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
-            ch->tow = -1;
+            unsync_nav(ch);
         }
     }
     else if (ch->lock >= 1852 + 100) {
@@ -1989,8 +2000,7 @@ static void decode_IRN_NAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
         sdr_log(3, "$IRNAV,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
     }
     else {
-        ch->nav->ssync = ch->nav->fsync = 0;
-        ch->tow = -1;
+        unsync_nav(ch);
         ch->nav->count[1]++;
         sdr_log(3, "$LOG,%.3f,%s,%d,IRNAV FRAME ERROR", time, ch->sig, ch->prn);
     }
@@ -2015,8 +2025,7 @@ static void decode_I5S(sdr_ch_t *ch)
             }
         }
         else if (ch->lock > ch->nav->fsync + 12000) {
-            ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
-            ch->tow = -1;
+            unsync_nav(ch);
         }
     }
     else if (ch->lock >= 20 * 616 + 1000) {
