@@ -26,7 +26,7 @@
 #define T_NPULLIN  1.5      // navigation data pullin time (s) 
 #define B_DLL      0.25     // band-width of DLL filter (Hz) 
 #define B_PLL      5.0      // band-width of PLL filter (Hz) 
-#define B_FLL_W    10.0     // band-width of FLL filter (Hz) (wide) 
+#define B_FLL_W    5.0      // band-width of FLL filter (Hz) (wide) 
 #define B_FLL_N    2.0      // band-width of FLL filter (Hz) (narrow) 
 #define MAX_DOP    5000.0   // default max Doppler for acquisition (Hz) 
 #define THRES_CN0_L 35.0    // C/N0 threshold (dB-Hz) (lock) 
@@ -213,10 +213,15 @@ static void start_track(sdr_ch_t *ch, double time, double fd, double coff,
 static void search_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff,
     int ix)
 {
-    float fd_ext = ch->acq->fd_ext; // Doppler assist
-    float *fds = (fd_ext == 0.0) ? ch->acq->fds : &fd_ext;
-    int n = (fd_ext == 0.0) ? ch->acq->len_fds : 1;
+    float *fds = ch->acq->fds, fd_ext[3];
+    int n = ch->acq->len_fds;
     
+    if (ch->acq->fd_ext != 0.0) { // assist by external Doppler
+        for (n = 0; n < 3; n++) {
+            fd_ext[n] = ch->acq->fd_ext + (n - 1) * 0.5 / ch->T;
+        }
+        fds = fd_ext;
+    }
     if (!ch->acq->P_sum) {
         ch->acq->P_sum = (float *)sdr_malloc(sizeof(float) * 2 * ch->N * n);
     }
