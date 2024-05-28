@@ -333,7 +333,7 @@ void sdr_search_code(const sdr_cpx_t *code_fft, double T,
 // max correlation power and C/N0 ----------------------------------------------
 float sdr_corr_max(const float *P, int N, int Nmax, int M, double T, int *ix)
 {
-    float P_max = 0.0, P_ave = 0.0;
+    double P_max = 0.0, P_ave = 0.0;
     int n = 0;
     
     for (int i = 0; i < M; i++) {
@@ -345,7 +345,8 @@ float sdr_corr_max(const float *P, int N, int Nmax, int M, double T, int *ix)
             ix[1] = j; // index of code offset
         }
     }
-    return (P_ave > 0.0f) ? 10.0f * log10f((P_max - P_ave) / P_ave / T) : 0.0f;
+    return (P_ave > 0.0) ?
+        (float)(10.0 * log10((P_max - P_ave) / P_ave / T)) : 0.0f;
 }
 
 // polynomial fitting ----------------------------------------------------------
@@ -658,12 +659,12 @@ void sdr_corr_fft_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N,
 // open stream -----------------------------------------------------------------
 stream_t *sdr_str_open(const char *path)
 {
-    const char *p = strchr(path, ':');
+    if (!*path) return NULL;
+    
     stream_t *str = (stream_t *)sdr_malloc(sizeof(stream_t));
+    const char *p = strchr(path, ':');
     int stat = 0;
-    
     strinit(str);
-    
     if (!p || *(p + 1) == ':' ) { // file (path = file[::opt...])
         stat = stropen(str, STR_FILE, STR_MODE_W, path);
     }
@@ -690,6 +691,8 @@ void sdr_str_close(stream_t *str)
 // open log --------------------------------------------------------------------
 int sdr_log_open(const char *path)
 {
+    if (!*path || log_str) return 0;
+    
     if (!(log_str = sdr_str_open(path))) {
         fprintf(stderr, "log stream open error %s\n", path);
         return 0;
