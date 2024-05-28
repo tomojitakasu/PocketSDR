@@ -1,4 +1,0 @@
-(fp_lib_table
-  (version 7)
-  (lib (name "pocket_sdr_v2.3")(type "KiCad")(uri "$(KIPRJMOD)/v3.0.pretty")(options "")(descr ""))
-)
