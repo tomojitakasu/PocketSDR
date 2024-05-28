@@ -1,5 +1,5 @@
 //
-//  Pocket SDR - Dump digital IF data of SDR device.
+//  Pocket SDR - Dump digital IF data of Pocket SDR FE device.
 //
 //  Author:
 //  T.TAKASU
@@ -136,12 +136,12 @@ static void print_stat(int nch, const int *IQ, FILE **fp, double time,
 }
 
 // dump digital IF data --------------------------------------------------------
-static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int fmt,
-    double fs, int nch, const double *fo, const int *IQ, FILE **fp)
+static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int nch,
+    FILE **fp)
 {
     double time = 0.0, time_p = 0.0, sample = 0.0, sample_p = 0.0;
     double rate = 0.0, byte[SDR_MAX_CH] = {0};
-    int ns = (fmt == 0 || fmt == SDR_FMT_RAW8) ? 1 : 2;
+    int ns = (dev->fmt == 0 || dev->fmt == SDR_FMT_RAW8) ? 1 : 2;
     uint8_t buff[SDR_SIZE_BUFF * ns];
     
     if (!quiet) {
@@ -157,7 +157,8 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int fmt,
         }
         while (sdr_dev_read(dev, buff, SDR_SIZE_BUFF * ns) && !intr) {
             for (int j = 0; j < nch; j++) {
-                byte[j] += write_file(fmt, buff, SDR_SIZE_BUFF, j, IQ[j], fp[j]);
+                byte[j] += write_file(dev->fmt, buff, SDR_SIZE_BUFF, j,
+                    dev->IQ[j], fp[j]);
             }
             sample += SDR_SIZE_BUFF;
         }
@@ -167,7 +168,7 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int fmt,
             sample_p = sample;
         }
         if (!quiet && i % (STAT_CYC / DATA_CYC) == 0) {
-            print_stat(nch, IQ, fp, time, byte, rate);
+            print_stat(nch, dev->IQ, fp, time, byte, rate);
         }
         sdr_sleep_msec(DATA_CYC);
     }
@@ -175,7 +176,7 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int fmt,
     
     if (!quiet) {
         rate = time > 0.0 ? sample / time : 0.0;
-        print_stat(nch, IQ, fp, time, byte, rate);
+        print_stat(nch, dev->IQ, fp, time, byte, rate);
         fprintf(stderr, "\n");
     }
 }
@@ -188,23 +189,24 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int fmt,
 //
 //  Description
 //
-//    Capture and dump digital IF (DIF) data of a SDR device to output files.
-//    To stop capturing, press Ctr-C.
+//    Capture and dump digital IF (DIF) data of a Pocket SDR FE device to output
+//    files. To stop capturing, press Ctr-C.
 //
 //  Options
 //    -t tsec
 //        Data capturing time in seconds.
 //
 //    -r
-//        Dump raw SDR device data without channel separation and quantization.
+//        Dump raw data of the Pocket SDR FE device without channel separation
+//        and quantization.
 //
 //    -p bus[,port]
-//        USB bus and port number of the SDR device. Without the option, the
-//        command selects the SDR device firstly found.
+//        USB bus and port number of the Pocket SDR FE device. Without the
+//        option, the command selects the device firstly found.
 //
 //    -c conf_file
-//        Configure the SDR device with a device configuration file before 
-//        capturing.
+//        Configure the Pocket SDR FE device with a device configuration file
+//        before capturing.
 //
 //    -q 
 //        Suppress showing data dump status.
@@ -229,9 +231,8 @@ int main(int argc, char **argv)
     char *files[SDR_MAX_CH] = {0}, path[SDR_MAX_CH][64];
     const char *conf_file = "";
     time_t dump_time;
-    double tsec = 0.0, fs = 0.0, fo[SDR_MAX_CH] = {0};
-    int i, n = 0, bus = -1, port = -1, raw = 0, quiet = 0;
-    int fmt = 0, nch = 1, IQ[SDR_MAX_CH] = {0};
+    double tsec = 0.0;
+    int i, n = 0, bus = -1, port = -1, raw = 0, quiet = 0, nch = 1;
     
     for (i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-t") && i + 1 < argc) {
@@ -266,11 +267,7 @@ int main(int argc, char **argv)
         return -1;
     }
     if (!raw) {
-        if (!(fmt = sdr_dev_info(dev, &fs, fo, IQ))) {
-            sdr_dev_close(dev);
-            return -1;
-        }
-        nch = fmt == SDR_FMT_RAW8 ? 2 : (fmt == SDR_FMT_RAW16 ? 4 : 8);
+        nch = dev->fmt == SDR_FMT_RAW8 ? 2 : (dev->fmt == SDR_FMT_RAW16 ? 4 : 8);
     }
     if (n == 0) { // set default file paths
         dump_time = time(NULL);
@@ -298,7 +295,7 @@ int main(int argc, char **argv)
     signal(SIGTERM, sig_func);
     signal(SIGINT, sig_func);
     
-    dump_data(dev, tsec, quiet, fmt, fs, nch, fo, IQ, fp);
+    dump_data(dev, tsec, quiet, nch, fp);
     
     for (i = 0; i < nch; i++) {
         if (fp[i]) fclose(fp[i]);
