@@ -21,14 +21,14 @@ T_CN0      = 1.0             # averaging time for C/N0 (s)
 T_FPULLIN  = 1.0             # frequency pullin time (s)
 T_NPULLIN  = 1.5             # navigation data pullin time (s)
 N_HIST     = 10000           # number of P correlator history
-B_DLL      = 0.5             # band-width of DLL filter (Hz)
-B_PLL      = 10.0            # band-width of PLL filter (Hz)
-B_FLL      = (10.0, 2.0)     # band-width of FLL filter (Hz) (wide, narrow)
+B_DLL      = 0.25            # band-width of DLL filter (Hz)
+B_PLL      = 5.0             # band-width of PLL filter (Hz)
+B_FLL      = (5.0, 2.0)      # band-width of FLL filter (Hz) (wide, narrow)
 SP_CORR    = 0.5             # default correlator spacing (chip)
 MAX_DOP    = 5000.0          # default max Doppler for acquisition (Hz)
 THRES_CN0  = (35.0, 32.0)    # C/N0 threshold (dB-Hz) (lock, lost)
-THRES_SYNC  = 0.3            # threshold for sec-code sync
-THRES_LOST  = 0.003          # threshold for sec-code lost
+THRES_SYNC  = 0.02           # threshold for sec-code sync
+THRES_LOST  = 0.002          # threshold for sec-code lost
 
 # general object classes -------------------------------------------------------
 class Obj: pass
