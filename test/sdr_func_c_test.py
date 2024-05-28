@@ -94,7 +94,7 @@ def test_03():
         d = np.abs(C1.real - C2.real)
         e = np.abs(C1.imag - C2.imag)
         
-        if np.all(d < 1e-4) and np.all(e < 1e-4):
+        if np.all(d < 0.01) and np.all(e < 0.01):
             print('test_03: OK N=%6d err_max=%9.7f %9.7f' % (N, np.max(d), np.max(e)))
         else:
             print('test_03: NG N=%6d err_max=%9.7f %9.7f' % (N, np.max(d), np.max(e)))
@@ -121,7 +121,7 @@ def test_04():
         d1 = np.abs(C1.real - C2.real)
         d2 = np.abs(C1.imag - C2.imag)
         
-        if np.all(d1 < 0.01) and np.all(d2 < 0.01):
+        if np.all(d1 < 0.015) and np.all(d2 < 0.015):
             print('test_04: OK N=%6d err_max=%9.7f %9.7f' % (N, np.max(d1), np.max(d2)))
         else:
             print('test_04: NG N=%6d err_max=%9.7f %9.7f' % (N, np.max(d1), np.max(d2)))

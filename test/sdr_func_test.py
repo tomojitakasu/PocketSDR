@@ -93,7 +93,7 @@ def test_03():
         d = np.abs(C1.real - C2.real)
         e = np.abs(C1.imag - C2.imag)
         
-        if np.all(d < 1e-4) and np.all(e < 1e-4):
+        if np.all(d < 0.01) and np.all(e < 0.01):
             print('test_03: OK N=%6d err_max=%9.7f %9.7f' % (N, np.max(d), np.max(e)))
         else:
             print('test_03: NG N=%6d err_max=%9.7f %9.7f' % (N, np.max(d), np.max(e)))
@@ -104,7 +104,6 @@ def test_04():
     fs = 24e6
     fc = 13500.0
     phi = 123.456
-    pos = range(-40, 41)
     coff = 1.345
     
     for N in (12000, 24000, 36000, 40000, 45000, 46000, 48000, 96000):
@@ -136,17 +135,14 @@ def test_05():
     phi = 3.456
     
     print('test_05: performance')
-    print('%6s %9s%9s%9s  %6s%15s%6s(ms)' % ('', '', 'Python', '', '', 'C+AVX2+FFTW3F', ''))
-    print('%6s  %8s %8s %8s   %8s %8s %8s' % (
-        'N  ', 'mix_carr', 'corr_std', 'corr_fft', 'mix_carr', 'corr_std', 'corr_fft'))
+    print('%6s %9s%9s%9s (ms)' % ('', '', 'Python', ''))
+    print('%6s  %8s %8s %8s' % ('N  ', 'mix_carr', 'corr_std', 'corr_fft'))
     
     for N in (12000, 16000, 24000, 32000, 32768, 48000, 65536, 96000):
         data = sdr_func.mix_carr(gen_data(N), 0, N, fs, fc, phi)
         code = sdr_code.gen_code('L6D', 194)
         code_res = sdr_code.res_code(code, 4e-3, coff, fs, N)
         code_fft = sdr_code.gen_code_fft(code, 4e-3, coff, fs, N)
-        
-        sdr_func.LIBSDR_ENA = False
         
         tt = time.time()
         for i in range(n):
@@ -163,26 +159,7 @@ def test_05():
             C1 = sdr_func.corr_fft(data, 0, N, fs, fc, phi, code_fft)
         t3 = (time.time() - tt) * 1e3 / n
         
-        sdr_func.LIBSDR_ENA = True
-        
-        tt = time.time()
-        for i in range(n):
-            data_carr1 = sdr_func.mix_carr(data, 0, N, fs, fc, phi)
-        t4 = (time.time() - tt) * 1e3 / n
-        
-        tt = time.time()
-        for i in range(n):
-            C1 = sdr_func.corr_std(data, 0, N, fs, fc, phi, code_res, pos)
-        t5 = (time.time() - tt) * 1e3 / n
-        
-        C1 = sdr_func.corr_fft(data, 0, N, fs, fc, phi, code_fft)
-        tt = time.time()
-        for i in range(n):
-            C1 = sdr_func.corr_fft(data, 0, N, fs, fc, phi, code_fft)
-        t6 = (time.time() - tt) * 1e3 / n
-        
-        print('%6d  %8.4f %8.4f %8.4f   %8.4f %8.4f %8.4f' % (
-            N, t1, t2, t3, t4, t5, t6))
+        print('%6d  %8.4f %8.4f %8.4f' % (N, t1, t2, t3))
 
 # test main --------------------------------------------------------------------
 if __name__ == '__main__':

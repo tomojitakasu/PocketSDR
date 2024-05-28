@@ -15,7 +15,7 @@ B3I="-sig B3I -prn 1-62"
 #L6="-sig L6D -prn 193-202 -sig L6E -prn 203-212"
 E6="-sig E6B -prn 1-36 -sig E6C -prn 1-36"
 
-../bin/pocket_trk -u $L5 $E5A $B2A $I5 $L5S $E5B $B2I $B2B $B3I $L6 $E6 \
+../bin/pocket_trk $L5 $E5A $B2A $I5 $L5S $E5B $B2I $B2B $B3I $L6 $E6 \
 -c ../conf/pocket_L5E5bB3L6_24MHz.conf \
--log pocket_trk_L5E5bB3L6_test.log
+-rtcm :10015 -nmea :10016 -log :10017 $@
 

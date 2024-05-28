@@ -12,7 +12,6 @@ B1I="-sig B1I -prn 1-62"
 L2="-sig L2CM -prn 1-32,193-199"
 G2="-sig G2CA -prn -7-6 -sig G2OCP -prn 1-27"
 
-../bin/pocket_trk -u $L1 $G1 $E1 $B1C $I1 $L1C $B1I $L2 $G2 \
+../bin/pocket_trk $L1 $G1 $E1 $B1C $I1 $L1C $B1I $L2 $G2 \
 -c ../conf/pocket_L1G1L2G2_24MHz.conf \
--log pocket_trk_L1G1L2G2_test.log
-
+-rtcm :10015 -nmea :10016 -log :10017 $@
