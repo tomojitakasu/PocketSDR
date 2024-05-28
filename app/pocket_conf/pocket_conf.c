@@ -1,5 +1,5 @@
 // 
-//  Pocket SDR C AP - SDR Device Configurator.
+//  Pocket SDR C AP - Pocket SDR FE Device Configurator.
 //
 //  Author:
 //  T.TAKASU
@@ -27,15 +27,15 @@ static void show_usage(void)
 //
 //  Description
 //
-//    Configure or show settings for a SDR device. If conf_file specified, the
-//    settings in the configuration file are set to the SDR device registers.
-//    The configuration is a text file containing records of MAX2771 register
-//    field settings as like follows. The register field settings are written as
-//    keyword = value format or hexadecimal format. In the case of keyword =
-//    value format, a keyword is a field name shown in MAX2771 manual [1].
-//    Strings after # in a line is treated as comments. If conf_file omitted,
-//    the command shows the settings of the SDR device in the same format of
-//    the configuration file.
+//    Configure or show settings for a Pocket SDR FE device. If conf_file
+//    specified, the settings in the configuration file are set to the Pocket
+//    SDR FE device registers. The configuration is a text file containing
+//    records of MAX2771 register field settings as like follows. The register
+//    field settings are written as keyword = value format or hexadecimal
+//    format. In the case of keyword = value format, a keyword is a field name
+//    shown in MAX2771 manual [1]. Strings after # in a line is treated as
+//    comments. If conf_file omitted, the command shows the settings of the
+//    Pocket SDR FE device in the same format of the configuration file.
 //    
 //    Keyword = value format:
 //
@@ -56,7 +56,7 @@ static void show_usage(void)
 //
 //    -s
 //        Save the settings to EEPROM of the SDR device. These settings are
-//        also loaded at reset of the SDR device.
+//        also loaded at reset of the Pocket SDR FE device.
 //
 //    -a
 //        Show all of the register fields.
@@ -65,12 +65,12 @@ static void show_usage(void)
 //        Configure or show registers in a hexadecimal format.
 //
 //    -p [bus[,port]]
-//        USB bus and port number of the SDR device. Without the option, the
-//        command selects the device firstly found.
+//        USB bus and port number of the Pocket SDR FE device. Without the
+//        option, the command selects the device firstly found.
 //
 //    conf_file
 //        Path of the configuration file. Without the option, the command shows
-//        current register field settings of the SDR device.
+//        current register field settings of the Pocket SDR FE device.
 //
 //  References
 //
