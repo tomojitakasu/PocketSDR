@@ -5,7 +5,6 @@
 #!
 #! $ git clone https://github.com/quiet/libfec libfec
 #! $ git clone https://github.com/radfordneal/LDPC-codes LDPC-codes
-#! $ git clone https://github.com/tomojitakasu/RTKLIB -b rtklib_2.4.3 RTKLIB
 #!
 #! You need to install external shared libary LIBFFTW3 as follows.
 #!
