@@ -14,6 +14,7 @@
 //  2023-12-25  1.3  modify taskname for AvSetMmThreadCharacteristicsA()
 //  2024-04-04  1.4  refactored
 //  2024-04-13  1.5  suppport Pocket SDR FE 4CH
+//  2024-05-28  1.6  delete API sdr_dev_info()
 //
 #include "pocket_sdr.h"
 #include "pocket_dev.h"
@@ -24,6 +25,112 @@
 // constants and macros --------------------------------------------------------
 #define BUFF_SIZE       (SDR_SIZE_BUFF * SDR_MAX_BUFF)
 #define TO_TRANSFER     3000    // USB transfer timeout (ms)
+
+// read MAX2771 status ---------------------------------------------------------
+static int read_MAX2771_stat(sdr_dev_t *dev, int ch, double fx)
+{
+    static const double ratio[8] = {2.0, 0.25, 0.5, 1.0, 4.0};
+    uint8_t data[4];
+    uint32_t reg[11], ENIQ, INT_PLL, NDIV, RDIV, FDIV, REFDIV, FCLKIN, ADCCLK;
+    uint32_t REFCLK_L, REFCLK_M, ADCCLK_L, ADCCLK_M, PREFRACDIV;
+    
+    for (int i = 0; i < 11; i++) {
+        if (!sdr_usb_req(dev->usb, 0, SDR_VR_REG_READ, (ch << 8) + i, data,
+            4)) {
+            return 0;
+        }
+        for (int j = 0; j < 4; j++) { // swap bytes
+            *((uint8_t *)(reg + i) + j) = data[3 - j];
+        }
+    }
+    ENIQ     = (reg[ 1] >> 27) & 0x1;
+    INT_PLL  = (reg[ 3] >>  3) & 0x1;
+    NDIV     = (reg[ 4] >> 13) & 0x7FFF;
+    RDIV     = (reg[ 4] >>  3) & 0x3FF;
+    FDIV     = (reg[ 5] >>  8) & 0xFFFFF;
+    REFDIV   = (reg[ 3] >> 29) & 0x7;
+    FCLKIN   = (reg[ 7] >>  3) & 0x1;
+    ADCCLK   = (reg[ 7] >>  2) & 0x1;
+    REFCLK_L = (reg[ 7] >> 16) & 0xFFF;
+    REFCLK_M = (reg[ 7] >>  4) & 0xFFF;
+    ADCCLK_L = (reg[10] >> 16) & 0xFFF;
+    ADCCLK_M = (reg[10] >>  4) & 0xFFF;
+    PREFRACDIV = (reg[0xA] >>  3) & 0x1;
+    if (ch == 0) {
+        dev->fs = !PREFRACDIV ?
+            fx : fx * REFCLK_L / (4096.0 - REFCLK_M + REFCLK_L);
+        dev->fs *= ADCCLK  ? 1.0 : ratio[REFDIV];
+        dev->fs *= !FCLKIN ? 1.0 : ADCCLK_L / (4096.0 - ADCCLK_M + ADCCLK_L);
+    }
+    dev->fo[ch] = fx / RDIV * (INT_PLL ? NDIV : NDIV + FDIV / 1048576.0);
+    dev->IQ[ch] = ENIQ ? 2 : 1;
+    return 1;
+}
+
+// read MAX2769B status --------------------------------------------------------
+static int read_MAX2769B_stat(sdr_dev_t *dev, int ch, double fx)
+{
+    static const double ratio[8] = {2.0, 0.25, 0.5, 1.0};
+    uint8_t data[4];
+    uint32_t reg[8], ENIQ, INT_PLL, NDIV, RDIV, FDIV, REFDIV, L_CNT, M_CNT;
+    uint32_t FCLKIN, ADCCLK;
+    
+    for (int i = 0; i < 8; i++) {
+        if (!sdr_usb_req(dev->usb, 0, SDR_VR_REG_READ, (ch << 8) + i, data,
+            4)) {
+            return 0;
+        }
+        for (int j = 0; j < 4; j++) { // swap bytes
+            *((uint8_t *)(reg + i) + j) = data[3 - j];
+        }
+    }
+    ENIQ    = (reg[1] >> 27) & 0x1;
+    INT_PLL = (reg[3] >>  3) & 0x1;
+    NDIV    = (reg[4] >> 13) & 0x7FFF;
+    RDIV    = (reg[4] >>  3) & 0x3FF;
+    FDIV    = (reg[5] >>  8) & 0xFFFFF;
+    REFDIV  = (reg[3] >> 21) & 0x3;
+    L_CNT   = (reg[7] >> 16) & 0xFFF;
+    M_CNT   = (reg[7] >>  4) & 0xFFF;
+    FCLKIN  = (reg[7] >>  3) & 0x1;
+    ADCCLK  = (reg[7] >>  2) & 0x1;
+    if (ch == 0) {
+        dev->fs = fx * (ADCCLK ? 1.0 : ratio[REFDIV]);
+        dev->fs *= !FCLKIN ? 1.0 : L_CNT / (4096.0 - M_CNT + L_CNT);
+    }
+    dev->fo[ch] = fx / RDIV * (INT_PLL ? NDIV : NDIV + FDIV / 1048576.0);
+    dev->IQ[ch] = ENIQ ? 2 : 1;
+    return 1;
+}
+
+// read device info ------------------------------------------------------------
+static int read_dev_info(sdr_dev_t *dev)
+{
+    uint8_t data[6];
+    
+    // read device info and status
+    if (!sdr_usb_req(dev->usb, 0, SDR_VR_STAT, 0, data, 6)) {
+        return 0;
+    }
+    int type = (data[3] >> 4) & 1; // 0: Pocket SDR, 1: Spider SDR
+    double fx = (((uint16_t)data[1] << 8) + data[2]) * 1e3;
+    
+    if (type == 1) { // Spider SDR
+        int nch = data[3] & 0xF;
+        for (int i = 0; i < nch; i++) {
+            if (!read_MAX2769B_stat(dev, i, fx)) return 0;
+        }
+        dev->fmt = SDR_FMT_RAW16I;
+    }
+    else { // Pocket SDR
+        int ver = data[0] >> 4, nch = (ver <= 2) ? 2 : 4;
+        for (int i = 0; i < nch; i++) {
+            if (!read_MAX2771_stat(dev, i, fx)) return 0;
+        }
+        dev->fmt = (ver <= 2) ? SDR_FMT_RAW8 : SDR_FMT_RAW16; // 2CH : 4CH
+    }
+    return 1;
+}
 
 #ifdef WIN32
 
@@ -82,8 +189,9 @@ static DWORD WINAPI event_handler(void *arg)
         ov[i].hEvent = CreateEvent(NULL, false, false, NULL);
         ctx[i] = ep->BeginDataXfer(dev->buff + len * i, len, &ov[i]); 
     }
-    (void)sdr_usb_req(dev->usb, 0, SDR_VR_START, 0, NULL, 0);
-    
+    if (dev->fmt == SDR_FMT_RAW16) {
+        (void)sdr_usb_req(dev->usb, 0, SDR_VR_START, 0, NULL, 0);
+    }
     for (int i = 0; dev->state; ) {
         if (!ep->WaitForXfer(&ov[i], TO_TRANSFER)) {
             fprintf(stderr, "bulk transfer timeout\n");
@@ -97,8 +205,9 @@ static DWORD WINAPI event_handler(void *arg)
         dev->wp += len;
         i = (i + 1) % SDR_MAX_BUFF;
     }
-    (void)sdr_usb_req(dev->usb, 0, SDR_VR_STOP, 0, NULL, 0);
-    
+    if (dev->fmt == SDR_FMT_RAW16) {
+        (void)sdr_usb_req(dev->usb, 0, SDR_VR_STOP, 0, NULL, 0);
+    }
     for (int i = 0; i < SDR_MAX_BUFF; i++) {
         ep->FinishDataXfer(dev->buff + len * i, len, &ov[i], ctx[i]);
         CloseHandle(ov[i].hEvent);
@@ -138,13 +247,15 @@ static void *event_handler(void *arg)
             return NULL;
         }
     }
-    (void)sdr_usb_req(dev->usb, 0, SDR_VR_START, 0, NULL, 0);
-    
+    if (dev->fmt == SDR_FMT_RAW16) {
+        (void)sdr_usb_req(dev->usb, 0, SDR_VR_START, 0, NULL, 0);
+    }
     while (dev->state) {
         if (libusb_handle_events_timeout(NULL, &to)) continue;
     }
-    (void)sdr_usb_req(dev->usb, 0, SDR_VR_STOP, 0, NULL, 0);
-    
+    if (dev->fmt == SDR_FMT_RAW16) {
+        (void)sdr_usb_req(dev->usb, 0, SDR_VR_STOP, 0, NULL, 0);
+    }
     for (int i = 0; i < SDR_MAX_BUFF; i++) {
         libusb_cancel_transfer(dev->transfer[i]);
     }
@@ -171,6 +282,12 @@ sdr_dev_t *sdr_dev_open(int bus, int port)
         !(dev->usb = sdr_usb_open(bus, port, SDR_DEV_VID, SDR_DEV_PID2))) {
         fprintf(stderr, "No device found. BUS=%d PORT=%d ID=%04X:%04X/%04X\n",
             bus, port, SDR_DEV_VID, SDR_DEV_PID1, SDR_DEV_PID2);
+        sdr_free(dev);
+        return NULL;
+    }
+    // read device info
+    if (!read_dev_info(dev)) {
+        fprintf(stderr, "Device info read error.\n");
         sdr_free(dev);
         return NULL;
     }
@@ -288,121 +405,3 @@ int sdr_dev_read(sdr_dev_t *dev, uint8_t *buff, int size)
     return size;
 }
 
-// read MAX2771 status ---------------------------------------------------------
-static int read_MAX2771_stat(sdr_dev_t *dev, int ch, double fx, double *fs,
-    double *fo, int *IQ)
-{
-    static const double ratio[8] = {2.0, 0.25, 0.5, 1.0, 4.0};
-    uint8_t data[4];
-    uint32_t reg[11], ENIQ, INT_PLL, NDIV, RDIV, FDIV, REFDIV, FCLKIN, ADCCLK;
-    uint32_t REFCLK_L, REFCLK_M, ADCCLK_L, ADCCLK_M, PREFRACDIV;
-    
-    for (int i = 0; i < 11; i++) {
-        if (!sdr_usb_req(dev->usb, 0, SDR_VR_REG_READ, (ch << 8) + i, data,
-            4)) {
-            return 0;
-        }
-        for (int j = 0; j < 4; j++) { // swap bytes
-            *((uint8_t *)(reg + i) + j) = data[3 - j];
-        }
-    }
-    ENIQ     = (reg[ 1] >> 27) & 0x1;
-    INT_PLL  = (reg[ 3] >>  3) & 0x1;
-    NDIV     = (reg[ 4] >> 13) & 0x7FFF;
-    RDIV     = (reg[ 4] >>  3) & 0x3FF;
-    FDIV     = (reg[ 5] >>  8) & 0xFFFFF;
-    REFDIV   = (reg[ 3] >> 29) & 0x7;
-    FCLKIN   = (reg[ 7] >>  3) & 0x1;
-    ADCCLK   = (reg[ 7] >>  2) & 0x1;
-    REFCLK_L = (reg[ 7] >> 16) & 0xFFF;
-    REFCLK_M = (reg[ 7] >>  4) & 0xFFF;
-    ADCCLK_L = (reg[10] >> 16) & 0xFFF;
-    ADCCLK_M = (reg[10] >>  4) & 0xFFF;
-    PREFRACDIV = (reg[0xA] >>  3) & 0x1;
-    *fs = !PREFRACDIV ? fx : fx * REFCLK_L / (4096.0 - REFCLK_M + REFCLK_L);
-    *fs *= ADCCLK  ? 1.0 : ratio[REFDIV];
-    *fs *= !FCLKIN ? 1.0 : ADCCLK_L / (4096.0 - ADCCLK_M + ADCCLK_L);
-    *fo = fx / RDIV * (INT_PLL ? NDIV : NDIV + FDIV / 1048576.0);
-    *IQ = ENIQ ? 2 : 1;
-    return 1;
-}
-
-// read MAX2769B status --------------------------------------------------------
-static int read_MAX2769B_stat(sdr_dev_t *dev, int ch, double fx, double *fs,
-    double *fo, int *IQ)
-{
-    static const double ratio[8] = {2.0, 0.25, 0.5, 1.0};
-    uint8_t data[4];
-    uint32_t reg[8], ENIQ, INT_PLL, NDIV, RDIV, FDIV, REFDIV, L_CNT, M_CNT;
-    uint32_t FCLKIN, ADCCLK;
-    
-    for (int i = 0; i < 8; i++) {
-        if (!sdr_usb_req(dev->usb, 0, SDR_VR_REG_READ, (ch << 8) + i, data,
-            4)) {
-            return 0;
-        }
-        for (int j = 0; j < 4; j++) { // swap bytes
-            *((uint8_t *)(reg + i) + j) = data[3 - j];
-        }
-    }
-    ENIQ    = (reg[1] >> 27) & 0x1;
-    INT_PLL = (reg[3] >>  3) & 0x1;
-    NDIV    = (reg[4] >> 13) & 0x7FFF;
-    RDIV    = (reg[4] >>  3) & 0x3FF;
-    FDIV    = (reg[5] >>  8) & 0xFFFFF;
-    REFDIV  = (reg[3] >> 21) & 0x3;
-    L_CNT   = (reg[7] >> 16) & 0xFFF;
-    M_CNT   = (reg[7] >>  4) & 0xFFF;
-    FCLKIN  = (reg[7] >>  3) & 0x1;
-    ADCCLK  = (reg[7] >>  2) & 0x1;
-    *fs = fx * (ADCCLK ? 1.0 : ratio[REFDIV]);
-    *fs *= !FCLKIN ? 1.0 : L_CNT / (4096.0 - M_CNT + L_CNT);
-    *fo = fx / RDIV * (INT_PLL ? NDIV : NDIV + FDIV / 1048576.0);
-    *IQ = ENIQ ? 2 : 1;
-    return 1;
-}
-
-//------------------------------------------------------------------------------
-//  Read device status and info.
-//
-//  args:
-//      dev         (I)   USB device pointer
-//      fs          (O)   sampling frequency (Hz)
-//      fo          (O)   LO frequencies for each IF data channels (Hz)
-//      IQ          (O)   sampling type for each IF data channels (1:I, 2:I/Q)
-//
-//  return
-//      IF data format (0: error)
-//        SDR_FMT_RAW8  : packed 8(4x2) bits raw  (Pocket SDR FE 2CH)
-//        SDR_FMT_RAW16 : packed 16(4x4) bits raw (Pocket SDR FE 4CH)
-//        SDR_FMT_RAW16I: packed 16(2x8) bits raw (Spider SDR)
-//
-int sdr_dev_info(sdr_dev_t *dev, double *fs, double *fo, int *IQ)
-{
-    uint8_t data[6];
-    
-    // read device info and status
-    if (!sdr_usb_req(dev->usb, 0, SDR_VR_STAT, 0, data, 6)) {
-        fprintf(stderr, "Device info read error\n");
-        return 0;
-    }
-    int type = (data[3] >> 4) & 1; // 0: Pocket SDR, 1: Spider SDR
-    double fx = (((uint16_t)data[1] << 8) + data[2]) * 1e3, fs_;
-    
-    if (type == 1) { // Spider SDR
-        int nch = data[3] & 0xF;
-        for (int i = 0; i < nch; i++) {
-            if (!read_MAX2769B_stat(dev, i, fx, &fs_, fo + i, IQ + i)) return 0;
-            if (i == 0) *fs = fs_;
-        }
-        return SDR_FMT_RAW16I;
-    }
-    else { // Pocket SDR
-        int ver = data[0] >> 4, nch = (ver <= 2) ? 2 : 4;
-        for (int i = 0; i < nch; i++) {
-            if (!read_MAX2771_stat(dev, i, fx, &fs_, fo + i, IQ + i)) return 0;
-            if (i == 0) *fs = fs_;
-        }
-        return (ver <= 2) ? SDR_FMT_RAW8 : SDR_FMT_RAW16; // 2CH : 4CH
-    }
-}
