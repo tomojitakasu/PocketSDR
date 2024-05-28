@@ -15,6 +15,7 @@
 //  2024-03-20  1.7  update macros, types and APIs
 //  2024-04-04  1.8  update constants, types and API
 //  2024-04-28  1.9  update constants, types and API
+//  2024-05-28  1.10 update constants, types and APIs
 //
 #ifndef POCKET_SDR_H
 #define POCKET_SDR_H
@@ -120,7 +121,8 @@ typedef struct {                // SDR receiver channel type
     double coff;                // code offset (s) 
     double adr;                 // accumurated Doppler range (cyc) 
     double cn0;                 // C/N0 (dB-Hz) 
-    int week, tow;              // week number (week) and TOW (ms)
+    int week, tow;              // week number (week), TOW (ms)
+    int tow_v;                  // TOW flag (0:invalid,1:valid,2:amb-unresolved)
     int lock, lost;             // lock and lost counts 
     int costas;                 // Costas PLL flag 
     sdr_acq_t *acq;             // signal acquisition 
@@ -146,12 +148,13 @@ typedef struct {                // SDR receiver channel thread type
 typedef struct {                // SDR PVT type
     gtime_t time;               // epoch time
     int64_t ix;                 // epoch cycle (cyc)
+    int nsat, nch;              // number of satellites and updated channels
     obs_t *obs;                 // observation data
     nav_t *nav;                 // navigation data
     sol_t *sol;                 // PVT solution
     ssat_t *ssat;               // satellite status
     rtcm_t *rtcm;               // RTCM control
-    stream_t *strs[2];          // NMEA and RTCM3 streams
+    struct sdr_rcv_tag *rcv;    // pointer to SDR receiver
     pthread_mutex_t mtx;        // lock flag
 } sdr_pvt_t;
 
@@ -166,7 +169,9 @@ typedef struct sdr_rcv_tag {    // SDR receiver type
     int64_t ix;                 // IF data cycle count (cyc)
     int N;                      // IF data cycle (sample)
     int fmt;                    // IF data format (SDR_FMT_???)
+    int buff_use;               // IF data buffer usage rate (%)
     sdr_pvt_t *pvt;             // SDR PVT
+    stream_t *strs[2];          // NMEA and RTCM3 streams
     double tint;                // log output intervals (s)
     pthread_t thread;           // SDR receiver thread
 } sdr_rcv_t;
@@ -264,18 +269,18 @@ int sdr_decode_NB_LDPC(const uint8_t H_idx[][4], const uint8_t H_ele[][4],
     int m, int n, const uint8_t *syms, uint8_t *syms_dec);
 
 // sdr_pvt.c
-sdr_pvt_t *sdr_pvt_new(stream_t **strs);
+sdr_pvt_t *sdr_pvt_new(sdr_rcv_t *rcv);
 void sdr_pvt_free(sdr_pvt_t *pvt);
 void sdr_pvt_udobs(sdr_pvt_t *pvt, int64_t ix, sdr_ch_t *ch);
+void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch);
 void sdr_pvt_udsol(sdr_pvt_t *pvt, int64_t ix);
 void sdr_pvt_solstr(sdr_pvt_t *pvt, char *buff);
 
 // sdr_rcv.c
 sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, const int *if_ch,
-    const double *fi, int n, double fs, const double *dop, int fmt,
-    const int *IQ);
+    const double *fi, int n, double fs, int fmt, const int *IQ);
 void sdr_rcv_free(sdr_rcv_t *rcv);
-int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, stream_t **strs,
+int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, const char **paths,
     double tint);
 void sdr_rcv_stop(sdr_rcv_t *rcv);
 
