@@ -59,8 +59,8 @@ from sdr_func import *
 import sdr_fec, sdr_rtk, sdr_code, sdr_ldpc
 
 # constants --------------------------------------------------------------------
-THRES_SYNC  = 0.3       # threshold for symbol sync
-THRES_LOST  = 0.003     # threshold for symbol lost
+THRES_SYNC  = 0.02      # threshold for symbol sync
+THRES_LOST  = 0.002     # threshold for symbol lost
 
 BCH_CORR_TBL = ( # BCH(15,11,1) error correction table ([7] Table 5-2)
     0b000000000000000, 0b000000000000001, 0b000000000000010, 0b000000000010000,
