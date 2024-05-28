@@ -13,6 +13,7 @@
 //                   support USB context
 //  2024-04-04  1.4  update constants and types
 //  2024-04-28  1.5  update constants, types and APIs
+//  2024-05-28  1.6  update constants, types and APIs
 //
 #ifndef POCKET_DEV_H
 #define POCKET_DEV_H
@@ -50,8 +51,6 @@ extern "C" {
 #define SDR_VR_RESET    0x46    // SDR vendor request: Reset device
 #define SDR_VR_SAVE     0x47    // SDR vendor request: Save settings
 
-#define SDR_FREQ_TCXO   24.000  // SDR frequency of TCXO (MHz)
-
 #define SDR_MAX_CH      8       // max number of channels in a SDR device
 #define SDR_MAX_REG     11      // max number of registers in a SDR device
 
@@ -71,6 +70,10 @@ typedef struct {                // USB device type
 
 typedef struct {                // SDR device type
     sdr_usb_t *usb;             // USB device
+    int fmt;                    // IF data format (SDR_FMT_???)
+    double fs;                  // IF sampling freqency (Hz)
+    double fo[SDR_MAX_CH];      // LO frequencies (Hz)
+    int IQ[SDR_MAX_CH];         // IF sampling types (I:1,I/Q:2)
     int state;                  // state of USB event handler
     int64_t rp, wp;             // read/write pointer of data buffer
     uint8_t *buff;              // data buffer
@@ -100,7 +103,6 @@ void sdr_dev_close(sdr_dev_t *dev);
 int sdr_dev_start(sdr_dev_t *dev);
 int sdr_dev_stop(sdr_dev_t *dev);
 int sdr_dev_read(sdr_dev_t *dev, uint8_t *buff, int size);
-int sdr_dev_info(sdr_dev_t *dev, double *fs, double *fo, int *IQ);
 
 #ifdef __cplusplus
 }
