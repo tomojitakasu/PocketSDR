@@ -187,8 +187,8 @@ static int read_dev_type(sdr_usb_t *usb, double *fx)
     }
     *fx = (((uint16_t)data[1] << 8) + data[2]) * 1e3;
     if ((data[3] >> 4) &  1) return TYPE_SPIDER;
-    if ((data[0] >> 4) == 2) return TYPE_POCKET_2CH;
-    if ((data[0] >> 4) == 3) return TYPE_POCKET_4CH;
+    if ((data[0] >> 4) == 1) return TYPE_POCKET_2CH; // F/W ver.1 (FE 2CH)
+    if ((data[0] >> 4) == 3) return TYPE_POCKET_4CH; // F/W ver.3 (FE 4CH)
     return -1;
 }
 
