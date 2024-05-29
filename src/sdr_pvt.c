@@ -460,7 +460,9 @@ static void update_sol(sdr_pvt_t *pvt)
     opt.err[1] = opt.err[2] = 0.03;
     opt.ionoopt = IONOOPT_BRDC;
     opt.tropopt = TROPOPT_SAAS;
-    opt.posopt[4] = 1; // RAIM-FDE ON
+#if 0 // RAIM-FDE on
+    opt.posopt[4] = 1;
+#endif
     double time = pvt->ix * SDR_CYC;
     char msg[128] = "";
     
