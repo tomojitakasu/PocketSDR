@@ -77,7 +77,7 @@ static const reg_t MAX2771_field[] = { // MAX2771 register field definitions
     {"NDIV"           , 0x4, 15, 13, {0, 0}, {0, 0}, "PLL integer division ratio (36-32767): F_LO=F_XTAL/RDIV*(NDIV+FDIV/2^20)"},
     {"RDIV"           , 0x4, 10,  3, {0, 0}, {0, 0}, "PLL reference division ratio (1-1023)"},
     {"FDIV"           , 0x5, 20,  8, {0, 0}, {0, 0}, "PLL fractional division ratio (0-1048575)"},
-    {"EXTADCCLK"      , 0x7,  1, 28, {0, 0}, {0, 1}, "External ADC clock selection (0:internal,1:ADC_CLKIN)"},
+    {"EXTADCCLK"      , 0x7,  1, 28, {1, 1}, {1, 1}, "External ADC clock selection (0:internal,1:ADC_CLKIN)"},
     {"PREFRACDIV_SEL" , 0xA,  1,  3, {0, 1}, {0, 0}, "Clock pre-divider selection (0:bypass,1:enable)"},
     {"REFCLK_L_CNT"   , 0x7, 12, 16, {0, 1}, {0, 0}, "Clock pre-divider L counter value (0-4095): L_CNT/(4096-M_CNT+L_CNT)"},
     {"REFCLK_M_CNT"   , 0x7, 12,  4, {0, 1}, {0, 0}, "Clock pre-divider M counter value (0-4095)"},
