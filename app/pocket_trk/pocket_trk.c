@@ -262,7 +262,9 @@ int main(int argc, char **argv)
     }
     signal(SIGTERM, sig_func);
     signal(SIGINT, sig_func);
-    
+#ifndef WIN32
+    signal(SIGPIPE, SIG_IGN);
+#endif
     uint32_t tt = sdr_get_tick();
     
     // new and start SDR receiver
