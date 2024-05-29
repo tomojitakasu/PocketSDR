@@ -60,7 +60,6 @@
 #define GPST_IRT_W  1024      // GPST - IRT (week)
 #define GPST_BDT    14.0      // GPST - BDT (s)
 #define GPST_UTC    18.0      // GPST - UTC (s) (2017-1-1 ~ )
-#define GPST_GLOT   (GPST_UTC - 10800.0) // GPST - GLOT (s)
 #define TOFF_L1CA   0.160     // time offset (s) L1CA
 #define TOFF_L1CA_S 1.084     // time offset (s) L1CA SBAS
 #define TOFF_L1CD  18.511     // time offset (s) L1CD
@@ -71,8 +70,9 @@
 #define TOFF_L5I_S  1.088     // time offset (s) L5I SBAS
 #define TOFF_L6DE   1.0175    // time offset (s) L6D/E
 #define TOFF_G1CA   2.000     // time offset (s) G1CA
-#define TOFF_G1OCD  2.207     // time offset (s) G1OCD ?
-#define TOFF_G3OCD  0.328     // time offset (s) G3OCD ?
+#define TOFF_G1OCD  2.207     // time offset (s) G1OCD
+#define TOFF_G3OCD  0.340     // time offset (s) G3OCD
+#define TOFF_G3OCP  0.340     // time offset (s) G3OCP
 #define TOFF_E1B    2.037     // time offset (s) E1B
 #define TOFF_E1C    0.897     // time offset (s) E1C
 #define TOFF_E5AI  10.240     // time offset (s) E5AI
@@ -885,7 +885,7 @@ static void decode_glo_str(sdr_ch_t *ch, const uint8_t *syms, int rev)
         if (sno == 1) {
             double tod = getbitu(data, 9, 5) * 3600.0 +
                 getbitu(data, 14, 6) * 60.0 + getbitu(data, 20, 1) * 30.0;
-            update_tow(ch, tod + GPST_GLOT + TOFF_G1CA);
+            update_tow(ch, tod + TOFF_G1CA + GPST_UTC);
             ch->tow_v = 2;
         }
         if (sno >= 1 && sno <= 5) { // GLO string w/o mark and hamming (77 bits)
@@ -956,7 +956,7 @@ static void decode_glo_L1OCD_str(sdr_ch_t *ch, const uint8_t *bits, int rev)
         ch->nav->fsync = ch->lock;
         ch->nav->rev = rev;
         sdr_pack_bits(buff, 250, 0, data);
-        update_tow(ch, getbitu(data, 34, 16) * 2.0 + TOFF_G1OCD + GPST_GLOT);
+        update_tow(ch, getbitu(data, 34, 16) * 2.0 + TOFF_G1OCD + GPST_UTC);
         ch->tow_v = 2;
         ch->nav->type = getbitu(data, 12, 6); // L1OCD nav string type
         memcpy(ch->nav->data, data, 32); // L1OCD nav string (250 bits)
@@ -1032,7 +1032,7 @@ static void decode_glo_L3OCD_str(sdr_ch_t *ch, const uint8_t *bits, int rev)
         ch->nav->ssync = ch->nav->fsync = ch->lock;
         ch->nav->rev = rev;
         sdr_pack_bits(buff, 300, 0, data);
-        update_tow(ch, getbitu(data, 26, 15) * 3.0 + TOFF_G3OCD + GPST_GLOT);
+        update_tow(ch, getbitu(data, 26, 15) * 3.0 + TOFF_G3OCD + GPST_UTC);
         ch->tow_v = 2;
         ch->nav->type = getbitu(data, 20, 6); // GLO L3OCD nav string type
         memcpy(ch->nav->data, data, 38); // GLO L3OCD nav string (300 bits)
@@ -1094,7 +1094,14 @@ static void decode_G3OCD(sdr_ch_t *ch)
 // decode G3OCP nav data ([16]) ------------------------------------------------
 static void decode_G3OCP(sdr_ch_t *ch)
 {
-    // to be implemented
+    if (ch->trk->sec_sync == 0) {
+        ch->tow = -1;
+        ch->tow_v = 0;
+    }
+    else if ((ch->lock - ch->trk->sec_sync) % ch->len_sec_code == 0) {
+        ch->tow = (int)(TOFF_G3OCP / 1e-3);
+        ch->tow_v = 2;
+    }
 }
 
 // decode Galileo symbols ([2]) ------------------------------------------------
