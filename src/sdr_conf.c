@@ -179,7 +179,7 @@ static uint32_t bit_mask(const reg_t *reg)
 // read device type and TCXO frequency -----------------------------------------
 static int read_dev_type(sdr_usb_t *usb, double *fx)
 {
-    uint8_t data[6];
+    uint8_t data[6] = {0};
     
     // read device info and status
     if (!sdr_usb_req(usb, 0, SDR_VR_STAT, 0, data, 6)) {
@@ -187,8 +187,9 @@ static int read_dev_type(sdr_usb_t *usb, double *fx)
     }
     *fx = (((uint16_t)data[1] << 8) + data[2]) * 1e3;
     if ((data[3] >> 4) &  1) return TYPE_SPIDER;
-    if ((data[0] >> 4) <= 2) return TYPE_POCKET_2CH;
-    else                     return TYPE_POCKET_4CH;
+    if ((data[0] >> 4) == 2) return TYPE_POCKET_2CH;
+    if ((data[0] >> 4) == 3) return TYPE_POCKET_4CH;
+    return -1;
 }
 
 // read settings from configuration file in hexadecimal format -----------------
@@ -554,6 +555,7 @@ int sdr_read_settings(const char *file, int bus, int port, int opt)
     // read device type and TCXO frequency
     int type = read_dev_type(usb, &fx);
     if (type < 0) {
+        fprintf(stderr, "No proper device found.\n");
         sdr_usb_close(usb);
         return 0;
     }
@@ -599,8 +601,7 @@ int sdr_write_settings(const char *file, int bus, int port, int opt)
     // read device type and TCXO frequency
     int type = read_dev_type(usb, &fx);
     if (type < 0) {
-        fprintf(stderr, "No proper device found. BUS=%d PORT=%d ID=%04X:%04X/%04X\n",
-            bus, port, SDR_DEV_VID, SDR_DEV_PID1, SDR_DEV_PID2);
+        fprintf(stderr, "No proper device found.\n");
         return 0;
     }
     // read settings from device registers
