@@ -390,6 +390,13 @@ static void CSK(sdr_ch_t *ch, const sdr_cpx_t *corr)
     sdr_cpx_free(C);
 }
 
+// update TOW ------------------------------------------------------------------
+static void update_tow(sdr_ch_t *ch, double sec)
+{
+    if (ch->tow < 0) return;
+    ch->tow = (ch->tow + (int)(sec / 1e-3)) % (86400 * 7 * 1000);
+}
+
 // track signal ----------------------------------------------------------------
 static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
 {
@@ -402,14 +409,14 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
     // adjust code offset within 1 cycle range (0 <= ch->coff < ch->T)
     if (ch->coff >= ch->T) {
         ch->coff -= ch->T;
-        if (ch->tow >= 0) ch->tow -= (int)(ch->T / 1e-3);
+        update_tow(ch, -ch->T);
         ch->lock--;
         memmove(ch->trk->P + 1, ch->trk->P, sizeof(sdr_cpx_t) *
             (SDR_N_HIST - 1));
     }
     else if (ch->coff < 0.0) {
         ch->coff += ch->T;
-        if (ch->tow >= 0) ch->tow += (int)(ch->T / 1e-3);
+        update_tow(ch, ch->T);
         ch->lock++;
         memmove(ch->trk->P, ch->trk->P + 1, sizeof(sdr_cpx_t) *
             (SDR_N_HIST - 1));
@@ -437,8 +444,8 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
     }
     // add P correlator outputs to history 
     sdr_add_buff(ch->trk->P, SDR_N_HIST, ch->trk->C[0], sizeof(sdr_cpx_t));
+    update_tow(ch, ch->T);
     ch->lock++;
-    if (ch->tow >= 0) ch->tow += (int)(ch->T / SDR_CYC);
     
     // sync and remove secondary code 
     if (ch->len_sec_code >= 2 && ch->lock * ch->T >= T_NPULLIN) {
