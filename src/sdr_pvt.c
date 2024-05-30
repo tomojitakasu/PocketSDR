@@ -308,7 +308,7 @@ static void update_obs(gtime_t time, obs_t *obs, sdr_ch_t *ch)
         if (sat == obs->data[i].sat) break;
     }
     if (i >= obs->n) {
-        memset(obs->data + i, 0, sizeof(obsd_t) * (NFREQ + NEXOBS));
+        memset(obs->data + i, 0, sizeof(obsd_t));
         obs->data[i].time = time;
         obs->data[i].sat = sat;
         obs->data[i].rcv = 1;
