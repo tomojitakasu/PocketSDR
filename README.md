@@ -1,29 +1,27 @@
-# **Pocket SDR - An Open-Source GNSS SDR, ver. 0.11**
+# **Pocket SDR - An Open-Source GNSS SDR, ver. 0.12**
 
 ## **Overview**
 
 Pocket SDR is an open-source GNSS (Global Navigation Satellite System) receiver
-based on the SDR (software defined radio) technology. It consists of an RF front-
-end device, some utilities for the device, and GNSS-SDR APs (application programs)
-written in Python and C. It supports almost all signals for GPS, GLONASS,
-Galileo, QZSS, BeiDou, NavIC, and SBAS.
+based on the SDR (software defined radio) technology. It consists of RF frontend
+devices named "Pocket SDR FE", some utilities for the devices, and GNSS-SDR
+APs (application programs) written in Python, C, and C++. It supports almost all
+signals for GPS, GLONASS, Galileo, QZSS, BeiDou, NavIC, and SBAS.
 
-The RF front-end device consists of 2 CH Maxim MAX2771 GNSS RF front-end ICs
-(LNA, mixer, filter, ADC, frequency synthesizer) and a Cypress EZ-USB FX2LP USB
-2.0 controller to connect to host PCs. The front-end CH1 is dedicated for GNSS
-L1 band (1525 - 1610 MHz), and CH2 is for GNSS L2/L5/L6 band (1160 - 1290 MHz).
-The frequency of the reference oscillator (TCXO) is 24.000 MHz, and the ADC sampling
-frequency can be configured up to 32 MHz.
+The Pocket SDR FE device consists of 2 or 4 RF frontend channels, which support
+GNSS L1 band (1525 - 1610 MHz), or L2/L5/L6 band (1160 - 1290 MHz). The bandwidth
+of each RF channel covers up to 36 MHz. The sampling rate of the ADC can be
+configured up to 32 Msps (FE 2CH) or 48 Msps (FE 4CH).
 
-Pocket SDR contains some utility programs for the RF front-end device to
-configure the device, capture and dump the digitized IF (inter-frequency) data.
-These utilities support Windows, Linux, and other environments.
-
-Pocket SDR also provides GNSS-SDR APs to show the PSD (power spectrum density)
-of captured IF data, search the GNSS signals, track these signals, and decode
-navigation data in them. The supported GNSS signals are as follows. For details
-on these signals and signal IDs used in the Pocket SDR APs, refer 
-[Pocket SDR Signal IDs](/doc/signal_IDs.pdf).
+The Pocket SDR also contains some utility programs for the Pocket SDR FE devices,
+to setup the devices, capture and dump the digitized IF (inter-frequency) data.
+These utilities support Windows, Linux, Raspberry Pi OS, and other environments.
+ZZZZ
+The Pocket SDR also provides GNSS-SDR APs to show the PSD (power spectrum
+density) of captured IF data, search GNSS signals, track these signals, decode
+navigation data and generate PVT (position, velocity and time) solutions. The
+supported GNSS signals are as follows. For details on these signals and signal
+IDs used in the APs, refer [Pocket SDR Signal IDs](/doc/signal_IDs.pdf).
 
 * **GPS**: L1C/A, L1C-D, L1C-P, L2C-M, L5-I, L5-Q
 * **GLONASS**: L1C/A (L1OF), L2C/A (L2OF), L1OCd, L1OCp, L2OCp, L3OCd, L3OCp
@@ -33,10 +31,12 @@ on these signals and signal IDs used in the Pocket SDR APs, refer
 * **NavIC**: L1-SPS-D, L1-SPS-P, L5-SPS
 * **SBAS**: L1C/A, L5-I, L5-Q
 
-These APs are written in Python and C by very compact way. They are easily
-modified by users to add user's unique algorithms. 
+These utilities and APs are written in Python, C, and C++ by very compact way. They
+are easily modified by users to add user's unique algorithms. 
 
-<img src="image/pocket_sdr_image.jpg" width=80%>
+<img src="image/pocket_sdr_image.jpg" width=100%>
+
+**<p style="text-align: center;">Pocket SDR FEs (FE 2CH v.2.1, FE 2CH v.2.3, and FE 4CH v.3.0)</p>**
 
 The introduction of Pocket SDR is shown in the following slides.
 
@@ -52,40 +52,53 @@ IPNTJ Annual Conference, June 10, 2022
 
 --------------------------------------------------------------------------------
 
-## **Package Structure**
+## **Directory Structure and Contents**
 ```
-PocketSDR --+-- bin     Pocket SDR utilities and APs binary programs for Windows
-            +-- app     Pocket SDR utilities and APs source programs
+PocketSDR --+-- bin     Pocket SDR APs binary programs
+            +-- app     Pocket SDR APs source programs
+            |   +-- pocket_conf  Pocket SDR FE device configurator
+            |   +-- pocket_dump  Dump digital IF data of Pocket SDR FE device
+            |   +-- pocket_scan  Scan and list USB devices
+            |   +-- pocket_acq   GNSS signal acquisition
+            |   +-- pocket_trk   GNSS signal tracking and PVT generation
+            |   +-- pocket_snap  Snapshot Positioning
             +-- src     Pocket SDR library source programs
             +-- python  Pocket SDR Python scripts
-            +-- lib     External library for utilities and APs
-            +-- conf    Configuration files for device settings
-            +-- driver  Windows driver for EZ-USB FX2LP/FX3 (cyusb3.sys) ([4])
-            +-- doc     Documents (ref [1], [2])
-            +-- FW      Firmware source programs and images
-            |   +-- cypress  Cypress libraries for EZ-USB firmware development
-            |                (ref [4])
-            +-- HW      Pocket SDR RF frontend CAD data and parts list
-            |           (*.brd and *.sch are for Eagle, *.f3d is for Fusion 360)
+            +-- lib     Libraries for APs and Python scripts
+            |   +-- win32        Libraries for Windows
+            |   +-- linux        Libraries for Linux or Raspberry Pi OS
+            |   +-- build        Makefiles to build libraries
+            |   +-- cyusb        Cypress EZ-USB API (CyAPI.a) and includes
+            |   +-- RTKLIB       RTKLIB source programs based on 2.4.3 b34
+            |   +-- (libfec)     Library for FEC (forward error corrections) ([1])
+            |   +-- (LDPC-codes) Library for LDPC-decoder ([2])
+            +-- conf    Configuration files for Pocket SDR FE
+            +-- FE_2CH  Pocket SDR FE 2CH H/W and F/W
+            +-- FE_4CH  Pocket SDR FE 4CH H/W and F/W
+            +-- driver  Windows driver for Pocket SDR FE
+            +-- doc     Documents
             +-- image   Image files for documents
-            +-- sample  Sample digital IF data captured by Pocket SDR
-            +-- test    Test codes
+            +-- sample  Sample digital IF data captured by Pocket SDR FE
+            +-- test    Test codes and data
+
+            () : not included in the package
 ```
 
 --------------------------------------------------------------------------------
 
 ## **Installation for Windows**
 
-* Extract PocketSDR.zip to an appropriate directory <install_dir>.
-* Attach Pocket SDR RF frontend to PC via USB cable.
+* Extract PocketSDR.zip or clone the git repository (https://github.com/tomojitakasu/PocketSDR)
+ to an appropriate directory <install_dir>.
+* Attach Pocket SDR FE to PC via USB cable.
 * Install USB driver (CYUSB) for Pocket SDR RF frontend according to
   PocketSDR\driver\readme.txt.
 * Add the Pocket SDR binary programs path (<install_dir>\PocketSDR\bin) to 
   the command search path (Path) of Windows environment variables.
 * Add the Pocket SDR Python scripts path (<install_dir>\PocketSDR\python) to 
   the command search path (Path) of Windows environment variables.
-* To rebuild the binary programs, you need MinGW64. Refer MSYS2
-  (https://www.msys2.org/) for details.
+* To rebuild the binary programs, you need MinGW64. Refer MSYS2 (https://www.msys2.org/)
+for details.
 * In MinGW64 environment, you need fftw3 library. To install fftw3 library.
 ```
 $ pacman -S mingw-w64-x86_64-fftw
@@ -93,36 +106,29 @@ $ pacman -S mingw-w64-x86_64-fftw
 
 --------------------------------------------------------------------------------
 
-## **Installation for Linux**
+## **Installation for Linux or Raspberry Pi OS**
 
-* Extract PocketSDR.zip or clone the Git repository to an appropriate directory <install_dir>.
+* You need fundamental development packages and some libraries. Confirm the following
+packages exist: gcc, g++, make, libusb-1.0-0-dev, libfftw3-dev, python3, python3-numpy,
+python3-scipy, python3-matplotlib
+* Extract PocketSDR.zip or clone the git repository to an appropriate directory <install_dir>.
 ```
 $ unzip PocketSDR.zip
 or
 $ git clone https://github.com/tomojitakasu/PocketSDR
 ```
-* Install libusb-1.0 developtment package. For Ubuntu:
-```
-$ sudo apt install libusb-1.0-0-dev
-```
-* Install libfftw3 developtment package. For Ubuntu:
-```
-$ sudo apt install libfftw3-dev
-```
-* Move to the library directory, install external library source trees ([5], [6], [7]) as follows:
+* Move to the library directory, install external library source trees ([1], [2]) as follows:
 ```
 $ cd <install_dir>/lib
-$ git clone https://github.com/quiet/libfec
-$ git clone https://github.com/radfordneal/LDPC-codes
-$ git clone https://github.com/tomojitakasu/RTKLIB -b rtklib_2.4.3
+$ ./clone_lib.sh
 ```
-* Move to the library build directory, build libraries.
+* Move to the library build directory and build libraries.
 ```
 $ cd <install_dir>/lib/build
 $ make
 $ make install
 ```
-* Move to the application program directory, build utilities and APs.
+* Move to the application program directory and build utilities and APs.
 ```
 $ cd <install_dir>/app
 $ make
@@ -137,22 +143,15 @@ $ sudo pocket_conf ../conf/pocket_L1L6_12MHz.conf
 $ sudo pocket_dump -t 10 ch1.bin ch2.bin
 ```
 
-* Add the Pocket SDR Python scripts path (<install_dir>/PocketSDR/python) to 
-  the command search path (Path) and set permissions.
-```
-$ cd <install_dir>/python
-$ chmod +x *.py
-```
-
 --------------------------------------------------------------------------------
 
-## **Utility Programs for RF frontend**
+## **Utility Programs for Pocket SDR FE**
 
-Pocket SDR contains the following utility programs.
+Pocket SDR contains the following utility programs for the Pocket SDR FE.
 
-- **pocket_conf**: SDR device configurator
+- **pocket_conf**: Pocket SDR FE device configurator
 - **pocket_scan**: Scan and list USB Devices
-- **pocket_dump**: Capture and dump digital IF data of SDR device
+- **pocket_dump**: Capture and dump digital IF data of Pocket SDR FE device
 
 For details, refer comment lines in src/pocket_conf.c, src/pocket_scan.c, 
 src/pocket_dump.c.
@@ -204,16 +203,17 @@ $ pocket_acq.py ch1.bin -f 12 -fi 3 -sig L1CA -prn 8 -3d
 $ pocket_acq.py ch2.bin -f 12 -sig L6D -prn 194 -p
 
 $ pocket_trk.py ch1.bin -f 12 -fi 3 -sig L1CA -prn 1-32
-TIME(s):      5.00                                                             SRCH:   0  LOCK:  8/ 32
-CH   SIG PRN STATE  LOCK(s) C/N0 (dB-Hz)         COFF(ms) DOP(Hz)    ADR(cyc) SYNC  #NAV #ERR #LOL NER
- 4  L1CA   4  LOCK     4.99 41.7 |||||||        0.9680586 -1947.0     -9713.3 -B--     0    0    0   0
- 7  L1CA   7  LOCK     4.99 35.1 |||            0.4019474  3676.0     18351.1 -B--     0    0    0   0
- 8  L1CA   8  LOCK     4.99 46.5 ||||||||||     0.4476165  2532.0     12638.9 -B--     0    0    0   0
- 9  L1CA   9  LOCK     4.99 37.6 |||||          0.9303968  -376.9     -1867.8 -B--     0    0    0   0
-16  L1CA  16  LOCK     4.99 46.6 |||||||||||    0.9330322  -418.9     -2089.4 -B--     0    0    0   0
-18  L1CA  18  LOCK     4.99 42.4 ||||||||       0.7254252 -1763.4     -8791.6 -B--     0    0    0   0
-26  L1CA  26  LOCK     4.99 45.8 ||||||||||     0.7427075 -1445.7     -7211.6 -B--     0    0    0   0
-31  L1CA  31  LOCK     4.99 45.0 ||||||||||     0.7491922 -3013.1    -15036.7 -B--     0    0    0   0
+ TIME(s):      4.90                                                            SRCH:   0  LOCK:  9/ 32
+ CH  SAT   SIG PRN  LOCK(s) C/N0 (dB-Hz)         COFF(ms) DOP(Hz)    ADR(cyc) SYNC  #NAV #ERR #LOL NER
+  5  G05  L1CA   5     4.89 47.3 |||||||||||    0.7176882   958.2      4687.7 -B--     0    0    0   0
+  6  G06  L1CA   6     4.89 41.7 |||||||        0.6283584 -3510.3    -17163.6 -B--     0    0    0   0
+  7  G07  L1CA   7     4.89 40.5 |||||||        0.6468045 -1258.6     -6152.3 -B--     0    0    0   0
+ 11  G11  L1CA  11     4.89 46.7 |||||||||||    0.1002834 -1660.3     -8114.1 -B--     0    0    0   0
+ 13  G13  L1CA  13     4.89 47.8 |||||||||||    0.1235314  1803.9      8825.4 -B--     0    0    0   0
+ 15  G15  L1CA  15     4.89 40.3 ||||||         0.8688543  2864.4     14011.2 -B--     0    0    0   0
+ 20  G20  L1CA  20     4.89 46.5 ||||||||||     0.4835166  -161.2      -789.3 -B--     0    0    0   0
+ 29  G29  L1CA  29     4.89 44.5 |||||||||      0.4977522   429.7      2108.4 -B--     0    0    0   0
+ 30  G30  L1CA  30     4.89 44.2 |||||||||      0.7357694   540.2      2643.5 -B--     0    0    0   0
 ...
 $ pocket_trk.py ch1.bin -f 12 -fi 3 -sig E1B -prn 18 -p
 ...
@@ -231,65 +231,105 @@ $ pocket_trk.py ch2.bin -f 12 -sig E6B -prn 4 -log trk.log -p -ts 0.2
 
 --------------------------------------------------------------------------------
 
-## **Real-time Signal Tracking with pocket_dump and pocket_trk**
+## **Real-time GNSS Signal Tracking with Pocket SDR FE and pocket_trk AP**
 
-With pocket_dump and pocket_trk, you can track GNSS signals in real-time.
-By using -r option in pocket_dump and pocket_trk, the captured 2 CH IF data can
-be handled as raw data format. In addition, multiple signal tracking feature is
-added to pocket_trk (C-version of pocket_trk.py) in ver. 0.9.
-
-For example, to track L1C/A and L5I signals of GPS in real-time, the following
-commands can be used. In this case, the tracking log is output as a TCP server with
-the port number 5070. For detailed options, please refer the comment lines in the
-source codes of app/pocket_dump/pocket_dump.c or app/pocket_trk/pocket_trk.c.
-For other samples, please refer test/pocket_trk_*_test.sh.
+With the Pocket SDR FE device and the AP pocket_trk, you can track GNSS signals
+and generate PVT solutions in real-time. In this case, the sampling frequency,
+IF frequencies, sampling type (I or I/Q), RF channel selections are automatically
+configured according to the device info obtained from the device. Multiple GNSS
+signals and PRN numbers can be specified as pocket_trk options -sig and -prn.
+On Linux or Raspberry Pi OS, you might have to add "sudo" to access the Pocket SDR FE
+device.
 
 ``` 
-$ sudo pocket_dump -r -q - -c conf/pocket_L1L5_24MHz.conf | \
-pocket_trk -r -f 24 -fi 6,0 -sig L1CA -prn 1-32 -sig L5I -prn 1-32 \
--log :5070
+$ pocket_trk -sig L1CA -prn 1-32 -sig L5I -prn 1-32
+``` 
+
+As default, the signal tracking status are shown as the following example.
+
+``` 
+ 2024-05-30 08:39:50.996  35.1234065  138.1234560  1234.45  8/ 9 FIX      BUFF:  1% SRCH: 17 LOCK: 11/ 32
+ CH RF  SAT   SIG PRN  LOCK(s) C/N0 (dB-Hz)         COFF(ms) DOP(Hz)    ADR(cyc) SYNC  #NAV #ERR #LOL FEC
+  5  1  G05  L1CA   5    52.14 47.5 |||||||||||    0.6361186   779.8     41233.8 -BFR     7    0    0   0
+  6  1  G06  L1CA   6    52.05 40.7 |||||||        0.0092524 -3740.1   -194068.1 -BF-     7    0    0   0
+ ...
+``` 
+
+The first line of the status indicates:
+
+```
+2024-05-30 08:39:50.996: Signal reception time expressed in GPS time
+ 35.1234065 : PVT solution latitude  (deg, +: north, -: south)
+138.1234560 : PVT solution longitude (deg, +: east, -: west)
+1234.45     : PVT solution ellipsoidal height (m)
+8/ 9        : Numbers of satellites for PVT and all tracking satellites
+FIX         : FIX PVT fixed, --- PVT not available
+BUFF:  1%   : Internal IF data buffer usage rate (overloaded if exceeding 100%)
+SRCH: 17    : Signal search channel number
+LOCK: 11/ 32: Numbers of signal lock channels and all channels
+```
+
+The third and following lines of the status indicates:
+
+```
+CH  : Receiver channel number (1-999)
+RF  : RF frontend RF channel number (1-4)
+SAT : GNSS satellite (Gnn: GPS, Rnn: GLONASS, Enn: Galileo, Jnn: QZSS,
+      Cnn: BeiDou, Inn: NavIC, Snn: SBAS)
+SIG : GNSS signal ID
+PRN : PRN number or FCN for GLONASS FDMA
+LOCK: Continuos lock time (s)
+C/N0: C/N0 (dB-Hz) and C/N0 bar
+COFF: Tracking PRN code offset (ms)
+DOP : Doppler frequency (Hz)
+ADR : Accumulated Doppler range (cycle)
+SYNC: Synchronization status (secondary code, bit, frame, and polarity)
+#NAV: Number of properly decoded navigation subframes or messages
+#ERR: Number of error navigation subframes or messages
+#LOL: Number of loss-of-lock trackings
+FEC : Number of corrected error bits by FEC (-1: unrecoverable errors)
+```
+
+The GNSS PVT solutions can be output as NMEA 0183 format ([3]) by -nmea option.
+
+``` 
+$ pocket_trk -sig L1CA -prn 1-32 -nmea <path>
+``` 
+
+The path is just a local file path. To output data to outside of the AP,
+use :port as the path to accept connections by a TCP server, or address:port
+to connect an external TCP server.
+
+The GNSS observation data and navigation data can be output as RTCM3 MSM7 and
+navigation data formats ([4]) by -rtcm option.
+
+``` 
+$ pocket_trk -sig L1CA -prn 1-32 -rtcm <path>
+``` 
+
+The GNSS signal tracking log including observation data and HEX dump of navigation
+data can be output by -log option.
+
+``` 
+$ pocket_trk -sig L1CA -prn 1-32 -log <path>
 ``` 
 
 <img src="image/image008.jpg" width=100%>
 
 --------------------------------------------------------------------------------
 
-## **Rebuild F/W and Write F/W Image to Pocket SDR RF frontend**
-
-* Install Cypress EZ-USB FX2LP Development Kit (ref [4]) to a Windows PC. As
-default, it is installed to C:\Cypress and C:\Keil.
-* Execute Keil uVision2 (C:\Keil\UV2\uv2.exe).
-* Execute Menu Project - Open Project, select <install_dir>\PocketSDR\FW\pocket_fw.Uv2>
-and open the project.
-* Execute Menu Project - Rebuild all target files and you can get a F/W image
-as <install_dir>\PocketSDR\FW\pocket_fw.iic.
-* Attach Pocket SDR RF frontend via USB cable to the PC.
-* Execute USB Control Center (C:\Cypress\USB\CY3684_EZ-USB_FX2LP_DVK\1.1\Windows Applications\
-c_sharp\controlcenter\bin\Release\CyControl.exe).
-* Select Cypress FX2LP Sample Device, execute menu Program - FX2 - 64KB EEPROM,
-select the F/W image <install_dir>\PocketSDR\FW\pocket_fw.iic and open it.
-* If you see "Programming succeeded." in status bar, the F/W is properly written
-to PocketSDR.
-
---------------------------------------------------------------------------------
-
 ## **References**
 
-[1] Maxim integrated, MAX2771 Multiband Universal GNSS Receiver, July 2018
+[1] https://github.com/quiet/libfec
 
-[2] Cypress, EZ-USB FX2LP USB Microcontroller High-Speed USB Peripheral 
-  Controller, Rev. AB, December 6, 2018
+[2] https://github.com/radfordneal/LDPC-codes
 
-[3] (deleted)
+[3] NMEA 0183, Standard for Interfacing Marine Electronic Devices, National Marine
+Electronics Association and International Marine Electronics Assosiation, 2013
 
-[4] Cypress, CY3684 EZ-USB FX2LP Development Kit
-    (https://www.cypress.com/documentation/development-kitsboards/cy3684-ez-usb-fx2lp-development-kit)
-
-[5] https://github.com/quiet/libfec
-
-[6] https://github.com/radfordneal/LDPC-codes
-
-[7] https://github.com/tomojitakasu/RTKLIB
+[4] RTCM 10403.3 with Amendment 1, Differential GNSS (Global Navgation Satellite
+Systems) service - version 3, Radio Technical Commission for Maritime Services,
+April 28, 2020
 
 --------------------------------------------------------------------------------
 
@@ -308,3 +348,5 @@ to PocketSDR.
 * 2024-01-12  0.10 Support NavIC L1-SPS-D, L1-SPS-P, GLONASS L1OCd, L1OCp and L2OCp.
 * 2024-01-25  0.11 Support decoding of GLONASS L1OCd NAV data
                    Support NB-LDCP error correction for BDS B1C, B2a and B2b
+* 2024-05-28  0.12 Performance optimized.
+                   Support PVT generation, RTCM3 and NMEA outputs
