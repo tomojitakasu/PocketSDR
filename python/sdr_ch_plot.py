@@ -43,6 +43,7 @@ def init(env, p3d, toff, tspan, ylim):
     plot_ena = True
     plot_opt = (env, p3d, toff, tspan, ylim)
     draw(fig)
+    draw(fig) # to fix error on ubuntu 22.04
     fig.canvas.mpl_connect('resize_event', on_resize)
     fig.canvas.mpl_connect('close_event', on_close)
     return fig
