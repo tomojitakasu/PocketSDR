@@ -16,7 +16,6 @@ configured up to 32 Msps (FE 2CH) or 48 Msps (FE 4CH).
 The Pocket SDR also contains some utility programs for the Pocket SDR FE devices,
 to setup the devices, capture and dump the digitized IF (inter-frequency) data.
 These utilities support Windows, Linux, Raspberry Pi OS, and other environments.
-ZZZZ
 The Pocket SDR also provides GNSS-SDR APs to show the PSD (power spectrum
 density) of captured IF data, search GNSS signals, track these signals, decode
 navigation data and generate PVT (position, velocity and time) solutions. The
