@@ -166,7 +166,8 @@ def plot_corr_peak(ax, x, y, xl, fc):
 
 # add text annotation in plot --------------------------------------------------
 def add_text(ax, x, y, text, color='k'):
-    ax.text(x, y, text, ha='right', va='top', c=color, transform=ax.transAxes)
+    ax.text(x, y, text, ha='right', va='top', color=color,
+        transform=ax.transAxes)
 
 #-------------------------------------------------------------------------------
 #
