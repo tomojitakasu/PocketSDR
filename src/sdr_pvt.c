@@ -66,7 +66,7 @@ static uint8_t sig2code(const char *sig)
 //          sig   signal ID
 //          cn0   C/N0 (dB-Hz)
 //          pr    pseudorange (m)
-//          cp    carrier pahse (cyc)
+//          cp    carrier phase (cyc)
 //          dop   Doppler frequency (Hz)
 //          lli   loss of lock indicator
 //

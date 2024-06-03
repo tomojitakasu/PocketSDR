@@ -31,7 +31,7 @@
 //  [14] Global Navigation Satellite System GLONASS Interface Control Document
 //      Navigation radiosignal in bands L1, L2 (Version 5.1), 2008
 //  [15] IS-QZSS-TV-004, Quasi-Zenith Satellite System Interface Specification
-//      Positioning Technology Verification Service, Septemver 27, 2023
+//      Positioning Technology Verification Service, September 27, 2023
 //  [16] IRNSS SIS ICD for Standard Positioning Service version 1.1, August,
 //      2017
 //  [17] GLONASS Interface Control Document Code Division Multiple Access Open

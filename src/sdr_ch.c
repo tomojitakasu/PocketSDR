@@ -477,7 +477,7 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
 //  Update a receiver channel. A receiver channel is a state machine which has
 //  the following internal states indicated as ch.state. By calling the function,
 //  the receiver channel search and track GNSS signals and decode navigation
-//  data in the signals. The results of the signal acquisition, trackingare and
+//  data in the signals. The results of the signal acquisition, tracking and
 //  navigation data decoding are output as log messages. The internal status are
 //  also accessed as object instance variables of the receiver channel after
 //  calling the function. The function should be called in the cycle of GNSS

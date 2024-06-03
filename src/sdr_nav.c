@@ -31,11 +31,11 @@
 //      Navigational radiosignal In bands L1, L2 (Edition 5.1), 2008
 //  [15] IRNSS SIS ICD for Standard Positioning Service version 1.1, August,
 //      2017
-//  [16] GLONASS Interface Control Document Code Devision Multiple Access Open
+//  [16] GLONASS Interface Control Document Code Division Multiple Access Open
 //      Service Navigation Signal in L3 frequency band Edition 1.0, 2016
 //  [17] NavIC Signal in Space ICD for Standard Positioning Service in L1
 //      Frequency version 1.0, August, 2023
-//  [18] GLONASS Interface Control Document Code Devision Multiple Access Open
+//  [18] GLONASS Interface Control Document Code Division Multiple Access Open
 //      Service Navigation Signal in L1 frequency band Edition 1.0, 2016
 //
 //  Author:
@@ -794,7 +794,7 @@ static void decode_L6_frame(sdr_ch_t *ch, const uint8_t *syms, int N)
     
     preamb[4] = ch->prn;
     
-    // sync 2 premable differences
+    // sync 2 preamble differences
     int n1 = 0, n2 = 0;
     for (int i = 1; i < 5; i++) {
         if ((uint8_t)(syms[i] - syms[0]) == (uint8_t)(preamb[i] - preamb[0])) n1++;
@@ -802,7 +802,7 @@ static void decode_L6_frame(sdr_ch_t *ch, const uint8_t *syms, int N)
     for (int i = 0; i < 5; i++) {
         if ((uint8_t)(syms[i+N] - syms[0]) == (uint8_t)(preamb[i] - preamb[0])) n2++;
     }
-    if (n1 + n2 < 9) { // test # of symbol matchs
+    if (n1 + n2 < 9) { // test # of symbol matches
         unsync_nav(ch);
         return;
     }

@@ -147,7 +147,7 @@ float sdr_cpx_abs(sdr_cpx_t cpx)
 //  
 //  args:
 //      a, b     (I)  Complex arrays
-//      N        (I)  Size of comlex arrays
+//      N        (I)  Size of complex arrays
 //      s        (I)  Scale
 //      c        (O)  Multiplication of a and b (c[i] = a[i] * b[i] * s)
 //

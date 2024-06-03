@@ -205,7 +205,7 @@ static void ch_th_stop(sdr_ch_th_t *th)
 //      if_ch    (I) IF CHs (0:CH1,1:CH2, ...) {if_ch_1, if_ch_2, ..., if_ch_n}
 //      fi       (I) IF frequencies (Hz) {fi_1, fi_2, ..., fi_n}
 //      n        (I) number of signal types, PRN numbers and IF frequencies
-//      fs       (I) sampling freqency of IF data (Hz)
+//      fs       (I) sampling frequency of IF data (Hz)
 //      dop      (I) Doppler search range (dop[0]-dop[1] ... dop[0]+dop[1])
 //                     dop[0]: center frequency to search (Hz)
 //                     dop[1]: lower and upper limits to search (Hz)
