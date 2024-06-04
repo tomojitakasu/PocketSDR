@@ -206,9 +206,6 @@ static void ch_th_stop(sdr_ch_th_t *th)
 //      fi       (I) IF frequencies (Hz) {fi_1, fi_2, ..., fi_n}
 //      n        (I) number of signal types, PRN numbers and IF frequencies
 //      fs       (I) sampling frequency of IF data (Hz)
-//      dop      (I) Doppler search range (dop[0]-dop[1] ... dop[0]+dop[1])
-//                     dop[0]: center frequency to search (Hz)
-//                     dop[1]: lower and upper limits to search (Hz)
 //      fmt      (I) IF data format
 //                     SDR_FMT_INT8 : 8 bits int
 //                     SDR_FMT_CPX16: 16(8+8) bits complex
