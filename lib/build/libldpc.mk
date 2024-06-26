@@ -12,6 +12,8 @@ SRC = ../LDPC-codes
 
 ifeq ($(OS),Windows_NT)
     INSTALL = ../win32
+else ifeq ($(shell uname -sm),Darwin arm64)
+    INSTALL = ../macos
 else
     INSTALL = ../linux
 endif

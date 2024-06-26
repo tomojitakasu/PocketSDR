@@ -10,8 +10,13 @@ SRC = ../libfec
 
 ifeq ($(OS),Windows_NT)
     INSTALL = ../win32
+    EXT = so
+else ifeq ($(shell uname -sm),Darwin arm64)
+    INSTALL = ../macos
+    EXT = dylib
 else
     INSTALL = ../linux
+    EXT = so
 endif
 
 ifeq ($(shell uname -m),aarch64)
@@ -28,7 +33,8 @@ all :
 	mv makefile.p makefile; \
 	make; \
 	cd $$DIR; \
-	cp $(SRC)/libfec.so $(SRC)/libfec.a .
+    cp $(SRC)/libfec.a ./libfec.a
+	cp $(SRC)/libfec.$(EXT) ./libfec.so
 
 clean:
 	DIR=`pwd`; \

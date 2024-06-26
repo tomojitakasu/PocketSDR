@@ -9,6 +9,10 @@ ifeq ($(OS),Windows_NT)
     INSTALL = ../win32
     OPTIONS= -DSVR_REUSEADDR -DTRACE -DWIN32
     LDLIBS = -lwsock32 -lwinmm
+else ifeq ($(shell uname -sm),Darwin arm64)
+    INSTALL = ../macos
+    OPTIONS= -DSVR_REUSEADDR -DTRACE -DMACOS -Wno-deprecated
+    LDLIBS =
 else
     INSTALL = ../linux
     OPTIONS= -DSVR_REUSEADDR -DTRACE
