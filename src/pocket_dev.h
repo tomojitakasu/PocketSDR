@@ -51,7 +51,7 @@ extern "C" {
 #define SDR_VR_RESET    0x46    // SDR vendor request: Reset device
 #define SDR_VR_SAVE     0x47    // SDR vendor request: Save settings
 
-#define SDR_MAX_CH      8       // max number of channels in a SDR device
+#define SDR_MAX_RFCH    8       // max number of RF channels in a SDR device
 #define SDR_MAX_REG     11      // max number of registers in a SDR device
 
 #define SDR_MAX_BUFF    96      // number of digital IF data buffer
@@ -72,8 +72,8 @@ typedef struct {                // SDR device type
     sdr_usb_t *usb;             // USB device
     int fmt;                    // IF data format (SDR_FMT_???)
     double fs;                  // IF sampling freqency (Hz)
-    double fo[SDR_MAX_CH];      // LO frequencies (Hz)
-    int IQ[SDR_MAX_CH];         // IF sampling types (I:1,I/Q:2)
+    double fo[SDR_MAX_RFCH];    // LO frequencies (Hz)
+    int IQ[SDR_MAX_RFCH];       // IF sampling types (I:1,I/Q:2)
     int state;                  // state of USB event handler
     int64_t rp, wp;             // read/write pointer of data buffer
     uint8_t *buff;              // data buffer
