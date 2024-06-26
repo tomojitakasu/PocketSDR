@@ -5,6 +5,7 @@
 #!
 #! $ pacman -S mingw-w64-x86_64-fftw (MINGW64)
 #! $ sudo apt install libfftw3-dev   (Ubuntu)
+#! $ brew install libffw             (Mac OS)
 
 CC  = g++
 SRC = ../../src
@@ -12,12 +13,18 @@ SRC = ../../src
 ifeq ($(OS),Windows_NT)
     INSTALL = ../win32
     OPTIONS = -DWIN32 -DAVX2 -mavx2 -mfma
-    LDLIBS = ./librtk.so ./libfec.so ./libldpc.so -lfftw3f -lwinmm \
-             ../cyusb/CyAPI.a -lsetupapi -lavrt
+    LDLIBS = -static ./librtk.so ./libfec.so ./libldpc.so -lfftw3f -lwinmm \
+             ../cyusb/CyAPI.a -lpthread -lsetupapi -lavrt
+else ifeq ($(shell uname -sm),Darwin arm64)
+    INSTALL = ../macos
+    OPTIONS = -DMACOS -DNEON -I/opt/homebrew/include -Wno-deprecated
+    LDLIBS = -L/opt/homebrew/lib ./librtk.so ./libfec.so ./libldpc.so -lfftw3f \
+             -lusb-1.0 -lpthread
 else
     INSTALL = ../linux
     OPTIONS = -DAVX2 -mavx2 -mfma
-    LDLIBS = ./librtk.a ./libfec.a ./libldpc.a -lfftw3f
+    LDLIBS = ./librtk.a ./libfec.a ./libldpc.a -lfftw3f -lpthread -lusb-1.0 -lm \
+             -lpthread
 endif
 ifeq ($(shell uname -m),aarch64)
     OPTIONS = -DNEON
