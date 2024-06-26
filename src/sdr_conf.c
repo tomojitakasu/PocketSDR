@@ -28,8 +28,8 @@ typedef struct {       // register field definition type
     uint8_t addr;      // register address
     uint8_t nbit;      // number of bits
     uint8_t pos;       // bit position (0:LSB,31:MSB)
-    uint8_t fix[SDR_MAX_CH];  // fixed setting (0:free,1:fixed)
-    uint32_t val[SDR_MAX_CH]; // value for fixed setting
+    uint8_t fix[SDR_MAX_RFCH];  // fixed setting (0:free,1:fixed)
+    uint32_t val[SDR_MAX_RFCH]; // value for fixed setting
     const char *desc;  // description */
 } reg_t;
 
@@ -550,7 +550,7 @@ int sdr_read_settings(const char *file, int bus, int port, int opt)
         !(usb = sdr_usb_open(bus, port, SDR_DEV_VID, SDR_DEV_PID2))) {
         return 0;
     }
-    uint32_t regs[SDR_MAX_CH][SDR_MAX_REG] = {{0}};
+    uint32_t regs[SDR_MAX_RFCH][SDR_MAX_REG] = {{0}};
     
     // read device type and TCXO frequency
     int type = read_dev_type(usb, &fx);
@@ -596,7 +596,7 @@ int sdr_write_settings(const char *file, int bus, int port, int opt)
             bus, port, SDR_DEV_VID, SDR_DEV_PID1, SDR_DEV_PID2);
         return 0;
     }
-    uint32_t regs[SDR_MAX_CH][SDR_MAX_REG] = {{0}};
+    uint32_t regs[SDR_MAX_RFCH][SDR_MAX_REG] = {{0}};
     
     // read device type and TCXO frequency
     int type = read_dev_type(usb, &fx);
