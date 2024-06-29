@@ -2,17 +2,22 @@
 #  makefile for pocket_dump
 #
 
-CC = g++
-
 SRC = ../../src
 LIB = ../../lib
 BIN = ../../bin
 
 ifeq ($(OS),Windows_NT)
+    CC = g++
     INCLUDE = -I$(SRC) -I$(LIB)/cyusb -I$(LIB)/RTKLIB/src
     OPTIONS = -DWIN32
     LDLIBS = -static $(LIB)/win32/libsdr.a $(LIB)/cyusb/CyAPI.a -lsetupapi -lavrt -lwinmm
+else ifeq ($(shell uname -sm),Darwin arm64)
+    CC = clang
+    INCLUDE = -I$(SRC) -I$(LIB)/RTKLIB/src -I/opt/homebrew/include
+    OPTIONS = -Wno-deprecated
+    LDLIBS = -L/opt/homebrew/lib $(LIB)/macos/libsdr.a -lusb-1.0 -lpthread
 else
+    CC = g++
     INCLUDE = -I$(SRC) -I$(LIB)/RTKLIB/src
     OPTIONS =
     LDLIBS = $(LIB)/linux/libsdr.a -lusb-1.0 -lpthread
