@@ -249,7 +249,11 @@ static int rescode(int iter, const obsd_t *obs, int n, const double *rs,
                    double *resp, int *ns)
 {
     gtime_t time;
+#if 0
     double r,freq,dion,dtrp,vmeas,vion,vtrp,rr[3],pos[3],dtr,e[3],P;
+#else
+    double r,freq,dion,dtrp=0.0,vmeas,vion,vtrp,rr[3],pos[3],dtr,e[3],P;
+#endif
     int i,j,nv=0,sat,sys,mask[NX-3]={0};
     
     trace(3,"resprng : n=%d\n",n);
