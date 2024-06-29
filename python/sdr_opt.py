@@ -7,21 +7,30 @@
 #  History:
 #  2024-06-10  1.0  new
 #
-import os, re
-import webbrowser
+import os, re, webbrowser
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
-import sdr_plot as plt
 
 # constants --------------------------------------------------------------------
-MAX_CH = 4             # max number of RF channels
-BG_COLOR = '#F0F0F0'   # background color
+MAX_RFCH = 4           # max number of RF channels
+BG_COLOR = '#F8F8F8'   # background color
 DLG_MARGIN = (20, 15)  # dialog margin
-SIG_LINK = 'file://' + os.path.split(__file__)[0] + '/../doc/signal_IDs.pdf'
+SIG_LINK = 'file://' + os.path.dirname(__file__) + '/../doc/signal_IDs.pdf'
+FONT = ('Tahoma', 9, 'normal')
 
 # general object class ---------------------------------------------------------
 class Obj: pass
+
+# set background color ---------------------------------------------------------
+def set_bgcolor(color):
+    global BG_COLOR
+    BG_COLOR = color
+
+# set font ---------------------------------------------------------------------
+def set_font(font):
+    global FONT
+    FONT = font
 
 # generate modal dialog --------------------------------------------------------
 def modal_dlg_new(root, width, height, title='', nocancel=0):
@@ -58,10 +67,19 @@ def on_modal_dlg_ok(e, dlg):
 def on_modal_dlg_cancel(e, dlg):
     dlg.win.destroy()
 
+# generate custom button -------------------------------------------------------
+def custom_btn_new(parent, label='', font=FONT):
+    p = Obj()
+    p.panel = Frame(parent, bg='#AAAAAA')
+    p.btn = ttk.Label(p.panel, text=label, anchor=CENTER, background='white')
+    p.btn.pack(expand=1, fill=BOTH, padx=1, pady=1)
+    p.btn.bind('<Enter>', lambda e: e.widget.configure(background = '#DDDDDD'))
+    p.btn.bind('<Leave>', lambda e: e.widget.configure(background = 'white'))
+    return p
+
 # generate linked label --------------------------------------------------------
-def link_label_new(parent, text='', link='', font=None):
-    if font == None: font = plt.get_font()
-    label = ttk.Label(parent, text=text, font=font, foreground='blue')
+def link_label_new(parent, text='', link='', font=FONT):
+    label = ttk.Label(parent, text=text, foreground='blue', font=font)
     label.bind('<Enter>', lambda e: e.widget.configure(foreground = 'red'))
     label.bind('<Leave>', lambda e: e.widget.configure(foreground = 'blue'))
     label.bind('<Button-1>', lambda e: webbrowser.open(link))
@@ -80,7 +98,7 @@ def sel_panel_new(parent, label, sels=[], var=None, width=9):
     panel.pack()
     ttk.Label(panel, text=label).pack(side=LEFT, fill=X)
     ttk.Combobox(panel, width=width, values=sels, textvariable=var,
-        justify=CENTER, font=plt.get_font()).pack(side=RIGHT)
+        justify=CENTER, font=FONT).pack(side=RIGHT)
     panel.pack(fill=X, padx=(10, 4), pady=2)
     return panel
 
@@ -89,8 +107,8 @@ def inp_panel_new(parent, label, var=None, width=10, pwidth=300, justify=RIGHT):
     panel = Frame(parent, width=pwidth, bg=BG_COLOR)
     panel.pack()
     ttk.Label(panel, text=label).pack(side=LEFT, fill=X, padx=2)
-    ttk.Entry(panel, width=width, font=plt.get_font(), justify=justify,
-        textvariable=var).pack(side=RIGHT, padx=2)
+    ttk.Entry(panel, width=width, justify=justify, textvariable=var,
+        font=FONT).pack(side=RIGHT, padx=2)
     panel.pack(fill=X, padx=(8, 4), pady=(2, 4))
     return panel
 
@@ -104,11 +122,11 @@ def path_panel_new(parent, label, out=0, var_path=None, var_ena=None, types=[]):
         ttk.Label(panel, text=label).pack(fill=X, pady=2)
     panel1 = Frame(panel, bg=BG_COLOR)
     panel1.pack(fill=X, pady=(0, 2))
-    btn = ttk.Button(panel1, width=2, text='...')
-    btn.pack(side=RIGHT, padx=2)
-    inp = ttk.Entry(panel1, font=plt.get_font(), textvariable=var_path)
+    p = custom_btn_new(panel1, ' ... ')
+    p.panel.pack(side=RIGHT, padx=2, pady=1)
+    inp = ttk.Entry(panel1, textvariable=var_path, font=FONT)
     inp.pack(side=LEFT, expand=1, fill=X)
-    btn.bind('<Button-1>', lambda e: on_path_btn_push(e, panel, var_path, out,
+    p.btn.bind('<Button-1>', lambda e: on_path_btn_push(e, panel, var_path, out,
         types))
     panel.pack(fill=X, padx=(10, 2), pady=2)
     return panel
@@ -144,8 +162,8 @@ def inp_opt_new(opt_p=None):
     opt.conf_ena = IntVar()
     opt.conf_path = StringVar()
     opt.fmt = StringVar()
-    opt.fo = [StringVar() for i in range(MAX_CH)]
-    opt.IQ = [StringVar() for i in range(MAX_CH)]
+    opt.fo = [StringVar() for i in range(MAX_RFCH)]
+    opt.IQ = [StringVar() for i in range(MAX_RFCH)]
     opt.fs = StringVar()
     opt.str_path = StringVar()
     opt.toff = StringVar()
@@ -329,7 +347,7 @@ def read_opt(val, opt):
 # show Input Options dialog ----------------------------------------------------
 def inp_opt_dlg(root, opt):
     opt_new = inp_opt_new(opt)
-    dlg = modal_dlg_new(root, 450, 480, 'Input Options')
+    dlg = modal_dlg_new(root, 450, 500, 'Input Options')
     panel = Frame(dlg.panel, width=450, bg=BG_COLOR)
     panel.pack(fill=X, pady=4)
     ttk.Label(panel, text='Input Source').pack(side=LEFT, padx=4)
@@ -418,47 +436,55 @@ def rfch_opt_panel_new(parent, ch, opt):
     panel.pack()
     ttk.Label(panel, text='RF CH%d' % (ch + 1)).pack(side=LEFT)
     ttk.Combobox(panel, width=4, justify=CENTER, values=opt.IQs,
-        textvariable=opt.IQ[ch]).pack(side=RIGHT)
+        textvariable=opt.IQ[ch], font=FONT).pack(side=RIGHT)
     ttk.Label(panel, text='Sampling').pack(side=RIGHT, padx=2)
-    ttk.Entry(panel, width=10, font=plt.get_font(), justify=RIGHT,
-        textvariable=opt.fo[ch]).pack(side=RIGHT, padx=2)
+    ttk.Entry(panel, width=10, justify=RIGHT, textvariable=opt.fo[ch],
+        font=FONT).pack(side=RIGHT, padx=2)
     ttk.Label(panel, text='LO Freq (MHz)').pack(side=RIGHT, padx=2)
     panel.pack(fill=X, padx=(10, 4), pady=(4, 0))
     return panel
 
 # show Output Options dialog ---------------------------------------------------
 def out_opt_dlg(root, opt):
-    labels = ['Output Paths (File: local path, TCP: [addr]:port)',
+    texts = ('Output Paths (File: local path, TCP: [addr]:port)',
         'PVT Solutions (NMEA 0183)', 'OBS and NAV Data (RTCM3)',
-        'Receiver Log (CSV Text)', 'IF Data Log (RAW8 or RAW16)']
+        'Receiver Log (CSV Text)', 'IF Data Log (RAW8 or RAW16)',
+        'Keywords Replacement in Path',
+        '%Y=Year(yyyy) %y=year(yy) %m=month(mm) %d=day(dd)',
+        '%h=hour(00-23) %M=minute(00-59) %S=second(00-59)')
     opt_new = out_opt_new(opt)
-    dlg = modal_dlg_new(root, 430, 330, 'Output Options')
-    panel = Frame(dlg.panel, height=150, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
-    panel.pack(expand=1, fill=BOTH, pady=(4, 8))
-    ttk.Label(panel, text=labels[0], justify=LEFT).pack(fill=X, padx=2,
-        pady=(2, 12))
-    path_panel_new(panel, labels[1], out=1, var_path=opt_new.path[1],
+    dlg = modal_dlg_new(root, 430, 450, 'Output Options')
+    panel1 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
+    panel1.pack(fill=X, pady=(4, 8))
+    ttk.Label(panel1, text=texts[0], justify=LEFT).pack(fill=X, padx=2,
+        pady=(4, 12))
+    path_panel_new(panel1, texts[1], out=1, var_path=opt_new.path[0],
         var_ena=opt_new.path_ena[0], types=[('NMEA File', '*.nmea'), ('All', '*.*')])
-    path_panel_new(panel, labels[2], out=1, var_path=opt_new.path[2],
+    path_panel_new(panel1, texts[2], out=1, var_path=opt_new.path[1],
        var_ena=opt_new.path_ena[1], types=[('RTCM3 File', '*.rtcm3'), ('All', '*.*')])
-    path_panel_new(panel, labels[3], out=1, var_path=opt_new.path[0],
+    path_panel_new(panel1, texts[3], out=1, var_path=opt_new.path[2],
        var_ena=opt_new.path_ena[2], types=[('Log File', '*.log'), ('All', '*.*')])
-    path_panel_new(panel, labels[4], out=1, var_path=opt_new.path[3],
+    path_panel_new(panel1, texts[4], out=1, var_path=opt_new.path[3],
        var_ena=opt_new.path_ena[3], types=[('Raw IF Log', '*.bin'), ('All', '*.*')])
+    panel2 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
+    panel2.pack(fill=X, pady=(4, 8))
+    ttk.Label(panel2, text=texts[5], justify=LEFT).pack(fill=X, padx=4, pady=(2, 4))
+    ttk.Label(panel2, text=texts[6], justify=LEFT).pack(fill=X, padx=18, pady=2)
+    ttk.Label(panel2, text=texts[7], justify=LEFT).pack(fill=X, padx=18, pady=(2, 8))
     root.wait_window(dlg.win)
     return opt_new if dlg.ok else opt
 
 # show Signal Options dialog ---------------------------------------------------
 def sig_opt_dlg(root, opt):
     opt_new = sig_opt_new(opt)
-    dlg = modal_dlg_new(root, 495, 460, 'Signal Options')
+    dlg = modal_dlg_new(root, 495, 500, 'Signal Options')
     panel = Frame(dlg.panel, width=450, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
-    panel.pack(pady=4)
-    labels_panel(panel, ['SYSTEM', 'SATELLITE NO'], [20, 90]).pack(fill=X, pady=(2, 0))
-    link_label_new(panel, text='SIGNALS', link=SIG_LINK).place(x=290, y=2)
+    panel.pack(pady=2)
+    labels_panel(panel, ['SYSTEM', 'SATELLITE NO'], [20, 90]).pack(fill=X, pady=(4, 2))
+    link_label_new(panel, text='SIGNALS', link=SIG_LINK).place(x=290, y=4)
     for i in range(len(opt_new.sys)):
-        ttk.Separator(panel, orient=HORIZONTAL).pack(fill=X, pady=(1, 5))
-        sig_opt_panel(panel, opt_new, i).pack(padx=(10, 0))
+        ttk.Separator(panel, orient=HORIZONTAL).pack(fill=X, pady=(0, 2))
+        sig_opt_panel(panel, opt_new, i).pack(padx=(10, 4), pady=(4, 2))
     root.wait_window(dlg.win)
     return opt_new if dlg.ok else opt
 
@@ -471,8 +497,8 @@ def sig_opt_panel(root, opt, i):
     panel = Frame(root, width=445, height=h, bg=BG_COLOR)
     ttk.Checkbutton(panel, width=8, text=opt.sys[i], variable=var,
         command=lambda: on_sig_opt_change(panel, var)).place(x=0, y=0)
-    ttk.Entry(panel, width=11, font=plt.get_font(), justify=CENTER,
-        textvariable=opt.satno[i], state=state).place(x=85, y=0)
+    ttk.Entry(panel, width=11, justify=CENTER, textvariable=opt.satno[i],
+        state=state, font=FONT).place(x=85, y=0)
     for j in range(ns):
         x, y = 180 + (j % 4) * 64, (j // 4) * 20
         ttk.Checkbutton(panel, width=8, text=opt.sig[i][j], state=state,
@@ -494,7 +520,7 @@ def sys_opt_dlg(root, opt):
         'Max Doppler to Search Signal (Hz)', 'C/N0 Threshold for Signal Lock (dB-Hz)',
         'C/N0 Threshold for Signal Lost (dB-Hz)')
     opt_new = sys_opt_new(opt)
-    dlg = modal_dlg_new(root, 380, 380, 'System Options')
+    dlg = modal_dlg_new(root, 380, 400, 'System Options')
     sel_panel_new(dlg.panel, labels[0], sels=('0.1', '0.2', '0.5', '1.0',
         '2.0', '5.0'), var=opt_new.epoch, width=8).pack()
     sel_panel_new(dlg.panel, labels[1], sels=('0.01', '0.02', '0.05', '0.1',
