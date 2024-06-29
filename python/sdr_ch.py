@@ -24,8 +24,9 @@ N_HIST     = 10000           # number of P correlator history
 B_DLL      = 0.25            # band-width of DLL filter (Hz)
 B_PLL      = 5.0             # band-width of PLL filter (Hz)
 B_FLL      = (5.0, 2.0)      # band-width of FLL filter (Hz) (wide, narrow)
-SP_CORR    = 0.5             # default correlator spacing (chip)
+SP_CORR    = 0.25            # default correlator spacing (chip)
 MAX_DOP    = 5000.0          # default max Doppler for acquisition (Hz)
+N_CODE     = 10              # number of code bank
 THRES_CN0  = (35.0, 32.0)    # C/N0 threshold (dB-Hz) (lock, lost)
 THRES_SYNC  = 0.02           # threshold for sec-code sync
 THRES_LOST  = 0.002          # threshold for sec-code lost
@@ -129,10 +130,13 @@ def trk_new(sig, prn, code, T, fs, sp_corr, add_corr):
     trk.sec_sync = trk.sec_pol = 0  # secondary code sync and polarity
     trk.err_phas = 0.0              # carrier phase error (cyc)
     trk.sumP = trk.sumE = trk.sumL = trk.sumN = 0.0 # sum of correlator outputs
-    if sig == 'L6D' or sig == 'L6E':
-        trk.code = sdr_code.gen_code_fft(code, T, 0.0, fs, int(fs * T))
-    else:
-        trk.code = sdr_code.res_code(code, T, 0.0, fs, int(fs * T))
+    trk.code = []
+    for i in range(N_CODE):
+        coff = -i / fs / N_CODE
+        if sig == 'L6D' or sig == 'L6E':
+            trk.code.append(sdr_code.gen_code_fft(code, T, coff, fs, int(fs * T)))
+        else:
+            trk.code.append(sdr_code.res_code(code, T, coff, fs, int(fs * T)))
     return trk
 
 # initialize signal tracking ---------------------------------------------------
@@ -190,18 +194,19 @@ def track_sig(ch, time, buff, ix):
     ch.time = time
     
     # code position (samples) and carrier phase (cyc)
-    i = int(ch.coff * ch.fs + 0.5) % ch.N
+    i = int(ch.coff * ch.fs) % ch.N
+    j = int(fmod(ch.coff * ch.fs, 1.0) * N_CODE) # index of code bank
     phi = ch.fi * tau + ch.adr + fc * i / ch.fs
     
     if ch.sig == 'L6D' or ch.sig == 'L6E':
         # FFT correlator
-        C = corr_fft(buff, ix + i, ch.N, ch.fs, fc, phi, ch.trk.code)
+        C = corr_fft(buff, ix + i, ch.N, ch.fs, fc, phi, ch.trk.code[j])
         
         # decode L6 CSK
         ch.trk.C = CSK(ch, C)
     else:
         # standard correlator
-        ch.trk.C = corr_std(buff, ix + i, ch.N, ch.fs, fc, phi, ch.trk.code,
+        ch.trk.C = corr_std(buff, ix + i, ch.N, ch.fs, fc, phi, ch.trk.code[j],
             ch.trk.pos)
     
     # add P correlator outputs to histroy
