@@ -6,52 +6,32 @@
 #  T.TAKASU
 #
 #  History:
-#  2024-06-25  1.0  new
+#  2024-06-29  1.0  new
 #
-import os, platform, time
+import os, platform, time, re
 from math import *
 from ctypes import *
 import numpy as np
 from numpy import ctypeslib
 from tkinter import *
 from tkinter import ttk
-import sdr_func, sdr_code, sdr_rtk
-from sdr_opt import *
+import sdr_func, sdr_code, sdr_rtk, sdr_opt
 import sdr_plot as plt
-
-# load external library --------------------------------------------------------
-dir = os.path.dirname(__file__)
-env = platform.platform()
-try:
-    if 'Windows' in env:
-        lib = dir + '/../lib/win32/libsdr.so'
-    elif 'macOS' in env:
-        lib = dir + '/../lib/macos/libsdr.so'
-    elif 'Linux' in env:
-        lib = dir + '/../lib/linux/libsdr.so'
-    else:
-        raise
-    libsdr = cdll.LoadLibrary(lib)
-except:
-    print('libsdr load error: %s' % (lib))
-    exit(-1)
-else:
-    libsdr.sdr_func_init(c_char_p((dir + '/fftw_wisdom.txt').encode()))
 
 # constants --------------------------------------------------------------------
 AP_NAME    = 'Pocket SDR'    # AP name
 VERSION    = 'ver.0.13'      # version
 TITLE      = 'An Open-Source GNSS SDR\n(Software Defined Receiver)'
 AP_URL     = 'https://github.com/tomojitakasu/PocketSDR'
+AP_DIR     = os.path.dirname(__file__)
 COPYRIGHT  = 'Copyright (c) 2021-2024, T.Takasu\nAll rights reserved.'
-OPTS_FILE  = os.path.split(__file__)[0] + '/pocket_sdr.ini' # options file
+OPTS_FILE  = AP_DIR + '/pocket_sdr.ini' # options file
 WIDTH      = 800             # root window width
 HEIGHT     = 600             # root window height
 TB_HEIGHT  = 25              # toolbar height
 SB_HEIGHT  = 20              # status bar height
 P1_COLOR   = '#003020'       # plot color 1
-P2_COLOR   = '#A0A080'       # plot color 2
-BG_COLOR   = '#F0F0F0'       # background color
+P2_COLOR   = '#888844'       # plot color 2
 SDR_N_CORR = (4+81)          # number of correlators
 SDR_N_HIST = 5000            # number of correlator history
 SDR_N_PSD  = 2048            # number FFT points for PSD
@@ -59,10 +39,60 @@ MAX_RCVLOG = 2000            # max receiver logs
 UD_CYCLE1  = 20              # update cycle (ms) RF channels/Correlator pages
 UD_CYCLE2  = 100             # update cycle (ms) other pages
 UD_CYCLE3  = 1000            # update cycle (ms) receiver stopped
-SYSTEMS = ['ALL', 'GPS', 'GLONASS', 'Galileo', 'QZSS', 'BeiDou', 'NavIC', 'SBAS']
+SYSTEMS = ('ALL', 'GPS', 'GLONASS', 'Galileo', 'QZSS', 'BeiDou', 'NavIC', 'SBAS')
+
+# platform depedent settings ---------------------------------------------------
+env = platform.platform()
+if 'Windows' in env:
+    LIBSDR = AP_DIR + '/../lib/win32/libsdr.so'
+    FONT = ('Tahoma', 'Lucida Console')
+    FONT_SIZE = 9
+    BG_COLOR1 = '#F8F8F8'
+    BG_COLOR2 = BG_COLOR1
+    ROW_HEIGHT = 15
+elif 'macOS' in env:
+    LIBSDR = AP_DIR + '/../lib/macos/libsdr.so'
+    FONT = ('Arial Narrow', 'Monaco')
+    FONT_SIZE = 12
+    BG_COLOR1 = '#E5E5E5'
+    BG_COLOR2 = '#ECECEC'
+    ROW_HEIGHT = 14
+else: # Linux or Rasbperry Pi OS
+    LIBSDR = AP_DIR + '/../lib/linux/libsdr.so'
+    FONT = ('Noto Sans', 'Noto Sans Mono')
+    FONT_SIZE = 9
+    BG_COLOR1 = '#F8F8F8'
+    BG_COLOR2 = BG_COLOR1
+    ROW_HEIGHT = 15
+
+# load external library
+try:
+    libsdr = cdll.LoadLibrary(LIBSDR)
+except:
+    print('libsdr load error: ' + LIBSDR)
+    exit(-1)
+else:
+    libsdr.sdr_func_init(c_char_p((AP_DIR + '/fftw_wisdom.txt').encode()))
 
 # general object class ---------------------------------------------------------
 class Obj: pass
+
+# get font ---------------------------------------------------------------------
+def get_font(add_size=0, weight='normal', mono=0):
+    return (FONT[mono], FONT_SIZE + add_size, weight)
+
+# convert string to integer or float -------------------------------------------
+def to_int(str):
+    try:
+       return int(str)
+    except:
+       return -1
+
+def to_float(str):
+    try:
+       return float(str)
+    except:
+       return 0.0
 
 # start receiver ---------------------------------------------------------------
 def rcv_open(sys_opt, inp_opt, out_opt, sig_opt):
@@ -113,19 +143,6 @@ def rcv_open_file(sys_opt, inp_opt, out_opt, sig_opt):
     return libsdr.sdr_rcv_open_file(c_sigs, c_prns, len(sigs), fmt, fs, c_fo,
         c_IQ, toff, path.encode(), c_paths)
 
-# convert string to integer or float -------------------------------------------
-def to_int(str):
-    try:
-       return int(str)
-    except:
-       return -1
-
-def to_float(str):
-    try:
-       return float(str)
-    except:
-       return 0.0
-
 # get signal options -----------------------------------------------------------
 def get_sig_opt(opt):
     sigs, prns = [], []
@@ -140,11 +157,22 @@ def get_sig_opt(opt):
 # add signals ------------------------------------------------------------------
 def add_sig(sigs, prns, i, satno, sig):
     s = satno.split('/')
+    if len(s) < 1: return
     for prn in sdr_func.parse_nums(s[0]):
         if i == 3: # QZSS
             prn = qzss_no2prn(sig, prn)
+        if i == 1 and sig != 'G1CA' and sig != 'G2CA':
+            continue
         sat = sdr_code.sat_id(sig, prn)
         if sat[0] != 'GREJCIS'[i]: continue
+        sigs.append(sig)
+        prns.append(prn)
+    if len(s) < 2: return
+    for prn in sdr_func.parse_nums(s[1]):
+        if i != 1 or sig == 'G1CA' or sig == 'G2CA':
+            continue
+        sat = sdr_code.sat_id(sig, prn)
+        if sat[0] != 'R': continue
         sigs.append(sig)
         prns.append(prn)
 
@@ -195,10 +223,10 @@ def get_rcv_stat(rcv):
     return libsdr.sdr_rcv_rcv_stat(rcv).decode()
 
 # get receiver channel status --------------------------------------------------
-def get_ch_stat(rcv, sys):
-    libsdr.sdr_rcv_ch_stat.argtypes = (c_void_p, c_char_p)
+def get_ch_stat(rcv, sys, all=0):
+    libsdr.sdr_rcv_ch_stat.argtypes = (c_void_p, c_char_p, c_int32)
     libsdr.sdr_rcv_ch_stat.restype = c_char_p
-    return libsdr.sdr_rcv_ch_stat(rcv, sys.encode()).decode().split('\n')[:-1]
+    return libsdr.sdr_rcv_ch_stat(rcv, sys.encode(), all).decode().splitlines()
 
 # get signal status ------------------------------------------------------------
 def get_sig_stat(rcv, sys):
@@ -218,7 +246,7 @@ def get_sig_stat(rcv, sys):
 def get_sat_stat(rcv, sys):
     libsdr.sdr_rcv_sat_stat.argtypes = (c_void_p, c_char_p)
     libsdr.sdr_rcv_sat_stat.restype = c_char_p
-    stat = libsdr.sdr_rcv_sat_stat(rcv, sys.encode()).decode().split('\n')[:-1]
+    stat = libsdr.sdr_rcv_sat_stat(rcv, sys.encode()).decode().splitlines()
     sats = [s.split()[0] for s in stat]
     az  = [float(s.split()[1]) for s in stat]
     el  = [float(s.split()[2]) for s in stat]
@@ -257,6 +285,16 @@ def get_rfch_hist(rcv, ch, tave):
     else:
         return val[:n], hist1[:n], hist2[:n]
 
+# get RF channel LNA gain -------------------------------------------------------
+def get_rfch_gain(rcv, ch):
+    libsdr.sdr_rcv_get_gain.argtypes = (c_void_p, c_int32)
+    return libsdr.sdr_rcv_get_gain(rcv, ch - 1)
+
+# set RF channel LNA gain -------------------------------------------------------
+def set_rfch_gain(rcv, ch, gain):
+    libsdr.sdr_rcv_set_gain.argtypes = (c_void_p, c_int32, c_int32)
+    return libsdr.sdr_rcv_set_gain(rcv, ch - 1, gain)
+
 # select receiver channel -------------------------------------------------------
 def set_sel_ch(rcv, ch):
     libsdr.sdr_rcv_sel_ch.argtypes = (c_void_p, c_int32)
@@ -292,7 +330,7 @@ def sat_color(sat):
     for i in range(len(colors)):
         if sat[0] == 'GREJCIS'[i]:
             return colors[i]
-    return BG_COLOR
+    return BG_COLOR1
 
 # update receiver log ----------------------------------------------------------
 def update_rcv_log():
@@ -301,7 +339,7 @@ def update_rcv_log():
     buff = create_string_buffer(buff_size)
     libsdr.sdr_get_log.argtypes = (POINTER(c_char), c_int32)
     size = libsdr.sdr_get_log(buff, buff_size)
-    for log in buff.value.decode().split('\n'):
+    for log in buff.value.decode().splitlines():
         if len(log) > 0:
             rcv_log.append(log)
     if len(rcv_log) > MAX_RCVLOG * 5:
@@ -342,10 +380,10 @@ def status_bar_new(parent):
 
 # show Help dialog -------------------------------------------------------------
 def help_dlg(root):
-    dlg = modal_dlg_new(root, 280, 160, 'About', nocancel=1)
-    link_label_new(dlg.panel, text=AP_NAME + ' ' + VERSION,
-        font=plt.get_font(11, 'bold'), link=AP_URL).pack(pady=(4, 0))
-    ttk.Label(dlg.panel, text=TITLE, font=plt.get_font(10),
+    dlg = sdr_opt.modal_dlg_new(root, 280, 160, 'About', nocancel=1)
+    sdr_opt.link_label_new(dlg.panel, text=AP_NAME + ' ' + VERSION,
+        font=get_font(2, 'bold'), link=AP_URL).pack(pady=(4, 0))
+    ttk.Label(dlg.panel, text=TITLE, font=get_font(1),
         justify=CENTER).pack(pady=2)
     ttk.Label(dlg.panel, text=COPYRIGHT, justify=CENTER).pack()
     root.wait_window(dlg.win)
@@ -354,25 +392,27 @@ def help_dlg(root):
 def rcv_page_new(parent):
     p = Obj()
     p.parent = parent
-    p.panel = Frame(parent, bg=BG_COLOR)
-    p.toolbar = Frame(p.panel, height=TB_HEIGHT, bg=BG_COLOR)
+    p.panel = Frame(parent, bg=BG_COLOR1)
+    p.toolbar = Frame(p.panel, height=TB_HEIGHT, bg=BG_COLOR1)
     p.toolbar.pack_propagate(0)
     p.toolbar.pack(fill=X)
     p.txt1 = ttk.Label(p.toolbar)
     p.txt1.pack(side=LEFT, fill=X, padx=4)
     p.box1 = ttk.Combobox(p.toolbar, width=9, state='readonly', justify=CENTER,
-        values=SYSTEMS)
+        values=SYSTEMS, font=get_font())
     p.box1.set('ALL')
     p.box1.pack(side=RIGHT, padx=(4, 20))
     ttk.Label(p.toolbar, text='System').pack(side=RIGHT)
-    panel1 = Frame(p.panel, bg=plt.BG_COLOR)
+    panel1 = Frame(p.panel, bg=BG_COLOR1)
     panel1.pack(expand=1, fill=X)
     p.plt1 = plt.plot_new(panel1, 257, 257, (-1.2, 1.2), (-1.2, 1.2),
-        (0, 0, 0, 0))
+        (0, 0, 0, 0), font=get_font(-1))
     p.plt1.c.pack(side=RIGHT)
-    p.stat = plt.plot_new(panel1, 543, 257, margin=(25, 20, 30, 30))
+    p.stat = plt.plot_new(panel1, 543, 257, margin=(25, 20, 30, 30),
+        font=get_font())
     p.stat.c.pack(side=LEFT, expand=1, fill=X)
-    p.plt2 = plt.plot_new(p.panel, 800, 245, title='Signal C/N0 (dB-Hz)', tick=2)
+    p.plt2 = plt.plot_new(p.panel, 800, 245, title='Signal C/N0 (dB-Hz)',
+        font=get_font(), tick=2)
     p.plt2.c.pack(expand=1, fill=BOTH)
     p.panel.bind('<Expose>', lambda e: on_rcv_panel_expose(e, p))
     p.box1.bind('<<ComboboxSelected>>', lambda e: on_sys_select(e, p))
@@ -400,17 +440,17 @@ def update_rcv_stat(p):
     labels = ('Receiver Time (s)', 'Input Source', 'IF Data Format',
         '# of RF CHs', 'LO Freqs (MHz)', '', 'Sampling Types',
         'Sampling Rate (Msps)', '# of BB CHs Locked/Total',
-        'IF Data Rate (MB/s)', 'IF Data Buffer Usage (%)', 'Sol Time',
-        'Sol Status', 'Latitude (\xb0)', 'Longitude (\xb0)', 'Altitude (m)',
-        'Systems Tracked', '# of Sats Used/Tracked', 'Output',
+        'IF Data Rate (MB/s)', 'IF Data Buffer Usage (%)', 'Time (GPST)',
+        'Solution Status', 'Latitude (\xb0)', 'Longitude (\xb0)',
+        'Altitude (m)', 'Systems Tracked', '# of Sats Used/Tracked', 'Output',
         '# of PVT Solutions', '# of OBS/NAV Data', 'IF Data Log (MB)')
     value = get_rcv_stat(rcv_body).split(',')
     plt.plot_clear(p)
     for i in range(len(labels)):
         x, y = 0.0 if i < 11 else 0.51, 1.0 - (i % 11) / 10
         plt.plot_text(p, x, y, labels[i], anchor=W,
-            font=plt.get_font(10, 'bold'), color=P1_COLOR)
-        plt.plot_text(p, x + 0.48, y, value[i], anchor=E, font=plt.get_font(10),
+            font=get_font(1, 'bold'), color=P1_COLOR)
+        plt.plot_text(p, x + 0.48, y, value[i], anchor=E, font=get_font(1),
             color=P1_COLOR)
 
 # update skyplot ---------------------------------------------------------------
@@ -423,11 +463,11 @@ def update_sky_plot(p, sys):
     for i in range(len(sats) - 1, -1, -1):
         x = (90 - el[i]) / 90 * sin(az[i] * pi / 180)
         y = (90 - el[i]) / 90 * cos(az[i] * pi / 180)
-        color1 = sat_color(sats[i]) if valid[i] and rcv_body else BG_COLOR
-        color2 = BG_COLOR if valid[i] and rcv_body else plt.FG_COLOR
+        color1 = sat_color(sats[i]) if valid[i] and rcv_body else BG_COLOR1
+        color2 = BG_COLOR1 if valid[i] and rcv_body else plt.FG_COLOR
         plt.plot_circle(p, x, y, r, fill=color1)
-        plt.plot_text(p, x, y, sats[i], color=color2, font=plt.get_font(8))
-    plt.plot_sky(p, gcolor=None, font=plt.get_font(8))
+        plt.plot_text(p, x, y, sats[i], color=color2, font=get_font(-1))
+    plt.plot_sky(p, gcolor=None)
 
 # update signal plot -----------------------------------------------------------
 def update_sig_plot(p, sys):
@@ -438,7 +478,7 @@ def update_sig_plot(p, sys):
     plt.plot_xlim(p, [-0.7, len(sat_set) - 0.3])
     plt.plot_ylim(p, [20, 55])
     xs, ys = plt.plot_scale(p)
-    font = plt.get_font(10)
+    font = get_font(1)
     plt.plot_axis(p)
     if sys == 'ALL':
         for i, s in enumerate('GREJCIS'):
@@ -454,13 +494,13 @@ def update_sig_plot(p, sys):
         text = sat[1:] if sys == 'ALL' else sat
         plt.plot_text(p, x, p.yl[0] - 2 / ys, text, color=sat_color(sat),
             font=font, anchor=N)
-        color = sat_color(sat) if rcv_body else BG_COLOR
+        color = sat_color(sat) if rcv_body else BG_COLOR1
         idx = [i for i, s in enumerate(sats) if s == sat]
         if sys != 'ALL':
             for i in range(len(sig_set)):
                 xi = x + (8 * i - (len(sig_set) - 1) * 4) / xs
                 plt.plot_rect(p, xi - 3 / xs, 20, xi + 3 / xs, p.yl[0] + 0.5,
-                    fill=BG_COLOR)
+                    fill=BG_COLOR1)
         for i in idx:
             xi = x
             if sys != 'ALL':
@@ -475,36 +515,46 @@ def rfch_page_new(parent):
     margin = (35, 25, 25, 40)
     p = Obj()
     p.parent = parent
-    p.panel = Frame(parent, bg=BG_COLOR)
-    p.toolbar = Frame(p.panel, height=TB_HEIGHT, bg=BG_COLOR)
+    p.panel = Frame(parent, bg=BG_COLOR1)
+    p.toolbar = Frame(p.panel, height=TB_HEIGHT, bg=BG_COLOR1)
     p.toolbar.pack_propagate(0)
     p.toolbar.pack(fill=X)
-    ttk.Label(p.toolbar, text='RF CH').pack(side=LEFT, padx=(12, 4))
+    ttk.Label(p.toolbar, text='RF CH').pack(side=LEFT, padx=(10, 4))
     p.box1 = ttk.Combobox(p.toolbar, width=4, state='readonly', justify=CENTER,
-        values=['1', '2', '3', '4'])
+        values=['1', '2', '3', '4'], font=get_font())
     p.box1.set('1')
     p.box1.pack(side=LEFT)
     p.box2 = ttk.Combobox(p.toolbar, width=5, state='readonly', justify=CENTER,
-        values=['0.1', '0.03', '0.01', '0.003', '0.001'])
+        values=['0.1', '0.03', '0.01', '0.003', '0.001'], font=get_font())
     p.box2.set('0.01')
-    p.box2.pack(side=RIGHT, padx=(4, 20))
-    ttk.Label(p.toolbar, text='PSD Ave Time (s)').pack(side=RIGHT)
-    p.txt1 = ttk.Label(p.toolbar, font=plt.get_font(10), foreground=P1_COLOR)
-    p.txt1.pack(side=LEFT, expand=1, fill=X, padx=16)
+    p.box2.pack(side=RIGHT, padx=(2, 10))
+    ttk.Label(p.toolbar, text='Aver (s)').pack(side=RIGHT)
+    p.btn1 = sdr_opt.custom_btn_new(p.toolbar, label=' > ')
+    p.btn1.panel.pack(side=RIGHT, padx=(0, 8), pady=1)
+    p.txt2 = ttk.Label(p.toolbar, width=3, text='0', anchor=CENTER,
+        background='white', relief=FLAT)
+    p.txt2.pack(side=RIGHT)
+    p.btn2 = sdr_opt.custom_btn_new(p.toolbar, label=' < ')
+    p.btn2.panel.pack(side=RIGHT, padx=(2, 0), pady=1)
+    ttk.Label(p.toolbar, text='LNA Gain (0:Auto)').pack(side=RIGHT)
+    p.txt1 = ttk.Label(p.toolbar, font=get_font(1), foreground=P1_COLOR)
+    p.txt1.pack(side=LEFT, expand=1, fill=X, padx=10)
     p.plt1 = plt.plot_new(p.panel, 520, 490, (0, 1), (-80, -40), margin,
-        title=ti[0], xlabel=labels[0])
+        font=get_font(), title=ti[0], xlabel=labels[0])
     p.plt1.c.pack(side=LEFT, expand=1, fill=BOTH)
     panel1 = Frame(p.panel)
     panel1.pack(side=RIGHT, expand=1, fill=BOTH)
     p.plt2 = plt.plot_new(panel1, 280, 245, (-5, 5), (0, 0.5), margin,
-        title=ti[1], xlabel=labels[1])
+        font=get_font(), title=ti[1], xlabel=labels[1])
     p.plt3 = plt.plot_new(panel1, 280, 245, (-5, 5), (0, 0.5), margin,
-        title=ti[2], xlabel=labels[1])
+        font=get_font(), title=ti[2], xlabel=labels[1])
     p.plt2.c.pack(expand=1, fill=BOTH)
     p.plt3.c.pack(expand=1, fill=BOTH)
     p.panel.bind('<Expose>', lambda e: on_rfch_page_expose(e, p))
     p.box1.bind('<<ComboboxSelected>>', lambda e: on_rfch_select(e, p))
     p.box2.bind('<<ComboboxSelected>>', lambda e: on_rfch_select(e, p))
+    p.btn1.btn.bind('<Button-1>', lambda e: on_updown_push(e, p))
+    p.btn2.btn.bind('<Button-1>', lambda e: on_updown_push(e, p))
     return p
 
 # RF Channels page expose callback ---------------------------------------------
@@ -518,12 +568,32 @@ def on_rfch_select(e, p):
     update_psd_plot(p.plt1, p.txt1, ch, tave)
     update_hist_plot(p.plt2, p.plt3, ch, tave)
 
+# updown button push callback ---------------------------------------------------
+def on_updown_push(e, p):
+    ch = int(p.box1.get())
+    val = int(p.txt2['text'])
+    if e.widget['text'] == ' < ' and val > 0:
+        p.txt2['text'] = str(val - 1)
+        set_rfch_gain(rcv_body, ch, val - 1)
+    elif e.widget['text'] == ' > ' and val < 63:
+        p.txt2['text'] = str(val + 1)
+        set_rfch_gain(rcv_body, ch, val + 1)
+
+# gain down button push callback -----------------------------------------------
+def on_gain_down_push(e, p):
+    ch = int(p.box1.get())
+    gain = int(p.txt2['text'])
+    if gain > 0:
+        p.txt2.configure(text='%d' % (gain - 1))
+        set_rfch_gain(rcv_body, ch, gain - 1)
+
 # update RF Channels page ------------------------------------------------------
 def update_rfch_page(p):
     ch = int(p.box1.get())
     tave = float(p.box2.get())
     update_psd_plot(p.plt1, p.txt1, ch, tave)
     update_hist_plot(p.plt2, p.plt3, ch, tave)
+    p.txt2.configure(text='%d' % get_rfch_gain(rcv_body, ch))
 
 # update PSD plot --------------------------------------------------------------
 def update_psd_plot(p, txt, ch, tave):
@@ -534,7 +604,7 @@ def update_psd_plot(p, txt, ch, tave):
     dev_str = ('-------', 'IF Data', 'RF Frontend')
     fmt_str = ('-------', 'INT8', 'INT8X2', 'RAW8', 'RAW16')
     IQ_str = ('---', 'I', 'IQ')
-    txt.configure(text='INPUT: %s   FORMAT: %s   F_S: %.3f MHz (%s)' % (
+    txt.configure(text='INPUT: %s  FORMAT: %s  F_S: %.3f MHz (%s)' % (
         dev_str[dev], fmt_str[fmt], fs, IQ_str[IQ]))
     plt.plot_clear(p)
     plt.plot_xlim(p, [f[0], f[-1]])
@@ -596,18 +666,23 @@ def plot_hist(p, val, hist):
 def bbch_page_new(parent):
     p = Obj()
     p.parent = parent
-    p.panel = Frame(parent, bg=BG_COLOR)
-    p.toolbar = Frame(p.panel, height=TB_HEIGHT, bg=BG_COLOR)
+    p.panel = Frame(parent, bg=BG_COLOR1)
+    p.toolbar = Frame(p.panel, height=TB_HEIGHT, bg=BG_COLOR1)
     p.toolbar.pack_propagate(0)
     p.toolbar.pack(fill=X)
-    ttk.Label(p.toolbar, text='System').pack(side=LEFT, padx=(10, 4))
+    ttk.Label(p.toolbar, text='CH').pack(side=LEFT, padx=(10, 4))
+    p.box2 = ttk.Combobox(p.toolbar, width=9, state='readonly', justify=CENTER,
+        values=('LOCK', 'ALL'), font=get_font())
+    p.box2.set('LOCK')
+    p.box2.pack(side=LEFT)
+    ttk.Label(p.toolbar, text='System').pack(side=LEFT, padx=(8, 4))
     p.box1 = ttk.Combobox(p.toolbar, width=9, state='readonly', justify=CENTER,
-        values=SYSTEMS)
+        values=SYSTEMS, font=get_font())
     p.box1.set('ALL')
     p.box1.pack(side=LEFT)
-    p.txt1 = ttk.Label(p.toolbar, font=plt.get_font(10), width=10)
-    p.txt2 = ttk.Label(p.toolbar, font=plt.get_font(10), width=9, anchor=E)
-    p.txt3 = ttk.Label(p.toolbar, font=plt.get_font(10), width=13, anchor=E)
+    p.txt1 = ttk.Label(p.toolbar, font=get_font(1), width=10)
+    p.txt2 = ttk.Label(p.toolbar, font=get_font(1), width=9, anchor=E)
+    p.txt3 = ttk.Label(p.toolbar, font=get_font(1), width=13, anchor=E)
     p.txt3.pack(side=RIGHT, padx=(2, 15))
     p.txt2.pack(side=RIGHT, padx=2)
     p.txt1.pack(side=RIGHT, padx=2)
@@ -619,6 +694,7 @@ def bbch_page_new(parent):
     p.tbl1.pack(expand=1, fill=BOTH)
     p.panel.bind('<Expose>', lambda e: on_bbch_page_expose(e, p))
     p.box1.bind('<<ComboboxSelected>>', lambda e: on_bbch_sys_select(e, p))
+    p.box2.bind('<<ComboboxSelected>>', lambda e: on_bbch_sys_select(e, p))
     p.tbl1.bind('<<TreeviewSelect>>', lambda e: on_bbch_ch_select(e, p))
     return p
 
@@ -640,13 +716,16 @@ def on_bbch_ch_select(e, p):
 # update BB Channels page ------------------------------------------------------
 def update_bbch_page(p):
     sys = p.box1.get()
-    stat = get_ch_stat(rcv_body, sys)
+    ch = p.box2.get()
+    stat = get_ch_stat(rcv_body, sys, all=(ch == 'ALL'))
     w = (36, 24, 36, 52, 32, 66, 40, 70, 80, 64, 84, 44, 44, 36, 36, 36)
     a = 'ecccceeweeeceeee'
-    p.txt1.configure(text=stat[0][72:83])
-    p.txt2.configure(text=stat[0][84:92])
-    p.txt3.configure(text=stat[0][93:])
-    buff_use = int(re.split('[:%]', p.txt1['text'])[1])
+    buff, srch, lock = stat[0][72:83], stat[0][84:92], stat[0][93:]
+    p.txt1.configure(text=buff)
+    p.txt2.configure(text=srch)
+    p.txt3.configure(text=lock)
+    buff_use = int(re.split('[:%]', buff)[1])
+    srch_ch = int(re.split('[:]', srch)[1])
     p.txt1.configure(foreground='green' if buff_use < 90 else 'red')
     for c in p.tbl1.get_children():
        p.tbl1.delete(c)
@@ -657,53 +736,59 @@ def update_bbch_page(p):
         p.tbl1.column(cols[i], width=w[i], anchor=a[i], stretch=0)
     for s in stat[2:]:
         vals = s.split()
-        p.tbl1.insert('', END, iid=vals[0], values=vals)
+        tag = 'idle' if float(vals[5]) == 0.0 else ''
+        tag = 'srch' if int(vals[0]) == srch_ch else tag
+        p.tbl1.insert('', END, iid=vals[0], values=vals, tags=tag)
+    p.tbl1.tag_configure('idle', foreground=P2_COLOR)
+    p.tbl1.tag_configure('srch', foreground='blue')
 
 # generate Correlator page -----------------------------------------------------
 def corr_page_new(parent):
     ti = ('I * sign(IP)', 'IP-QP', 'Time (s) - IP/QP')
     p = Obj()
     p.parent = parent
-    p.panel = Frame(parent, bg=BG_COLOR)
-    p.toolbar = Frame(p.panel, height=TB_HEIGHT, bg=BG_COLOR)
+    p.panel = Frame(parent, bg=BG_COLOR1)
+    p.toolbar = Frame(p.panel, height=TB_HEIGHT, bg=BG_COLOR1)
     p.toolbar.pack_propagate(0)
     p.toolbar.pack(fill=X)
     ttk.Label(p.toolbar, text='BB CH').pack(side=LEFT, padx=(10, 2))
-    p.btn1 = ttk.Button(p.toolbar, text='<', width=2)
-    p.btn1.pack(side=LEFT)
+    p.btn1 = sdr_opt.custom_btn_new(p.toolbar, label=' < ')
+    p.btn1.panel.pack(side=LEFT, padx=2, pady=1)
     p.box1 = ttk.Combobox(p.toolbar, width=4, height=32, state='readonly',
-        justify=CENTER)
+        justify=CENTER, font=get_font())
     p.box1.set('1')
     p.box1.pack(side=LEFT)
-    p.btn2 = ttk.Button(p.toolbar, text='>', width=2)
-    p.btn2.pack(side=LEFT)
-    p.txt1 = ttk.Label(p.toolbar, font=plt.get_font(10), foreground=P1_COLOR)
+    p.btn2 = sdr_opt.custom_btn_new(p.toolbar, label=' > ')
+    p.btn2.panel.pack(side=LEFT, padx=2, pady=1)
+    p.txt1 = ttk.Label(p.toolbar, font=get_font(1), foreground=P1_COLOR)
     p.txt1.pack(side=LEFT, expand=1, fill=X, padx=10)
     p.box3 = ttk.Combobox(p.toolbar, width=3, state='readonly', justify=CENTER,
-        values=('0.1', '0.2', '0.3', '0.4', '0.6', '0.8', '1.0', '1.5', '2'))
+        values=('0.1', '0.2', '0.3', '0.4', '0.6', '0.8', '1.0', '1.5', '2'), font=get_font())
     p.box3.set('0.4')
     p.box3.pack(side=RIGHT, padx=(1, 10))
     p.box2 = ttk.Combobox(p.toolbar, width=3, state='readonly', justify=CENTER,
-        values=('0.1', '0.2', '0.5', '1', '2', '5', '10'))
+        values=('0.1', '0.2', '0.5', '1', '2', '5', '10'), font=get_font())
     p.box2.set('1')
     p.box2.pack(side=RIGHT, padx=1)
     p.box4 = ttk.Combobox(p.toolbar, width=3, state='readonly', justify=CENTER,
-        values=('I', 'IQ'))
+        values=('I', 'IQ'), font=get_font())
     p.box4.set('I')
     p.box4.pack(side=RIGHT, padx=1)
-    ttk.Label(p.toolbar, text='Type/Span/Range').pack(side=RIGHT, padx=2)
-    p.plt3 = plt.plot_new(p.panel, 800, 245, [0, 1], [-0.6, 0.6], title=ti[2])
+    ttk.Label(p.toolbar, text='IQ/Span(s)/Range').pack(side=RIGHT, padx=2)
+    p.plt3 = plt.plot_new(p.panel, 800, 245, [0, 1], [-0.6, 0.6],
+        font=get_font(), title=ti[2])
     p.plt3.c.pack(side=BOTTOM, expand=1, fill=BOTH)
-    panel1 = Frame(p.panel, bg=BG_COLOR)
+    panel1 = Frame(p.panel, bg=BG_COLOR1)
     panel1.pack(expand=1, fill=BOTH)
     p.plt2 = plt.plot_new(panel1, 255, 245, [-0.6, 0.6], [-0.6, 0.6],
-        aspect=1, title=ti[1])
+        font=get_font(), aspect=1, title=ti[1])
     p.plt2.c.pack(side=RIGHT, expand=1, fill=BOTH)
-    p.plt1 = plt.plot_new(panel1, 545, 245, [0, 1], [-0.2, 0.6], title=ti[0])
+    p.plt1 = plt.plot_new(panel1, 545, 245, [0, 1], [-0.2, 0.6],
+        font=get_font(), title=ti[0])
     p.plt1.c.pack(side=LEFT, expand=1, fill=BOTH)
     p.panel.bind('<Expose>', lambda e: on_corr_page_expose(e, p))
-    p.btn1.bind('<Button-1>', lambda e: on_corr_ch_down(e, p))
-    p.btn2.bind('<Button-1>', lambda e: on_corr_ch_up(e, p))
+    p.btn1.btn.bind('<Button-1>', lambda e: on_corr_ch_down(e, p))
+    p.btn2.btn.bind('<Button-1>', lambda e: on_corr_ch_up(e, p))
     p.box1.bind('<<ComboboxSelected>>', lambda e: on_corr_ch_select(e, p))
     p.box2.bind('<<ComboboxSelected>>', lambda e: on_corr_ch_select(e, p))
     p.box3.bind('<<ComboboxSelected>>', lambda e: on_corr_ch_select(e, p))
@@ -787,7 +872,7 @@ def update_corr_plot1(p, coff, fs, pos, C, type, rng):
     plt.plot_xlim(p, [x[4], x[-1]])
     plt.plot_ylim(p, [-rng * 0.3 if type == 'I' else 0, rng])
     xs, ys = plt.plot_scale(p)
-    p.title = 'I * sign(IP)' if type == 'I' else 'sqrt(I^2+Q^2)'
+    p.title = 'I * sign(IP)' if type == 'I' else 'sqrt(I\xb2+Q\xb2)'
     plt.plot_axis(p, fcolor=None, tcolor=None)
     plt.plot_poly(p, [coff, coff], p.yl, color='grey')
     plt.plot_poly(p, p.xl, [0, 0], color='grey')
@@ -809,8 +894,8 @@ def update_corr_plot2(p, P, rng):
     plt.plot_poly(p, [0, 0], p.yl, color='grey')
     plt.plot_poly(p, p.xl, [0, 0], color='grey')
     plt.plot_dots(p, [0], [0], color=plt.FG_COLOR, size=5)
-    plt.plot_dots(p, P.real, P.imag, color='grey', size=1)
-    plt.plot_dots(p, P[-1:].real, P[-1:].imag, color=BG_COLOR, size=11)
+    plt.plot_dots(p, P.real, P.imag, color=P2_COLOR, size=1)
+    plt.plot_dots(p, P[-1:].real, P[-1:].imag, color=BG_COLOR1, size=11)
     plt.plot_dots(p, P[-1:].real, P[-1:].imag, color=P1_COLOR, fill=P1_COLOR,
         size=9)
     plt.plot_axis(p, gcolor=None)
@@ -827,7 +912,7 @@ def update_corr_plot3(p, tt, T, P, rng):
     plt.plot_poly(p, t, P.real, color=P1_COLOR)
     plt.plot_axis(p, gcolor=None)
     plt.plot_dots(p, t[-1:], P[-1:].imag, color=P2_COLOR, fill=P2_COLOR, size=9)
-    plt.plot_dots(p, t[-1:], P[-1:].real, color=BG_COLOR, fill=BG_COLOR, size=11)
+    plt.plot_dots(p, t[-1:], P[-1:].real, color=BG_COLOR1, fill=BG_COLOR1, size=11)
     plt.plot_dots(p, t[-1:], P[-1:].real, color=P1_COLOR, fill=P1_COLOR, size=9)
     plt.plot_text(p, p.xl[1] - 70 / xs, p.yl[1] - 15 / ys, '--- IP', P1_COLOR)
     plt.plot_text(p, p.xl[1] - 35 / xs, p.yl[1] - 15 / ys, '--- QP', P2_COLOR)
@@ -838,12 +923,12 @@ def log_page_new(parent):
         '$CNV2', '$GSTR', '$INAV', '$FNAV', '$L6FRM', '$BCNV', '$IRNV', '$SBAS')
     p = Obj()
     p.parent = parent
-    p.panel = Frame(parent, bg=BG_COLOR)
-    p.toolbar = Frame(p.panel, height=TB_HEIGHT, bg=BG_COLOR)
+    p.panel = Frame(parent, bg=BG_COLOR1)
+    p.toolbar = Frame(p.panel, height=TB_HEIGHT, bg=BG_COLOR1)
     p.toolbar.pack_propagate(0)
     p.toolbar.pack(fill=X)
     ttk.Label(p.toolbar, text='Filter').pack(side=LEFT, padx=(6, 4))
-    p.box1 = ttk.Combobox(p.toolbar, width=12, height=len(filts), values=filts)
+    p.box1 = ttk.Combobox(p.toolbar, width=12, height=len(filts), values=filts, font=get_font())
     p.box1.pack(side=LEFT)
     p.btn1 = ttk.Button(p.toolbar, width=8, text='Pause')
     p.btn2 = ttk.Button(p.toolbar, width=8, text='Clear')
@@ -892,12 +977,12 @@ def show_log_page(p):
     global rcv_log
     filt = p.box1.get()
     p.cvs1.delete('all')
-    txt = [s for s in rcv_log if filt_log(filt, s)]
-    if len(txt) >= MAX_RCVLOG:
-        txt = txt[-MAX_RCVLOG:]
-    t = p.cvs1.create_text(4, 0, text=''.join(txt), anchor=NW,
-        font=plt.get_font(mono=1), fill=P1_COLOR)
-    p.cvs1.configure(scrollregion=p.cvs1.bbox(t))
+    text = [s for s in rcv_log if filt_log(filt, s)]
+    if len(text) >= MAX_RCVLOG:
+        text = text[-MAX_RCVLOG:]
+    txt = p.cvs1.create_text(4, 0, text='\n'.join(text), anchor=NW,
+        font=get_font(mono=1), fill=P1_COLOR)
+    p.cvs1.configure(scrollregion=p.cvs1.bbox(txt))
     p.cvs1.yview(MOVETO, 1.0)
 
 # filter log -------------------------------------------------------------------
@@ -938,25 +1023,25 @@ def on_btn_stop_push(bar):
 def on_btn_input_push(bar):
     global inp_opt
     if not rcv_body:
-        inp_opt = inp_opt_dlg(root, inp_opt)
+        inp_opt = sdr_opt.inp_opt_dlg(root, inp_opt)
 
 # Output button push callback --------------------------------------------------
 def on_btn_output_push(bar):
     global out_opt
     if not rcv_body:
-        out_opt = out_opt_dlg(root, out_opt)
+        out_opt = sdr_opt.out_opt_dlg(root, out_opt)
 
 # Signal button push callback --------------------------------------------------
 def on_btn_signal_push(bar):
     global sig_opt
     if not rcv_body:
-        sig_opt = sig_opt_dlg(root, sig_opt)
+        sig_opt = sdr_opt.sig_opt_dlg(root, sig_opt)
 
 # System button push callback --------------------------------------------------
 def on_btn_system_push(bar):
     global sys_opt
     if not rcv_body:
-        sys_opt = sys_opt_dlg(root, sys_opt)
+        sys_opt = sdr_opt.sys_opt_dlg(root, sys_opt)
 
 # Help button push callback ----------------------------------------------------
 def on_btn_help_push(bar):
@@ -965,7 +1050,7 @@ def on_btn_help_push(bar):
 # Exit button push callback ----------------------------------------------------
 def on_btn_exit_push(bar):
     if not rcv_body:
-        save_opts(OPTS_FILE, inp_opt, out_opt, sig_opt, sys_opt)
+        sdr_opt.save_opts(OPTS_FILE, inp_opt, out_opt, sig_opt, sys_opt)
         exit()
 
 # root Window close callback ---------------------------------------------------
@@ -1003,24 +1088,23 @@ def pages_update(note, pages):
 # set styles -------------------------------------------------------------------
 def set_styles():
     style = ttk.Style()
-    font = plt.get_font()
-    style.configure('TButton', font=plt.get_font(10), background=BG_COLOR)
-    style.map('TButton', background=[(DISABLED, BG_COLOR)])
-    style.configure('TRadiobutton', font=font, background=BG_COLOR)
-    style.configure('TLabel', font=font, background=BG_COLOR)
-    style.map('TLabel', background=[(DISABLED, BG_COLOR)])
-    style.configure('TEntry', font=font, background=BG_COLOR)
-    style.configure('TCheckbutton', font=font, background=BG_COLOR)
-    style.map('TCheckbutton', background=[(DISABLED, BG_COLOR)])
-    style.configure('Treeview', font=font, rowheight=int(font[1] * 1.7),
+    style.configure('TButton', font=get_font(1), background=BG_COLOR1)
+    style.map('TButton', background=[(DISABLED, BG_COLOR1)])
+    style.configure('TRadiobutton', font=get_font(), background=BG_COLOR1)
+    style.configure('TLabel', font=get_font(), background=BG_COLOR1)
+    style.map('TLabel', background=[(DISABLED, BG_COLOR1)])
+    style.configure('TEntry', font=get_font(), background='white')
+    style.configure('TCheckbutton', font=get_font(), background=BG_COLOR1)
+    style.map('TCheckbutton', background=[(DISABLED, BG_COLOR1)])
+    style.configure('Treeview', font=get_font(), rowheight=ROW_HEIGHT,
         foreground=P1_COLOR)
-    style.configure('Treeview.Heading', font=font)
-    style.configure('TNotebook', background='light grey')
-    style.configure('TNotebook.Tab', font=plt.get_font(10), padding=(25, 2))
-    style.map('TNotebook.Tab', background=[('selected', BG_COLOR)])
-    style.configure('TCombobox', font=font, background=BG_COLOR)
-    style.configure('link.TLabel', font=font, foreground='blue')
- 
+    style.configure('Treeview.Heading', font=get_font())
+    style.configure('TNotebook', background=BG_COLOR1)
+    style.configure('TNotebook.Tab', font=get_font(1), padding=(25, 2))
+    style.map('TNotebook.Tab', background=[('selected', BG_COLOR1)])
+    style.configure('TCombobox', font=get_font(), background=BG_COLOR1)
+    style.configure('link.TLabel', font=get_font(), foreground='blue')
+
 # main -------------------------------------------------------------------------
 if __name__ == '__main__':
     
@@ -1035,11 +1119,13 @@ if __name__ == '__main__':
     set_styles()
     
     # load options
-    inp_opt = inp_opt_new()
-    out_opt = out_opt_new()
-    sig_opt = sig_opt_new()
-    sys_opt = sys_opt_new()
-    load_opts(OPTS_FILE, inp_opt, out_opt, sig_opt, sys_opt)
+    sdr_opt.set_bgcolor(BG_COLOR2)
+    sdr_opt.set_font(get_font())
+    inp_opt = sdr_opt.inp_opt_new()
+    out_opt = sdr_opt.out_opt_new()
+    sig_opt = sdr_opt.sig_opt_new()
+    sys_opt = sdr_opt.sys_opt_new()
+    sdr_opt.load_opts(OPTS_FILE, inp_opt, out_opt, sig_opt, sys_opt)
     
     # SDR receiver
     rcv_body = None
@@ -1059,7 +1145,7 @@ if __name__ == '__main__':
     
     # generate receiver pages
     labels = ('Receiver', 'RF Channels', 'BB Channels', 'Correlators', 'Log')
-    note = ttk.Notebook(root)
+    note = ttk.Notebook(root, padding=0)
     note.pack(fill=BOTH)
     pages = (rcv_page_new(note), rfch_page_new(note),  bbch_page_new(note),
         corr_page_new(note), log_page_new(note))
