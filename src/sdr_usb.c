@@ -9,7 +9,9 @@
 //  2022-01-04  0.2  support CyUSB on Windows
 //  2022-05-23  0.3  change coding style
 //  2022-08-08  1.0  support multiple contexts for libusb-1.0
+//  2024-06-29  1.1  change API sdr_usb_open()
 //
+#include "pocket_sdr.h"
 #include "pocket_dev.h"
 
 // constants and macros --------------------------------------------------------
@@ -17,9 +19,8 @@
 #define USB_VR          (LIBUSB_RECIPIENT_DEVICE | LIBUSB_REQUEST_TYPE_VENDOR)
 #define USB_VR_IN       (USB_VR | LIBUSB_ENDPOINT_IN)
 #define USB_VR_OUT      (USB_VR | LIBUSB_ENDPOINT_OUT)
-#endif
-
 #define TO_TRANSFER     15000    // USB transfer timeout (ms)
+#endif
 
 //------------------------------------------------------------------------------
 //  Open USB device.
@@ -27,23 +28,26 @@
 //  args:
 //      bus         (I)   USB bus number  (-1: any)
 //      port        (I)   USB port number (-1: any)
-//      vid         (I)   USB device vendor ID
-//      pid         (I)   USB device product ID
+//      vid         (I)   USB device vendor IDs
+//      pid         (I)   USB device product IDs
+//      n           (I)   numboer of vid and pid
 //
 //  return
 //      USB device (NULL: error)
 //
-sdr_usb_t *sdr_usb_open(int bus, int port, uint16_t vid, uint16_t pid)
+sdr_usb_t *sdr_usb_open(int bus, int port, const uint16_t *vid,
+    const uint16_t *pid, int n)
 {
 #ifdef WIN32
     sdr_usb_t *usb = new CCyUSBDevice();
-    int i;
     
-    for (i = 0; i < usb->DeviceCount(); i++) {
+    for (int i = 0; i < usb->DeviceCount(); i++) {
         usb->Open(i);
-        if (usb->VendorID == vid && usb->ProductID == pid &&
-            (bus < 0 || usb->USBAddress == bus)) {
-            return usb;
+        for (int j = 0; j < n; j++) {
+            if ((bus < 0 || usb->USBAddress == bus) &&
+                usb->VendorID == vid[j] && usb->ProductID == pid[j]) {
+                return usb;
+            }
         }
         usb->Close();
     }
@@ -52,40 +56,39 @@ sdr_usb_t *sdr_usb_open(int bus, int port, uint16_t vid, uint16_t pid)
 #else
     libusb_device **devs;
     struct libusb_device_descriptor desc;
-    sdr_usb_t *usb;
-    int i, n;
+    sdr_usb_t *usb = (sdr_usb_t *)sdr_malloc(sizeof(sdr_usb_t));
+    int i, j, ndev, ret;
     
-    if (!(usb = (sdr_usb_t *)malloc(sizeof(sdr_usb_t)))) {
+    if ((ret = libusb_init(&usb->ctx))) {
+        fprintf(stderr, "libusb_init error (%d)\n", ret);
+        sdr_free(usb);
         return NULL;
     }
-    libusb_init(&usb->ctx);
-    
-    if ((n = libusb_get_device_list(NULL, &devs)) <= 0) {
+    if ((ndev = libusb_get_device_list(usb->ctx, &devs)) <= 0) {
         fprintf(stderr, "USB device list get error.\n");
         libusb_exit(usb->ctx);
-        free(usb);
+        sdr_free(usb);
         return NULL;
     }
-    for (i = 0; i < n; i++) {
+    for (i = 0; i < ndev; i++) {
         if (libusb_get_device_descriptor(devs[i], &desc) < 0) continue;
-        if ((bus < 0 || bus == libusb_get_bus_number(devs[i])) && 
-            (port < 0 || port == libusb_get_port_number(devs[i])) && 
-            vid == desc.idVendor && pid == desc.idProduct) {
-            break;
+        if ((bus >= 0 && bus != libusb_get_bus_number(devs[i])) ||
+            (port >= 0 && port != libusb_get_port_number(devs[i]))) continue;
+        for (j = 0; j < n; j++) {
+            if (vid[j] == desc.idVendor && pid[j] == desc.idProduct) break;
         }
+        if (j < n) break;
     }
-    if (i >= n) {
+    if (i >= ndev) {
         libusb_free_device_list(devs, 0);
         libusb_exit(usb->ctx);
-        free(usb);
+        sdr_free(usb);
         return NULL;
     }
     if (libusb_open(devs[i], &usb->h)) {
-        fprintf(stderr, "USB device open error. BUS=%d PORT=%d ID=%04X:%04X\n",
-            bus, port, vid, pid);
         libusb_free_device_list(devs, 0);
         libusb_exit(usb->ctx);
-        free(usb);
+        sdr_free(usb);
         return NULL;
     }
     libusb_free_device_list(devs, 0);
@@ -112,7 +115,7 @@ void sdr_usb_close(sdr_usb_t *usb)
     libusb_release_interface(usb->h, SDR_DEV_IF);
     libusb_close(usb->h);
     libusb_exit(usb->ctx);
-    free(usb);
+    sdr_free(usb);
 #endif // WIN32
 }
 
@@ -125,7 +128,7 @@ void sdr_usb_close(sdr_usb_t *usb)
 //      req         (I)   USB vendor request
 //      val         (I)   USB vendor request wValue
 //      data        (IO)  data
-//      size        (I)   data size (bytes)
+//      size        (I)   data size (bytes) (size <= 64)
 //
 //  return
 //      status (1: OK, 0: error)
