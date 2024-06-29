@@ -23,7 +23,7 @@ ifeq ($(shell uname -m),aarch64)
     CONF_OPT = --build=arm
 endif
 
-TARGET = libfec.so libfec.a
+TARGET = libfec.$(EXT) libfec.a
 
 all :
 	DIR=`pwd`; \
@@ -33,8 +33,7 @@ all :
 	mv makefile.p makefile; \
 	make; \
 	cd $$DIR; \
-    cp $(SRC)/libfec.a ./libfec.a
-	cp $(SRC)/libfec.$(EXT) ./libfec.so
+    cp $(SRC)/libfec.a $(SRC)/libfec.$(EXT) .
 
 clean:
 	DIR=`pwd`; \
