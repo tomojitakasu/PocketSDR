@@ -22,12 +22,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <pthread.h>
 
 #ifdef WIN32
 #include <windows.h>
 #include <CyAPI.h>
 #else
-#include <pthread.h>
 #include <libusb-1.0/libusb.h>
 #endif // WIN32
 
@@ -70,32 +70,24 @@ typedef struct {                // USB device type
 
 typedef struct {                // SDR device type
     sdr_usb_t *usb;             // USB device
-    int fmt;                    // IF data format (SDR_FMT_???)
-    double fs;                  // IF sampling freqency (Hz)
-    double fo[SDR_MAX_RFCH];    // LO frequencies (Hz)
-    int IQ[SDR_MAX_RFCH];       // IF sampling types (I:1,I/Q:2)
     int state;                  // state of USB event handler
     int64_t rp, wp;             // read/write pointer of data buffer
     uint8_t *buff;              // data buffer
-#ifdef WIN32
-    HANDLE thread;              // USB event handler thread
-#else
+#ifndef WIN32
     struct libusb_transfer *transfer[SDR_MAX_BUFF]; // USB transfers
-    pthread_t thread;           // USB event handler thread
 #endif
+    pthread_t thread;           // USB event handler thread
+    pthread_mutex_t mtx;        // lock flag
 } sdr_dev_t;
 
 // function prototypes -------------------------------------------------------
 
 // sdr_usb.c
-sdr_usb_t *sdr_usb_open(int bus, int port, uint16_t vid, uint16_t pid);
+sdr_usb_t *sdr_usb_open(int bus, int port, const uint16_t *vid,
+    const uint16_t *pid, int n);
 void sdr_usb_close(sdr_usb_t *usb);
 int sdr_usb_req(sdr_usb_t *usb, int mode, uint8_t req, uint16_t val,
     uint8_t *data, int size);
-
-// sdr_conf.c
-int sdr_read_settings(const char *file, int bus, int port, int opt);
-int sdr_write_settings(const char *file, int bus, int port, int opt);
 
 // sdr_dev.c
 sdr_dev_t *sdr_dev_open(int bus, int port);
@@ -103,6 +95,13 @@ void sdr_dev_close(sdr_dev_t *dev);
 int sdr_dev_start(sdr_dev_t *dev);
 int sdr_dev_stop(sdr_dev_t *dev);
 int sdr_dev_read(sdr_dev_t *dev, uint8_t *buff, int size);
+int sdr_dev_get_info(sdr_dev_t *dev, int *fmt, double *fs, double *fo, int *IQ);
+int sdr_dev_get_gain(sdr_dev_t *dev, int ch);
+int sdr_dev_set_gain(sdr_dev_t *dev, int ch, int gain);
+
+// sdr_conf.c
+int sdr_conf_read(sdr_dev_t *dev, const char *file, int opt);
+int sdr_conf_write(sdr_dev_t *dev, const char *file, int opt);
 
 #ifdef __cplusplus
 }
