@@ -11,7 +11,6 @@ import time
 from math import *
 import numpy as np
 from tkinter import *
-from tkinter import font
 
 # constants --------------------------------------------------------------------
 BG_COLOR = 'white'     # background color
@@ -19,18 +18,9 @@ FG_COLOR = '#555555'   # foreground color
 GR_COLOR = '#DDDDDD'   # grid color
 FONT_SIZE = 9          # default font size
 TICK_SIZE = 6          # tick size
-FONT_PP = ('Tahoma', 'Noto Sans', 'Monaco') # proportional fonts
-FONT_MS = ('Lucida Console', 'Noto Sans Mono', 'Courier') # mono fonts
 
 # general object class ---------------------------------------------------------
 class Obj: pass
-
-# get font ---------------------------------------------------------------------
-def get_font(size=FONT_SIZE, weight='normal', mono=0):
-    for ft in FONT_MS if mono else FONT_PP:
-        if ft in font.families():
-            return (ft, size, weight)
-    return (font.nametofont('TkDefaultFont'), size, weight)
 
 # get tick positions -----------------------------------------------------------
 def get_ticks(xl, xs):
@@ -46,7 +36,8 @@ def get_ticks(xl, xs):
 
 # generate plot ----------------------------------------------------------------
 def plot_new(parent, width, height, xlim=(0, 1), ylim=(0, 1),
-    margin=(35, 25, 25, 25), tick=3, aspect=0, title='', xlabel='', ylabel=''):
+    margin=(35, 25, 25, 25), tick=3, aspect=0, title='', xlabel='', ylabel='',
+    font=('Tahoma', FONT_SIZE, 'normal')):
     plt = Obj()
     plt.c = Canvas(parent, width=width, height=height, bg=BG_COLOR)
     plt.m = margin # (left, right, top, bottom)
@@ -57,6 +48,7 @@ def plot_new(parent, width, height, xlim=(0, 1), ylim=(0, 1),
     plt.title = title
     plt.xlabel = xlabel
     plt.ylabel = ylabel
+    plt.font = font
     return plt
 
 # plot update ------------------------------------------------------------------
@@ -130,11 +122,11 @@ def plot_dots(plt, x, y, color=FG_COLOR, fill=FG_COLOR, size=3):
                 outline=color, fill=fill)
 
 # plot text --------------------------------------------------------------------
-def plot_text(plt, x, y, text, color=FG_COLOR, font=None, anchor=CENTER,
+def plot_text(plt, x, y, text, color=FG_COLOR, anchor=CENTER, font=None,
     angle=0):
     if color == None: return
+    if font == None: font = plt.font
     xp, yp = plot_pos(plt, x, y)
-    if font == None: font = get_font()
     plt.c.create_text(xp, yp, text=text, fill=color, font=font, anchor=anchor,
         angle=angle)
 
@@ -152,7 +144,6 @@ def plot_frm(plt, color=FG_COLOR):
         for y in get_ticks(plt.yl, ys):
             plot_poly(plt, [plt.xl[0], plt.xl[0] + d], [y, y], color)
             plot_poly(plt, [plt.xl[1], plt.xl[1] - d], [y, y], color)
-        #plot_poly(plt, plt.xl, [0, 0], color)
     plot_rect(plt, plt.xl[0], plt.yl[0], plt.xl[1], plt.yl[1], color)
 
 # plot grid --------------------------------------------------------------------
@@ -167,18 +158,17 @@ def plot_grid(plt, color=GR_COLOR):
             plot_poly(plt, plt.xl, [y, y], color)
 
 # plot tick labels -------------------------------------------------------------
-def plot_tick_labels(plt, color=FG_COLOR, font=None):
+def plot_tick_labels(plt, color=FG_COLOR):
     if color == None: return
-    if font == None: font = get_font()
     xs, ys = plot_scale(plt)
     if plt.tick & 1:
         for x in get_ticks(plt.xl, xs):
             plot_text(plt, x, plt.yl[0] - 3 / ys, text='%.9g' % (x),
-                color=color, font=font, anchor=N)
+                color=color, anchor=N)
     if plt.tick & 2:
         for y in get_ticks(plt.yl, ys):
             plot_text(plt, plt.xl[0] - 3 / xs, y, text='%.9g' % (y),
-                color=color, font=font, anchor=E)
+                color=color, anchor=E)
 
 # plot axis --------------------------------------------------------------------
 def plot_axis(plt, fcolor=FG_COLOR, gcolor=GR_COLOR, tcolor=FG_COLOR):
@@ -195,19 +185,18 @@ def plot_axis(plt, fcolor=FG_COLOR, gcolor=GR_COLOR, tcolor=FG_COLOR):
     xp, yp = plot_pos(plt, (plt.xl[0] + plt.xl[1]) / 2,
         (plt.yl[0] + plt.yl[1]) / 2)
     plt.c.create_text(xp, plt.m[2] - 3, text=plt.title, anchor=S,
-        font=get_font(weight='bold'), fill=tcolor)
+        font=(plt.font[0], plt.font[1], 'bold'), fill=tcolor)
     plt.c.create_text(xp, h - plt.m[3] + 18, text=plt.xlabel, anchor=N,
-        font=get_font(), fill=tcolor)
+        font=plt.font, fill=tcolor)
     plt.c.create_text(plt.m[0] - 28, yp, text=plt.ylabel, anchor=S, angle=90,
-        font=get_font(), fill=tcolor)
+        font=plt.font, fill=tcolor)
 
 # plot skyplot -----------------------------------------------------------------
-def plot_sky(plt, color=FG_COLOR, gcolor=GR_COLOR, font=None):
+def plot_sky(plt, color=FG_COLOR, gcolor=GR_COLOR):
     for az in np.arange(0, 360, 30):
         x, y = sin(az * pi / 180), cos(az * pi / 180)
         plot_poly(plt, [0, x], [0, y], gcolor)
         text = ('%.0f' % (az)) if az % 90 else 'NESW'[az//90]
-        plot_text(plt, x * 1.01, y * 1.01, text, color=color, font=font, 
-            anchor=S, angle=-az)
+        plot_text(plt, x * 1.01, y * 1.01, text, color=color, anchor=S, angle=-az)
     for el in np.arange(0, 90, 30):
         plot_circle(plt, 0, 0, (90 - el) / 90, color if el < 5 else gcolor)
