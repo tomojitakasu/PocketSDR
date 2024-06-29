@@ -24,16 +24,17 @@ NONE = np.array([], dtype='uint8')
 # load LIBFEC ([1]) ------------------------------------------------------------
 env = platform.platform()
 dir = os.path.dirname(__file__)
+if 'Windows' in env:
+    lib = dir + '/../lib/win32/libfec.so'
+elif 'macOS' in env:
+    lib = dir + '/../lib/macos/libfec.dylib'
+else: # linux or Raspberryr Pi OS
+    lib = dir + '/../lib/linux/libfec.so'
 try:
-    if 'Windows' in env:
-        libfec = cdll.LoadLibrary(dir + '/../lib/win32/libfec.so')
-    elif 'Linux' in env:
-        libfec = cdll.LoadLibrary(dir + '/../lib/linux/libfec.so')
-    else:
-        raise
+    libfec = cdll.LoadLibrary(lib)
 except:
-    print('load libfec.so error (%s)' % (env))
-    exit()
+    print('load libfec error: ' + lib)
+    exit(-1)
 
 #-------------------------------------------------------------------------------
 #  Encode convolution code (K=7, R=1/2, Poly=G1:0x4F,G2:0x6D).
