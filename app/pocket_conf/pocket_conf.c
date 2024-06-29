@@ -7,6 +7,7 @@
 //  History:
 //  2021-10-20  0.1  new
 //  2022-01-04  1.0  support C++.
+//  2024-06-29  1.1  support API changes of sdr_conf.c
 //
 #include "pocket_dev.h"
 
@@ -78,6 +79,7 @@ static void show_usage(void)
 //
 int main(int argc, char **argv)
 {
+    sdr_dev_t *dev;
     const char *file = "";
     int i, bus = -1, port = -1, opt1 = 0, opt2 = 0;
     
@@ -102,17 +104,23 @@ int main(int argc, char **argv)
             file = argv[i];
         }
     }
+    if (!(dev = sdr_dev_open(bus, port))) {
+        return -1;
+    }
     if (*file) {
-        if (!sdr_write_settings(file, bus, port, opt1)) {
+        if (!sdr_conf_write(dev, file, opt1)) {
+            sdr_dev_close(dev);
             return -1;
         }
         printf("%s device settings are changed%s.\n", SDR_DEV_NAME,
             (opt1 & 1) ? " and saved to EEPROM" : "");
     }
     else {
-        if (!sdr_read_settings("", bus, port, opt2)) {
+        if (!sdr_conf_read(dev, "", opt2)) {
+            sdr_dev_close(dev);
             return -1;
         }
     }
+    sdr_dev_close(dev);
     return 0;
 }
