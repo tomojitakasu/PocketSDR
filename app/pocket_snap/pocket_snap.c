@@ -24,9 +24,15 @@
 #define ROUND(x)   floor(x + 0.5)
 
 // function prototype in rtklib_wrap.c ------------------------------------------
+#ifdef __cplusplus
+extern "C" {
+#endif
 double ionmodel_nav(gtime_t time, const nav_t *nav, const double *pos,
     const double *azel);
 double navgettgd(int sat, const nav_t *nav);
+#ifdef __cplusplus
+}
+#endif
 
 // type definition --------------------------------------------------------------
 typedef struct {           // satellite data type
@@ -497,12 +503,12 @@ static const char *conv_path(const char *path)
 //
 int main(int argc, char **argv)
 {
-    gtime_t ts = {0};
+    gtime_t ts = {0,0};
     FILE *fp = stdout;
-    nav_t nav = {0};
-    data_t data[MAX_SAT] = {0};
+    nav_t nav;
+    data_t data[MAX_SAT] = {{0,0,0}};
     double ti = 0.0, toff = 0.0, fs = 6e6, fi = 0.0, tint = 0.02, rr[3] = {0};
-    char *file = "", *nfile = "", *ofile = "", *fftw_wisdom = FFTW_WISDOM;
+    const char *file = "", *nfile = "", *ofile = "", *fftw_wisdom = FFTW_WISDOM;
     int ssys = SYS_GPS;
     
     for (int i = 1; i < argc; i++) {
@@ -554,6 +560,7 @@ int main(int argc, char **argv)
         }
     }
     // read RINEX NAV
+    memset(&nav, 0, sizeof(nav));
     if (readrnx(conv_path(nfile), 0, "", NULL, &nav, NULL) == -1) {
         fprintf(stderr, "nav data read error %s\n", nfile);
         exit(-1);
