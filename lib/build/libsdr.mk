@@ -5,23 +5,28 @@
 #!
 #! $ pacman -S mingw-w64-x86_64-fftw (MINGW64)
 #! $ sudo apt install libfftw3-dev   (Ubuntu)
-#! $ brew install libffw             (Mac OS)
+#! $ brew install libfftw            (Mac OS)
 
-CC  = g++
 SRC = ../../src
 
 ifeq ($(OS),Windows_NT)
+    CC = g++
     INSTALL = ../win32
+    INCLUDE = -I$(SRC) -I../RTKLIB/src -I../cyusb
     OPTIONS = -DWIN32 -DAVX2 -mavx2 -mfma
-    LDLIBS = -static ./librtk.so ./libfec.so ./libldpc.so -lfftw3f -lwinmm \
-             ../cyusb/CyAPI.a -lpthread -lsetupapi -lavrt
+    LDLIBS = -static ./librtk.a ./libfec.a ./libldpc.a -lfftw3f -lwinmm \
+             ../cyusb/CyAPI.a -lpthread -lsetupapi -lavrt -lwsock32
 else ifeq ($(shell uname -sm),Darwin arm64)
+    CC = clang
     INSTALL = ../macos
-    OPTIONS = -DMACOS -DNEON -I/opt/homebrew/include -Wno-deprecated
-    LDLIBS = -L/opt/homebrew/lib ./librtk.so ./libfec.so ./libldpc.so -lfftw3f \
+    INCLUDE = -I$(SRC) -I../RTKLIB/src -I/opt/homebrew/include
+    OPTIONS = -DMACOS -DNEON -Wno-deprecated
+    LDLIBS = -L/opt/homebrew/lib ./librtk.a ./libfec.a ./libldpc.a -lfftw3f \
              -lusb-1.0 -lpthread
 else
+    CC = g++
     INSTALL = ../linux
+    INCLUDE = -I$(SRC) -I../RTKLIB/src
     OPTIONS = -DAVX2 -mavx2 -mfma
     LDLIBS = ./librtk.a ./libfec.a ./libldpc.a -lfftw3f -lpthread -lusb-1.0 -lm \
              -lpthread
@@ -30,7 +35,6 @@ ifeq ($(shell uname -m),aarch64)
     OPTIONS = -DNEON
 endif
 
-INCLUDE = -I$(SRC) -I../RTKLIB/src -I../cyusb
 #CFLAGS = -Ofast -march=native $(INCLUDE) $(OPTIONS) -Wall -fPIC -g
 CFLAGS = -Ofast $(INCLUDE) $(OPTIONS) -Wall -fPIC -g
 
