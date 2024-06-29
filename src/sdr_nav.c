@@ -964,7 +964,7 @@ static void decode_glo_L1OCD_str(sdr_ch_t *ch, const uint8_t *bits, int rev)
         ch->nav->count[0]++;
         char str[256];
         hex_str(data, 250, str);
-        sdr_log(3, "$G1OCD,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+        sdr_log(3, "$GSTR1,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
     }
     else {
         unsync_nav(ch);
@@ -1040,7 +1040,7 @@ static void decode_glo_L3OCD_str(sdr_ch_t *ch, const uint8_t *bits, int rev)
         ch->nav->count[0]++;
         char str[256];
         hex_str(data, 300, str);
-        sdr_log(3, "$G3OCD,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+        sdr_log(3, "$GSTR3,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
     }
     else {
         unsync_nav(ch);
@@ -1486,7 +1486,7 @@ static void decode_D1D2NAV(sdr_ch_t *ch, int type, const uint8_t *syms, int rev)
     ch->nav->count[0]++;
     char str[256];
     hex_str(data, 300, str);
-    sdr_log(3, "$D%dNAV,%.3f,%s,%d,%s", type, time, ch->sig, ch->prn, str);
+    sdr_log(3, "$BCNVD%d,%.3f,%s,%d,%s", type, time, ch->sig, ch->prn, str);
 }
 
 // decode B1I D1 nav data ([7]) ------------------------------------------------
@@ -2004,7 +2004,7 @@ static void decode_IRN_NAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
         ch->nav->count[0]++;
         char str[256];
         hex_str(data, 286, str);
-        sdr_log(3, "$IRNAV,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+        sdr_log(3, "$IRNV5,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
     }
     else {
         unsync_nav(ch);
