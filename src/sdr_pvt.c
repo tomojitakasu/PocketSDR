@@ -10,10 +10,16 @@
 #include "pocket_sdr.h"
 
 // constants and macros --------------------------------------------------------
-#define LAG_EPOCH  0.25         // max PVT epoch lag (s)
+#define LAG_EPOCH  0.05         // max PVT epoch lag (s)
+#define EL_MASK    15.0         // elavation mask (deg)
 #define FILE_NAV   ".pocket_navdata.csv" // navigation data file
 
 #define ROUND(x)   (int)floor((x) + 0.5)
+
+// global variable -------------------------------------------------------------
+double sdr_epoch     = SDR_EPOCH;
+double sdr_lag_epoch = LAG_EPOCH;
+double sdr_el_mask   = EL_MASK;
 
 // system index ----------------------------------------------------------------
 static int sys_idx(int sat)
@@ -122,7 +128,7 @@ static void out_nmea(const sol_t *sol, const ssat_t *ssat, stream_t *str)
     n += outnmea_gga(buff + n, sol);
     n += outnmea_gsa(buff + n, sol, ssat);
     n += outnmea_gsv(buff + n, sol, ssat);
-    strwrite(str, buff, n);
+    sdr_str_write(str, buff, n);
 }
 
 // count number of signals -----------------------------------------------------
@@ -164,14 +170,14 @@ static void out_rtcm3_obs(rtcm_t *rtcm, const obs_t *obs, stream_t *str)
             // separate messages if nsat x nsig > 64
             if ((rtcm->obs.n + 1) * nsig[i] > 64) {
                 if (gen_rtcm3(rtcm, msgs[i], 0, 1)) {
-                    strwrite(str, rtcm->buff, rtcm->nbyte);
+                    sdr_str_write(str, rtcm->buff, rtcm->nbyte);
                 }
                 rtcm->obs.n = 0;
             }
             rtcm->obs.data[rtcm->obs.n++] = *data;
         }
         if (rtcm->obs.n > 0 && gen_rtcm3(rtcm, msgs[i], 0, i < idx_tail)) {
-            strwrite(str, rtcm->buff, rtcm->nbyte);
+            sdr_str_write(str, rtcm->buff, rtcm->nbyte);
         }
     }
 }
@@ -194,7 +200,7 @@ static void out_rtcm3_nav(rtcm_t *rtcm, int sat, int type, const nav_t *nav,
     rtcm->ephsat = sat;
     int msg = (sys == SYS_GAL && type == 1) ? 1045 : msgs[idx];
     if (gen_rtcm3(rtcm, msg, 0, 0)) {
-        strwrite(str, rtcm->buff, rtcm->nbyte);
+        sdr_str_write(str, rtcm->buff, rtcm->nbyte);
     }
 }
 
@@ -257,7 +263,7 @@ void sdr_pvt_free(sdr_pvt_t *pvt)
 static void init_epoch(sdr_pvt_t *pvt, int64_t ix, sdr_ch_t *ch)
 {
     if (!ch->week) return;
-    double tow = floor(ch->tow * 1e-3 / SDR_EPOCH) * SDR_EPOCH + SDR_EPOCH;
+    double tow = floor(ch->tow * 1e-3 / sdr_epoch) * sdr_epoch + sdr_epoch;
     pvt->time = gpst2time(ch->week, tow);
     pvt->ix = ix + ROUND((tow - ch->tow * 1e-3 - 0.07) / SDR_CYC);
     pvt->ix = (pvt->ix / 20) * 20; // round by 20 ms
@@ -382,6 +388,7 @@ void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch)
             decode_frame(data, pvt->nav->eph + sat - 1, NULL, NULL, NULL)) {
             pvt->nav->eph[sat-1].sat = sat;
             out_rtcm3_nav(pvt->rtcm, sat, 0, pvt->nav, pvt->rcv->strs[1]);
+            pvt->count[2]++;
         }
         if (ch->nav->type == 4) {
             decode_frame(data, NULL, NULL, pvt->nav->ion_gps, NULL);
@@ -394,6 +401,7 @@ void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch)
             pvt->nav->geph[prn-1].sat = sat;
             pvt->nav->geph[prn-1].frq = ch->prn; // FCN
             out_rtcm3_nav(pvt->rtcm, sat, 0, pvt->nav, pvt->rcv->strs[1]);
+            pvt->count[2]++;
         }
     }
     else if (!strcmp(ch->sig, "E1B") || !strcmp(ch->sig, "E5BI")) { // GAL I/NAV
@@ -401,6 +409,7 @@ void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch)
             decode_gal_inav(data, pvt->nav->eph + sat - 1, NULL, NULL)) {
             pvt->nav->eph[sat-1].sat = sat;
             out_rtcm3_nav(pvt->rtcm, sat, 0, pvt->nav, pvt->rcv->strs[1]);
+            pvt->count[2]++;
         }
     }
     else if (!strcmp(ch->sig, "E5AI")) { // GAL F/NAV
@@ -409,6 +418,7 @@ void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch)
                 NULL)) {
             pvt->nav->eph[MAXSAT+sat-1].sat = sat;
             out_rtcm3_nav(pvt->rtcm, sat, 1, pvt->nav, pvt->rcv->strs[1]);
+            pvt->count[2]++;
         }
     }
     else if (!strcmp(ch->sig, "B1I") || !strcmp(ch->sig, "B2I") ||
@@ -418,6 +428,7 @@ void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch)
                 decode_bds_d1(data, pvt->nav->eph + sat - 1, NULL, NULL)) {
                 pvt->nav->eph[sat-1].sat = sat;
                 out_rtcm3_nav(pvt->rtcm, sat, 0, pvt->nav, pvt->rcv->strs[1]);
+                pvt->count[2]++;
             }
         }
         else { // BDS D2 NAV
@@ -425,6 +436,7 @@ void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch)
                 decode_bds_d2(data, pvt->nav->eph + sat - 1, NULL)) {
                 pvt->nav->eph[sat-1].sat = sat;
                 out_rtcm3_nav(pvt->rtcm, sat, 0, pvt->nav, pvt->rcv->strs[1]);
+                pvt->count[2]++;
             }
         }
     }
@@ -433,6 +445,7 @@ void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch)
             decode_irn_nav(data, pvt->nav->eph + sat - 1, NULL, NULL)) {
             pvt->nav->eph[sat-1].sat = sat;
             out_rtcm3_nav(pvt->rtcm, sat, 0, pvt->nav, pvt->rcv->strs[1]);
+            pvt->count[2]++;
         }
     }
     pthread_mutex_unlock(&pvt->mtx);
@@ -460,6 +473,7 @@ static void update_sol(sdr_pvt_t *pvt)
     opt.err[1] = opt.err[2] = 0.03;
     opt.ionoopt = IONOOPT_BRDC;
     opt.tropopt = TROPOPT_SAAS;
+    opt.elmin = sdr_el_mask * D2R;
 #if 0 // RAIM-FDE on
     opt.posopt[4] = 1;
 #endif
@@ -476,6 +490,7 @@ static void update_sol(sdr_pvt_t *pvt)
         // output log $POS and NMEA RMC, GGA, GSA and GSV
         out_log_pos(time, pvt->sol, pvt->obs->n);
         out_nmea(pvt->sol, pvt->ssat, pvt->rcv->strs[0]);
+        pvt->count[0]++;
     }
     else {
         pvt->sol->ns = 0;
@@ -546,7 +561,7 @@ void sdr_pvt_udsol(sdr_pvt_t *pvt, int64_t ix)
     pthread_mutex_lock(&pvt->mtx);
     
     if (pvt->ix > 0 && (pvt->nch >= pvt->rcv->nch ||
-        ix >= pvt->ix + (int)(LAG_EPOCH / SDR_CYC))) {
+        ix >= pvt->ix + (int)(sdr_lag_epoch / SDR_CYC))) {
         
         // resolve msec ambiguity in pseudorange
         res_obs_amb(pvt->obs, SYS_GPS | SYS_QZS, CODE_L5Q, 20e-3); // L5Q
@@ -557,13 +572,14 @@ void sdr_pvt_udsol(sdr_pvt_t *pvt, int64_t ix)
         // output log $OBS and RTCM3 observation data
         out_log_obs(pvt->ix * SDR_CYC, pvt->obs);
         out_rtcm3_obs(pvt->rtcm, pvt->obs, pvt->rcv->strs[1]);
+        if (pvt->obs->n > 0) pvt->count[1]++;
         
         // update PVT solution
         update_sol(pvt);
         
         // set next epoch time and cycle
-        pvt->time = timeadd(pvt->time, SDR_EPOCH);
-        pvt->ix += (int)(SDR_EPOCH / SDR_CYC);
+        pvt->time = timeadd(pvt->time, sdr_epoch);
+        pvt->ix += (int)(sdr_epoch / SDR_CYC);
         pvt->nch = pvt->obs->n = 0; 
         
         // adjust epoch cycle within 20 ms
