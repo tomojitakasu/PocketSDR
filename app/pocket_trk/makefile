@@ -10,20 +10,23 @@ BIN = ../../bin
 
 ifeq ($(OS),Windows_NT)
     INCLUDE = -I$(SRC) -I$(LIB)/RTKLIB/src -I$(LIB)/cyusb
-    OPTIONS = -DWIN32 -DAVX2 -mavx2 -mfma
     LIBSDR = $(LIB)/win32/libsdr.a
     LDLIBS = -static $(LIBSDR) $(LIB)/win32/librtk.a $(LIB)/win32/libfec.a \
              $(LIB)/win32/libldpc.a -lfftw3f -lwinmm -lws2_32 $(LIB)/cyusb/CyAPI.a \
-             -lsetupapi -lavrt -lwinmm
+             -lsetupapi -lavrt -lwinmm -lpthread
+    OPTIONS =
+else ifeq ($(shell uname -sm),Darwin arm64)
+    INCLUDE = -I$(SRC) -I$(LIB)/RTKLIB/src -I/opt/homebrew/include
+    LIBSDR = $(LIB)/macos/libsdr.a
+    LDLIBS = -L/opt/homebrew/lib $(LIBSDR) $(LIB)/macos/librtk.a $(LIB)/macos/libfec.a \
+             $(LIB)/macos/libldpc.a -lfftw3f -lpthread -lm -lusb-1.0
+    OPTIONS = -Wno-deprecated
 else
     INCLUDE = -I$(SRC) -I$(LIB)/RTKLIB/src
     LIBSDR = $(LIB)/linux/libsdr.a
     LDLIBS = $(LIBSDR) $(LIB)/linux/librtk.a $(LIB)/linux/libfec.a \
              $(LIB)/linux/libldpc.a -lfftw3f -lpthread -lm -lusb-1.0
-    OPTIONS = -DAVX2 -mavx2 -mfma
-endif
-ifeq ($(shell uname -m),aarch64)
-    OPTIONS = -DNEON
+    OPTIONS =
 endif
 
 WARNOPT = -Wall -Wextra -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function
