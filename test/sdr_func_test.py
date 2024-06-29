@@ -97,7 +97,6 @@ def test_03():
             print('test_03: OK N=%6d err_max=%9.7f %9.7f' % (N, np.max(d), np.max(e)))
         else:
             print('test_03: NG N=%6d err_max=%9.7f %9.7f' % (N, np.max(d), np.max(e)))
-    
 
 # test corr_fft() --------------------------------------------------------------
 def test_04():
@@ -124,8 +123,50 @@ def test_04():
         else:
             print('test_04: NG N=%6d err_max=%9.7f %9.7f' % (N, np.max(d1), np.max(d2)))
 
-# test performance() -----------------------------------------------------------
+# test psd() -------------------------------------------------------------------
 def test_05():
+    N, IQ, fs, T, file = 1024, 1, 12e6, 0.01, 'sample/L1.bin'
+    
+    data = sdr_func.read_data(file, fs, IQ, T, 0.5)
+    psd = sdr_func.psd(data, N, fs, IQ)
+    plot_psd(data, N, fs, IQ, psd)
+    print('test_05: OK N=%d, IQ=%d' % (N, IQ))
+    
+    N, IQ, fs, T, file = 4096, 2, 12e6, 0.1, 'sample/L6.bin'
+    
+    data = sdr_func.read_data(file, fs, IQ, T, 2.5)
+    psd = sdr_func.psd(data, N, fs, IQ)
+    plot_psd(data, N, fs, 2, psd)
+    print('test_05: OK N=%d, IQ=%d' % (N, IQ))
+    
+# plot psd ----------------------------------------------------------------------
+def plot_psd(data, N, fs, IQ, psd):
+    if IQ == 1:
+        f = np.arange(0.0, fs * 0.5, fs / N)
+        xl = [0, fs * 0.5]
+    else:
+        f = np.arange(-fs * 0.5, fs * 0.5, fs / N)
+        xl = [-fs * 0.5, fs * 0.5]
+    yl = [-80, -45]
+    
+    fig = plt.figure('PSD', figsize=(9, 6))
+    ax = fig.add_axes([.08, .08, .84, .85])
+    ax.set_xlim(xl)
+    ax.set_ylim(yl)
+    ax.grid(True, lw=0.4)
+    
+    # reference
+    if IQ == 1:
+        plt.psd(np.array(data, dtype='float32'), Fs=fs, NFFT=N, c='r', lw=0.3)
+    else:
+        plt.psd(data, Fs=fs, NFFT=N, c='r', lw=0.3)
+    
+    ax.plot(f, psd, '.-b', lw=0.3, ms=2)
+    
+    plt.show()
+
+# test performance() -----------------------------------------------------------
+def test_06():
     n = 5000
     fs = 12e6
     fc = 13500.0
@@ -167,5 +208,6 @@ if __name__ == '__main__':
     test_02()
     test_03()
     test_04()
-    test_05()
+    #test_05()
+    test_06()
 
