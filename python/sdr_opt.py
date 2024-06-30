@@ -349,7 +349,7 @@ def read_opt(val, opt):
 # show Input Options dialog ----------------------------------------------------
 def inp_opt_dlg(root, opt):
     opt_new = inp_opt_new(opt)
-    dlg = modal_dlg_new(root, 450, 500, 'Input Options')
+    dlg = modal_dlg_new(root, 480, 500, 'Input Options')
     panel = Frame(dlg.panel, width=450, bg=BG_COLOR)
     panel.pack(fill=X, pady=4)
     ttk.Label(panel, text='Input Source').pack(side=LEFT, padx=4)
@@ -455,7 +455,7 @@ def out_opt_dlg(root, opt):
         '%Y=Year(yyyy) %y=year(yy) %m=month(mm) %d=day(dd)',
         '%h=hour(00-23) %M=minute(00-59) %S=second(00-59)')
     opt_new = out_opt_new(opt)
-    dlg = modal_dlg_new(root, 430, 450, 'Output Options')
+    dlg = modal_dlg_new(root, 480, 450, 'Output Options')
     panel1 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     panel1.pack(fill=X, pady=(4, 8))
     ttk.Label(panel1, text=texts[0], justify=LEFT).pack(fill=X, padx=2,
@@ -515,14 +515,16 @@ def on_sig_opt_change(p, var):
 # show System Options dialog ---------------------------------------------------
 def sys_opt_dlg(root, opt):
     labels = ('Epoch Interval for PVT (s)', 'Max Epoch Lag for PVT (s)',
-        'Elevation Mask for PVT (deg)', 'Correlator Spacing (chip)',
+        'Elevation Mask for PVT (\xb0)', 'Correlator Spacing (chip)',
         'Integration Time for Acquisition (s)', 'Integration Time for DLL (s)',
         'DLL Loop Filter Bandwidth (Hz)', 'PLL Loop Filter Bandwidth (Hz)',
-        'FLL Loop Filter Bandwidth Wide (Hz)', 'FLL Loop Filter Bandwidth Narrow (Hz)',
-        'Max Doppler to Search Signal (Hz)', 'C/N0 Threshold for Signal Lock (dB-Hz)',
+        'FLL Loop Filter Bandwidth Wide (Hz)',
+        'FLL Loop Filter Bandwidth Narrow (Hz)',
+        'Max Doppler Frequency to Search Signal (Hz)',
+        'C/N0 Threshold for Signal Locked (dB-Hz)',
         'C/N0 Threshold for Signal Lost (dB-Hz)')
     opt_new = sys_opt_new(opt)
-    dlg = modal_dlg_new(root, 380, 440, 'System Options')
+    dlg = modal_dlg_new(root, 420, 480, 'System Options')
     sel_panel_new(dlg.panel, labels[0], sels=('0.1', '0.2', '0.5', '1.0',
         '2.0', '5.0'), var=opt_new.epoch, width=8).pack()
     sel_panel_new(dlg.panel, labels[1], sels=('0.01', '0.02', '0.05', '0.1',
