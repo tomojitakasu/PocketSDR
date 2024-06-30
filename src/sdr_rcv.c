@@ -781,8 +781,8 @@ sdr_rcv_t *sdr_rcv_open_dev(const char **sigs, int *prns, int n, int bus,
     int port, const char *conf_file, const char **paths)
 {
     sdr_dev_t *dev;
-    double fs, fo[SDR_MAX_RFCH];
-    int fmt, nch, IQ[SDR_MAX_RFCH];
+    double fs, fo[SDR_MAX_RFCH] = {0};
+    int fmt, nch, IQ[SDR_MAX_RFCH] = {0};
     
     if (!(dev = sdr_dev_open(bus, port))) {
         return NULL;
