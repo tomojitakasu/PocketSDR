@@ -326,8 +326,6 @@ int sdr_dev_stop(sdr_dev_t *dev)
 {
     if (!dev->state) return 0;
     
-    sdr_usb_req(dev->usb, 0, SDR_VR_STOP, 0, NULL, 0);
-    
     dev->state = 0;
     pthread_join(dev->thread, NULL);
 #ifndef WIN32
@@ -335,6 +333,8 @@ int sdr_dev_stop(sdr_dev_t *dev)
         libusb_cancel_transfer(dev->transfer[i]);
     }
 #endif
+    sdr_usb_req(dev->usb, 0, SDR_VR_STOP, 0, NULL, 0);
+    
     return 1;
 }
 
@@ -424,7 +424,7 @@ int sdr_dev_get_info(sdr_dev_t *dev, int *fmt, double *fs, double *fo, int *IQ)
 //  args:
 //      dev         (I)   SDR device
 //      ch          (I)   RF channel (0:CH1, 1:CH2, ...)
-//      gain        (I)   LNA gain (0: AGC, 1-63: gain dB)
+//      gain        (I)   LNA gain (0: AGC, 1-64: gain dB)
 //
 //  return
 //      status (1: OK, 0: error)
@@ -449,10 +449,10 @@ int sdr_dev_set_gain(sdr_dev_t *dev, int ch, int gain)
         !sdr_usb_req(dev->usb, 0, SDR_VR_REG_READ, (ch << 8) + 2, reg2, 4)) {
         return 0;
     }
-    if (gain > 0) { // manual garin
+    if (gain > 0) { // manual gain
         reg1[2] = (reg1[2] & ~0x18) + (2 << 3); // AGCMODE = 2
-        reg2[0] = (reg2[0] & ~0x0F) + ((gain >> 2) & 0x0F); // GAININ[5:2]
-        reg2[1] = (reg2[1] & ~0xC0) + ((gain << 6) & 0xC0); // GAININ[1:0]
+        reg2[0] = (reg2[0] & ~0x0F) + (((gain - 1) >> 2) & 0x0F); // GAININ[5:2]
+        reg2[1] = (reg2[1] & ~0xC0) + (((gain - 1) << 6) & 0xC0); // GAININ[1:0]
     }
     else { // AGC
         reg1[2] = (reg1[2] & ~0x18); // AGCMODE = 0
@@ -470,7 +470,7 @@ int sdr_dev_set_gain(sdr_dev_t *dev, int ch, int gain)
 //      ch          (I)   RF channel (0:CH1, 1:CH2, ...)
 //
 //  return
-//      LNA gain (0: AGC, 1-63: LNA gain dB, -1: error)
+//      LNA gain (0: AGC, 1-64: LNA gain dB, -1: error)
 //
 int sdr_dev_get_gain(sdr_dev_t *dev, int ch)
 {
@@ -493,7 +493,7 @@ int sdr_dev_get_gain(sdr_dev_t *dev, int ch)
         return -1;
     }
     if (((reg1[2] >> 3) & 0x03) == 2) { // manual gain
-        return ((reg2[0] & 0x0F) << 2) + (reg2[1] >> 6);
+        return ((reg2[0] & 0x0F) << 2) + (reg2[1] >> 6) + 1;
     }
     else { // AGC
         return 0;
