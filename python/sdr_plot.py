@@ -185,7 +185,7 @@ def plot_axis(plt, fcolor=FG_COLOR, gcolor=GR_COLOR, tcolor=FG_COLOR):
     xp, yp = plot_pos(plt, (plt.xl[0] + plt.xl[1]) / 2,
         (plt.yl[0] + plt.yl[1]) / 2)
     plt.c.create_text(xp, plt.m[2] - 3, text=plt.title, anchor=S,
-        font=(plt.font[0], plt.font[1], 'bold'), fill=tcolor)
+        font=(plt.font[0], plt.font[1] + 1, 'bold'), fill=tcolor)
     plt.c.create_text(xp, h - plt.m[3] + 18, text=plt.xlabel, anchor=N,
         font=plt.font, fill=tcolor)
     plt.c.create_text(plt.m[0] - 28, yp, text=plt.ylabel, anchor=S, angle=90,
