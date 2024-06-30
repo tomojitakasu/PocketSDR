@@ -245,6 +245,7 @@ def sys_opt_new(opt_p=None):
     opt.max_dop = StringVar()
     opt.thres_cn0_l = StringVar()
     opt.thres_cn0_u = StringVar()
+    opt.fftw_wisdom_path = StringVar()
     if opt_p != None:
         opt.epoch.set(opt_p.epoch.get())
         opt.lag_epoch.set(opt_p.lag_epoch.get())
@@ -259,6 +260,7 @@ def sys_opt_new(opt_p=None):
         opt.max_dop.set(opt_p.max_dop.get())
         opt.thres_cn0_l.set(opt_p.thres_cn0_l.get())
         opt.thres_cn0_u.set(opt_p.thres_cn0_u.get())
+        opt.fftw_wisdom_path.set(opt_p.fftw_wisdom_path.get())
     else:
         opt.epoch.set('1.0')
         opt.lag_epoch.set('0.05')
@@ -480,8 +482,8 @@ def sig_opt_dlg(root, opt):
     dlg = modal_dlg_new(root, 495, 500, 'Signal Options')
     panel = Frame(dlg.panel, width=450, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     panel.pack(pady=2)
-    labels_panel(panel, ['SYSTEM', 'SATELLITE NO'], [20, 90]).pack(fill=X, pady=(4, 2))
-    link_label_new(panel, text='SIGNALS', link=SIG_LINK).place(x=290, y=4)
+    labels_panel(panel, ('SYSTEM', 'SATELLITE NO'), (20, 90)).pack(fill=X, pady=(4, 2))
+    link_label_new(panel, text='SIGNALS', link=SIG_LINK, font=FONT).place(x=290, y=4)
     for i in range(len(opt_new.sys)):
         ttk.Separator(panel, orient=HORIZONTAL).pack(fill=X, pady=(0, 2))
         sig_opt_panel(panel, opt_new, i).pack(padx=(10, 4), pady=(4, 2))
@@ -520,7 +522,7 @@ def sys_opt_dlg(root, opt):
         'Max Doppler to Search Signal (Hz)', 'C/N0 Threshold for Signal Lock (dB-Hz)',
         'C/N0 Threshold for Signal Lost (dB-Hz)')
     opt_new = sys_opt_new(opt)
-    dlg = modal_dlg_new(root, 380, 400, 'System Options')
+    dlg = modal_dlg_new(root, 380, 440, 'System Options')
     sel_panel_new(dlg.panel, labels[0], sels=('0.1', '0.2', '0.5', '1.0',
         '2.0', '5.0'), var=opt_new.epoch, width=8).pack()
     sel_panel_new(dlg.panel, labels[1], sels=('0.01', '0.02', '0.05', '0.1',
@@ -547,6 +549,8 @@ def sys_opt_dlg(root, opt):
         '35.0', '36.0', '37.0'), var=opt_new.thres_cn0_l, width=8).pack()
     sel_panel_new(dlg.panel, labels[12], sels=('27.0', '28.0', '29.0', '30.0',
         '31.0', '32.0', '33.0'), var=opt_new.thres_cn0_u, width=8).pack()
+    path_panel_new(dlg.panel, 'FFTW Wisdom Path', out=0,
+        var_path=opt_new.fftw_wisdom_path).pack()
     root.wait_window(dlg.win)
     return opt_new if dlg.ok else opt
 
