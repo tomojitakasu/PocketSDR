@@ -40,7 +40,8 @@ except:
     print('libsdr load error: ' + lib)
     libsdr = None
 else:
-    libsdr.sdr_func_init(char_p(''))
+    libsdr.sdr_func_init.argtypes = (c_char_p,)
+    libsdr.sdr_func_init(''.encode())
 
 # constants --------------------------------------------------------------------
 DOP_STEP = 0.5     # Doppler frequency search step (* 1 / code cycle)
