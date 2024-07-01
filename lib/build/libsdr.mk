@@ -104,9 +104,9 @@ sdr_rcv.o  : $(SRC)/pocket_sdr.h
 sdr_fec.o  : $(SRC)/pocket_sdr.h
 sdr_ldpc.o : $(SRC)/pocket_sdr.h
 sdr_nb_ldpc.o: $(SRC)/pocket_sdr.h
-sdr_usb.o  : $(SRC)/pocket_dev.h
-sdr_dev.o  : $(SRC)/pocket_dev.h
-sdr_conf.o : $(SRC)/pocket_dev.h
+sdr_usb.o  : $(SRC)/pocket_sdr.h
+sdr_dev.o  : $(SRC)/pocket_sdr.h
+sdr_conf.o : $(SRC)/pocket_sdr.h
 
 clean:
 	rm -f $(TARGET) *.o
