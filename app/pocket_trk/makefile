@@ -41,7 +41,7 @@ all: $(TARGET)
 pocket_trk: pocket_trk.o $(LIBSDR)
 fftw_wisdom: fftw_wisdom.o
 
-pocket_trk.o: $(SRC)/pocket_sdr.h $(SRC)/pocket_dev.h
+pocket_trk.o: $(SRC)/pocket_sdr.h
 fftw_wisdom.o: $(SRC)/pocket_sdr.h
 
 clean:

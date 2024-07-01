@@ -9,7 +9,6 @@
 //  2024-02-24  1.1  QZSS signal: L1CP -> L1CA
 //                   mask health for QZSS L6
 //
-#include "rtklib.h"
 #include "pocket_sdr.h"
 
 // constants --------------------------------------------------------------------

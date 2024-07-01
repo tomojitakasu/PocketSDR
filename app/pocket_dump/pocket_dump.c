@@ -16,6 +16,7 @@
 //  2023-12-28  1.5  set binary mode to stdout for Windows
 //  2024-04-28  1.6  support Pocket SDR FE 4CH
 //  2024-06-29  1.7  support API change in sdr_dev.c
+//  2024-07-02  1.8  support output of tag files
 //
 #include <signal.h>
 #include <time.h>
@@ -23,7 +24,6 @@
 #include <fcntl.h>
 #endif
 #include "pocket_sdr.h"
-#include "pocket_dev.h"
 
 // constants and macros --------------------------------------------------------
 #define PROG_NAME       "pocket_dump" // program name
@@ -108,10 +108,10 @@ static int write_file(int fmt, const uint8_t *buff, int size, int ch, int IQ,
 }
 
 // print header ----------------------------------------------------------------
-static void print_head(int nch, FILE **fp)
+static void print_head(int nfile, FILE **fp)
 {
     fprintf(stderr, "%9s ", "TIME(s)");
-    for (int i = 0; i < nch; i++) {
+    for (int i = 0; i < nfile; i++) {
         if (fp[i]) fprintf(stderr, " %3s   CH%d(Bytes)", "T", i + 1);
     }
     fprintf(stderr, " %12s\n", "RATE(Ks/s)");
@@ -134,7 +134,7 @@ static void print_stat(int nch, const int *IQ, FILE **fp, double time,
 
 // dump digital IF data --------------------------------------------------------
 static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int raw, int fmt,
-    int nch, const int *IQ, FILE **fp)
+    int nfile, const int *IQ, FILE **fp)
 {
     double time = 0.0, time_p = 0.0, sample = 0.0, sample_p = 0.0;
     double rate = 0.0, byte[SDR_MAX_RFCH] = {0};
@@ -142,7 +142,7 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int raw, int fmt,
     uint8_t buff[SDR_SIZE_BUFF * ns];
     
     if (!quiet) {
-        print_head(nch, fp);
+        print_head(nfile, fp);
     }
     uint32_t tick = sdr_get_tick();
     
@@ -153,7 +153,7 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int raw, int fmt,
             time = (sdr_get_tick() - tick) * 1e-3;
         }
         while (sdr_dev_read(dev, buff, SDR_SIZE_BUFF * ns) && !intr) {
-            for (int j = 0; j < nch; j++) {
+            for (int j = 0; j < nfile; j++) {
                 if (!fp[j]) continue;
                 if (raw) {
                     byte[j] += fwrite(buff, 1, SDR_SIZE_BUFF * ns, fp[j]);
@@ -171,7 +171,7 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int raw, int fmt,
             sample_p = sample;
         }
         if (!quiet && i % (STAT_CYC / DATA_CYC) == 0) {
-            print_stat(nch, IQ, fp, time, byte, rate);
+            print_stat(nfile, IQ, fp, time, byte, rate);
         }
         sdr_sleep_msec(DATA_CYC);
     }
@@ -179,8 +179,53 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int raw, int fmt,
     
     if (!quiet) {
         rate = time > 0.0 ? sample / time : 0.0;
-        print_stat(nch, IQ, fp, time, byte, rate);
+        print_stat(nfile, IQ, fp, time, byte, rate);
         fprintf(stderr, "\n");
+    }
+}
+
+// write tag file --------------------------------------------------------------
+static void write_tag_files(time_t time, int raw, int fmt, double fs,
+    const double *fo, const int *IQ, int nch, char **files)
+{
+    static const char *fmt_str[] = {
+        "-", "INT8", "INT8X2", "RAW8", "RAW16", "RAW16I"
+    };
+    FILE *fp;
+    char path[1024+4], time_str[32];
+    int nfile = raw ? 1 : nch;
+    
+    strftime(time_str, sizeof(time_str), "%Y-%m-%dT%H:%M:%SZ", gmtime(&time));
+    
+    for (int i = 0; i < nfile; i++) {
+        if (!files[i] || !*files[i] || !strcmp(files[i], "-")) continue;
+        
+        snprintf(path, sizeof(path), "%s.tag", files[i]);
+        
+        if (!(fp = fopen(path, "w"))) {
+            fprintf(stderr, "tag file open error %s\n", path);
+            continue;
+        }
+        fprintf(fp, "PROGRAM = %s\n", PROG_NAME);
+        fprintf(fp, "TIME = %s\n", time_str);
+        fprintf(fp, "FORMAT = %s\n", fmt_str[raw ? fmt : (IQ[i] == 1 ? 1 : 2)]);
+        fprintf(fp, "FREQ_SAMPL = %.0f\n", fs);
+        if (raw) {
+            fprintf(fp, "FREQ_LO = ");
+            for (int j = 0; j < nch; j++) {
+                fprintf(fp, "%.0f%s", fo[j], j < nch - 1 ? "," : "");
+            }
+            fprintf(fp, "\nTYPE_SAMPL = ");
+            for (int j = 0; j < nch; j++) {
+                fprintf(fp, "%s%s", IQ[j] == 1 ? "I" : "IQ", j < nch - 1 ? "," : "");
+            }
+            fprintf(fp, "\n");
+        }
+        else {
+            fprintf(fp, "FREQ_LO = %.0f\n", fo[i]);
+            fprintf(fp, "TYPE_SAMPL = %s\n", IQ[i] == 1 ? "I" : "IQ");
+        }
+        fclose(fp);
     }
 }
 
@@ -236,7 +281,7 @@ int main(int argc, char **argv)
     time_t dump_time;
     double tsec = 0.0, fs, fo[SDR_MAX_RFCH];
     int i, n = 0, bus = -1, port = -1, raw = 0, quiet = 0;
-    int nch, fmt, IQ[SDR_MAX_RFCH];
+    int nch, fmt, IQ[SDR_MAX_RFCH], nfile;
     
     for (i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-t") && i + 1 < argc) {
@@ -275,16 +320,18 @@ int main(int argc, char **argv)
         sdr_dev_close(dev);
         return -1;
     }
+    nfile = raw ? 1 : nch;
+    dump_time = time(NULL);
+    
     if (n == 0) { // set default file paths
-        dump_time = time(NULL);
-        for (i = 0; i < nch; i++) {
+        for (i = 0; i < nfile; i++) {
             char *p = path[i];
             p += sprintf(p, "ch%d_", i + 1);
             p += strftime(p, 32, "%Y%m%d_%H%M%S.bin", gmtime(&dump_time));
             files[i] = path[i];
         }
     }
-    for (i = 0; i < nch; i++) {
+    for (i = 0; i < nfile; i++) {
         if (!files[i]) continue;
         if (!strcmp(files[i], "-")) {
 #ifdef WIN32 // set binary mode for Windows
@@ -301,12 +348,14 @@ int main(int argc, char **argv)
     signal(SIGTERM, sig_func);
     signal(SIGINT, sig_func);
     
-    dump_data(dev, tsec, quiet, raw, fmt, nch, IQ, fp);
+    dump_data(dev, tsec, quiet, raw, fmt, nfile, IQ, fp);
     
-    for (i = 0; i < nch; i++) {
+    for (i = 0; i < nfile; i++) {
         if (fp[i]) fclose(fp[i]);
     }
     sdr_dev_close(dev);
+    
+    write_tag_files(dump_time, raw, fmt, fs, fo, IQ, nch, files);
     
     return 0;
 }

@@ -33,7 +33,7 @@ all: $(TARGET)
 
 pocket_dump: pocket_dump.o
 
-pocket_dump.o: $(SRC)/pocket_dev.h
+pocket_dump.o: $(SRC)/pocket_sdr.h
 
 clean:
 	rm -f $(TARGET) *.exe *.o *.stackdump

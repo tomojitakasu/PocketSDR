@@ -9,7 +9,7 @@
 //  2022-01-04  1.0  support C++.
 //  2024-06-29  1.1  support API changes of sdr_conf.c
 //
-#include "pocket_dev.h"
+#include "pocket_sdr.h"
 
 // constants and macro ---------------------------------------------------------
 #define PROG_NAME       "pocket_conf" // program name
