@@ -30,7 +30,7 @@ dir = os.path.dirname(__file__)
 env = platform.platform()
 if 'Windows' in env:
     lib = dir + '/../lib/win32/libsdr.so'
-elif 'maxOS' in env:
+elif 'macOS' in env:
     lib = dir + '/../lib/macos/libsdr.so'
 else: # linux or Raspberry PI OS
     lib = dir + '/../lib/linux/libsdr.so'
@@ -40,7 +40,7 @@ except:
     print('libsdr load error: ' + lib)
     libsdr = None
 else:
-    libsdr.sdr_func_init(c_char_p((dir + '/fftw_wisdom.txt').encode()))
+    libsdr.sdr_func_init(char_p(''))
 
 # constants --------------------------------------------------------------------
 DOP_STEP = 0.5     # Doppler frequency search step (* 1 / code cycle)
