@@ -10,9 +10,10 @@
 #include "pocket_sdr.h"
 
 // constants and macros --------------------------------------------------------
-#define LAG_EPOCH  0.05         // max PVT epoch lag (s)
-#define EL_MASK    15.0         // elavation mask (deg)
-#define FILE_NAV   ".pocket_navdata.csv" // navigation data file
+#define SDR_EPOCH      1.0      // epoch time interval (s)
+#define LAG_EPOCH      0.05     // max PVT epoch lag (s)
+#define EL_MASK        15.0     // elavation mask (deg)
+#define FILE_NAV       ".pocket_navdata.csv" // navigation data file
 
 #define ROUND(x)   (int)floor((x) + 0.5)
 

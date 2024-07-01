@@ -19,7 +19,6 @@
 //                   sdr_dev_get_gain()
 //
 #include "pocket_sdr.h"
-#include "pocket_dev.h"
 #ifdef WIN32
 #include <avrt.h>
 #endif
@@ -328,13 +327,12 @@ int sdr_dev_stop(sdr_dev_t *dev)
     
     dev->state = 0;
     pthread_join(dev->thread, NULL);
+    sdr_usb_req(dev->usb, 0, SDR_VR_STOP, 0, NULL, 0);
 #ifndef WIN32
     for (int i = 0; i < SDR_MAX_BUFF; i++) {
         libusb_cancel_transfer(dev->transfer[i]);
     }
 #endif
-    sdr_usb_req(dev->usb, 0, SDR_VR_STOP, 0, NULL, 0);
-    
     return 1;
 }
 

@@ -12,7 +12,6 @@
 //  2024-06-29  1.1  change API sdr_usb_open()
 //
 #include "pocket_sdr.h"
-#include "pocket_dev.h"
 
 // constants and macros --------------------------------------------------------
 #ifndef WIN32
@@ -80,18 +79,18 @@ sdr_usb_t *sdr_usb_open(int bus, int port, const uint16_t *vid,
         if (j < n) break;
     }
     if (i >= ndev) {
-        libusb_free_device_list(devs, 0);
+        libusb_free_device_list(devs, 1);
         libusb_exit(usb->ctx);
         sdr_free(usb);
         return NULL;
     }
     if (libusb_open(devs[i], &usb->h)) {
-        libusb_free_device_list(devs, 0);
+        libusb_free_device_list(devs, 1);
         libusb_exit(usb->ctx);
         sdr_free(usb);
         return NULL;
     }
-    libusb_free_device_list(devs, 0);
+    libusb_free_device_list(devs, 1);
     libusb_claim_interface(usb->h, SDR_DEV_IF);
     return usb;
 #endif // WIN32

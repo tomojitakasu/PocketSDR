@@ -12,9 +12,7 @@
 //                   move API sdr_cpx_malloc(), sdr_cpx_free() to sdr_func.c
 //
 #include "pocket_sdr.h"
-#ifdef WIN32
-#include <windows.h>
-#else
+#ifndef WIN32
 #include <time.h>
 #include <sys/time.h>
 #endif

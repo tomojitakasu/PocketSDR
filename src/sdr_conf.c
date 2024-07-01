@@ -13,7 +13,7 @@
 //  2024-06-29  1.4  delete API sdr_read_settings(), sdr_write_settings()
 //                   add API sdr_conf_read(), sdr_conf_write()
 //
-#include "pocket_dev.h"
+#include "pocket_sdr.h"
 
 // constants -------------------------------------------------------------------
 #define POCKET_DEV_NAME SDR_DEV_NAME

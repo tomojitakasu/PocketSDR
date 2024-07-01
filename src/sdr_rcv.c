@@ -14,7 +14,6 @@
 //                   sdr_rcv_close()
 //
 #include "pocket_sdr.h"
-#include "pocket_dev.h"
 
 // constants and macros ---------------------------------------------------------
 #define MAX_BUFF   8000         // max number of IF data buffer (* SDR_CYC)
