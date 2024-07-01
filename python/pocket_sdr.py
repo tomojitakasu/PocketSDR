@@ -15,7 +15,7 @@ import numpy as np
 from numpy import ctypeslib
 from tkinter import *
 from tkinter import ttk
-import sdr_func, sdr_code, sdr_rtk, sdr_opt
+import sdr_func, sdr_code, sdr_opt
 import sdr_plot as plt
 
 # constants --------------------------------------------------------------------
@@ -45,22 +45,23 @@ SYSTEMS = ('ALL', 'GPS', 'GLONASS', 'Galileo', 'QZSS', 'BeiDou', 'NavIC', 'SBAS'
 env = platform.platform()
 if 'Windows' in env:
     LIBSDR = AP_DIR + '/../lib/win32/libsdr.so'
-    FONT = ('Tahoma', 'Lucida Console')
-    FONT_SIZE = 9
+    #FONT = ('Tahoma', 'Lucida Console')
+    FONT = ('Tahoma', 'Consolas')
+    FONT_SIZE = (9, 9)
     BG_COLOR1 = '#F8F8F8'
     BG_COLOR2 = BG_COLOR1
     ROW_HEIGHT = 15
 elif 'macOS' in env:
     LIBSDR = AP_DIR + '/../lib/macos/libsdr.so'
     FONT = ('Arial Narrow', 'Monaco')
-    FONT_SIZE = 12
+    FONT_SIZE = (12, 10)
     BG_COLOR1 = '#E5E5E5'
     BG_COLOR2 = '#ECECEC'
     ROW_HEIGHT = 14
-else: # Linux or Rasbperry Pi OS
+else: # Linux or Raspberry Pi OS
     LIBSDR = AP_DIR + '/../lib/linux/libsdr.so'
     FONT = ('Noto Sans', 'Noto Sans Mono')
-    FONT_SIZE = 9
+    FONT_SIZE = (9, 9)
     BG_COLOR1 = '#F8F8F8'
     BG_COLOR2 = BG_COLOR1
     ROW_HEIGHT = 15
@@ -71,15 +72,13 @@ try:
 except:
     print('libsdr load error: ' + LIBSDR)
     exit(-1)
-else:
-    libsdr.sdr_func_init(c_char_p((AP_DIR + '/fftw_wisdom.txt').encode()))
 
 # general object class ---------------------------------------------------------
 class Obj: pass
 
 # get font ---------------------------------------------------------------------
 def get_font(add_size=0, weight='normal', mono=0):
-    return (FONT[mono], FONT_SIZE + add_size, weight)
+    return (FONT[mono], FONT_SIZE[mono] + add_size, weight)
 
 # convert string to integer or float -------------------------------------------
 def to_int(str):
@@ -136,6 +135,9 @@ def rcv_open_file(sys_opt, inp_opt, out_opt, sig_opt):
     c_fo = (c_double * 4)(*fo)
     c_IQ = (c_int32 * 4)(*IQ)
     c_paths = (c_char_p * 4)(*[s.encode() for s in paths])
+    
+    libsdr.sdr_func_init.argtypes = (c_char_p)
+    libsdr.sdr_func_init(sys_opt.fftw_wisdom_path.get().encode())
     libsdr.sdr_rcv_open_file.argtypes = (POINTER(c_char_p), POINTER(c_int32),
         c_int32, c_int32, c_double, POINTER(c_double), POINTER(c_int32),
         c_double, c_char_p, POINTER(c_char_p))
@@ -459,13 +461,12 @@ def update_sky_plot(p, sys):
     plt.plot_clear(p)
     plt.plot_sky(p, color=None)
     xs, ys = plt.plot_scale(p)
-    r = plt.FONT_SIZE * 1.3 / xs
     for i in range(len(sats) - 1, -1, -1):
         x = (90 - el[i]) / 90 * sin(az[i] * pi / 180)
         y = (90 - el[i]) / 90 * cos(az[i] * pi / 180)
         color1 = sat_color(sats[i]) if valid[i] and rcv_body else BG_COLOR1
         color2 = BG_COLOR1 if valid[i] and rcv_body else plt.FG_COLOR
-        plt.plot_circle(p, x, y, r, fill=color1)
+        plt.plot_circle(p, x, y, 12 / xs, fill=color1)
         plt.plot_text(p, x, y, sats[i], color=color2, font=get_font(-1))
     plt.plot_sky(p, gcolor=None)
 
@@ -575,17 +576,9 @@ def on_updown_push(e, p):
     if e.widget['text'] == ' < ' and val > 0:
         p.txt2['text'] = str(val - 1)
         set_rfch_gain(rcv_body, ch, val - 1)
-    elif e.widget['text'] == ' > ' and val < 63:
+    elif e.widget['text'] == ' > ' and val < 64:
         p.txt2['text'] = str(val + 1)
         set_rfch_gain(rcv_body, ch, val + 1)
-
-# gain down button push callback -----------------------------------------------
-def on_gain_down_push(e, p):
-    ch = int(p.box1.get())
-    gain = int(p.txt2['text'])
-    if gain > 0:
-        p.txt2.configure(text='%d' % (gain - 1))
-        set_rfch_gain(rcv_body, ch, gain - 1)
 
 # update RF Channels page ------------------------------------------------------
 def update_rfch_page(p):
@@ -680,7 +673,7 @@ def bbch_page_new(parent):
         values=SYSTEMS, font=get_font())
     p.box1.set('ALL')
     p.box1.pack(side=LEFT)
-    p.txt1 = ttk.Label(p.toolbar, font=get_font(1), width=10)
+    p.txt1 = ttk.Label(p.toolbar, font=get_font(1), width=12)
     p.txt2 = ttk.Label(p.toolbar, font=get_font(1), width=9, anchor=E)
     p.txt3 = ttk.Label(p.toolbar, font=get_font(1), width=13, anchor=E)
     p.txt3.pack(side=RIGHT, padx=(2, 15))
