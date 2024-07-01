@@ -16,6 +16,7 @@
 //  2024-04-04  1.8  update constants, types and API
 //  2024-04-28  1.9  update constants, types and API
 //  2024-05-28  1.10 update constants, types and APIs
+//  2024-07-01  1.11 import pocket_dev.h
 //
 #ifndef POCKET_SDR_H
 #define POCKET_SDR_H
@@ -27,37 +28,60 @@
 #include <fftw3.h>
 #include <pthread.h>
 #include "rtklib.h"
-#include "pocket_dev.h"
+#ifdef WIN32
+#include <windows.h>
+#include <CyAPI.h>
+#else
+#include <libusb-1.0/libusb.h>
+#endif // WIN32
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 // constants and macros ------------------------------------------------------
-#define PI  3.1415926535897932  // pi 
+#define SDR_MAX_RFCH   8        // max number of RF channels in a SDR device
+#define SDR_MAX_REG    11       // max number of registers in a SDR device
+#define SDR_MAX_BUFF   96       // number of IF data buffer
+#define SDR_SIZE_BUFF  (1<<16)  // size of IF data buffer (bytes)
+
 #define SDR_MAX_NPRN   256      // max number of PRNs
 #define SDR_MAX_NCH    999      // max number of receiver channels
 #define SDR_MAX_NSYM   2000     // max number of symbols
 #define SDR_MAX_DATA   4096     // max length of navigation data
 #define SDR_N_CORR     (4+81)   // number of correlators
 #define SDR_N_HIST     5000     // number of P correlator history 
-#define SDR_CSCALE     (1/24.0f) // carrier scale (max(IQ)*sqrt(2)/scale<127)
-#define SDR_EPOCH      1.0      // epoch time interval (s)
+#define SDR_CSCALE    (1/24.0f) // carrier scale (max(IQ)*sqrt(2)/scale<127)
 #define SDR_CYC        1e-3     // IF data processing cycle (s)
-#define SDR_MAX_IFFREQ 24e6     // max IF frequency (Hz)
+#define PI 3.1415926535897932   // pi 
 
 #define SDR_DEV_FILE   1        // SDR device: file
 #define SDR_DEV_USB    2        // SDR device: USB device
 
-#define SDR_FMT_INT8   1        // IF data format: int8 (I)
-#define SDR_FMT_INT8X2 2        // IF data format: int8 x 2 complex (IQ)
-#define SDR_FMT_RAW8   3        // IF data format: packed 8 bits raw  (2CH)
-#define SDR_FMT_RAW16  4        // IF data format: packed 16 bits raw (4CH)
-#define SDR_FMT_RAW16I 5        // IF data format: packed 16 bits raw (8CH)
+#define SDR_DEV_NAME   "Pocket SDR" // SDR device name 
+#define SDR_DEV_VID    0x04B4   // SDR USB device vendor ID 
+#define SDR_DEV_PID1   0x1004   // SDR USB device product ID (EZ-USB FX2LP)
+#define SDR_DEV_PID2   0x00F1   // SDR USB device product ID (EZ-USB FX3)
+#define SDR_DEV_IF     0        // SDR USB device interface number 
+#define SDR_DEV_EP     0x86     // SDR USB device end point for bulk transter 
 
-#define SDR_STATE_IDLE 1        // channel state idle
-#define SDR_STATE_SRCH 2        // channel state search
-#define SDR_STATE_LOCK 3        // channel state lock
+#define SDR_VR_STAT    0x40     // SDR USB vendor request: Get status
+#define SDR_VR_REG_READ 0x41    // SDR USB vendor request: Read register
+#define SDR_VR_REG_WRITE 0x42   // SDR USB vendor request: Write register
+#define SDR_VR_START   0x44     // SDR USB vendor request: Start bulk transfer
+#define SDR_VR_STOP    0x45     // SDR USB vendor request: Stop bulk transfer
+#define SDR_VR_RESET   0x46     // SDR USB vendor request: Reset device
+#define SDR_VR_SAVE    0x47     // SDR USB vendor request: Save settings
+
+#define SDR_FMT_INT8   1        // SDR IF data format: int8 (I)
+#define SDR_FMT_INT8X2 2        // SDR IF data format: int8 x 2 complex (IQ)
+#define SDR_FMT_RAW8   3        // SDR IF data format: packed 8 bits raw  (2CH)
+#define SDR_FMT_RAW16  4        // SDR IF data format: packed 16 bits raw (4CH)
+#define SDR_FMT_RAW16I 5        // SDR IF data format: packed 16 bits raw (8CH)
+
+#define SDR_STATE_IDLE 1        // SDR channel state: idle
+#define SDR_STATE_SRCH 2        // SDR channel state: search
+#define SDR_STATE_LOCK 3        // SDR channel state: lock
 
 #define SDR_CPX8(re, im) (sdr_cpx8_t)(((int8_t)(im)<<4)|(((int8_t)((re)<<4)>>4)&0xF))
 #define SDR_CPX8_I(x)  ((int8_t)((x)<<4)>>4)
@@ -67,6 +91,27 @@ extern "C" {
 typedef uint8_t sdr_cpx8_t;      // 8(4+4) bits complex type 
 typedef struct {int8_t I, Q;} sdr_cpx16_t; // 16(8+8) bits complex type 
 typedef fftwf_complex sdr_cpx_t; // single precision complex type 
+
+#ifdef WIN32
+typedef CCyUSBDevice sdr_usb_t; // USB device type 
+#else
+typedef struct {                // USB device type
+    libusb_context *ctx;        // USB context
+    libusb_device_handle *h;    // USB device handle
+} sdr_usb_t;
+#endif
+
+typedef struct {                // SDR device type
+    sdr_usb_t *usb;             // USB device
+    int state;                  // state of USB event handler
+    int64_t rp, wp;             // read/write pointer of raw data buffer
+    uint8_t *buff;              // raw data buffer
+#ifndef WIN32
+    struct libusb_transfer *transfer[SDR_MAX_BUFF]; // USB transfers
+#endif
+    pthread_t thread;           // USB event handler thread
+    pthread_mutex_t mtx;        // lock flag
+} sdr_dev_t;
 
 typedef struct {                // signal acquisition type 
     sdr_cpx_t *code_fft;        // code FFT 
@@ -192,6 +237,27 @@ void sdr_free(void *p);
 void sdr_get_time(double *t);
 uint32_t sdr_get_tick(void);
 void sdr_sleep_msec(int msec);
+
+// sdr_usb.c
+sdr_usb_t *sdr_usb_open(int bus, int port, const uint16_t *vid,
+    const uint16_t *pid, int n);
+void sdr_usb_close(sdr_usb_t *usb);
+int sdr_usb_req(sdr_usb_t *usb, int mode, uint8_t req, uint16_t val,
+    uint8_t *data, int size);
+
+// sdr_dev.c
+sdr_dev_t *sdr_dev_open(int bus, int port);
+void sdr_dev_close(sdr_dev_t *dev);
+int sdr_dev_start(sdr_dev_t *dev);
+int sdr_dev_stop(sdr_dev_t *dev);
+int sdr_dev_read(sdr_dev_t *dev, uint8_t *buff, int size);
+int sdr_dev_get_info(sdr_dev_t *dev, int *fmt, double *fs, double *fo, int *IQ);
+int sdr_dev_get_gain(sdr_dev_t *dev, int ch);
+int sdr_dev_set_gain(sdr_dev_t *dev, int ch, int gain);
+
+// sdr_conf.c
+int sdr_conf_read(sdr_dev_t *dev, const char *file, int opt);
+int sdr_conf_write(sdr_dev_t *dev, const char *file, int opt);
 
 // sdr_func.c
 void sdr_func_init(const char *file);
