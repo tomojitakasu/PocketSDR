@@ -4,3 +4,4 @@
 [submodule "lib/libfec"]
 	path = lib/libfec
 	url = https://github.com/quiet/libfec.git
+	ignore = untracked
