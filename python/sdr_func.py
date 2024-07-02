@@ -68,8 +68,8 @@ log_str = None     # log stream
 #      data     Digitized IF data as complex64 ndarray (length == 0: read error)
 #
 def read_data(file, fs, IQ, T, toff=0.0):
-    off = int(fs * toff * IQ)
-    cnt = int(fs * T * IQ) if T > 0.0 else -1 # all if T=0.0
+    off = int(fs * toff * IQ) & ~7
+    cnt = (int(fs * T * IQ) & ~1) if T > 0.0 else -1 # all if T=0.0
     
     f = open(file, 'rb')
     f.seek(off, os.SEEK_SET)
