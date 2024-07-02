@@ -7878,3 +7878,183 @@ arm-none-eabi-size --format=berkeley "pocket_fw_v3.elf"
   99344	   1204	   6228	 106776	  1a118	pocket_fw_v3.elf
 'Finished building: pocket_fw_v3.siz'
 ' '
+07:14:53 **** Build of configuration Release for project pocket_fw_v3 ****
+cs-make all 
+'Invoking: Cross ARM GNU Print Size'
+arm-none-eabi-size --format=berkeley "pocket_fw_v3.elf"
+   text	   data	    bss	    dec	    hex	filename
+  99344	   1204	   6228	 106776	  1a118	pocket_fw_v3.elf
+'Finished building: pocket_fw_v3.siz'
+' '
+07:15:10 **** Clean-only build of configuration Release for project pocket_fw_v3 ****
+cs-make clean 
+cs-rm -rf  pocket_fw_v3.siz  ./cyfx_gcc_startup.o ./cyfxtx.o ./pocket_fw_v3.o ./pocket_usb_dscr.o  ./cyfxtx.d ./pocket_fw_v3.d ./pocket_usb_dscr.d  ./cyfx_gcc_startup.d  pocket_fw_v3.elf
+' '
+07:15:11 **** Build of configuration Release for project pocket_fw_v3 ****
+cs-make all 
+'Building file: ../cyfx_gcc_startup.S'
+'Invoking: Cross ARM GNU Assembler'
+arm-none-eabi-gcc -mcpu=arm926ej-s -marm -mthumb-interwork -Os -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -Wall -x assembler-with-cpp -I"C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc" -MMD -MP -MF"cyfx_gcc_startup.d" -MT"cyfx_gcc_startup.o" -c -o "cyfx_gcc_startup.o" "../cyfx_gcc_startup.S"
+'Finished building: ../cyfx_gcc_startup.S'
+' '
+'Building file: ../cyfxtx.c'
+'Invoking: Cross ARM C Compiler'
+arm-none-eabi-gcc -mcpu=arm926ej-s -marm -mthumb-interwork -Os -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -Wall -D__CYU3P_TX__=1 -DREV_A -I"C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc" -std=c99 -v -MMD -MP -MF"cyfxtx.d" -MT"cyfxtx.o" -c -o "cyfxtx.o" "../cyfxtx.c"
+Using built-in specs.
+COLLECT_GCC=arm-none-eabi-gcc
+Target: arm-none-eabi
+Configured with: /scratch/astubbs/arm-eabi-lite/src/gcc-4.8-2013.11/configure --build=i686-pc-linux-gnu --host=i686-mingw32 --target=arm-none-eabi --enable-threads --disable-libmudflap --disable-libssp --disable-libstdcxx-pch --enable-extra-sgxxlite-multilibs --with-gnu-as --with-gnu-ld --with-specs='%{save-temps: -fverbose-asm} -D__CS_SOURCERYGXX_MAJ__=2013 -D__CS_SOURCERYGXX_MIN__=11 -D__CS_SOURCERYGXX_REV__=24' --enable-languages=c,c++ --disable-shared --enable-lto --with-newlib --with-pkgversion='Sourcery CodeBench Lite 2013.11-24' --with-bugurl=https://sourcery.mentor.com/GNUToolchain/ --disable-nls --prefix=/opt/codesourcery --with-headers=yes --with-sysroot=/opt/codesourcery/arm-none-eabi --with-build-sysroot=/scratch/astubbs/arm-eabi-lite/install/host-i686-mingw32/opt/codesourcery/arm-none-eabi --with-libiconv-prefix=/scratch/astubbs/arm-eabi-lite/obj/pkg-2013.11-24-arm-none-eabi/arm-2013.11-24-arm-none-eabi.extras/host-libs-i686-mingw32/usr --with-gmp=/scratch/astubbs/arm-eabi-lite/obj/pkg-2013.11-24-arm-none-eabi/arm-2013.11-24-arm-none-eabi.extras/host-libs-i686-mingw32/usr --with-mpfr=/scratch/astubbs/arm-eabi-lite/obj/pkg-2013.11-24-arm-none-eabi/arm-2013.11-24-arm-none-eabi.extras/host-libs-i686-mingw32/usr --with-mpc=/scratch/astubbs/arm-eabi-lite/obj/pkg-2013.11-24-arm-none-eabi/arm-2013.11-24-arm-none-eabi.extras/host-libs-i686-mingw32/usr --with-isl=/scratch/astubbs/arm-eabi-lite/obj/pkg-2013.11-24-arm-none-eabi/arm-2013.11-24-arm-none-eabi.extras/host-libs-i686-mingw32/usr --with-cloog=/scratch/astubbs/arm-eabi-lite/obj/pkg-2013.11-24-arm-none-eabi/arm-2013.11-24-arm-none-eabi.extras/host-libs-i686-mingw32/usr --disable-libgomp --disable-libitm --disable-libssp --enable-poison-system-directories --with-build-time-tools=/scratch/astubbs/arm-eabi-lite/obj/tools-i686-pc-linux-gnu-2013.11-24-arm-none-eabi-i686-mingw32/arm-none-eabi/bin --with-build-time-tools=/scratch/astubbs/arm-eabi-lite/obj/tools-i686-pc-linux-gnu-2013.11-24-arm-none-eabi-i686-mingw32/arm-none-eabi/bin SED=sed
+Thread model: single
+gcc version 4.8.1 (Sourcery CodeBench Lite 2013.11-24) 
+COLLECT_GCC_OPTIONS='-mcpu=arm926ej-s' '-marm' '-mthumb-interwork' '-Os' '-fmessage-length=0' '-fsigned-char' '-ffunction-sections' '-fdata-sections' '-Wall' '-D' '__CYU3P_TX__=1' '-D' 'REV_A' '-I' 'C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc' '-std=c99' '-v' '-MMD' '-MP' '-MF' 'cyfxtx.d' '-MT' 'cyfxtx.o' '-c' '-o' 'cyfxtx.o' '-D' '__CS_SOURCERYGXX_MAJ__=2013' '-D' '__CS_SOURCERYGXX_MIN__=11' '-D' '__CS_SOURCERYGXX_REV__=24'
+ c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../libexec/gcc/arm-none-eabi/4.8.1/cc1.exe -quiet -v -I C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc -iprefix c:\program files (x86)\cypress\ez-usb fx3 sdk\1.3\arm gcc\bin\../lib/gcc/arm-none-eabi/4.8.1/ -isysroot c:\program files (x86)\cypress\ez-usb fx3 sdk\1.3\arm gcc\bin\../arm-none-eabi -MMD cyfxtx.d -MF cyfxtx.d -MP -MT cyfxtx.o -D__USES_INITFINI__ -D __CYU3P_TX__=1 -D REV_A -D __CS_SOURCERYGXX_MAJ__=2013 -D __CS_SOURCERYGXX_MIN__=11 -D __CS_SOURCERYGXX_REV__=24 ../cyfxtx.c -quiet -dumpbase cyfxtx.c -mcpu=arm926ej-s -marm -mthumb-interwork -auxbase-strip cyfxtx.o -Os -Wall -std=c99 -version -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -o C:\Users\ttaka\AppData\Local\Temp\ccWwde2r.s
+GNU C (Sourcery CodeBench Lite 2013.11-24) version 4.8.1 (arm-none-eabi)
+	compiled by GNU C version 4.7.2, GMP version 5.0.5, MPFR version 3.1.1-p2, MPC version 1.0.1
+GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
+ignoring duplicate directory "c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/lib/gcc/../../lib/gcc/arm-none-eabi/4.8.1/include"
+ignoring nonexistent directory "c:\program files (x86)\cypress\ez-usb fx3 sdk\1.3\arm gcc\bin\../arm-none-eabi/opt/codesourcery/lib/gcc/arm-none-eabi/4.8.1/../../../../include"
+ignoring duplicate directory "c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/lib/gcc/../../lib/gcc/arm-none-eabi/4.8.1/include-fixed"
+ignoring duplicate directory "c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/lib/gcc/../../lib/gcc/arm-none-eabi/4.8.1/../../../../arm-none-eabi/include"
+ignoring nonexistent directory "c:\program files (x86)\cypress\ez-usb fx3 sdk\1.3\arm gcc\bin\../arm-none-eabi/usr/include"
+#include "..." search starts here:
+#include <...> search starts here:
+ C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc
+ c:\program files (x86)\cypress\ez-usb fx3 sdk\1.3\arm gcc\bin\../lib/gcc/arm-none-eabi/4.8.1/include
+ c:\program files (x86)\cypress\ez-usb fx3 sdk\1.3\arm gcc\bin\../lib/gcc/arm-none-eabi/4.8.1/include-fixed
+ c:\program files (x86)\cypress\ez-usb fx3 sdk\1.3\arm gcc\bin\../lib/gcc/arm-none-eabi/4.8.1/../../../../arm-none-eabi/include
+End of search list.
+GNU C (Sourcery CodeBench Lite 2013.11-24) version 4.8.1 (arm-none-eabi)
+	compiled by GNU C version 4.7.2, GMP version 5.0.5, MPFR version 3.1.1-p2, MPC version 1.0.1
+GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
+Compiler executable checksum: 627172c03ac174a18c4798eeb1e848b6
+COLLECT_GCC_OPTIONS='-mcpu=arm926ej-s' '-marm' '-mthumb-interwork' '-Os' '-fmessage-length=0' '-fsigned-char' '-ffunction-sections' '-fdata-sections' '-Wall' '-D' '__CYU3P_TX__=1' '-D' 'REV_A' '-I' 'C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc' '-std=c99' '-v' '-MMD' '-MP' '-MF' 'cyfxtx.d' '-MT' 'cyfxtx.o' '-c' '-o' 'cyfxtx.o' '-D' '__CS_SOURCERYGXX_MAJ__=2013' '-D' '__CS_SOURCERYGXX_MIN__=11' '-D' '__CS_SOURCERYGXX_REV__=24'
+ c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../lib/gcc/arm-none-eabi/4.8.1/../../../../arm-none-eabi/bin/as.exe -v -I C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc -mcpu=arm926ej-s -mthumb-interwork -meabi=5 -o cyfxtx.o C:\Users\ttaka\AppData\Local\Temp\ccWwde2r.s
+GNU assembler version 2.23.52 (arm-none-eabi) using BFD version (Sourcery CodeBench Lite 2013.11-24) 2.23.52.20130912
+COMPILER_PATH=c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../libexec/gcc/arm-none-eabi/4.8.1/;c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../libexec/gcc/;c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../lib/gcc/arm-none-eabi/4.8.1/../../../../arm-none-eabi/bin/
+LIBRARY_PATH=c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../lib/gcc/arm-none-eabi/4.8.1/;c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../lib/gcc/;c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../lib/gcc/arm-none-eabi/4.8.1/../../../../arm-none-eabi/lib/;c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../arm-none-eabi/lib/
+COLLECT_GCC_OPTIONS='-mcpu=arm926ej-s' '-marm' '-mthumb-interwork' '-Os' '-fmessage-length=0' '-fsigned-char' '-ffunction-sections' '-fdata-sections' '-Wall' '-D' '__CYU3P_TX__=1' '-D' 'REV_A' '-I' 'C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc' '-std=c99' '-v' '-MMD' '-MP' '-MF' 'cyfxtx.d' '-MT' 'cyfxtx.o' '-c' '-o' 'cyfxtx.o' '-D' '__CS_SOURCERYGXX_MAJ__=2013' '-D' '__CS_SOURCERYGXX_MIN__=11' '-D' '__CS_SOURCERYGXX_REV__=24'
+'Finished building: ../cyfxtx.c'
+' '
+'Building file: ../pocket_fw_v3.c'
+'Invoking: Cross ARM C Compiler'
+arm-none-eabi-gcc -mcpu=arm926ej-s -marm -mthumb-interwork -Os -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -Wall -D__CYU3P_TX__=1 -DREV_A -I"C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc" -std=c99 -v -MMD -MP -MF"pocket_fw_v3.d" -MT"pocket_fw_v3.o" -c -o "pocket_fw_v3.o" "../pocket_fw_v3.c"
+Using built-in specs.
+COLLECT_GCC=arm-none-eabi-gcc
+Target: arm-none-eabi
+Configured with: /scratch/astubbs/arm-eabi-lite/src/gcc-4.8-2013.11/configure --build=i686-pc-linux-gnu --host=i686-mingw32 --target=arm-none-eabi --enable-threads --disable-libmudflap --disable-libssp --disable-libstdcxx-pch --enable-extra-sgxxlite-multilibs --with-gnu-as --with-gnu-ld --with-specs='%{save-temps: -fverbose-asm} -D__CS_SOURCERYGXX_MAJ__=2013 -D__CS_SOURCERYGXX_MIN__=11 -D__CS_SOURCERYGXX_REV__=24' --enable-languages=c,c++ --disable-shared --enable-lto --with-newlib --with-pkgversion='Sourcery CodeBench Lite 2013.11-24' --with-bugurl=https://sourcery.mentor.com/GNUToolchain/ --disable-nls --prefix=/opt/codesourcery --with-headers=yes --with-sysroot=/opt/codesourcery/arm-none-eabi --with-build-sysroot=/scratch/astubbs/arm-eabi-lite/install/host-i686-mingw32/opt/codesourcery/arm-none-eabi --with-libiconv-prefix=/scratch/astubbs/arm-eabi-lite/obj/pkg-2013.11-24-arm-none-eabi/arm-2013.11-24-arm-none-eabi.extras/host-libs-i686-mingw32/usr --with-gmp=/scratch/astubbs/arm-eabi-lite/obj/pkg-2013.11-24-arm-none-eabi/arm-2013.11-24-arm-none-eabi.extras/host-libs-i686-mingw32/usr --with-mpfr=/scratch/astubbs/arm-eabi-lite/obj/pkg-2013.11-24-arm-none-eabi/arm-2013.11-24-arm-none-eabi.extras/host-libs-i686-mingw32/usr --with-mpc=/scratch/astubbs/arm-eabi-lite/obj/pkg-2013.11-24-arm-none-eabi/arm-2013.11-24-arm-none-eabi.extras/host-libs-i686-mingw32/usr --with-isl=/scratch/astubbs/arm-eabi-lite/obj/pkg-2013.11-24-arm-none-eabi/arm-2013.11-24-arm-none-eabi.extras/host-libs-i686-mingw32/usr --with-cloog=/scratch/astubbs/arm-eabi-lite/obj/pkg-2013.11-24-arm-none-eabi/arm-2013.11-24-arm-none-eabi.extras/host-libs-i686-mingw32/usr --disable-libgomp --disable-libitm --disable-libssp --enable-poison-system-directories --with-build-time-tools=/scratch/astubbs/arm-eabi-lite/obj/tools-i686-pc-linux-gnu-2013.11-24-arm-none-eabi-i686-mingw32/arm-none-eabi/bin --with-build-time-tools=/scratch/astubbs/arm-eabi-lite/obj/tools-i686-pc-linux-gnu-2013.11-24-arm-none-eabi-i686-mingw32/arm-none-eabi/bin SED=sed
+Thread model: single
+gcc version 4.8.1 (Sourcery CodeBench Lite 2013.11-24) 
+COLLECT_GCC_OPTIONS='-mcpu=arm926ej-s' '-marm' '-mthumb-interwork' '-Os' '-fmessage-length=0' '-fsigned-char' '-ffunction-sections' '-fdata-sections' '-Wall' '-D' '__CYU3P_TX__=1' '-D' 'REV_A' '-I' 'C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc' '-std=c99' '-v' '-MMD' '-MP' '-MF' 'pocket_fw_v3.d' '-MT' 'pocket_fw_v3.o' '-c' '-o' 'pocket_fw_v3.o' '-D' '__CS_SOURCERYGXX_MAJ__=2013' '-D' '__CS_SOURCERYGXX_MIN__=11' '-D' '__CS_SOURCERYGXX_REV__=24'
+ c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../libexec/gcc/arm-none-eabi/4.8.1/cc1.exe -quiet -v -I C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc -iprefix c:\program files (x86)\cypress\ez-usb fx3 sdk\1.3\arm gcc\bin\../lib/gcc/arm-none-eabi/4.8.1/ -isysroot c:\program files (x86)\cypress\ez-usb fx3 sdk\1.3\arm gcc\bin\../arm-none-eabi -MMD pocket_fw_v3.d -MF pocket_fw_v3.d -MP -MT pocket_fw_v3.o -D__USES_INITFINI__ -D __CYU3P_TX__=1 -D REV_A -D __CS_SOURCERYGXX_MAJ__=2013 -D __CS_SOURCERYGXX_MIN__=11 -D __CS_SOURCERYGXX_REV__=24 ../pocket_fw_v3.c -quiet -dumpbase pocket_fw_v3.c -mcpu=arm926ej-s -marm -mthumb-interwork -auxbase-strip pocket_fw_v3.o -Os -Wall -std=c99 -version -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -o C:\Users\ttaka\AppData\Local\Temp\ccm0Ft2Y.s
+GNU C (Sourcery CodeBench Lite 2013.11-24) version 4.8.1 (arm-none-eabi)
+	compiled by GNU C version 4.7.2, GMP version 5.0.5, MPFR version 3.1.1-p2, MPC version 1.0.1
+GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
+ignoring duplicate directory "c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/lib/gcc/../../lib/gcc/arm-none-eabi/4.8.1/include"
+ignoring nonexistent directory "c:\program files (x86)\cypress\ez-usb fx3 sdk\1.3\arm gcc\bin\../arm-none-eabi/opt/codesourcery/lib/gcc/arm-none-eabi/4.8.1/../../../../include"
+ignoring duplicate directory "c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/lib/gcc/../../lib/gcc/arm-none-eabi/4.8.1/include-fixed"
+ignoring duplicate directory "c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/lib/gcc/../../lib/gcc/arm-none-eabi/4.8.1/../../../../arm-none-eabi/include"
+ignoring nonexistent directory "c:\program files (x86)\cypress\ez-usb fx3 sdk\1.3\arm gcc\bin\../arm-none-eabi/usr/include"
+#include "..." search starts here:
+#include <...> search starts here:
+ C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc
+ c:\program files (x86)\cypress\ez-usb fx3 sdk\1.3\arm gcc\bin\../lib/gcc/arm-none-eabi/4.8.1/include
+ c:\program files (x86)\cypress\ez-usb fx3 sdk\1.3\arm gcc\bin\../lib/gcc/arm-none-eabi/4.8.1/include-fixed
+ c:\program files (x86)\cypress\ez-usb fx3 sdk\1.3\arm gcc\bin\../lib/gcc/arm-none-eabi/4.8.1/../../../../arm-none-eabi/include
+End of search list.
+GNU C (Sourcery CodeBench Lite 2013.11-24) version 4.8.1 (arm-none-eabi)
+	compiled by GNU C version 4.7.2, GMP version 5.0.5, MPFR version 3.1.1-p2, MPC version 1.0.1
+GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
+Compiler executable checksum: 627172c03ac174a18c4798eeb1e848b6
+COLLECT_GCC_OPTIONS='-mcpu=arm926ej-s' '-marm' '-mthumb-interwork' '-Os' '-fmessage-length=0' '-fsigned-char' '-ffunction-sections' '-fdata-sections' '-Wall' '-D' '__CYU3P_TX__=1' '-D' 'REV_A' '-I' 'C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc' '-std=c99' '-v' '-MMD' '-MP' '-MF' 'pocket_fw_v3.d' '-MT' 'pocket_fw_v3.o' '-c' '-o' 'pocket_fw_v3.o' '-D' '__CS_SOURCERYGXX_MAJ__=2013' '-D' '__CS_SOURCERYGXX_MIN__=11' '-D' '__CS_SOURCERYGXX_REV__=24'
+ c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../lib/gcc/arm-none-eabi/4.8.1/../../../../arm-none-eabi/bin/as.exe -v -I C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc -mcpu=arm926ej-s -mthumb-interwork -meabi=5 -o pocket_fw_v3.o C:\Users\ttaka\AppData\Local\Temp\ccm0Ft2Y.s
+GNU assembler version 2.23.52 (arm-none-eabi) using BFD version (Sourcery CodeBench Lite 2013.11-24) 2.23.52.20130912
+COMPILER_PATH=c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../libexec/gcc/arm-none-eabi/4.8.1/;c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../libexec/gcc/;c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../lib/gcc/arm-none-eabi/4.8.1/../../../../arm-none-eabi/bin/
+LIBRARY_PATH=c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../lib/gcc/arm-none-eabi/4.8.1/;c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../lib/gcc/;c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../lib/gcc/arm-none-eabi/4.8.1/../../../../arm-none-eabi/lib/;c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../arm-none-eabi/lib/
+COLLECT_GCC_OPTIONS='-mcpu=arm926ej-s' '-marm' '-mthumb-interwork' '-Os' '-fmessage-length=0' '-fsigned-char' '-ffunction-sections' '-fdata-sections' '-Wall' '-D' '__CYU3P_TX__=1' '-D' 'REV_A' '-I' 'C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc' '-std=c99' '-v' '-MMD' '-MP' '-MF' 'pocket_fw_v3.d' '-MT' 'pocket_fw_v3.o' '-c' '-o' 'pocket_fw_v3.o' '-D' '__CS_SOURCERYGXX_MAJ__=2013' '-D' '__CS_SOURCERYGXX_MIN__=11' '-D' '__CS_SOURCERYGXX_REV__=24'
+'Finished building: ../pocket_fw_v3.c'
+' '
+'Building file: ../pocket_usb_dscr.c'
+'Invoking: Cross ARM C Compiler'
+arm-none-eabi-gcc -mcpu=arm926ej-s -marm -mthumb-interwork -Os -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -Wall -D__CYU3P_TX__=1 -DREV_A -I"C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc" -std=c99 -v -MMD -MP -MF"pocket_usb_dscr.d" -MT"pocket_usb_dscr.o" -c -o "pocket_usb_dscr.o" "../pocket_usb_dscr.c"
+Using built-in specs.
+COLLECT_GCC=arm-none-eabi-gcc
+Target: arm-none-eabi
+Configured with: /scratch/astubbs/arm-eabi-lite/src/gcc-4.8-2013.11/configure --build=i686-pc-linux-gnu --host=i686-mingw32 --target=arm-none-eabi --enable-threads --disable-libmudflap --disable-libssp --disable-libstdcxx-pch --enable-extra-sgxxlite-multilibs --with-gnu-as --with-gnu-ld --with-specs='%{save-temps: -fverbose-asm} -D__CS_SOURCERYGXX_MAJ__=2013 -D__CS_SOURCERYGXX_MIN__=11 -D__CS_SOURCERYGXX_REV__=24' --enable-languages=c,c++ --disable-shared --enable-lto --with-newlib --with-pkgversion='Sourcery CodeBench Lite 2013.11-24' --with-bugurl=https://sourcery.mentor.com/GNUToolchain/ --disable-nls --prefix=/opt/codesourcery --with-headers=yes --with-sysroot=/opt/codesourcery/arm-none-eabi --with-build-sysroot=/scratch/astubbs/arm-eabi-lite/install/host-i686-mingw32/opt/codesourcery/arm-none-eabi --with-libiconv-prefix=/scratch/astubbs/arm-eabi-lite/obj/pkg-2013.11-24-arm-none-eabi/arm-2013.11-24-arm-none-eabi.extras/host-libs-i686-mingw32/usr --with-gmp=/scratch/astubbs/arm-eabi-lite/obj/pkg-2013.11-24-arm-none-eabi/arm-2013.11-24-arm-none-eabi.extras/host-libs-i686-mingw32/usr --with-mpfr=/scratch/astubbs/arm-eabi-lite/obj/pkg-2013.11-24-arm-none-eabi/arm-2013.11-24-arm-none-eabi.extras/host-libs-i686-mingw32/usr --with-mpc=/scratch/astubbs/arm-eabi-lite/obj/pkg-2013.11-24-arm-none-eabi/arm-2013.11-24-arm-none-eabi.extras/host-libs-i686-mingw32/usr --with-isl=/scratch/astubbs/arm-eabi-lite/obj/pkg-2013.11-24-arm-none-eabi/arm-2013.11-24-arm-none-eabi.extras/host-libs-i686-mingw32/usr --with-cloog=/scratch/astubbs/arm-eabi-lite/obj/pkg-2013.11-24-arm-none-eabi/arm-2013.11-24-arm-none-eabi.extras/host-libs-i686-mingw32/usr --disable-libgomp --disable-libitm --disable-libssp --enable-poison-system-directories --with-build-time-tools=/scratch/astubbs/arm-eabi-lite/obj/tools-i686-pc-linux-gnu-2013.11-24-arm-none-eabi-i686-mingw32/arm-none-eabi/bin --with-build-time-tools=/scratch/astubbs/arm-eabi-lite/obj/tools-i686-pc-linux-gnu-2013.11-24-arm-none-eabi-i686-mingw32/arm-none-eabi/bin SED=sed
+Thread model: single
+gcc version 4.8.1 (Sourcery CodeBench Lite 2013.11-24) 
+COLLECT_GCC_OPTIONS='-mcpu=arm926ej-s' '-marm' '-mthumb-interwork' '-Os' '-fmessage-length=0' '-fsigned-char' '-ffunction-sections' '-fdata-sections' '-Wall' '-D' '__CYU3P_TX__=1' '-D' 'REV_A' '-I' 'C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc' '-std=c99' '-v' '-MMD' '-MP' '-MF' 'pocket_usb_dscr.d' '-MT' 'pocket_usb_dscr.o' '-c' '-o' 'pocket_usb_dscr.o' '-D' '__CS_SOURCERYGXX_MAJ__=2013' '-D' '__CS_SOURCERYGXX_MIN__=11' '-D' '__CS_SOURCERYGXX_REV__=24'
+ c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../libexec/gcc/arm-none-eabi/4.8.1/cc1.exe -quiet -v -I C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc -iprefix c:\program files (x86)\cypress\ez-usb fx3 sdk\1.3\arm gcc\bin\../lib/gcc/arm-none-eabi/4.8.1/ -isysroot c:\program files (x86)\cypress\ez-usb fx3 sdk\1.3\arm gcc\bin\../arm-none-eabi -MMD pocket_usb_dscr.d -MF pocket_usb_dscr.d -MP -MT pocket_usb_dscr.o -D__USES_INITFINI__ -D __CYU3P_TX__=1 -D REV_A -D __CS_SOURCERYGXX_MAJ__=2013 -D __CS_SOURCERYGXX_MIN__=11 -D __CS_SOURCERYGXX_REV__=24 ../pocket_usb_dscr.c -quiet -dumpbase pocket_usb_dscr.c -mcpu=arm926ej-s -marm -mthumb-interwork -auxbase-strip pocket_usb_dscr.o -Os -Wall -std=c99 -version -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -o C:\Users\ttaka\AppData\Local\Temp\cctNW3Kj.s
+GNU C (Sourcery CodeBench Lite 2013.11-24) version 4.8.1 (arm-none-eabi)
+	compiled by GNU C version 4.7.2, GMP version 5.0.5, MPFR version 3.1.1-p2, MPC version 1.0.1
+GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
+ignoring duplicate directory "c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/lib/gcc/../../lib/gcc/arm-none-eabi/4.8.1/include"
+ignoring nonexistent directory "c:\program files (x86)\cypress\ez-usb fx3 sdk\1.3\arm gcc\bin\../arm-none-eabi/opt/codesourcery/lib/gcc/arm-none-eabi/4.8.1/../../../../include"
+ignoring duplicate directory "c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/lib/gcc/../../lib/gcc/arm-none-eabi/4.8.1/include-fixed"
+ignoring duplicate directory "c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/lib/gcc/../../lib/gcc/arm-none-eabi/4.8.1/../../../../arm-none-eabi/include"
+ignoring nonexistent directory "c:\program files (x86)\cypress\ez-usb fx3 sdk\1.3\arm gcc\bin\../arm-none-eabi/usr/include"
+#include "..." search starts here:
+#include <...> search starts here:
+ C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc
+ c:\program files (x86)\cypress\ez-usb fx3 sdk\1.3\arm gcc\bin\../lib/gcc/arm-none-eabi/4.8.1/include
+ c:\program files (x86)\cypress\ez-usb fx3 sdk\1.3\arm gcc\bin\../lib/gcc/arm-none-eabi/4.8.1/include-fixed
+ c:\program files (x86)\cypress\ez-usb fx3 sdk\1.3\arm gcc\bin\../lib/gcc/arm-none-eabi/4.8.1/../../../../arm-none-eabi/include
+End of search list.
+GNU C (Sourcery CodeBench Lite 2013.11-24) version 4.8.1 (arm-none-eabi)
+	compiled by GNU C version 4.7.2, GMP version 5.0.5, MPFR version 3.1.1-p2, MPC version 1.0.1
+GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
+Compiler executable checksum: 627172c03ac174a18c4798eeb1e848b6
+COLLECT_GCC_OPTIONS='-mcpu=arm926ej-s' '-marm' '-mthumb-interwork' '-Os' '-fmessage-length=0' '-fsigned-char' '-ffunction-sections' '-fdata-sections' '-Wall' '-D' '__CYU3P_TX__=1' '-D' 'REV_A' '-I' 'C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc' '-std=c99' '-v' '-MMD' '-MP' '-MF' 'pocket_usb_dscr.d' '-MT' 'pocket_usb_dscr.o' '-c' '-o' 'pocket_usb_dscr.o' '-D' '__CS_SOURCERYGXX_MAJ__=2013' '-D' '__CS_SOURCERYGXX_MIN__=11' '-D' '__CS_SOURCERYGXX_REV__=24'
+ c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../lib/gcc/arm-none-eabi/4.8.1/../../../../arm-none-eabi/bin/as.exe -v -I C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc -mcpu=arm926ej-s -mthumb-interwork -meabi=5 -o pocket_usb_dscr.o C:\Users\ttaka\AppData\Local\Temp\cctNW3Kj.s
+GNU assembler version 2.23.52 (arm-none-eabi) using BFD version (Sourcery CodeBench Lite 2013.11-24) 2.23.52.20130912
+COMPILER_PATH=c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../libexec/gcc/arm-none-eabi/4.8.1/;c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../libexec/gcc/;c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../lib/gcc/arm-none-eabi/4.8.1/../../../../arm-none-eabi/bin/
+LIBRARY_PATH=c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../lib/gcc/arm-none-eabi/4.8.1/;c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../lib/gcc/;c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../lib/gcc/arm-none-eabi/4.8.1/../../../../arm-none-eabi/lib/;c:/program files (x86)/cypress/ez-usb fx3 sdk/1.3/arm gcc/bin/../arm-none-eabi/lib/
+COLLECT_GCC_OPTIONS='-mcpu=arm926ej-s' '-marm' '-mthumb-interwork' '-Os' '-fmessage-length=0' '-fsigned-char' '-ffunction-sections' '-fdata-sections' '-Wall' '-D' '__CYU3P_TX__=1' '-D' 'REV_A' '-I' 'C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc' '-std=c99' '-v' '-MMD' '-MP' '-MF' 'pocket_usb_dscr.d' '-MT' 'pocket_usb_dscr.o' '-c' '-o' 'pocket_usb_dscr.o' '-D' '__CS_SOURCERYGXX_MAJ__=2013' '-D' '__CS_SOURCERYGXX_MIN__=11' '-D' '__CS_SOURCERYGXX_REV__=24'
+'Finished building: ../pocket_usb_dscr.c'
+' '
+'Building target: pocket_fw_v3.elf'
+'Invoking: Cross ARM C Linker'
+arm-none-eabi-gcc -mcpu=arm926ej-s -marm -mthumb-interwork -Os -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -Wall -T "C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_build/fx3_fw/fx3.ld" -nostartfiles -Xlinker --gc-sections -L"C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/fx3_release" -L"C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\ARM GCC\/lib/gcc/arm-none-eabi/4.8.1" -L"C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\ARM GCC\/arm-none-eabi/lib" -Wl,-Map,"pocket_fw_v3.map" -Wl,-d  -Wl,--no-wchar-size-warning -Wl,--entry,CyU3PFirmwareEntry -o "pocket_fw_v3.elf"  ./cyfx_gcc_startup.o ./cyfxtx.o ./pocket_fw_v3.o ./pocket_usb_dscr.o   -lcyu3lpp -lcyfxapi -lcyu3threadx -lc -lgcc
+'Finished building target: pocket_fw_v3.elf'
+' '
+cs-make --no-print-directory post-build
+'Generate boot-loadable binary image'
+elf2img.exe -i pocket_fw_v3.elf -o pocket_fw_v3.img -v
+Endian-ness    : Little
+Entry point    : 0x400068c0
+Program header table offset: 0x00000034
+Program header count       : 3
+Program header entry size  : 0x0020
+Copying data from program header:
+	Addr=0x00000100 Size(words)=0x00000960 FileSize=0x00000960 Offset=0x00000100 Flags=0x00000005
+Copying data from program header:
+	Addr=0x40003000 Size(words)=0x00004000 FileSize=0x00004000 Offset=0x00003000 Flags=0x00000005
+Copying data from program header:
+	Addr=0x40013000 Size(words)=0x000017e4 FileSize=0x000017e4 Offset=0x00013000 Flags=0x00000005
+Copying data from program header:
+Note: 256 bytes of interrupt vector code have been removed from the image.
+	Addr=0x40030000 Size(words)=0x00000745 FileSize=0x0000012d Offset=0x00020000 Flags=0x00000006
+      Use the "-vectorload yes" option to retain this code.
+
+' '
+'Invoking: Cross ARM GNU Print Size'
+arm-none-eabi-size --format=berkeley "pocket_fw_v3.elf"
+   text	   data	    bss	    dec	    hex	filename
+  99344	   1204	   6228	 106776	  1a118	pocket_fw_v3.elf
+'Finished building: pocket_fw_v3.siz'
+' '
+07:15:19 **** Incremental Build of configuration Release for project pocket_fw_v3 ****
+cs-make all 
+'Invoking: Cross ARM GNU Print Size'
+arm-none-eabi-size --format=berkeley "pocket_fw_v3.elf"
+   text	   data	    bss	    dec	    hex	filename
+  99344	   1204	   6228	 106776	  1a118	pocket_fw_v3.elf
+'Finished building: pocket_fw_v3.siz'
+' '
+07:15:41 **** Incremental Build of configuration Release for project pocket_fw_v3 ****
+cs-make all 
+'Invoking: Cross ARM GNU Print Size'
+arm-none-eabi-size --format=berkeley "pocket_fw_v3.elf"
+   text	   data	    bss	    dec	    hex	filename
+  99344	   1204	   6228	 106776	  1a118	pocket_fw_v3.elf
+'Finished building: pocket_fw_v3.siz'
+' '
