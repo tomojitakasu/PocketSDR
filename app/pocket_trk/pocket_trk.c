@@ -19,6 +19,8 @@
 //  2024-04-28  1.11 add -r, -rx, -s options, implement -rtcm, -nmea options
 //  2024-05-28  1.12 delete -u, -r, -rx, -s options, add -IQ option
 //                   delete input from stdin
+//  2024-07-02  1.8  add -fo, -raw option, delete -fi option
+//                   support tag file input for auto-configuration
 //
 #include <math.h>
 #include <signal.h>
@@ -121,23 +123,30 @@ static int print_rcv_stat(sdr_rcv_t *rcv, int nrow)
 //         number list can be repeated for multiple GNSS signals to be tracked.
 //
 //     -fmt {INT8|INT8X2|RAW8|RAW16}
-//         IF data format. INT8: int8 I-sampling, INT8X2: interleaved int8
-//         IQ-sampling, RAW8: packed raw 2CH, RAW16: packed raw 4CH
-//         [INT8X2]
+//         Specify IF data format as follows: INT8 = int8 (I-sampling), INT8X2 =
+//         interleaved int8 (IQ-sampling), RAW8 = Pocket SDR FE 2CH raw (packed
+//         8 bits), RAW16 = Pocket SDR FE 4CH raw (packed 16 bits) [INT8X2]
 //
 //     -f freq
-//         Sampling frequency of the digital IF data in MHz. [12.0]
+//         Specify the sampling frequency of the IF data in MHz. [12.0]
 //
 //     -fo freq[,...]
-//         IF frequency for each RF channel if IF data format is RAW8 or RAW16.
-//         [0,0,0,0]
+//         Specify LO frequency for each RF channel in MHz. In case of the
+//         IF data format as RAW8 or RAW16, multiple (2 or 4) frequencies have
+//         to be specified separated by ",". If the LO frequency is specified
+//         as 0, the IF frequency is assumed as 0 for IQ-sampling and 1/2 of
+//         the sampling frequency for I-sampling. [0,0,0,0]
 //
 //     -IQ {1|2}[,...]
-//        Sampling type for each RF channel if IF data foramt is RAW8 or RAW16.
-//        (1:I-sampline, 2:IQ-sampling) [2,2,2,2]
+//         Specify the sampling type (1 = I-sampline, 2 = IQ-sampling) for each
+//         RF channel separated by "," in case of the IF data foramt as RAW8 or
+//         RAW16. [2,2,2,2]
 //
 //     -toff toff
-//         Time offset from the start of the digital IF data in s. [0.0]
+//         Time offset from the start of the IF data in s. [0.0]
+//
+//     -tscale scale
+//         Time scale to replay the IF data file. [1.0]
 //
 //     -ti tint
 //         Update interval of the signal tracking status in seconds. If 0
@@ -177,25 +186,28 @@ static int print_rcv_stat(sdr_rcv_t *rcv, int nrow)
 //         Specify the FFTW wisdowm file. [../python/fftw_wisdom.txt]
 //
 //     [file]
-//         A file path of the input digital IF data. The format should be a
-//         series of int8_t (signed byte) for real-sampling (I-sampling),
-//         interleaved int8_t for complex-sampling (IQ-sampling).
-//         The Pocket SDR FE deveice and pocket_dump can be used to capture
-//         such digital IF data.
+//         A file path of the input IF data. The Pocket SDR FE deveice and
+//         pocket_dump can be used to capture such digitized IF data.
+//
+//         If the tag file <file>.tag of the input IF data exists, the format,
+//         the sampling frequency, the LO frequencies and the sampling types
+//         are automatically recognized by the tag file and the options -fmt,
+//         -f, -fo, and -IQ are ignored.
 //
 //         If the file path omitted, the input is taken from a Pocket SDR FE
 //         device directly. In this case, the sampling frequency, the sampling
 //         types of IF data, the RF channel assignments and the IF freqencies
 //         for each signals are automatically configured according to the
-//         device information. In this case, the specified options -toff,
-//         -f, -fi and -IQ are ignored.
+//         device information.
 //
 int main(int argc, char **argv)
 {
     sdr_rcv_t *rcv;
-    int prns[SDR_MAX_NCH], nch = 0, fmt = SDR_FMT_INT8X2, IQ[4] = {2, 2, 2, 2};
+    int prns[SDR_MAX_NCH], nch = 0, fmt = SDR_FMT_INT8X2;
+    int IQ[SDR_MAX_RFCH] = {2, 2, 2, 2, 2, 2, 2, 2};
     int dev_type = SDR_DEV_FILE, bus = -1, port = -1, nrow = 0;
-    double fs = 12e6, fo[4] = {0}, toff = 0.0, tint = 0.1;
+    double fs = 12.0, fo[SDR_MAX_RFCH] = {0}, toff = 0.0, tscale = 1.0;
+    double tint = 0.1;
     const char *sig = "L1CA", *sigs[SDR_MAX_NCH];
     const char *file = "", *fftw_wisdom = FFTW_WISDOM, *conf_file = "";
     const char *paths[4] = {"", "", "", ""}, *debug_file = "";
@@ -215,12 +227,16 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "-toff") && i + 1 < argc) {
             toff = atof(argv[++i]);
         }
+        else if (!strcmp(argv[i], "-tscale") && i + 1 < argc) {
+            tscale = atof(argv[++i]);
+        }
         else if (!strcmp(argv[i], "-fmt") && i + 1 < argc) {
             const char *format = argv[++i];
             if      (!strcmp(format, "INT8"  )) fmt = SDR_FMT_INT8;
             else if (!strcmp(format, "INT8X2")) fmt = SDR_FMT_INT8X2;
             else if (!strcmp(format, "RAW8"  )) fmt = SDR_FMT_RAW8;
             else if (!strcmp(format, "RAW16" )) fmt = SDR_FMT_RAW16;
+            else if (!strcmp(format, "RAW16I")) fmt = SDR_FMT_RAW16I;
             else {
                 fprintf(stderr, "unrecognized format: %s\n", format);
                 exit(-1);
@@ -230,11 +246,13 @@ int main(int argc, char **argv)
             fs = atof(argv[++i]) * 1e6;
         }
         else if (!strcmp(argv[i], "-fo") && i + 1 < argc) {
-            sscanf(argv[++i], "%lf,%lf,%lf,%lf", fo, fo + 1, fo + 2, fo + 3);
-            for (int j = 0; j < 4; j++) fo[j] *= 1e6;
+            int n = sscanf(argv[++i], "%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf", fo,
+                fo + 1, fo + 2, fo + 3, fo + 4, fo + 5, fo + 6, fo + 7);
+            for (int j = 0; j < n; j++) fo[j] *= 1e6;
         }
         else if (!strcmp(argv[i], "-IQ") && i + 1 < argc) {
-            sscanf(argv[++i], "%d,%d,%d,%d", IQ, IQ + 1, IQ + 2, IQ + 3);
+            sscanf(argv[++i], "%d,%d,%d,%d,%d,%d,%d,%d", IQ, IQ + 1, IQ + 2,
+                IQ + 3, IQ + 4, IQ + 5, IQ + 6, IQ + 7);
         }
         else if (!strcmp(argv[i], "-ti") && i + 1 < argc) {
             tint = atof(argv[++i]);
@@ -283,15 +301,18 @@ int main(int argc, char **argv)
 #endif
     uint32_t tt = sdr_get_tick();
     
-    if (tint > 0.0) {
-        printf("%s", ESC_HCUR);
-    }
     if (*file) {
-        rcv = sdr_rcv_open_file(sigs, prns, nch, fmt, fs, fo, IQ, toff, file,
-            paths);
+        rcv = sdr_rcv_open_file(sigs, prns, nch, fmt, fs, fo, IQ, toff,
+            tscale, file, paths);
     }
     else {
         rcv = sdr_rcv_open_dev(sigs, prns, nch, bus, port, conf_file, paths);
+    }
+    if (!rcv) {
+        return -1;
+    }
+    if (tint > 0.0) {
+        printf("%s", ESC_HCUR);
     }
     while (!intr && rcv->state) { // wait for interrupt or file end
         if (tint > 0.0) {
