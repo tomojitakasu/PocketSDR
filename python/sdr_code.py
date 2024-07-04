@@ -976,31 +976,37 @@ def sig_freq(sig):
 def sat_id(sig, prn):
     if sig[0] == 'L':
         if prn >= 1 and prn <= 63: # GPS
-            sat = 'G%02d' % (prn)
+            return 'G%02d' % (prn)
         elif prn >= 120 and prn <= 158: # SBAS
-            sat = 'S%02d' % (prn - 100)
+            return 'S%02d' % (prn - 100)
         else: # QZSS
-            sat = sat_id_qzss(sig, prn)
+            return sat_id_qzss(sig, prn)
     elif sig == 'G1CA' or sig == 'G2CA':
-        sat = 'R%c%d' % ('-' if prn < 0 else '+', -prn if prn < 0 else prn)
+        if prn < -7 or prn > 6: return '???'
+        return 'R%+d' % (prn)
     elif sig[0] == 'G':
-        sat = 'R%02d' % (prn)
+        if prn < 1 or prn > 27: return '???'
+        return 'R%02d' % (prn)
     elif sig[0] == 'E':
-        sat = 'E%02d' % (prn)
+        if prn < 1 or prn > 36: return '???'
+        return 'E%02d' % (prn)
     elif sig[0] == 'B':
-        sat = 'C%02d' % (prn)
+        if prn < 1 or prn > 62: return '???'
+        if (sig[:3] == 'B1C' or sig[:3] == 'B2A' or sig[:3] == 'B2B') and \
+           (prn < 19 or prn > 58): return '???'
+        if sig[:3] == 'B2I' and (prn < 1 or prn > 18): return '???'
+        return 'C%02d' % (prn)
     elif sig[0] == 'I':
-        sat = 'I%02d' % (prn)
-    else:
-        sat = '???'
-    return sat
+        if prn < 1 or prn > 14: return '???'
+        return 'I%02d' % (prn)
+    return '???'
 
 # get satellite ID for QZSS ([3],[4],[15]) -------------------------------------
 def sat_id_qzss(sig, prn):
     sat_L1B = (4, 5, 8, 9)
-    sat_L5S = (2, 4, 5, 0, 0, 3, 0, 0, 0, 0, 0, 7, 8)
+    sat_L5S = (2, 4, 5, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 8)
     
-    if sig == 'L1CB' and prn >= 203 and prn <= 206:
+    if sig == 'L1CB' and prn >= 203 and prn <= 206 and sat_L1B[prn-203]:
         sat = 'J%02d' % (sat_L1B[prn-203])
     elif (sig == 'L1CA' or sig == 'L1CD' or sig == 'L1CP' or sig == 'L2CM'
         or sig == 'L5I' or sig == 'L5Q' or sig == 'L6D') and \

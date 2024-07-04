@@ -10,8 +10,10 @@
 //  2022-05-23  1.1  change coding style
 //  2022-08-08  1.2  support Spider SDR
 //  2024-04-20  1.3  support Pocket SDR FE 4CH
+//  2024-06-29  1.4  delete API sdr_read_settings(), sdr_write_settings()
+//                   add API sdr_conf_read(), sdr_conf_write()
 //
-#include "pocket_dev.h"
+#include "pocket_sdr.h"
 
 // constants -------------------------------------------------------------------
 #define POCKET_DEV_NAME SDR_DEV_NAME
@@ -28,8 +30,8 @@ typedef struct {       // register field definition type
     uint8_t addr;      // register address
     uint8_t nbit;      // number of bits
     uint8_t pos;       // bit position (0:LSB,31:MSB)
-    uint8_t fix[SDR_MAX_CH];  // fixed setting (0:free,1:fixed)
-    uint32_t val[SDR_MAX_CH]; // value for fixed setting
+    uint8_t fix[SDR_MAX_RFCH];  // fixed setting (0:free,1:fixed)
+    uint32_t val[SDR_MAX_RFCH]; // value for fixed setting
     const char *desc;  // description */
 } reg_t;
 
@@ -531,9 +533,8 @@ static void save_regs(sdr_usb_t *usb)
 //  Read SDR device settings and output to a configuration file.
 //  
 //  args:
+//      dev      (I)  SDR device
 //      file     (I)  configuration file ("": stdout)
-//      bus      (I)  SDR device USB bus number  (-1:any)
-//      port     (I)  SDR device USB port number (-1:any)
 //      opt      (I)  options (OR of the followings)
 //                      1: read all registers
 //                      4: output in hexadecimal format
@@ -541,33 +542,25 @@ static void save_regs(sdr_usb_t *usb)
 //  return:
 //      status (0: error, 1: OK)
 //
-int sdr_read_settings(const char *file, int bus, int port, int opt)
+int sdr_conf_read(sdr_dev_t *dev, const char *file, int opt)
 {
-    sdr_usb_t *usb;
     double fx = 0.0;
     
-    if (!(usb = sdr_usb_open(bus, port, SDR_DEV_VID, SDR_DEV_PID1)) &&
-        !(usb = sdr_usb_open(bus, port, SDR_DEV_VID, SDR_DEV_PID2))) {
-        return 0;
-    }
-    uint32_t regs[SDR_MAX_CH][SDR_MAX_REG] = {{0}};
+    uint32_t regs[SDR_MAX_RFCH][SDR_MAX_REG] = {{0}};
     
     // read device type and TCXO frequency
-    int type = read_dev_type(usb, &fx);
+    int type = read_dev_type(dev->usb, &fx);
     if (type < 0) {
         fprintf(stderr, "No proper device found.\n");
-        sdr_usb_close(usb);
         return 0;
     }
     // read settings from device registers
-    read_regs(usb, type, regs);
+    read_regs(dev->usb, type, regs);
     
     // write settings to configuration file
     if (!write_config(file, type, fx * 1e-6, regs, opt)) {
-        sdr_usb_close(usb);
         return 0;
     }
-    sdr_usb_close(usb);
     return 1;
 }
 
@@ -575,9 +568,8 @@ int sdr_read_settings(const char *file, int bus, int port, int opt)
 //  Write SDR device settings in a configuration file.
 //  
 //  args:
+//      dev      (I)  SDR device
 //      file     (I)  configuration file
-//      bus      (I)  SDR device USB bus number  (-1:any)
-//      port     (I)  SDR device USB port number (-1:any)
 //      opt      (I)  options (OR of the followings)
 //                      1: save settings to EEPROM
 //                      4: input in hexadecimal format
@@ -585,43 +577,34 @@ int sdr_read_settings(const char *file, int bus, int port, int opt)
 //  return:
 //      status (0: error, 1: OK)
 //
-int sdr_write_settings(const char *file, int bus, int port, int opt)
+int sdr_conf_write(sdr_dev_t *dev, const char *file, int opt)
 {
-    sdr_usb_t *usb;
     double fx;
     
-    if (!(usb = sdr_usb_open(bus, port, SDR_DEV_VID, SDR_DEV_PID1)) &&
-        !(usb = sdr_usb_open(bus, port, SDR_DEV_VID, SDR_DEV_PID2))) {
-        fprintf(stderr, "No device found. BUS=%d PORT=%d ID=%04X:%04X/%04X\n",
-            bus, port, SDR_DEV_VID, SDR_DEV_PID1, SDR_DEV_PID2);
-        return 0;
-    }
-    uint32_t regs[SDR_MAX_CH][SDR_MAX_REG] = {{0}};
+    uint32_t regs[SDR_MAX_RFCH][SDR_MAX_REG] = {{0}};
     
     // read device type and TCXO frequency
-    int type = read_dev_type(usb, &fx);
+    int type = read_dev_type(dev->usb, &fx);
     if (type < 0) {
         fprintf(stderr, "No proper device found.\n");
         return 0;
     }
     // read settings from device registers
-    read_regs(usb, type, regs);
+    read_regs(dev->usb, type, regs);
     
     // set fixed value of settings
     set_fixed(type, regs);
     
     // read settings from configuration file
     if (!read_config(file, type, regs, opt)) {
-        sdr_usb_close(usb);
         return 0;
     }
     // write settings to device registers
-    write_regs(usb, type, regs);
+    write_regs(dev->usb, type, regs);
     
     if (opt & 1) {
         // save device registers to EEPROM
-        save_regs(usb);
+        save_regs(dev->usb);
     }
-    sdr_usb_close(usb);
     return 1;
 }

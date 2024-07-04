@@ -33,16 +33,17 @@ from sdr_nb_ldpc import *
 # load library of LDPC-codes ([1],[2]) -----------------------------------------
 env = platform.platform()
 dir = os.path.dirname(__file__)
+if 'Windows' in env:
+    lib = dir + '/../lib/win32/libldpc.so'
+elif 'macOS' in env:
+    lib = dir + '/../lib/macos/libldpc.so'
+else: # linux or Raspberry Pi OS
+    lib = dir + '/../lib/linux/libldpc.so'
 try:
-    if 'Windows' in env:
-        libldpc = cdll.LoadLibrary(dir + '/../lib/win32/libldpc.so')
-    elif 'Linux' in env:
-        libldpc = cdll.LoadLibrary(dir + '/../lib/linux/libldpc.so')
-    else:
-        raise
+    libldpc = cdll.LoadLibrary(lib)
 except:
-    print('load libldpc.so error (%s)' % (env))
-    exit()
+    print('libldpc load error: ' + lib)
+    exit(-1)
 
 # constants --------------------------------------------------------------------
 MAX_ITER = 250

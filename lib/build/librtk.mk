@@ -1,15 +1,21 @@
 #
 #  makefile for RTKLIB library (librtk.so, librtk.a)
 #
-CC = gcc
 
 SRC = ../RTKLIB/src
 
 ifeq ($(OS),Windows_NT)
+    CC = gcc
     INSTALL = ../win32
     OPTIONS= -DSVR_REUSEADDR -DTRACE -DWIN32
     LDLIBS = -lwsock32 -lwinmm
+else ifeq ($(shell uname -sm),Darwin arm64)
+    CC = clang
+    INSTALL = ../macos
+    OPTIONS= -DSVR_REUSEADDR -DTRACE -DMACOS -Wno-deprecated
+    LDLIBS =
 else
+    CC = gcc
     INSTALL = ../linux
     OPTIONS= -DSVR_REUSEADDR -DTRACE
     LDLIBS =

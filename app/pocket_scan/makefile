@@ -12,6 +12,10 @@ ifeq ($(OS),Windows_NT)
     INCLUDE = -I$(LIB)/cyusb
     OPTIONS = -DWIN32
     LDLIBS = -static $(LIB)/cyusb/CyAPI.a -lsetupapi
+else ifeq ($(shell uname -sm),Darwin arm64)
+    INCLUDE = -I/opt/homebrew/include 
+    OPTIONS = -Wno-deprecated
+    LDLIBS = -L/opt/homebrew/lib -lusb-1.0
 else
     INCLUDE =
     OPTIONS =

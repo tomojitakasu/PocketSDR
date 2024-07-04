@@ -2313,7 +2313,11 @@ static int readngspcv(const char *file, pcvs_t *pcvs)
         if (buff[0]!=' ') n=0; /* start line */
         if (++n==1) {
             pcv=pcv0;
+#if 0
             strncpy(pcv.type,buff,61); pcv.type[61]='\0';
+#else
+            sprintf(pcv.type,"%.61s",buff);
+#endif
         }
         else if (n==2) {
             if (decodef(buff,3,neu)<3) continue;

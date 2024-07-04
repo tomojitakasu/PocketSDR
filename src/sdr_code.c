@@ -2466,26 +2466,25 @@ double sdr_sig_freq(const char *sig)
 // get satellite ID for QZSS ([3],[4],[15]) ------------------------------------
 static void sat_id_qzss(const char *sig, int prn, char *sat)
 {
-    if ((!strcmp(sig, "L1CA") || !strcmp(sig, "L1CD") ||
+    static int sat_L1B[] = {4, 5, 8, 9};
+    static int sat_L5S[] = {2, 4, 5, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 7, 8};
+    
+    if (!strcmp(sig, "L1CB") && prn >= 203 && prn <= 206 && sat_L1B[prn-203]) {
+        sprintf(sat, "J%02d", sat_L1B[prn-203]);
+    }
+    else if ((!strcmp(sig, "L1CA") || !strcmp(sig, "L1CD") ||
         !strcmp(sig, "L1CP") || !strcmp(sig, "L2CM") || !strcmp(sig, "L5I") ||
         !strcmp(sig, "L5Q") || !strcmp(sig, "L6D")) &&
         prn >= 193 && prn <= 202) {
         sprintf(sat, "J%02d", prn - 192);
     }
-    else if (!strcmp(sig, "L1CB") && prn >= 203 && prn <= 204) {
-        sprintf(sat, "J%02d", prn - 199);
-    }
-    else if (!strcmp(sig, "L1CB") && prn >= 205 && prn <= 206) {
-        sprintf(sat, "J%02d", prn - 197);
-    }
     else if (!strcmp(sig, "L1S") && prn >= 183 && prn <= 191) {
         sprintf(sat, "J%02d", prn - 182);
     }
-    else if (!strncmp(sig, "L5S", 3) && prn >= 184 && prn <= 189) {
-        sprintf(sat, "J%02d", prn - 182);
-    }
-    else if (!strncmp(sig, "L5S", 3) && prn >= 205 && prn <= 206) {
-        sprintf(sat, "J%02d", prn - 197);
+    else if (!strncmp(sig, "L5S", 3) && prn >= 184 && prn <= 206 &&
+        sat_L5S[prn-184]) {
+        sprintf(sat, "J%02d", sat_L5S[prn-184]);
     }
     else if (!strcmp(sig, "L6E") && prn >= 203 && prn <= 212) {
         sprintf(sat, "J%02d", prn - 202);

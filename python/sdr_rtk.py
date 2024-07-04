@@ -28,12 +28,16 @@ import numpy as np
 env = platform.platform()
 dir = os.path.dirname(__file__)
 if 'Windows' in env:
-    librtk = cdll.LoadLibrary(dir + '/../lib/win32/librtk.so')
-elif 'Linux' in env:
-    librtk = cdll.LoadLibrary(dir + '/../lib/linux/librtk.so')
-else:
-    printf('load librtk.so error for %s' % (env))
-    exit()
+    lib = dir + '/../lib/win32/librtk.so'
+elif 'macOS' in env:
+    lib = dir + '/../lib/macos/librtk.so'
+else: # linux or Raspberry Pi OS
+    lib = dir + '/../lib/linux/librtk.so'
+try:
+    librtk = cdll.LoadLibrary(lib)
+except:
+    print('librtk load error: ' + lib)
+    exit(-1)
 
 # get constant -----------------------------------------------------------------
 def get_const_int(name):

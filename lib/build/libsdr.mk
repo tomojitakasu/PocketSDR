@@ -5,25 +5,36 @@
 #!
 #! $ pacman -S mingw-w64-x86_64-fftw (MINGW64)
 #! $ sudo apt install libfftw3-dev   (Ubuntu)
+#! $ brew install libfftw            (Mac OS)
 
-CC  = g++
 SRC = ../../src
 
 ifeq ($(OS),Windows_NT)
+    CC = g++
     INSTALL = ../win32
+    INCLUDE = -I$(SRC) -I../RTKLIB/src -I../cyusb
     OPTIONS = -DWIN32 -DAVX2 -mavx2 -mfma
-    LDLIBS = ./librtk.so ./libfec.so ./libldpc.so -lfftw3f -lwinmm \
-             ../cyusb/CyAPI.a -lsetupapi -lavrt
+    LDLIBS = -static ./librtk.a ./libfec.a ./libldpc.a -lfftw3f -lwinmm \
+             ../cyusb/CyAPI.a -lpthread -lsetupapi -lavrt -lwsock32
+else ifeq ($(shell uname -sm),Darwin arm64)
+    CC = clang
+    INSTALL = ../macos
+    INCLUDE = -I$(SRC) -I../RTKLIB/src -I/opt/homebrew/include
+    OPTIONS = -DMACOS -DNEON -Wno-deprecated
+    LDLIBS = -L/opt/homebrew/lib ./librtk.a ./libfec.a ./libldpc.a -lfftw3f \
+             -lusb-1.0 -lpthread
 else
+    CC = g++
     INSTALL = ../linux
+    INCLUDE = -I$(SRC) -I../RTKLIB/src
     OPTIONS = -DAVX2 -mavx2 -mfma
-    LDLIBS = ./librtk.a ./libfec.a ./libldpc.a -lfftw3f
+    LDLIBS = ./librtk.a ./libfec.a ./libldpc.a -lfftw3f -lpthread -lusb-1.0 -lm \
+             -lpthread
 endif
 ifeq ($(shell uname -m),aarch64)
     OPTIONS = -DNEON
 endif
 
-INCLUDE = -I$(SRC) -I../RTKLIB/src -I../cyusb
 #CFLAGS = -Ofast -march=native $(INCLUDE) $(OPTIONS) -Wall -fPIC -g
 CFLAGS = -Ofast $(INCLUDE) $(OPTIONS) -Wall -fPIC -g
 
@@ -93,9 +104,9 @@ sdr_rcv.o  : $(SRC)/pocket_sdr.h
 sdr_fec.o  : $(SRC)/pocket_sdr.h
 sdr_ldpc.o : $(SRC)/pocket_sdr.h
 sdr_nb_ldpc.o: $(SRC)/pocket_sdr.h
-sdr_usb.o  : $(SRC)/pocket_dev.h
-sdr_dev.o  : $(SRC)/pocket_dev.h
-sdr_conf.o : $(SRC)/pocket_dev.h
+sdr_usb.o  : $(SRC)/pocket_sdr.h
+sdr_dev.o  : $(SRC)/pocket_sdr.h
+sdr_conf.o : $(SRC)/pocket_sdr.h
 
 clean:
 	rm -f $(TARGET) *.o

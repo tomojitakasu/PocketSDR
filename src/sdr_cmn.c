@@ -12,9 +12,7 @@
 //                   move API sdr_cpx_malloc(), sdr_cpx_free() to sdr_func.c
 //
 #include "pocket_sdr.h"
-#ifdef WIN32
-#include <windows.h>
-#else
+#ifndef WIN32
 #include <time.h>
 #include <sys/time.h>
 #endif
@@ -122,12 +120,12 @@ uint32_t sdr_get_tick(void)
 //
 void sdr_sleep_msec(int msec)
 {
+    if (msec <= 0) return;
 #ifdef WIN32
     Sleep(msec < 5 ? 1 : msec);
 #else
     struct timespec ts = {0, 0};
     
-    if (msec <= 0) return;
     ts.tv_nsec = (long)(msec * 1000000);
     nanosleep(&ts, NULL);
 #endif

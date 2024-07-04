@@ -28,17 +28,20 @@ import sdr_code, sdr_rtk
 # load external library --------------------------------------------------------
 dir = os.path.dirname(__file__)
 env = platform.platform()
+if 'Windows' in env:
+    lib = dir + '/../lib/win32/libsdr.so'
+elif 'macOS' in env:
+    lib = dir + '/../lib/macos/libsdr.so'
+else: # linux or Raspberry PI OS
+    lib = dir + '/../lib/linux/libsdr.so'
 try:
-    if 'Windows' in env:
-        libsdr = cdll.LoadLibrary(dir + '/../lib/win32/libsdr.so')
-    elif 'Linux' in env:
-        libsdr = cdll.LoadLibrary(dir + '/../lib/linux/libsdr.so')
-    else:
-        raise
+    libsdr = cdll.LoadLibrary(lib)
 except:
+    #print('libsdr load error: ' + lib)
     libsdr = None
 else:
-    libsdr.sdr_func_init(c_char_p((dir + '/fftw_wisdom.txt').encode()))
+    libsdr.sdr_func_init.argtypes = (c_char_p,)
+    libsdr.sdr_func_init(''.encode())
 
 # constants --------------------------------------------------------------------
 DOP_STEP = 0.5     # Doppler frequency search step (* 1 / code cycle)
@@ -190,6 +193,17 @@ def corr_std_(data, code, pos):
 # FFT correlator ---------------------------------------------------------------
 def corr_fft_(data, code_fft):
     return fft.ifft(fft.fft(data) * code_fft) / len(data)
+
+# PSD of IF data ---------------------------------------------------------------
+def psd(data, N, fs, IQ):
+    if not libsdr and LIBSDR_ENA:
+        return []
+    psd = np.zeros(N if IQ == 2 else N // 2, dtype='float32')
+    libsdr.sdr_psd_cpx.argtypes = [
+        ctypeslib.ndpointer('complex64'), c_int32, c_int32, c_double, c_int32,
+        ctypeslib.ndpointer('float32')]
+    libsdr.sdr_psd_cpx(np.array(data, 'complex64'), len(data), N, fs, IQ, psd)
+    return psd
 
 # open log ---------------------------------------------------------------------
 def log_open(path):

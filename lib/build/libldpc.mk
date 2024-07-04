@@ -5,14 +5,17 @@
 #!
 #! $ git clone https://github.com/radfordneal/LDPC-codes LDPC-codes
 
-CC  = gcc
-
 #! specify directory of LDPC-codes source tree
 SRC = ../LDPC-codes
 
 ifeq ($(OS),Windows_NT)
+    CC = gcc
     INSTALL = ../win32
+else ifeq ($(shell uname -sm),Darwin arm64)
+    CC = clang
+    INSTALL = ../macos
 else
+    CC = gcc
     INSTALL = ../linux
 endif
 

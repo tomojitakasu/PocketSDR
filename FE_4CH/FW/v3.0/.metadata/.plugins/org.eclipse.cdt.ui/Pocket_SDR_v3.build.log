@@ -1,0 +1,36 @@
+18:56:27 **** Incremental Build of configuration Release for project pocket_sdr_v3 ****
+cs-make all 
+'Building target: pocket_sdr_v3.elf'
+'Invoking: Cross ARM C Linker'
+arm-none-eabi-gcc -mcpu=arm926ej-s -marm -mthumb-interwork -O3 -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -Wall  -g -T "C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_build/fx3_fw/fx3.ld" -nostartfiles -Xlinker --gc-sections -L"C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/fx3_release" -L"C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\ARM GCC\/lib/gcc/arm-none-eabi/4.8.1" -L"C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\ARM GCC\/arm-none-eabi/lib" -Wl,-Map,"pocket_sdr_v3.map" -Wl,-d  -Wl,--no-wchar-size-warning -Wl,--entry,CyU3PFirmwareEntry -o "pocket_sdr_v3.elf"  ./cyfx_gcc_startup.o ./cyfxtx.o ./cyfxusbenumdscr.o ./pocket_fw_v3.o   -lcyu3lpp -lcyfxapi -lcyu3threadx -lc -lgcc
+'Finished building target: pocket_sdr_v3.elf'
+' '
+cs-make --no-print-directory post-build
+'Generate boot-loadable binary image'
+elf2img.exe -i pocket_sdr_v3.elf -o pocket_sdr_v3.img -v
+Endian-ness    : Little
+Entry point    : 0x40005630
+Program header table offset: 0x00000034
+Program header count       : 3
+Program header entry size  : 0x0020
+Note: 256 bytes of interrupt vector code have been removed from the image.
+Copying data from program header:
+      Use the "-vectorload yes" option to retain this code.
+	Addr=0x00000100 Size(words)=0x00000960 FileSize=0x00000960 Offset=0x00000100 Flags=0x00000005
+
+Copying data from program header:
+	Addr=0x40003000 Size(words)=0x00004000 FileSize=0x00004000 Offset=0x00003000 Flags=0x00000005
+Copying data from program header:
+	Addr=0x40013000 Size(words)=0x00000980 FileSize=0x00000980 Offset=0x00013000 Flags=0x00000005
+Copying data from program header:
+	Addr=0x40030000 Size(words)=0x000006d8 FileSize=0x000000a7 Offset=0x00018000 Flags=0x00000006
+' '
+'Invoking: Cross ARM GNU Print Size'
+arm-none-eabi-size --format=berkeley "pocket_sdr_v3.elf"
+   text	   data	    bss	    dec	    hex	filename
+  84608	    668	   6336	  91612	  165dc	pocket_sdr_v3.elf
+'Finished building: pocket_sdr_v3.siz'
+' '
+
+18:56:28 Build Finished (took 956ms)
+

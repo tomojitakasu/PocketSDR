@@ -14,15 +14,15 @@
 //                   DATA_CYC: 50 -> 10 (ms)
 //  2023-12-25  1.4  insert wait after writing receiver settings
 //  2023-12-28  1.5  set binary mode to stdout for Windows
-//  2023-04-28  1.6  support Pocket SDR FE 4CH
+//  2024-04-28  1.6  support Pocket SDR FE 4CH
+//  2024-06-29  1.7  support API change in sdr_dev.c
+//  2024-07-02  1.8  support tag file output
 //
 #include <signal.h>
-#include <time.h>
 #ifdef WIN32
 #include <fcntl.h>
 #endif
 #include "pocket_sdr.h"
-#include "pocket_dev.h"
 
 // constants and macros --------------------------------------------------------
 #define PROG_NAME       "pocket_dump" // program name
@@ -67,11 +67,7 @@ static int write_file(int fmt, const uint8_t *buff, int size, int ch, int IQ,
 {
     static int8_t LUT[4][256] = {{0}};
     
-    if (!fp) return 0;
     
-    if (fmt == 0) { // output raw
-        return (int)fwrite(buff, 1, size, fp);
-    }
     if (!LUT[0][0]) {
         gen_LUT(LUT);
     }
@@ -111,10 +107,10 @@ static int write_file(int fmt, const uint8_t *buff, int size, int ch, int IQ,
 }
 
 // print header ----------------------------------------------------------------
-static void print_head(int nch, FILE **fp)
+static void print_head(int nfile, FILE **fp)
 {
     fprintf(stderr, "%9s ", "TIME(s)");
-    for (int i = 0; i < nch; i++) {
+    for (int i = 0; i < nfile; i++) {
         if (fp[i]) fprintf(stderr, " %3s   CH%d(Bytes)", "T", i + 1);
     }
     fprintf(stderr, " %12s\n", "RATE(Ks/s)");
@@ -136,16 +132,16 @@ static void print_stat(int nch, const int *IQ, FILE **fp, double time,
 }
 
 // dump digital IF data --------------------------------------------------------
-static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int nch,
-    FILE **fp)
+static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int raw, int fmt,
+    int nfile, const int *IQ, FILE **fp)
 {
     double time = 0.0, time_p = 0.0, sample = 0.0, sample_p = 0.0;
-    double rate = 0.0, byte[SDR_MAX_CH] = {0};
-    int ns = (dev->fmt == 0 || dev->fmt == SDR_FMT_RAW8) ? 1 : 2;
+    double rate = 0.0, byte[SDR_MAX_RFCH] = {0};
+    int ns = (fmt == SDR_FMT_RAW8) ? 1 : 2;
     uint8_t buff[SDR_SIZE_BUFF * ns];
     
     if (!quiet) {
-        print_head(nch, fp);
+        print_head(nfile, fp);
     }
     uint32_t tick = sdr_get_tick();
     
@@ -156,9 +152,15 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int nch,
             time = (sdr_get_tick() - tick) * 1e-3;
         }
         while (sdr_dev_read(dev, buff, SDR_SIZE_BUFF * ns) && !intr) {
-            for (int j = 0; j < nch; j++) {
-                byte[j] += write_file(dev->fmt, buff, SDR_SIZE_BUFF, j,
-                    dev->IQ[j], fp[j]);
+            for (int j = 0; j < nfile; j++) {
+                if (!fp[j]) continue;
+                if (raw) {
+                    byte[j] += fwrite(buff, 1, SDR_SIZE_BUFF * ns, fp[j]);
+                }
+                else {
+                    byte[j] += write_file(fmt, buff, SDR_SIZE_BUFF, j, IQ[j],
+                        fp[j]);
+                }
             }
             sample += SDR_SIZE_BUFF;
         }
@@ -168,16 +170,73 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int nch,
             sample_p = sample;
         }
         if (!quiet && i % (STAT_CYC / DATA_CYC) == 0) {
-            print_stat(nch, dev->IQ, fp, time, byte, rate);
+            print_stat(nfile, IQ, fp, time, byte, rate);
         }
         sdr_sleep_msec(DATA_CYC);
     }
-    (void)sdr_dev_stop(dev);
+    sdr_dev_stop(dev);
     
     if (!quiet) {
         rate = time > 0.0 ? sample / time : 0.0;
-        print_stat(nch, dev->IQ, fp, time, byte, rate);
+        print_stat(nfile, IQ, fp, time, byte, rate);
         fprintf(stderr, "\n");
+    }
+}
+
+// write tag for IF data dump file ---------------------------------------------
+static int write_tag(const char *file, const char *prog, time_t time, int fmt,
+    double fs, const double *fo, const int *IQ)
+{
+    static const char *fstr[] = {
+        "-", "INT8", "INT8X2", "RAW8", "RAW16", "RAW16I"
+    };
+    FILE *fp;
+    char path[1024+4], tstr[32];
+    
+    snprintf(path, sizeof(path), "%s.tag", file);
+    strftime(tstr, sizeof(tstr), "%Y-%m-%dT%H:%M:%SZ", gmtime(&time));
+    
+    if (!(fp = fopen(path, "w"))) {
+        fprintf(stderr, "tag file open error %s\n", path);
+        return 0;
+    }
+    fprintf(fp, "PROG = %s\n", prog);
+    fprintf(fp, "TIME = %s\n", tstr);
+    fprintf(fp, "FMT  = %s\n", fstr[fmt]);
+    fprintf(fp, "F_S  = %.6g\n", fs * 1e-6);
+    if (fmt >= SDR_FMT_RAW8) {
+        int nch = fmt == SDR_FMT_RAW8 ? 2 : (fmt == SDR_FMT_RAW16 ? 4 : 8);
+        fprintf(fp, "F_LO = ");
+        for (int j = 0; j < nch; j++) {
+            fprintf(fp, "%.6g%s", fo[j] * 1e-6, j < nch - 1 ? "," : "\n");
+        }
+        fprintf(fp, "IQ   = ");
+        for (int j = 0; j < nch; j++) {
+            fprintf(fp, "%d%s", IQ[j], j < nch - 1 ? "," : "\n");
+        }
+    }
+    else {
+        fprintf(fp, "F_LO = %.6g\n", fo[0] * 1e-6);
+        fprintf(fp, "IQ   = %d\n", IQ[0]);
+    }
+    fclose(fp);
+    return 1;
+}
+
+// write tag file --------------------------------------------------------------
+static void write_tag_files(time_t time, int raw, int fmt, double fs,
+    const double *fo, const int *IQ, int nch, char **files)
+{
+    for (int i = 0; i < (raw ? 1 : nch); i++) {
+        if (!files[i] || !*files[i] || !strcmp(files[i], "-")) continue;
+        
+        if (raw) {
+            write_tag(files[i], PROG_NAME, time, fmt, fs, fo, IQ);
+        }
+        else {
+            int fmt_i = IQ[i] == 1 ? SDR_FMT_INT8 : SDR_FMT_INT8X2;
+            write_tag(files[i], PROG_NAME, time, fmt_i, fs, fo + i, IQ + i);
+        }
     }
 }
 
@@ -226,15 +285,16 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int nch,
 //
 int main(int argc, char **argv)
 {
-    FILE *fp[SDR_MAX_CH] = {0};
+    FILE *fp[SDR_MAX_RFCH] = {0};
     sdr_dev_t *dev;
-    char *files[SDR_MAX_CH] = {0}, path[SDR_MAX_CH][64];
+    char *files[SDR_MAX_RFCH] = {0}, path[SDR_MAX_RFCH][64];
     const char *conf_file = "";
     time_t dump_time;
-    double tsec = 0.0;
-    int i, n = 0, bus = -1, port = -1, raw = 0, quiet = 0, nch = 1;
+    double tsec = 0.0, fs, fo[SDR_MAX_RFCH];
+    int n = 0, bus = -1, port = -1, raw = 0, quiet = 0;
+    int nch, fmt, IQ[SDR_MAX_RFCH], nfile;
     
-    for (i = 1; i < argc; i++) {
+    for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-t") && i + 1 < argc) {
             tsec = atof(argv[++i]);
         }
@@ -253,32 +313,36 @@ int main(int argc, char **argv)
         else if (argv[i][0] == '-' && argv[i][1] != '\0') {
             print_usage();
         }
-        else if (n < SDR_MAX_CH) {
+        else if (n < SDR_MAX_RFCH) {
             files[n++] = argv[i];
         }
-    }
-    if (*conf_file) {
-        if (!sdr_write_settings(conf_file, bus, port, 0)) {
-            return -1;
-        }
-        sdr_sleep_msec(100);
     }
     if (!(dev = sdr_dev_open(bus, port))) {
         return -1;
     }
-    if (!raw) {
-        nch = dev->fmt == SDR_FMT_RAW8 ? 2 : (dev->fmt == SDR_FMT_RAW16 ? 4 : 8);
+    if (*conf_file) {
+        if (!sdr_conf_write(dev, conf_file, 0)) {
+            sdr_dev_close(dev);
+            return -1;
+        }
+        sdr_sleep_msec(50);
     }
+    if (!(nch = sdr_dev_get_info(dev, &fmt, &fs, fo, IQ))) {
+        sdr_dev_close(dev);
+        return -1;
+    }
+    nfile = raw ? 1 : nch;
+    dump_time = time(NULL);
+    
     if (n == 0) { // set default file paths
-        dump_time = time(NULL);
-        for (i = 0; i < nch; i++) {
+        for (int i = 0; i < nfile; i++) {
             char *p = path[i];
             p += sprintf(p, "ch%d_", i + 1);
             p += strftime(p, 32, "%Y%m%d_%H%M%S.bin", gmtime(&dump_time));
             files[i] = path[i];
         }
     }
-    for (i = 0; i < nch; i++) {
+    for (int i = 0; i < nfile; i++) {
         if (!files[i]) continue;
         if (!strcmp(files[i], "-")) {
 #ifdef WIN32 // set binary mode for Windows
@@ -295,12 +359,14 @@ int main(int argc, char **argv)
     signal(SIGTERM, sig_func);
     signal(SIGINT, sig_func);
     
-    dump_data(dev, tsec, quiet, nch, fp);
+    dump_data(dev, tsec, quiet, raw, fmt, nfile, IQ, fp);
     
-    for (i = 0; i < nch; i++) {
+    for (int i = 0; i < nfile; i++) {
         if (fp[i]) fclose(fp[i]);
     }
     sdr_dev_close(dev);
+    
+    write_tag_files(dump_time, raw, fmt, fs, fo, IQ, nch, files);
     
     return 0;
 }

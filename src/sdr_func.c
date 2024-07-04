@@ -24,6 +24,7 @@
 //  2024-03-29  1.12 add API sdr_corr_std_cpx(), sdr_corr_fft_cpx()
 //                   support ARM and NEON
 //  2024-05-13  1.13 add API sdr_str_open(), sdr_str_close()
+//  2024-06-29  1.14 add API sdr_psd_cpx()
 //
 #include <math.h>
 #include <stdarg.h>
@@ -42,6 +43,7 @@
 #define NTBL          256   // carrier-mixed-data LUT size
 #define DOP_STEP      0.5   // Doppler frequency search step (* 1 / code cycle)
 #define MAX_FFTW_PLAN 32    // max number of FFTW plans
+#define MAX_LOG_BUFF  32768 // max sizeof log buffer
 #define FFTW_FLAG     FFTW_ESTIMATE // FFTW flag
 
 #define SQR(x)        ((x) * (x))
@@ -54,6 +56,9 @@ static fftwf_plan fftw_plans[MAX_FFTW_PLAN][2] = {{0}}; // FFTW plan buffer
 static int fftw_size[MAX_FFTW_PLAN] = {0}; // FFTW plan sizes
 static int log_lvl = 3;           // log level
 static stream_t *log_str = NULL;  // log stream
+static char log_buff[MAX_LOG_BUFF]; // log buffer
+static int log_buff_p = 0;        // log buffer pointer
+static pthread_mutex_t log_buff_mtx = PTHREAD_MUTEX_INITIALIZER;
 
 // enable escape sequence for Windows console ----------------------------------
 static void enable_console_esc(void)
@@ -240,7 +245,7 @@ sdr_buff_t *sdr_read_data(const char *file, double fs, int IQ, double T,
     }
     // get file size
     fseek(fp, 0, SEEK_END);
-#ifdef WIN32
+#if defined(WIN32) || defined(MACOS)
     fpos_t pos = 0;
     fgetpos(fp, &pos);
     size_t size = (size_t)pos;
@@ -259,7 +264,7 @@ sdr_buff_t *sdr_read_data(const char *file, double fs, int IQ, double T,
         return NULL;
     }
     int8_t *raw = (int8_t *)sdr_malloc(cnt);
-#ifdef WIN32
+#if defined(WIN32) || defined(MACOS)
     pos = (size_t)off;
     fsetpos(fp, &pos);
 #else
@@ -570,9 +575,10 @@ static void corr_std(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
 void sdr_corr_std(const sdr_buff_t *buff, int ix, int N, double fs, double fc,
     double phi, const sdr_cpx16_t *code, const int *pos, int n, sdr_cpx_t *corr)
 {
-    sdr_cpx16_t IQ[N];
+    sdr_cpx16_t *IQ = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N);
     sdr_mix_carr(buff, ix, N, fs, fc, phi, IQ);
     corr_std(IQ, code, N, pos, n, corr);
+    sdr_free(IQ);
 }
 
 // mix carrier and standard correlator for complex buffer ----------------------
@@ -580,12 +586,13 @@ void sdr_corr_std_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N,
     double fs, double fc, double phi, const float *code, const int *pos, int n,
     sdr_cpx_t *corr)
 {
-    sdr_cpx16_t IQ[N], code_cpx16[N];
+    sdr_cpx16_t *IQ = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N * 2);
     mix_carr_cpx(buff, len_buff, ix, N, fs, fc, phi, IQ);
     for (int i = 0; i < N; i++) {
-        code_cpx16[i].I = code_cpx16[i].Q = (int8_t)code[i];
+        IQ[N+i].I = IQ[N+i].Q = (int8_t)code[i];
     }
-    corr_std(IQ, code_cpx16, N, pos, n, corr);
+    corr_std(IQ, IQ + N, N, pos, n, corr);
+    sdr_free(IQ);
 }
 
 // get FFTW plan ---------------------------------------------------------------
@@ -641,9 +648,10 @@ static void corr_fft(const sdr_cpx16_t *IQ, const sdr_cpx_t *code_fft, int N,
 void sdr_corr_fft(const sdr_buff_t *buff, int ix, int N, double fs, double fc,
     double phi, const sdr_cpx_t *code_fft, sdr_cpx_t *corr)
 {
-    sdr_cpx16_t IQ[N];
+    sdr_cpx16_t *IQ = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N);
     sdr_mix_carr(buff, ix, N, fs, fc, phi, IQ);
     corr_fft(IQ, code_fft, N, corr);
+    sdr_free(IQ);
 }
 
 // mix carrier and FFT correlator for complex input ----------------------------
@@ -651,9 +659,84 @@ void sdr_corr_fft_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N,
     double fs, double fc, double phi, const sdr_cpx_t *code_fft,
     sdr_cpx_t *corr)
 {
-    sdr_cpx16_t IQ[N];
+    sdr_cpx16_t *IQ = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N);
     mix_carr_cpx(buff, len_buff, ix, N, fs, fc, phi, IQ);
     corr_fft(IQ, code_fft, N, corr);
+    sdr_free(IQ);
+}
+
+// hanning window function -----------------------------------------------------
+static float hann_window(int N, float *w)
+{
+    float w_ave = 0.0;
+    
+    for (int i = 0; i < N; i++) {
+        w[i] = 0.5 + 0.5 * cos(2.0 * PI * (i - 0.5 * (N - 1)) / (N - 1));
+        w_ave += w[i] / N;
+    }
+    return w_ave;
+}
+
+//------------------------------------------------------------------------------
+//  Power spectral density of digitalized IF (inter-frequency) data.
+//
+//  args:
+//      buff     (I) digitalized IF data buffer
+//      len_buff (I) length of buffer
+//      N        (I) FFT size
+//      fs       (I) sampling frequency (Hz)
+//      IQ       (I) sampling type (1: I-sampling, 2: IQ-sampling)
+//      psd      (O) PSD (dB/Hz) size: N/2 (IQ=1), N (IQ=2)
+//
+//  return:
+//      none
+//
+void sdr_psd_cpx(const sdr_cpx_t *buff, int len_buff, int N, double fs, int IQ,
+    float *psd)
+{
+    fftwf_plan plan[2];
+    
+    if (!get_fftw_plan(N, plan)) return;
+    
+    float *p = (float *)sdr_malloc(sizeof(float) * N);
+    float *w = (float *)sdr_malloc(sizeof(float) * N);
+    sdr_cpx_t *cpx1 = sdr_cpx_malloc(N);
+    sdr_cpx_t *cpx2 = sdr_cpx_malloc(N);
+    
+    float w_ave = hann_window(N, w);
+    
+    // Welch's method without overlap
+    int M = len_buff / N;
+    for (int i = 0; i < M; i++) {
+        for (int j = 0; j < N; j++) {
+            cpx1[j][0] = buff[N*i+j][0] * w[j];
+            cpx1[j][1] = buff[N*i+j][1] * w[j];
+        }
+        fftwf_execute_dft(plan[0], cpx1, cpx2);
+        for (int j = 0; j < N; j++) {
+            p[j] += SQR(cpx2[j][0]) + SQR(cpx2[j][1]);
+        }
+    }
+    // scale complies with matplotlib.psd()
+    float scale = 1.333 / N / M / w_ave / fs;
+    
+    if (IQ == 1) { // I
+        for (int i = 0; i < N / 2; i++) {
+            psd[i] = 10.0f * log10f(p[i] * scale * 2.0);
+        }
+    }
+    else { // IQ
+        for (int i = 0; i < N / 2; i++) {
+            psd[i] = 10.0f * log10f(p[N/2+i] * scale);
+        }
+        for (int i = N / 2; i < N; i++) {
+            psd[i] = 10.0f * log10f(p[i-N/2] * scale);
+        }
+    }
+    sdr_free(p);
+    sdr_free(w);
+    sdr_cpx_free(cpx1);
+    sdr_cpx_free(cpx2);
 }
 
 // open stream -----------------------------------------------------------------
@@ -663,16 +746,24 @@ stream_t *sdr_str_open(const char *path)
     
     stream_t *str = (stream_t *)sdr_malloc(sizeof(stream_t));
     const char *p = strchr(path, ':');
-    int stat = 0;
+    int stat = 0, port = 0, str_opt[] = {30000, 30000, 1000, 1<<20, 0};
+    
     strinit(str);
-    if (!p || *(p + 1) == ':' ) { // file (path = file[::opt...])
-        stat = stropen(str, STR_FILE, STR_MODE_W, path);
-    }
-    else if (p == path) { // TCP server (path = :port)
+    strsetopt(str_opt);
+    if (p == path) { // TCP server (path = :port)
         stat = stropen(str, STR_TCPSVR, STR_MODE_W, path);
     }
-    else { // TCP client (path = addr:port)
+    else if (sscanf(p, ":%d", &port) == 1) { // TCP client (path = addr:port)
         stat = stropen(str, STR_TCPCLI, STR_MODE_W, path);
+    }
+    else { // file (path = file[::opt...])
+#ifdef WIN32
+        char buff[1024], *q;
+        snprintf(buff, sizeof(buff), "%s", path);
+        for (q = buff; *q; q++) if (*q == '/') *q = '\\';
+        path = buff;
+#endif
+        stat = stropen(str, STR_FILE, STR_MODE_W, path);
     }
     if (!stat) {
         sdr_free(str);
@@ -686,6 +777,13 @@ void sdr_str_close(stream_t *str)
 {
     if (!str) return;
     strclose(str);
+}
+
+// write stream ----------------------------------------------------------------
+int sdr_str_write(stream_t *str, uint8_t *data, int size)
+{
+    if (!str) return 0;
+    return strwrite(str, data, size);
 }
 
 // open log --------------------------------------------------------------------
@@ -723,14 +821,32 @@ void sdr_log(int level, const char *msg, ...)
     if (log_lvl == 0) {
         vprintf(msg, ap);
     }
-    else if (level <= log_lvl && log_str) {
+    else if (level <= log_lvl) {
         char buff[1024];
         int len = vsnprintf(buff, sizeof(buff) - 2, msg, ap);
         len = MIN(len, (int)sizeof(buff) - 3);
-        sprintf(buff + len, "\r\n");
-        strwrite(log_str, (uint8_t *)buff, len + 2);
+        if (log_str) {
+            sprintf(buff + len, "\r\n");
+            strwrite(log_str, (uint8_t *)buff, len + 2);
+        }
+        pthread_mutex_lock(&log_buff_mtx);
+        if (log_buff_p + len + 1 < MAX_LOG_BUFF) {
+            log_buff_p += sprintf(log_buff + log_buff_p, "%s\n", buff);
+        }
+        pthread_mutex_unlock(&log_buff_mtx);
     }
     va_end(ap);
+}
+
+// get log buffer --------------------------------------------------------------
+int sdr_get_log(char *buff, int size)
+{
+    pthread_mutex_lock(&log_buff_mtx);
+    int out_size = snprintf(buff, size, "%s", log_buff);
+    log_buff[0] = '\0';
+    log_buff_p = 0;
+    pthread_mutex_unlock(&log_buff_mtx);
+    return out_size <= size ? out_size : size;
 }
 
 // parse numbers list and range ------------------------------------------------
