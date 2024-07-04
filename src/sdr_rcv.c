@@ -12,6 +12,7 @@
 //  2024-05-28  1.4  modify API sdr_rcv_new(), sdr_rcv_start()
 //  2024-06-21  1.5  add API sdr_rcv_open_dev(), sdr_rcv_open_file()
 //                   sdr_rcv_close()
+//  2024-07-28  1.6  modify API sdr_rcv_open_file()
 //
 #include "pocket_sdr.h"
 
@@ -180,7 +181,7 @@ char *sdr_rcv_rcv_stat(sdr_rcv_t *rcv)
             IQ_str[rcv->IQ[1]], IQ_str[rcv->IQ[2]], IQ_str[rcv->IQ[3]],
             rcv->fs * 1e-6, nch_trk, rcv->nch, rcv->data_rate * 1e-6,
             rcv->buff_use);
-        p += sprintf(p, "%.23s,%.3s,%.11s,%.12s,%.8s,%s,%.5s,,%d,%d/%d,%.1f,",
+        p += sprintf(p, "%.21s,%.3s,%.11s,%.12s,%.8s,%s,%.5s,,%d,%d/%d,%.1f,",
             solstr, solstr + 64, solstr + 24, solstr + 36, solstr + 49, sys,
             solstr + 58, rcv->pvt->count[0], rcv->pvt->count[1],
             rcv->pvt->count[2], rcv->data_sum);
@@ -189,7 +190,7 @@ char *sdr_rcv_rcv_stat(sdr_rcv_t *rcv)
         p += sprintf(p, "%.3f,---,---,%d,%.3f/%.3f,%.3f/%.3f,---/---/---/---,"
             "%.3f,%d/%d,%.3f,%.1f,", 0.0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, 0, 0.0,
             0.0);
-        p += sprintf(p, "1970-01-01 00:00:00.000,---,%.7f,%.7f,%.2f,,%d/%d,,%d,"
+        p += sprintf(p, "1970-01-01 00:00:00.0,---,%.7f,%.7f,%.2f,,%d/%d,,%d,"
             "%d/%d,%.1f,", 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0.0);
     }
     return rcv_rcv_stat_buff;
@@ -613,17 +614,6 @@ static void update_srch_ch(sdr_rcv_t *rcv)
     }
 }
 
-// wait for receiver channels --------------------------------------------------
-static void rcv_wait(sdr_rcv_t *rcv)
-{
-    int64_t ix = get_buff_ix(rcv);
-    for (int i = 0; i < rcv->nch; i++) {
-        while (ix + 1 - rcv->th[i]->ix >= MAX_BUFF - 10) {
-            sdr_sleep_msec(1);
-        }
-    }
-}
-
 // SDR receiver thread ---------------------------------------------------------
 static void *rcv_thread(void *arg)
 {
@@ -631,7 +621,7 @@ static void *rcv_thread(void *arg)
     int ns = (rcv->fmt == SDR_FMT_INT8 || rcv->fmt == SDR_FMT_RAW8) ? 1 : 2;
     int size, sum_size = 0;
     uint8_t *raw = (uint8_t *)sdr_malloc(ns * rcv->N);
-    uint32_t tick = sdr_get_tick();
+    uint32_t tick = sdr_get_tick(), tick_r = tick;
     
     sdr_log(3, "$LOG,%.3f,%s,%d,START NCH=%d FMT=%d", 0.0, "", 0, rcv->nch,
         rcv->fmt);
@@ -644,7 +634,7 @@ static void *rcv_thread(void *arg)
     for (int64_t ix = 0; rcv->state; ix++) {
         if (ix % LOG_CYC == 0) {
             update_buff_use(rcv);
-            tick = update_data_rate(rcv, tick, sum_size);
+            tick_r = update_data_rate(rcv, tick_r, sum_size);
             sum_size = 0;
             out_log_time(ix * SDR_CYC);
         }
@@ -668,9 +658,9 @@ static void *rcv_thread(void *arg)
         // update PVT solution
         sdr_pvt_udsol(rcv->pvt, ix);
         
-        // suspend data if reading file
+        // sleep if reading file
         if (rcv->dev == SDR_DEV_FILE) {
-            rcv_wait(rcv);
+            sdr_sleep_msec((int)(ix - (sdr_get_tick() - tick) * rcv->tscale));
         }
     }
     if (rcv->dev == SDR_DEV_USB) {
@@ -704,10 +694,6 @@ int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, const char **paths)
     sdr_log_open(paths[2]);
     
     for (int i = 0; i < rcv->nch; i++) {
-        // set all channels search for file input
-        if (dev == SDR_DEV_FILE) {
-            rcv->th[i]->ch->state = SDR_STATE_SRCH;
-        }
         ch_th_start(rcv->th[i]);
     }
     rcv->dev = dev;
@@ -803,6 +789,48 @@ sdr_rcv_t *sdr_rcv_open_dev(const char **sigs, int *prns, int n, int bus,
     return rcv;
 }
 
+// read tag for IF data dump file ----------------------------------------------
+static void read_tag(const char *file, int *fmt, double *fs, double *fo,
+    int *IQ)
+{
+    FILE *fp;
+    char path[1024+4], buff[256], *p;
+    
+    snprintf(path, sizeof(path), "%s.tag", file);
+    
+    if (!(fp = fopen(path, "r"))) return;
+    
+    while (fgets(buff, sizeof(buff), fp)) {
+        if (!(p = strchr(buff, '='))) continue;
+        if (strstr(buff, "FMT") == buff) {
+            if      (!strncmp(p + 2, "INT8X2", 6)) *fmt = SDR_FMT_INT8X2;
+            else if (!strncmp(p + 2, "INT8"  , 4)) *fmt = SDR_FMT_INT8;
+            else if (!strncmp(p + 2, "RAW16I", 6)) *fmt = SDR_FMT_RAW16I;
+            else if (!strncmp(p + 2, "RAW16" , 5)) *fmt = SDR_FMT_RAW16;
+            else if (!strncmp(p + 2, "RAW8"  , 4)) *fmt = SDR_FMT_RAW8;
+        }
+        else if (strstr(buff, "F_S") == buff) {
+            if (sscanf(p + 2, "%lf", fs)) *fs *= 1e6;
+        }
+        else if (strstr(buff, "F_LO") == buff) {
+            int n = sscanf(p + 2, "%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf", fo, fo + 1,
+                fo + 2, fo + 3, fo + 4, fo + 5, fo + 6, fo + 7);
+            for (int i = 0; i < n; i++) fo[i] *= 1e6;
+        }
+        else if (strstr(buff, "IQ") == buff) {
+            sscanf(p + 2, "%d,%d,%d,%d,%d,%d,%d,%d", IQ, IQ + 1, IQ + 2, IQ + 3,
+                IQ + 4, IQ + 5, IQ + 6, IQ + 7);
+        }
+    }
+    int nch = (*fmt == SDR_FMT_INT8 || *fmt == SDR_FMT_INT8X2) ? 1 :
+        (*fmt == SDR_FMT_RAW8 ? 2 : (*fmt == SDR_FMT_RAW16 ? 4 : 8));
+    for (int i = nch; i < SDR_MAX_RFCH; i++) {
+        fo[i] = 0.0;
+        IQ[i] = 0;
+    }
+    fclose(fp);
+}
+
 //------------------------------------------------------------------------------
 //  Generate a new SDR receiver by IF data file and start receiver.
 //
@@ -815,26 +843,39 @@ sdr_rcv_t *sdr_rcv_open_dev(const char **sigs, int *prns, int n, int bus,
 //      fo        (I)  LO frequency for each RFCH (Hz)
 //      IQ        (I)  sampling type for each RFCH (1:I, 2:IQ)
 //      toff      (I)  time offset of IF data file (s)
+//      tscale    (I)  time scale of replay IF data file
 //      file      (I)  IF data file
 //      paths     (I)  output stream paths as same as sdr_rcv_start()
 //
 //  returns:
 //      SDR receiver (NULL: error)
 //
+//  notes:
+//      If the tag file exists, fmt, fs, fo, IQ are obtained from the tag file.
+//
+//
 sdr_rcv_t *sdr_rcv_open_file(const char **sigs, int *prns, int n, int fmt,
-    double fs, const double *fo, const int *IQ, double toff, const char *file,
-    const char **paths)
+    double fs, const double *fo, const int *IQ, double toff, double tscale,
+    const char *file, const char **paths)
 {
     FILE *fp;
+    double fo_t[SDR_MAX_RFCH] = {0};
+    int IQ_t[SDR_MAX_RFCH] = {0};
     
     if (!(fp = fopen(file, "rb"))) {
         fprintf(stderr, "file open error: %s\n", file);
         return NULL;
     }
+    // read tag file
+    memcpy(fo_t, fo, sizeof(double) * SDR_MAX_RFCH);
+    memcpy(IQ_t, IQ, sizeof(int) * SDR_MAX_RFCH);
+    read_tag(file, &fmt, &fs, fo_t, IQ_t);
+    
     int ns = (fmt == SDR_FMT_INT8 || fmt == SDR_FMT_RAW8) ? 1 : 2;
     fseek(fp, (long)(toff * fs * ns), SEEK_SET);
     
-    sdr_rcv_t *rcv = sdr_rcv_new(sigs, prns, n, fmt, fs, fo, IQ);
+    sdr_rcv_t *rcv = sdr_rcv_new(sigs, prns, n, fmt, fs, fo_t, IQ_t);
+    rcv->tscale = tscale;
     sdr_rcv_start(rcv, SDR_DEV_FILE, (void *)fp, paths);
     
     return rcv;
@@ -895,3 +936,4 @@ void sdr_rcv_setopt(const char *opt, double value)
     else if (!strcmp(opt, "thres_cn0_u")) sdr_thres_cn0_u = value;
     else fprintf(stderr, "sdr_rcv_setopt error opt=%s\n", opt);
 }
+
