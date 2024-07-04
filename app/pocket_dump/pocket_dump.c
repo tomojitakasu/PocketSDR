@@ -16,10 +16,9 @@
 //  2023-12-28  1.5  set binary mode to stdout for Windows
 //  2024-04-28  1.6  support Pocket SDR FE 4CH
 //  2024-06-29  1.7  support API change in sdr_dev.c
-//  2024-07-02  1.8  support output of tag files
+//  2024-07-02  1.8  support tag file output
 //
 #include <signal.h>
-#include <time.h>
 #ifdef WIN32
 #include <fcntl.h>
 #endif
@@ -184,48 +183,60 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int raw, int fmt,
     }
 }
 
+// write tag for IF data dump file ---------------------------------------------
+static int write_tag(const char *file, const char *prog, time_t time, int fmt,
+    double fs, const double *fo, const int *IQ)
+{
+    static const char *fstr[] = {
+        "-", "INT8", "INT8X2", "RAW8", "RAW16", "RAW16I"
+    };
+    FILE *fp;
+    char path[1024+4], tstr[32];
+    
+    snprintf(path, sizeof(path), "%s.tag", file);
+    strftime(tstr, sizeof(tstr), "%Y-%m-%dT%H:%M:%SZ", gmtime(&time));
+    
+    if (!(fp = fopen(path, "w"))) {
+        fprintf(stderr, "tag file open error %s\n", path);
+        return 0;
+    }
+    fprintf(fp, "PROG = %s\n", prog);
+    fprintf(fp, "TIME = %s\n", tstr);
+    fprintf(fp, "FMT  = %s\n", fstr[fmt]);
+    fprintf(fp, "F_S  = %.6g\n", fs * 1e-6);
+    if (fmt >= SDR_FMT_RAW8) {
+        int nch = fmt == SDR_FMT_RAW8 ? 2 : (fmt == SDR_FMT_RAW16 ? 4 : 8);
+        fprintf(fp, "F_LO = ");
+        for (int j = 0; j < nch; j++) {
+            fprintf(fp, "%.6g%s", fo[j] * 1e-6, j < nch - 1 ? "," : "\n");
+        }
+        fprintf(fp, "IQ   = ");
+        for (int j = 0; j < nch; j++) {
+            fprintf(fp, "%d%s", IQ[j], j < nch - 1 ? "," : "\n");
+        }
+    }
+    else {
+        fprintf(fp, "F_LO = %.6g\n", fo[0] * 1e-6);
+        fprintf(fp, "IQ   = %d\n", IQ[0]);
+    }
+    fclose(fp);
+    return 1;
+}
+
 // write tag file --------------------------------------------------------------
 static void write_tag_files(time_t time, int raw, int fmt, double fs,
     const double *fo, const int *IQ, int nch, char **files)
 {
-    static const char *fmt_str[] = {
-        "-", "INT8", "INT8X2", "RAW8", "RAW16", "RAW16I"
-    };
-    FILE *fp;
-    char path[1024+4], time_str[32];
-    int nfile = raw ? 1 : nch;
-    
-    strftime(time_str, sizeof(time_str), "%Y-%m-%dT%H:%M:%SZ", gmtime(&time));
-    
-    for (int i = 0; i < nfile; i++) {
+    for (int i = 0; i < (raw ? 1 : nch); i++) {
         if (!files[i] || !*files[i] || !strcmp(files[i], "-")) continue;
         
-        snprintf(path, sizeof(path), "%s.tag", files[i]);
-        
-        if (!(fp = fopen(path, "w"))) {
-            fprintf(stderr, "tag file open error %s\n", path);
-            continue;
-        }
-        fprintf(fp, "PROGRAM = %s\n", PROG_NAME);
-        fprintf(fp, "TIME = %s\n", time_str);
-        fprintf(fp, "FORMAT = %s\n", fmt_str[raw ? fmt : (IQ[i] == 1 ? 1 : 2)]);
-        fprintf(fp, "FREQ_SAMPL = %.0f\n", fs);
         if (raw) {
-            fprintf(fp, "FREQ_LO = ");
-            for (int j = 0; j < nch; j++) {
-                fprintf(fp, "%.0f%s", fo[j], j < nch - 1 ? "," : "");
-            }
-            fprintf(fp, "\nTYPE_SAMPL = ");
-            for (int j = 0; j < nch; j++) {
-                fprintf(fp, "%s%s", IQ[j] == 1 ? "I" : "IQ", j < nch - 1 ? "," : "");
-            }
-            fprintf(fp, "\n");
+            write_tag(files[i], PROG_NAME, time, fmt, fs, fo, IQ);
         }
         else {
-            fprintf(fp, "FREQ_LO = %.0f\n", fo[i]);
-            fprintf(fp, "TYPE_SAMPL = %s\n", IQ[i] == 1 ? "I" : "IQ");
+            int fmt_i = IQ[i] == 1 ? SDR_FMT_INT8 : SDR_FMT_INT8X2;
+            write_tag(files[i], PROG_NAME, time, fmt_i, fs, fo + i, IQ + i);
         }
-        fclose(fp);
     }
 }
 
@@ -280,10 +291,10 @@ int main(int argc, char **argv)
     const char *conf_file = "";
     time_t dump_time;
     double tsec = 0.0, fs, fo[SDR_MAX_RFCH];
-    int i, n = 0, bus = -1, port = -1, raw = 0, quiet = 0;
+    int n = 0, bus = -1, port = -1, raw = 0, quiet = 0;
     int nch, fmt, IQ[SDR_MAX_RFCH], nfile;
     
-    for (i = 1; i < argc; i++) {
+    for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-t") && i + 1 < argc) {
             tsec = atof(argv[++i]);
         }
@@ -324,14 +335,14 @@ int main(int argc, char **argv)
     dump_time = time(NULL);
     
     if (n == 0) { // set default file paths
-        for (i = 0; i < nfile; i++) {
+        for (int i = 0; i < nfile; i++) {
             char *p = path[i];
             p += sprintf(p, "ch%d_", i + 1);
             p += strftime(p, 32, "%Y%m%d_%H%M%S.bin", gmtime(&dump_time));
             files[i] = path[i];
         }
     }
-    for (i = 0; i < nfile; i++) {
+    for (int i = 0; i < nfile; i++) {
         if (!files[i]) continue;
         if (!strcmp(files[i], "-")) {
 #ifdef WIN32 // set binary mode for Windows
@@ -350,7 +361,7 @@ int main(int argc, char **argv)
     
     dump_data(dev, tsec, quiet, raw, fmt, nfile, IQ, fp);
     
-    for (i = 0; i < nfile; i++) {
+    for (int i = 0; i < nfile; i++) {
         if (fp[i]) fclose(fp[i]);
     }
     sdr_dev_close(dev);
