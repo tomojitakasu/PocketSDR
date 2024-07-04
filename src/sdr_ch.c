@@ -347,9 +347,11 @@ static void DLL(sdr_ch_t *ch)
     if (ch->lock % N == 0) {
         double E = ch->trk->sumE;
         double L = ch->trk->sumL;
-        double err_code = (E - L) / (E + L) / 2.0f * ch->T / ch->len_code;
-        ch->coff -= sdr_b_dll / 0.25 * err_code * ch->T * N;
-        ch->trk->err_code = err_code;
+        if (E + L > 0.0) {
+            double err_code = (E - L) / (E + L) * 0.5f * ch->T / ch->len_code;
+            ch->coff -= sdr_b_dll / 0.25 * err_code * ch->T * N;
+            ch->trk->err_code = err_code;
+        }
         ch->trk->sumE = ch->trk->sumL = 0.0;
     }
 }
