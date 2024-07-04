@@ -1,4 +1,4 @@
-# **Pocket SDR - An Open-Source GNSS SDR, ver. 0.12**
+# **Pocket SDR - An Open-Source GNSS SDR, ver. 0.13**
 
 ## **Overview**
 
@@ -15,7 +15,7 @@ configured up to 32 Msps (FE 2CH) or 48 Msps (FE 4CH).
 
 The Pocket SDR also contains some utility programs for the Pocket SDR FE devices,
 to setup the devices, capture and dump the digitized IF (inter-frequency) data.
-These utilities support Windows, Linux, Raspberry Pi OS, and other environments.
+These utilities support Windows, Linux, Raspberry Pi OS, macOS and other environments.
 The Pocket SDR also provides GNSS-SDR APs to show the PSD (power spectrum
 density) of captured IF data, search GNSS signals, track these signals, decode
 navigation data and generate PVT (position, velocity and time) solutions. The
@@ -119,6 +119,7 @@ $ git clone https://github.com/tomojitakasu/PocketSDR
 * Move to the library directory, install external library source trees ([1], [2]) as follows:
 ```
 $ cd <install_dir>/lib
+$ chmod +x clone_lib.sh
 $ ./clone_lib.sh
 ```
 * Move to the library build directory and build libraries.
@@ -144,6 +145,51 @@ $ sudo pocket_dump -t 10 ch1.bin ch2.bin
 
 --------------------------------------------------------------------------------
 
+## **Installation for macOS**
+
+* You need Homebrew as a package manager for macOS. Install Homebrew according to
+the following link.
+
+  https://brew.sh/
+
+* Open a terminal window on macOS and install the basic libraries by using Homebrew:
+```
+$ brew install numpy
+$ brew install scipy
+$ brew install python-matplotlib
+$ brew install python-tk
+$ brew install tcl-tk
+$ brew install libusb
+```
+* Extract PocketSDR.zip or clone the git repository to an appropriate directory <install_dir>.
+```
+$ unzip PocketSDR.zip
+or
+$ git clone https://github.com/tomojitakasu/PocketSDR
+```
+* Move to the library directory, install external library source trees ([1], [2]) as follows:
+```
+$ cd <install_dir>/lib
+$ chmod +x clone_lib.sh
+$ ./clone_lib.sh
+```
+* Move to the library build directory and build libraries.
+```
+$ cd <install_dir>/lib/build
+$ make
+$ make install
+```
+* Move to the application program directory and build utilities and APs.
+```
+$ cd <install_dir>/app
+$ make
+$ make install
+```
+* Add the Pocket SDR binary programs path (<install_dir>/PocketSDR/bin) to 
+  the command search path.
+
+--------------------------------------------------------------------------------
+
 ## **Utility Programs for Pocket SDR FE**
 
 Pocket SDR contains the following utility programs for the Pocket SDR FE.
@@ -166,6 +212,7 @@ Pocket SDR contains the following application programs for GNSS-SDR.
 - **pocket_trk.py** : GNSS signal tracking and navigation data decoding in digital IF data
 - **pocket_snap.py**: Snapshot positioning with digital IF data
 - **pocket_plot.py**: Plot GNSS signal tracking log by pocket_trk.py
+- **pocket_sdr.py** : GUI-based GNSS-SDR receiver
 - **pocket_acq**    : C-version of pocket_acq.py (w/o graph plots)
 - **pocket_trk**    : C-version of pocket_trk.py (w/o graph plots)
 - **pocket_snap**   : C-version of pocket_snap.py
@@ -173,6 +220,25 @@ Pocket SDR contains the following application programs for GNSS-SDR.
 For details, refer comment lines in python/pocket_psd.py, python/pocket_acq.py,
 python/pocket_trk.py, python/pocket_snap.py and python/pocket_plot.py. You need
 Python 3, Numpy, Scipy and matplotlib to execute Python scripts.
+
+--------------------------------------------------------------------------------
+## **GUI-based GNSS-SDR Receiver AP**
+
+In ver.0.13, GUI-based GNSS-SDR receiver AP "Pocket SDR" is added. To execute
+the AP:
+```
+$ chmod +x <install_dir>/python/pocket_sdr.py
+$ ./<install_dir>/python/pocket_sdr.py
+or
+$ python <install_dir>/python/pocket_sdr.py
+```
+You can see the Pocket SDR AP window. If you connect Pocket SDR FE 2CH or 4CH to
+the PC, push the button "Start" top of the window to launch the GNSS-SDR receiver.
+To stop the receiver, push the button "Stop".
+
+The detailed instructions for the AP will be added later as a manual. 
+
+<img src="image/pocket_sdr_ap001.jpg" width=100%>
 
 --------------------------------------------------------------------------------
 
@@ -189,19 +255,19 @@ $ sudo pocket_dump -t 5 ch1.bin ch2.bin
       5.0    I     60047360  IQ    120094720      11985.5
 
 $ pocket_psd.py ch1.bin -f 12 -h
-$ pocket_acq.py ch1.bin -f 12 -fi 3 -sig L1CA -prn 1-32,193-199
+$ pocket_acq.py ch1.bin -f 12 -sig L1CA -prn 1-32,193-199
 SIG= L1CA, PRN=   1, COFF=  0.23492 ms, DOP= -1519 Hz, C/N0= 33.6 dB-Hz
 SIG= L1CA, PRN=   2, COFF=  0.98558 ms, DOP=  2528 Hz, C/N0= 33.8 dB-Hz
 SIG= L1CA, PRN=   3, COFF=  0.96792 ms, DOP=  3901 Hz, C/N0= 33.7 dB-Hz
 SIG= L1CA, PRN=   4, COFF=  0.96192 ms, DOP= -1957 Hz, C/N0= 40.4 dB-Hz
 ...
-$ pocket_acq.py ch1.bin -f 12 -fi 3 -sig L1CA -prn 4
+$ pocket_acq.py ch1.bin -f 12 -IQ 1 -sig L1CA -prn 4
 
-$ pocket_acq.py ch1.bin -f 12 -fi 3 -sig L1CA -prn 8 -3d
+$ pocket_acq.py ch1.bin -f 12 -IQ 1 -sig L1CA -prn 8 -3d
 
 $ pocket_acq.py ch2.bin -f 12 -sig L6D -prn 194 -p
 
-$ pocket_trk.py ch1.bin -f 12 -fi 3 -sig L1CA -prn 1-32
+$ pocket_trk.py ch1.bin -f 12 -IQ 1 -sig L1CA -prn 1-32
  TIME(s):      4.90                                                            SRCH:   0  LOCK:  9/ 32
  CH  SAT   SIG PRN  LOCK(s) C/N0 (dB-Hz)         COFF(ms) DOP(Hz)    ADR(cyc) SYNC  #NAV #ERR #LOL NER
   5  G05  L1CA   5     4.89 47.3 |||||||||||    0.7176882   958.2      4687.7 -B--     0    0    0   0
@@ -214,7 +280,7 @@ $ pocket_trk.py ch1.bin -f 12 -fi 3 -sig L1CA -prn 1-32
  29  G29  L1CA  29     4.89 44.5 |||||||||      0.4977522   429.7      2108.4 -B--     0    0    0   0
  30  G30  L1CA  30     4.89 44.2 |||||||||      0.7357694   540.2      2643.5 -B--     0    0    0   0
 ...
-$ pocket_trk.py ch1.bin -f 12 -fi 3 -sig E1B -prn 18 -p
+$ pocket_trk.py ch1.bin -f 12 -IQ 1 -sig E1B -prn 18 -p
 ...
 $ pocket_trk.py ch2.bin -f 12 -sig E6B -prn 4 -log trk.log -p -ts 0.2
 ...
@@ -349,3 +415,5 @@ April 28, 2020
                    Support NB-LDCP error correction for BDS B1C, B2a and B2b
 * 2024-05-28  0.12 Performance optimized.
                    Support PVT generation, RTCM3 and NMEA outputs
+* 2024-07-04  0.13 GUI-based GNSS-SDR receiver AP added.
+                   Support macOS.
