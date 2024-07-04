@@ -127,23 +127,24 @@ def rcv_open_file(sys_opt, inp_opt, out_opt, sig_opt):
     fo = [to_float(inp_opt.fo[i].get()) * 1e6 for i in range(4)]
     IQ = [1 if inp_opt.IQ[i].get() == 'I' else 2 for i in range(4)]
     toff = to_float(inp_opt.toff.get())
+    tscale = to_float(inp_opt.tscale.get())
     path = inp_opt.str_path.get()
     paths = [out_opt.path[i].get() if out_opt.path_ena[i].get() else ''
         for i in range(4)]
     c_sigs = (c_char_p * len(sigs))(*[s.encode() for s in sigs])
     c_prns = (c_int32 * len(sigs))(*prns)
-    c_fo = (c_double * 4)(*fo)
-    c_IQ = (c_int32 * 4)(*IQ)
+    c_fo = (c_double * 8)(*fo)
+    c_IQ = (c_int32 * 8)(*IQ)
     c_paths = (c_char_p * 4)(*[s.encode() for s in paths])
     
-    libsdr.sdr_func_init.argtypes = (c_char_p)
+    libsdr.sdr_func_init.argtypes = (c_char_p,)
     libsdr.sdr_func_init(sys_opt.fftw_wisdom_path.get().encode())
     libsdr.sdr_rcv_open_file.argtypes = (POINTER(c_char_p), POINTER(c_int32),
         c_int32, c_int32, c_double, POINTER(c_double), POINTER(c_int32),
-        c_double, c_char_p, POINTER(c_char_p))
+        c_double, c_double, c_char_p, POINTER(c_char_p))
     libsdr.sdr_rcv_open_file.restype = c_void_p
     return libsdr.sdr_rcv_open_file(c_sigs, c_prns, len(sigs), fmt, fs, c_fo,
-        c_IQ, toff, path.encode(), c_paths)
+        c_IQ, toff, tscale, path.encode(), c_paths)
 
 # get signal options -----------------------------------------------------------
 def get_sig_opt(opt):
@@ -410,7 +411,7 @@ def rcv_page_new(parent):
     p.plt1 = plt.plot_new(panel1, 257, 257, (-1.2, 1.2), (-1.2, 1.2),
         (0, 0, 0, 0), font=get_font(-1))
     p.plt1.c.pack(side=RIGHT)
-    p.stat = plt.plot_new(panel1, 543, 257, margin=(25, 20, 30, 30),
+    p.stat = plt.plot_new(panel1, 543, 257, margin=(20, 15, 30, 30),
         font=get_font())
     p.stat.c.pack(side=LEFT, expand=1, fill=X)
     p.plt2 = plt.plot_new(p.panel, 800, 245, title='Signal C/N0 (dB-Hz)',
@@ -441,7 +442,7 @@ def update_rcv_page(p):
 def update_rcv_stat(p):
     labels = ('Receiver Time (s)', 'Input Source', 'IF Data Format',
         '# of RF CHs', 'LO Freqs (MHz)', '', 'Sampling Types',
-        'Sampling Rate (Msps)', '# of BB CHs Locked/Total',
+        'Sampling Rate (Msps)', '# of BB CHs Locked/All',
         'IF Data Rate (MB/s)', 'IF Data Buffer Usage (%)', 'Time (GPST)',
         'Solution Status', 'Latitude (\xb0)', 'Longitude (\xb0)',
         'Altitude (m)', 'Systems Tracked', '# of Sats Used/Tracked', 'Output',
@@ -756,7 +757,8 @@ def corr_page_new(parent):
     p.txt1 = ttk.Label(p.toolbar, font=get_font(1), foreground=P1_COLOR)
     p.txt1.pack(side=LEFT, expand=1, fill=X, padx=10)
     p.box3 = ttk.Combobox(p.toolbar, width=3, state='readonly', justify=CENTER,
-        values=('0.1', '0.2', '0.3', '0.4', '0.6', '0.8', '1.0', '1.5', '2'), font=get_font())
+        values=('0.1', '0.2', '0.3', '0.4', '0.6', '0.8', '1.0', '1.5', '2'),
+        font=get_font())
     p.box3.set('0.4')
     p.box3.pack(side=RIGHT, padx=(1, 10))
     p.box2 = ttk.Combobox(p.toolbar, width=3, state='readonly', justify=CENTER,
@@ -921,7 +923,8 @@ def log_page_new(parent):
     p.toolbar.pack_propagate(0)
     p.toolbar.pack(fill=X)
     ttk.Label(p.toolbar, text='Filter').pack(side=LEFT, padx=(6, 4))
-    p.box1 = ttk.Combobox(p.toolbar, width=12, height=len(filts), values=filts, font=get_font())
+    p.box1 = ttk.Combobox(p.toolbar, width=12, height=len(filts), values=filts,
+        font=get_font())
     p.box1.pack(side=LEFT)
     p.btn1 = ttk.Button(p.toolbar, width=8, text='Pause')
     p.btn2 = ttk.Button(p.toolbar, width=8, text='Clear')
@@ -989,15 +992,16 @@ def filt_log(filt, log):
 def on_btn_start_push(bar):
     global rcv_body
     if not rcv_body:
-        rcv_body = rcv_open(sys_opt, inp_opt, out_opt, sig_opt)
-        if rcv_body == None:
-            stat_bar.msg1.configure(text='Receiver start error.')
-            return
         if inp_opt.inp.get() == 0:
             info = ' (bus/port=%s, conf=%s)' % (inp_opt.dev.get(), \
                 inp_opt.conf_path.get() if inp_opt.conf_ena.get() else '')
         else:
-            info = ' (path=%s)' % (inp_opt.str_path.get())
+            info = ' (path=%s, toff=%s, tscale=%s)' % (inp_opt.str_path.get(),
+                inp_opt.toff.get(), inp_opt.tscale.get())
+        rcv_body = rcv_open(sys_opt, inp_opt, out_opt, sig_opt)
+        if rcv_body == None:
+            stat_bar.msg1.configure(text='Receiver start error.' + info)
+            return
         stat_bar.msg1.configure(text='Receiver started.' + info)
         for i, btn in enumerate(bar.panel.winfo_children()):
             btn.configure(state=NORMAL if i in (1, 6) else DISABLED)
