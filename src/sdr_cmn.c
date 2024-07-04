@@ -120,12 +120,12 @@ uint32_t sdr_get_tick(void)
 //
 void sdr_sleep_msec(int msec)
 {
+    if (msec <= 0) return;
 #ifdef WIN32
     Sleep(msec < 5 ? 1 : msec);
 #else
     struct timespec ts = {0, 0};
     
-    if (msec <= 0) return;
     ts.tv_nsec = (long)(msec * 1000000);
     nanosleep(&ts, NULL);
 #endif
