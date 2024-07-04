@@ -37,7 +37,7 @@ else: # linux or Raspberry PI OS
 try:
     libsdr = cdll.LoadLibrary(lib)
 except:
-    print('libsdr load error: ' + lib)
+    #print('libsdr load error: ' + lib)
     libsdr = None
 else:
     libsdr.sdr_func_init.argtypes = (c_char_p,)
