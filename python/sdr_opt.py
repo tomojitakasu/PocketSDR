@@ -55,7 +55,7 @@ def modal_dlg_new(root, width, height, title='', nocancel=0):
     btn1.pack(side=TOP if nocancel else RIGHT, padx=1)
     dlg.win.update()
     dlg.win.grab_set()
-    btn1.focus_set()
+    dlg.win.focus_set()
     return dlg
 
 # modal dialog OK callback -----------------------------------------------------
@@ -95,11 +95,10 @@ def labels_panel(parent, labels, xs):
 # generate option selection panel ----------------------------------------------
 def sel_panel_new(parent, label, sels=[], var=None, width=9):
     panel = Frame(parent, bg=BG_COLOR)
-    panel.pack()
     ttk.Label(panel, text=label).pack(side=LEFT, fill=X)
     ttk.Combobox(panel, width=width, values=sels, textvariable=var,
         justify=CENTER, font=FONT).pack(side=RIGHT)
-    panel.pack(fill=X, padx=(10, 4), pady=2)
+    panel.pack(fill=X, padx=(10, 4), pady=(4, 2))
     return panel
 
 # generate option input panel --------------------------------------------------
@@ -349,7 +348,7 @@ def read_opt(val, opt):
 # show Input Options dialog ----------------------------------------------------
 def inp_opt_dlg(root, opt):
     opt_new = inp_opt_new(opt)
-    dlg = modal_dlg_new(root, 480, 500, 'Input Options')
+    dlg = modal_dlg_new(root, 480, 520, 'Input Options')
     panel = Frame(dlg.panel, width=450, bg=BG_COLOR)
     panel.pack(fill=X, pady=4)
     ttk.Label(panel, text='Input Source').pack(side=LEFT, padx=4)
@@ -360,37 +359,27 @@ def inp_opt_dlg(root, opt):
     p1 = rf_opt_panel_new(dlg.panel, opt_new)
     p2 = if_opt_panel_new(dlg.panel, opt_new)
     p3 = ch_opt_panel_new(dlg.panel, opt_new)
-    inp_opt_enable_update(opt_new.inp.get(), p1, p2, p3)
+    p4 = Frame(dlg.panel, bg=BG_COLOR)
+    p4.pack(fill=X)
+    text = '* Automatically configured if <Path>.tag file exists.'
+    ttk.Label(p4, text=text, anchor=N).pack(fill=X)
+    inp_opt_enable_update(opt_new.inp.get(), p1, p2, p3, p4)
     ch_opt_enable_update(opt_new.fmt.get(), p3)
-    btn1.bind('<Button-1>', lambda e: on_inp_select(e, 0, p1, p2, p3))
-    btn2.bind('<Button-1>', lambda e: on_inp_select(e, 1, p1, p2, p3))
-    p = p2.winfo_children()[1].winfo_children()[1]
-    p.bind('<<ComboboxSelected>>', lambda e: on_fmt_select(e, p3))
+    btn1.bind('<Button-1>', lambda e: on_inp_select(e, 0, p1, p2, p3, p4))
+    btn2.bind('<Button-1>', lambda e: on_inp_select(e, 1, p1, p2, p3, p4))
     root.wait_window(dlg.win)
     return opt_new if dlg.ok else opt
 
 # input source select callback -------------------------------------------------
-def on_inp_select(e, sel, p1, p2, p3):
-    inp_opt_enable_update(sel, p1, p2, p3)
-
-# IF data format select callback -----------------------------------------------
-def on_fmt_select(e, p3):
-    ch_opt_enable_update(e.widget.get(), p3)
+def on_inp_select(e, sel, p1, p2, p3, p4):
+    inp_opt_enable_update(sel, p1, p2, p3, p4)
 
 # update input options enable --------------------------------------------------
-def inp_opt_enable_update(sel, p1, p2, p3):
+def inp_opt_enable_update(sel, p1, p2, p3, p4):
     config_panel_state(p1, DISABLED if sel else NORMAL)
     config_panel_state(p2, NORMAL if sel else DISABLED)
     config_panel_state(p3, NORMAL if sel else DISABLED)
-
-# update channel options enable ------------------------------------------------
-def ch_opt_enable_update(fmt, p3):
-    p = p3.winfo_children()
-    p1 = p[0].winfo_children()[1]
-    p1.configure(stat=NORMAL if fmt in ('RAW8', 'RAW16') else DISABLED)
-    config_panel_state(p[1], NORMAL if fmt in ('RAW8', 'RAW16') else DISABLED)
-    config_panel_state(p[2], NORMAL if fmt == 'RAW16' else DISABLED)
-    config_panel_state(p[3], NORMAL if fmt == 'RAW16' else DISABLED)
+    config_panel_state(p4, NORMAL if sel else DISABLED)
 
 # generate RF Frontend options panel -------------------------------------------
 def rf_opt_panel_new(parent, opt):
@@ -410,14 +399,13 @@ def rf_opt_panel_new(parent, opt):
 def if_opt_panel_new(parent, opt):
     panel = Frame(parent, width=300, height=300, bg=BG_COLOR, relief=GROOVE,
         borderwidth=2)
-    ttk.Label(panel, text=opt.inps[1], justify=LEFT).pack(fill=X, padx=2, pady=2)
-    sel_panel_new(panel, 'IF Data Format', opt.fmts, opt.fmt)
-    path_panel_new(panel, 'Path (File: local path, TCP: addr:port)',
+    ttk.Label(panel, text=opt.inps[1]).pack(fill=X, padx=2, pady=2)
+    path_panel_new(panel, 'Path (File: local path)',
         var_path=opt.str_path, types=[('Raw IF Data', '*.bin'), ('All', '*.*')])
     p1 = Frame(panel, bg=BG_COLOR)
     p1.pack(fill=X)
     inp_panel_new(p1, 'Time Offset (s)', opt.toff, width=10).pack(side=LEFT)
-    inp_panel_new(p1, 'Time Scale (0: None)', opt.tscale, width=10).pack(
+    inp_panel_new(p1, 'Time Scale', opt.tscale, width=10).pack(
         side=RIGHT, padx=(0, 28))
     panel.pack(fill=X, pady=2)
     return panel
@@ -426,11 +414,28 @@ def if_opt_panel_new(parent, opt):
 def ch_opt_panel_new(parent, opt):
     panel = Frame(parent, width=300, height=300, bg=BG_COLOR, relief=GROOVE,
         borderwidth=2)
+    p1 = sel_panel_new(panel, 'IF Data Format*', opt.fmts, opt.fmt)
+    p1.pack(pady=(4,0))
+    p2 = p1.winfo_children()[1]
+    p2.bind('<<ComboboxSelected>>', lambda e: on_fmt_select(e, panel))
     for ch in range(4):
         rfch_opt_panel_new(panel, ch, opt)
-    inp_panel_new(panel, 'Sampling Rate (Msps)', opt.fs)
+    inp_panel_new(panel, 'Sampling Rate (Msps)*', opt.fs)
     panel.pack(fill=X, pady=2)
     return panel
+
+# IF data format select callback -----------------------------------------------
+def on_fmt_select(e, p3):
+    ch_opt_enable_update(e.widget.get(), p3)
+
+# update channel options enable ------------------------------------------------
+def ch_opt_enable_update(fmt, p3):
+    p = p3.winfo_children()
+    p1 = p[1].winfo_children()[1]
+    p1.configure(stat=NORMAL if fmt in ('RAW8', 'RAW16') else DISABLED)
+    config_panel_state(p[2], NORMAL if fmt in ('RAW8', 'RAW16') else DISABLED)
+    config_panel_state(p[3], NORMAL if fmt == 'RAW16' else DISABLED)
+    config_panel_state(p[4], NORMAL if fmt == 'RAW16' else DISABLED)
 
 # generate RF channel options panel --------------------------------------------
 def rfch_opt_panel_new(parent, ch, opt):
@@ -439,10 +444,10 @@ def rfch_opt_panel_new(parent, ch, opt):
     ttk.Label(panel, text='RF CH%d' % (ch + 1)).pack(side=LEFT)
     ttk.Combobox(panel, width=4, justify=CENTER, values=opt.IQs,
         textvariable=opt.IQ[ch], font=FONT).pack(side=RIGHT)
-    ttk.Label(panel, text='Sampling').pack(side=RIGHT, padx=2)
+    ttk.Label(panel, text='Sampling*').pack(side=RIGHT, padx=2)
     ttk.Entry(panel, width=10, justify=RIGHT, textvariable=opt.fo[ch],
         font=FONT).pack(side=RIGHT, padx=2)
-    ttk.Label(panel, text='LO Freq (MHz)').pack(side=RIGHT, padx=2)
+    ttk.Label(panel, text='LO Freq (MHz)*').pack(side=RIGHT, padx=2)
     panel.pack(fill=X, padx=(10, 4), pady=(4, 0))
     return panel
 
@@ -524,35 +529,35 @@ def sys_opt_dlg(root, opt):
         'C/N0 Threshold for Signal Locked (dB-Hz)',
         'C/N0 Threshold for Signal Lost (dB-Hz)')
     opt_new = sys_opt_new(opt)
-    dlg = modal_dlg_new(root, 420, 480, 'System Options')
+    dlg = modal_dlg_new(root, 420, 500, 'System Options')
     sel_panel_new(dlg.panel, labels[0], sels=('0.1', '0.2', '0.5', '1.0',
-        '2.0', '5.0'), var=opt_new.epoch, width=8).pack()
+        '2.0', '5.0'), var=opt_new.epoch, width=8)
     sel_panel_new(dlg.panel, labels[1], sels=('0.01', '0.02', '0.05', '0.1',
-        '0.2', '0.3', '0.4', '0.5'), var=opt_new.lag_epoch, width=8).pack()
+        '0.2', '0.3', '0.4', '0.5'), var=opt_new.lag_epoch, width=8)
     sel_panel_new(dlg.panel, labels[2], sels=('5', '10', '15', '20', '25',
-        '30'), var=opt_new.el_mask, width=8).pack()
+        '30'), var=opt_new.el_mask, width=8)
     sel_panel_new(dlg.panel, labels[3], sels=('0.05', '0.1', '0.15', '0.2',
-        '0.25', '0.3', '0.4', '0.5', '0.6'), var=opt_new.sp_corr, width=8).pack()
+        '0.25', '0.3', '0.4', '0.5', '0.6'), var=opt_new.sp_corr, width=8)
     sel_panel_new(dlg.panel, labels[4], sels=('0.005', '0.01', '0.02', '0.05',
-        '0.1', '0.2'), var=opt_new.t_acq, width=8).pack()
+        '0.1', '0.2'), var=opt_new.t_acq, width=8)
     sel_panel_new(dlg.panel, labels[5], sels=('0.005', '0.01', '0.02', '0.05',
-        '0.1', '0.2'), var=opt_new.t_dll, width=8).pack()
+        '0.1', '0.2'), var=opt_new.t_dll, width=8)
     sel_panel_new(dlg.panel, labels[6], sels=('0.1', '0.15', '0.2', '0.25',
-        '0.3', '0.4', '0.5', '0.75', '1.0'), var=opt_new.b_dll, width=8).pack()
+        '0.3', '0.4', '0.5', '0.75', '1.0'), var=opt_new.b_dll, width=8)
     sel_panel_new(dlg.panel, labels[7], sels=('1.0', '2.5', '5.0', '7.5', '10.0',
-        '15.0', '20.0'), var=opt_new.b_pll, width=8).pack()
+        '15.0', '20.0'), var=opt_new.b_pll, width=8)
     sel_panel_new(dlg.panel, labels[8], sels=('1.0', '2.5', '5.0', '7.5', '10.0',
-        '15.0', '20.0'), var=opt_new.b_fll_w, width=8).pack()
+        '15.0', '20.0'), var=opt_new.b_fll_w, width=8)
     sel_panel_new(dlg.panel, labels[9], sels=('0.5', '1.0', '2.0', '3.0', '4.0',
-        '5.0', '6.0'), var=opt_new.b_fll_n, width=8).pack()
+        '5.0', '6.0'), var=opt_new.b_fll_n, width=8)
     sel_panel_new(dlg.panel, labels[10], sels=('3000', '5000', '7000', '10000',
-        '20000'), var=opt_new.max_dop, width=8).pack()
+        '20000'), var=opt_new.max_dop, width=8)
     sel_panel_new(dlg.panel, labels[11], sels=('31.0', '32.0', '33.0', '34.0',
-        '35.0', '36.0', '37.0'), var=opt_new.thres_cn0_l, width=8).pack()
+        '35.0', '36.0', '37.0'), var=opt_new.thres_cn0_l, width=8)
     sel_panel_new(dlg.panel, labels[12], sels=('27.0', '28.0', '29.0', '30.0',
-        '31.0', '32.0', '33.0'), var=opt_new.thres_cn0_u, width=8).pack()
+        '31.0', '32.0', '33.0'), var=opt_new.thres_cn0_u, width=8)
     path_panel_new(dlg.panel, 'FFTW Wisdom Path', out=0,
-        var_path=opt_new.fftw_wisdom_path).pack()
+        var_path=opt_new.fftw_wisdom_path)
     root.wait_window(dlg.win)
     return opt_new if dlg.ok else opt
 
