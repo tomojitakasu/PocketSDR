@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <time.h>
 #include <fftw3.h>
 #include <pthread.h>
 #include "rtklib.h"
@@ -221,6 +222,7 @@ typedef struct sdr_rcv_tag {    // SDR receiver type
     sdr_ch_th_t *th[SDR_MAX_NCH]; // SDR receiver channel threads
     sdr_buff_t *buff[SDR_MAX_RFCH]; // IF data buffers
     int64_t ix;                 // IF data cycle count (cyc)
+    double tscale;              // time scale to replay IF data file
     double data_rate, data_sum; // IF data rate (MB/s) and size (MB)
     double buff_use;            // buffer usage (%)
     sdr_pvt_t *pvt;             // SDR PVT
@@ -365,8 +367,8 @@ void sdr_rcv_stop(sdr_rcv_t *rcv);
 sdr_rcv_t *sdr_rcv_open_dev(const char **sigs, int *prns, int n, int bus,
     int port, const char *conf_file, const char **paths);
 sdr_rcv_t *sdr_rcv_open_file(const char **sigs, int *prns, int n, int fmt,
-    double fs, const double *fo, const int *IQ, double toff, const char *file,
-    const char **paths);
+    double fs, const double *fo, const int *IQ, double toff, double tscale,
+    const char *file, const char **paths);
 void sdr_rcv_close(sdr_rcv_t *rcv);
 void sdr_rcv_setopt(const char *opt, double value);
 char *sdr_rcv_rcv_stat(sdr_rcv_t *rcv);
