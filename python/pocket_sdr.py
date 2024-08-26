@@ -20,7 +20,7 @@ import sdr_plot as plt
 
 # constants --------------------------------------------------------------------
 AP_NAME    = 'Pocket SDR'    # AP name
-VERSION    = 'ver.0.13'      # version
+VERSION    = 'ver.0.13.1'    # version
 TITLE      = 'An Open-Source GNSS SDR\n(Software Defined Receiver)'
 AP_URL     = 'https://github.com/tomojitakasu/PocketSDR'
 AP_DIR     = os.path.dirname(__file__)
@@ -41,7 +41,7 @@ UD_CYCLE2  = 100             # update cycle (ms) other pages
 UD_CYCLE3  = 1000            # update cycle (ms) receiver stopped
 SYSTEMS = ('ALL', 'GPS', 'GLONASS', 'Galileo', 'QZSS', 'BeiDou', 'NavIC', 'SBAS')
 
-# platform depedent settings ---------------------------------------------------
+# platform dependent settings --------------------------------------------------
 env = platform.platform()
 if 'Windows' in env:
     LIBSDR = AP_DIR + '/../lib/win32/libsdr.so'
