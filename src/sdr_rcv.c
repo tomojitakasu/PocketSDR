@@ -13,6 +13,7 @@
 //  2024-06-21  1.5  add API sdr_rcv_open_dev(), sdr_rcv_open_file()
 //                   sdr_rcv_close()
 //  2024-06-28  1.6  modify API sdr_rcv_open_file()
+//  2024-08-26  1.7  support tag-file output for raw IF data log
 //
 #include "pocket_sdr.h"
 
@@ -196,7 +197,7 @@ char *sdr_rcv_rcv_stat(sdr_rcv_t *rcv)
     return rcv_rcv_stat_buff;
 }
 
-// get satellite status as sting -----------------------------------------------
+// get satellite status as string ----------------------------------------------
 char *sdr_rcv_sat_stat(sdr_rcv_t *rcv, const char *sys)
 {
     char *p = rcv_sat_stat_buff;
@@ -303,6 +304,7 @@ int sdr_rcv_rfch_hist(sdr_rcv_t *rcv, int ch, double tave, int *val,
     }
     return nval;
 }
+
 // output log $TIME ------------------------------------------------------------
 static void out_log_time(double time)
 {
@@ -700,12 +702,62 @@ int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, const char **paths)
     rcv->dp = dp;
     rcv->pvt = sdr_pvt_new(rcv);
     for (int i = 0; i < 4; i++) {
+        if (i == 3 && rcv->dev != SDR_DEV_USB) continue;
         if (i != 2 && *paths[i] && !(rcv->strs[i] = sdr_str_open(paths[i]))) {
-            fprintf(stderr, "stream open error: %s", paths[i+1]);
+            fprintf(stderr, "stream open error: %s", paths[i]);
         }
     }
     rcv->state = 1;
     return !pthread_create(&rcv->thread, NULL, rcv_thread, rcv);
+}
+
+// get file path and start time ------------------------------------------------
+static int get_path_time(stream_t *str, char *path, char *tstr)
+{
+    char buff[4096], *p = buff, *q;
+    
+    strstatx(str, buff);
+    if (!(p = strstr(p, "openpath= ")) || !(q = strstr(p + 10, "\n"))) {
+        return 0;
+    }
+    *q = '\0';
+    sprintf(path, "%.1023s", p + 10);
+    if (!(p = strstr(q + 1, "time    = ")) || !(q = strstr(p + 10, "\n"))) {
+        return 0;
+    }
+    *q = '\0';
+    sprintf(tstr, "%.31s", p + 10);
+    return 1;
+}
+
+// write tag file --------------------------------------------------------------
+static void write_tag(sdr_rcv_t *rcv, stream_t *str)
+{
+    static const char *fstr[] = {
+        "-", "INT8", "INT8X2", "RAW8", "RAW16", "RAW16I"
+    };
+    FILE *fp;
+    char path[1024+4], tstr[32];
+    
+    // get file path and start time
+    if (!get_path_time(str, path, tstr)) return;
+    strcat(path, ".tag");
+    
+    if (!(fp = fopen(path, "w"))) return;
+    fprintf(fp, "PROG = %s\n", SDR_DEV_NAME);
+    fprintf(fp, "TIME = %s\n", tstr);
+    fprintf(fp, "FMT  = %s\n", fstr[rcv->fmt]);
+    fprintf(fp, "F_S  = %.6g\n", rcv->fs * 1e-6);
+    int nch = rcv->fmt == SDR_FMT_RAW8 ? 2 : (rcv->fmt == SDR_FMT_RAW16 ? 4 : 8);
+    fprintf(fp, "F_LO = ");
+    for (int j = 0; j < nch; j++) {
+        fprintf(fp, "%.6g%s", rcv->fo[j] * 1e-6, j < nch - 1 ? "," : "\n");
+    }
+    fprintf(fp, "IQ   = ");
+    for (int j = 0; j < nch; j++) {
+        fprintf(fp, "%d%s", rcv->IQ[j], j < nch - 1 ? "," : "\n");
+    }
+    fclose(fp);
 }
 
 //------------------------------------------------------------------------------
@@ -727,6 +779,10 @@ void sdr_rcv_stop(sdr_rcv_t *rcv)
     }
     rcv->state = 0;
     pthread_join(rcv->thread, NULL);
+    
+    if (rcv->dev == SDR_DEV_USB && rcv->strs[3] && rcv->strs[3]->type == STR_FILE) {
+        write_tag(rcv, rcv->strs[3]);
+    }
     for (int i = 0; i < 4; i++) {
         sdr_str_close(rcv->strs[i]);
     }
@@ -872,7 +928,12 @@ sdr_rcv_t *sdr_rcv_open_file(const char **sigs, int *prns, int n, int fmt,
     read_tag(file, &fmt, &fs, fo_t, IQ_t);
     
     int ns = (fmt == SDR_FMT_INT8 || fmt == SDR_FMT_RAW8) ? 1 : 2;
-    fseek(fp, (long)(toff * fs * ns), SEEK_SET);
+#if defined(WIN32) || defined(MACOS)
+    fpos_t pos = (fpos_t)(fs * toff * ns);
+#else
+    fpos_t pos = {(__off_t)(fs * toff * ns)};
+#endif
+    fsetpos(fp, &pos);
     
     sdr_rcv_t *rcv = sdr_rcv_new(sigs, prns, n, fmt, fs, fo_t, IQ_t);
     rcv->tscale = tscale;
