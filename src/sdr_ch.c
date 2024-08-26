@@ -15,6 +15,7 @@
 //  2024-04-28  1.7  modify API sdr_ch_new()
 //  2024-06-06  1.8  modify API sdr_ch_new()
 //  2024-06-10  1.9  add API sdr_ch_stat_req(), sdr_ch_stat_get()
+//  2024-08-26  1.10 support sdr_corr_std(), sdr_corr_fft() API changes
 //
 #include <ctype.h>
 #include <math.h>
@@ -176,6 +177,10 @@ sdr_ch_t *sdr_ch_new(const char *sig, int prn, double fs, double fi)
     ch->acq = acq_new(ch->code, ch->len_code, ch->T, fs, ch->N);
     ch->trk = trk_new(ch->sig, ch->prn, ch->code, ch->len_code, ch->T, fs);
     ch->nav = sdr_nav_new();
+    ch->data = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * ch->N);
+    if (!strcmp(ch->sig, "L6D") || !strcmp(ch->sig, "L6E")) {
+        ch->corr = sdr_cpx_malloc(ch->N);
+    }
     pthread_mutex_init(&ch->mtx, NULL);
     return ch;
 }
@@ -195,6 +200,8 @@ void sdr_ch_free(sdr_ch_t *ch)
     acq_free(ch->acq);
     trk_free(ch->trk);
     sdr_nav_free(ch->nav);
+    sdr_free(ch->data);
+    sdr_cpx_free(ch->corr);
     sdr_free(ch);
 }
 
@@ -446,22 +453,20 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
     int j = (int)((ch->coff * ch->fs - i) * N_CODE); // code bank index
     double phi = ch->fi * tau + ch->adr + fc * i / ch->fs;
     
+    // mix carrier
+    sdr_mix_carr(buff, ix + i, ch->N, ch->fs, fc, phi, ch->data);
+    
     if (!strcmp(ch->sig, "L6D") || !strcmp(ch->sig, "L6E")) {
-        sdr_cpx_t *corr = sdr_cpx_malloc(ch->N);
-        
         // FFT correlator 
-        sdr_corr_fft(buff, ix + i, ch->N, ch->fs, fc, phi,
-            ch->trk->code_fft + j * ch->N, corr);
+        sdr_corr_fft(ch->data, ch->trk->code_fft + j * ch->N, ch->N, ch->corr);
         
         // decode L6 CSK 
-        CSK(ch, corr);
-        
-        sdr_cpx_free(corr);
+        CSK(ch, ch->corr);
     }
     else {
         // standard correlator
-        sdr_corr_std(buff, ix + i, ch->N, ch->fs, fc, phi,
-            ch->trk->code + j * ch->N, ch->trk->pos, ch->trk->npos, ch->trk->C);
+        sdr_corr_std(ch->data, ch->trk->code + j * ch->N, ch->N, ch->trk->pos,
+            ch->trk->npos, ch->trk->C);
     }
     // add P correlator outputs to history 
     sdr_add_buff(ch->trk->P, SDR_N_HIST, ch->trk->C[0], sizeof(sdr_cpx_t));
