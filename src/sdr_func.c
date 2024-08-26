@@ -25,6 +25,7 @@
 //                   support ARM and NEON
 //  2024-05-13  1.13 add API sdr_str_open(), sdr_str_close()
 //  2024-06-29  1.14 add API sdr_psd_cpx()
+//  2024-08-26  1.15 modify API sdr_corr_std(), sdr_corr_fft()
 //
 #include <math.h>
 #include <stdarg.h>
@@ -318,11 +319,13 @@ void sdr_search_code(const sdr_cpx_t *code_fft, double T,
     const float *fds, int len_fds, float *P)
 {
     sdr_cpx_t *C = sdr_cpx_malloc(N);
+    sdr_cpx16_t *data = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N);
     
     for (int i = 0; i < len_fds; i++) {
         
-        // FFT correlator
-        sdr_corr_fft(buff, ix, N, fs, fi + fds[i], 0.0, code_fft, C);
+        // mix carrier and FFT correlator
+        sdr_mix_carr(buff, ix, N, fs, fi + fds[i], 0.0, data);
+        sdr_corr_fft(data, code_fft, N, C);
         
         // add correlation power
         for (int j = 0; j < N; j++) {
@@ -333,6 +336,7 @@ void sdr_search_code(const sdr_cpx_t *code_fft, double T,
         }
     }
     sdr_cpx_free(C);
+    sdr_free(data);
 }
 
 // max correlation power and C/N0 ----------------------------------------------
@@ -553,7 +557,7 @@ static void dot_IQ_code(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
 }
 
 // standard correlator ---------------------------------------------------------
-static void corr_std(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
+void sdr_corr_std(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
     const int *pos, int n, sdr_cpx_t *corr)
 {
     for (int i = 0; i < n; i++) {
@@ -571,16 +575,6 @@ static void corr_std(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
     }
 }
 
-// mix carrier and standard correlator -----------------------------------------
-void sdr_corr_std(const sdr_buff_t *buff, int ix, int N, double fs, double fc,
-    double phi, const sdr_cpx16_t *code, const int *pos, int n, sdr_cpx_t *corr)
-{
-    sdr_cpx16_t *IQ = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N);
-    sdr_mix_carr(buff, ix, N, fs, fc, phi, IQ);
-    corr_std(IQ, code, N, pos, n, corr);
-    sdr_free(IQ);
-}
-
 // mix carrier and standard correlator for complex buffer ----------------------
 void sdr_corr_std_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N,
     double fs, double fc, double phi, const float *code, const int *pos, int n,
@@ -591,7 +585,7 @@ void sdr_corr_std_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N,
     for (int i = 0; i < N; i++) {
         IQ[N+i].I = IQ[N+i].Q = (int8_t)code[i];
     }
-    corr_std(IQ, IQ + N, N, pos, n, corr);
+    sdr_corr_std(IQ, IQ + N, N, pos, n, corr);
     sdr_free(IQ);
 }
 
@@ -625,7 +619,7 @@ static int get_fftw_plan(int N, fftwf_plan *plan)
 }
 
 // FFT correlator --------------------------------------------------------------
-static void corr_fft(const sdr_cpx16_t *IQ, const sdr_cpx_t *code_fft, int N,
+void sdr_corr_fft(const sdr_cpx16_t *IQ, const sdr_cpx_t *code_fft, int N,
     sdr_cpx_t *corr)
 {
     fftwf_plan plan[2];
@@ -644,16 +638,6 @@ static void corr_fft(const sdr_cpx16_t *IQ, const sdr_cpx_t *code_fft, int N,
     sdr_cpx_free(cpx);
 }
 
-// mix carrier and FFT correlator ----------------------------------------------
-void sdr_corr_fft(const sdr_buff_t *buff, int ix, int N, double fs, double fc,
-    double phi, const sdr_cpx_t *code_fft, sdr_cpx_t *corr)
-{
-    sdr_cpx16_t *IQ = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N);
-    sdr_mix_carr(buff, ix, N, fs, fc, phi, IQ);
-    corr_fft(IQ, code_fft, N, corr);
-    sdr_free(IQ);
-}
-
 // mix carrier and FFT correlator for complex input ----------------------------
 void sdr_corr_fft_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N,
     double fs, double fc, double phi, const sdr_cpx_t *code_fft,
@@ -661,7 +645,7 @@ void sdr_corr_fft_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N,
 {
     sdr_cpx16_t *IQ = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N);
     mix_carr_cpx(buff, len_buff, ix, N, fs, fc, phi, IQ);
-    corr_fft(IQ, code_fft, N, corr);
+    sdr_corr_fft(IQ, code_fft, N, corr);
     sdr_free(IQ);
 }
 
