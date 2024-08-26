@@ -2053,7 +2053,7 @@ static void decode_ISS(sdr_ch_t *ch)
 //------------------------------------------------------------------------------
 //  Decode navigation data in the correlation history of the tracking GNSS
 //  signals. The decoded subframe or message in the navigation data are saved to
-//  ch->nav->data asi the packed bits format.
+//  ch->nav->data as the packed bits format.
 //
 //  args:
 //      ch       (IO) SDR receiver channel
