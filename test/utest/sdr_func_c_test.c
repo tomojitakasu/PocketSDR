@@ -171,12 +171,14 @@ static void test_03(void)
         int len_code;
         int8_t *code = sdr_gen_code("L6D", 194, &len_code);
         sdr_cpx16_t *code_res = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N[i]);
+        sdr_cpx16_t *data = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N[i]);
         sdr_res_code(code, len_code, 4e-3, 1.345, fs[i], N[i], 0, code_res);
         
         sdr_buff_t *buff = gen_data(N[i] * 2);
         
         sdr_cpx_t C[4], C_ref[4];
-        sdr_corr_std(buff, ix[i], N[i], fs[i], fc[i], phi[i], code_res, pos, 4, C);
+        sdr_mix_carr(buff, ix[i], N[i], fs[i], fc[i], phi[i], data);
+        sdr_corr_std(data, code_res, N[i], pos, 4, C);
         sdr_corr_std_ref(buff, ix[i], N[i], fs[i], fc[i], phi[i], code_res, pos, 4, C_ref);
         
         for (int j = 0; j < 4; j++) {
@@ -188,6 +190,7 @@ static void test_03(void)
         }
         sdr_buff_free(buff);
         sdr_free(code_res);
+        sdr_free(data);
         
         printf("test_03: sdr_corr_std() N=%8d OK\n", N[i]);
     }
@@ -236,13 +239,15 @@ static void test_05(void)
         
         tt = sdr_get_tick();
         for (int j = 0; j < n; j++) {
-            sdr_corr_std(buff, 0, N[i], fs, fc, phi, code_res, pos, 4, C1);
+            sdr_mix_carr(buff, 0, N[i], fs, fc, phi, IQ);
+            sdr_corr_std(IQ, code_res, N[i], pos, 4, C1);
         }
         double t2 = (double)(sdr_get_tick() - tt) / n;
         
         tt = sdr_get_tick();
         for (int j = 0; j < n; j++) {
-            sdr_corr_fft(buff, 0, N[i], fs, fc, phi, code_fft, C1);
+            sdr_mix_carr(buff, 0, N[i], fs, fc, phi, IQ);
+            sdr_corr_fft(IQ, code_fft, N[i], C1);
         }
         double t3 = (double)(sdr_get_tick() - tt) / n;
         
