@@ -1004,7 +1004,7 @@ def sat_id(sig, prn):
 # get satellite ID for QZSS ([3],[4],[15]) -------------------------------------
 def sat_id_qzss(sig, prn):
     sat_L1B = (4, 5, 8, 9)
-    sat_L5S = (2, 4, 5, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 8)
+    sat_L5S = (2, 3, 4, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 9)
     
     if sig == 'L1CB' and prn >= 203 and prn <= 206 and sat_L1B[prn-203]:
         sat = 'J%02d' % (sat_L1B[prn-203])
