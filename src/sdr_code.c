@@ -2467,8 +2467,8 @@ double sdr_sig_freq(const char *sig)
 static void sat_id_qzss(const char *sig, int prn, char *sat)
 {
     static int sat_L1B[] = {4, 5, 8, 9};
-    static int sat_L5S[] = {2, 4, 5, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 7, 8};
+    static int sat_L5S[] = {2, 3, 4, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 8, 9};
     
     if (!strcmp(sig, "L1CB") && prn >= 203 && prn <= 206 && sat_L1B[prn-203]) {
         sprintf(sat, "J%02d", sat_L1B[prn-203]);
