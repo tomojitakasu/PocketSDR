@@ -17,6 +17,7 @@
 //  2024-04-28  1.9  update constants, types and API
 //  2024-05-28  1.10 update constants, types and APIs
 //  2024-07-01  1.11 import pocket_dev.h
+//  2024-08-26  1.12 update types and APIs
 //
 #ifndef POCKET_SDR_H
 #define POCKET_SDR_H
@@ -176,6 +177,8 @@ typedef struct {                // SDR receiver channel type
     sdr_acq_t *acq;             // signal acquisition 
     sdr_trk_t *trk;             // signal tracking 
     sdr_nav_t *nav;             // navigation decoder
+    sdr_cpx16_t *data;          // data buffer
+    sdr_cpx_t *corr;            // correlation buffer
     pthread_mutex_t mtx;        // lock flag
 } sdr_ch_t;
 
@@ -280,14 +283,13 @@ double sdr_fine_dop(const float *P, int N, const float *fds, int len_fds,
     const int *ix);
 double sdr_shift_freq(const char *sig, int fcn, double fi);
 float *sdr_dop_bins(double T, float dop, float max_dop, int *len_fds);
-void sdr_corr_std(const sdr_buff_t *buff, int ix, int N, double fs, double fc,
-    double phi, const sdr_cpx16_t *code, const int *pos, int n,
-    sdr_cpx_t *corr);
+void sdr_corr_std(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
+    const int *pos, int n, sdr_cpx_t *corr);
 void sdr_corr_std_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N,
     double fs, double fc, double phi, const float *code, const int *pos, int n,
     sdr_cpx_t *corr);
-void sdr_corr_fft(const sdr_buff_t *buff, int ix, int N, double fs, double fc,
-    double phi, const sdr_cpx_t *code_fft, sdr_cpx_t *corr);
+void sdr_corr_fft(const sdr_cpx16_t *IQ, const sdr_cpx_t *code_fft, int N,
+    sdr_cpx_t *corr);
 void sdr_corr_fft_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N,
     double fs, double fc, double phi, const sdr_cpx_t *code_fft,
     sdr_cpx_t *corr);
