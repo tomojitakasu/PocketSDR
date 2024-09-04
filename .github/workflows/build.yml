@@ -23,7 +23,7 @@ jobs:
     - name: Install build dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential
+        sudo apt-get install -y build-essential libusb-1.0-0-dev libfftw3-dev
     - name: Install Lib
       run: |
         cd lib
