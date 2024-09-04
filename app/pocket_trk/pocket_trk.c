@@ -266,13 +266,13 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "-w") && i + 1 < argc) {
             fftw_wisdom = argv[++i];
         }
-        else if (!strcmp(argv[i], "-log") && i + 1 < argc) {
+        else if (!strcmp(argv[i], "-nmea") && i + 1 < argc) {
             paths[0] = argv[++i];
         }
-        else if (!strcmp(argv[i], "-nmea") && i + 1 < argc) {
+        else if (!strcmp(argv[i], "-rtcm") && i + 1 < argc) {
             paths[1] = argv[++i];
         }
-        else if (!strcmp(argv[i], "-rtcm") && i + 1 < argc) {
+        else if (!strcmp(argv[i], "-log") && i + 1 < argc) {
             paths[2] = argv[++i];
         }
         else if (!strcmp(argv[i], "-raw") && i + 1 < argc) {
