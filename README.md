@@ -106,7 +106,13 @@ $ pacman -S mingw-w64-x86_64-fftw
 --------------------------------------------------------------------------------
 
 ## **Installation for Linux or Raspberry Pi OS**
+There are two ways to install:
 
+1. Auto Installation
+```
+curl -sSL https://raw.githubusercontent.com/datagnss/PocketSDR/master/install.sh | sudo bash
+```
+2. Manual Installation
 * You need fundamental development packages and some libraries. Confirm the following
 packages exist: gcc, g++, make, libusb-1.0-0-dev, libfftw3-dev, python3, python3-numpy,
 python3-scipy, python3-matplotlib
