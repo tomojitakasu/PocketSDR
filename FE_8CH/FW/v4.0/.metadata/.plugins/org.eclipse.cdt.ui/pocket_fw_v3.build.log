@@ -1,0 +1,50 @@
+15:39:30 **** Build of configuration Debug for project pocket_fw_v3 ****
+cs-make all 
+'Building file: ../cyfx_gcc_startup.S'
+'Invoking: Cross ARM GNU Assembler'
+arm-none-eabi-gcc -mcpu=arm926ej-s -marm -mthumb-interwork -O0 -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -Wall  -g3 -x assembler-with-cpp -I"C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc" -MMD -MP -MF"cyfx_gcc_startup.d" -MT"cyfx_gcc_startup.o" -c -o "cyfx_gcc_startup.o" "../cyfx_gcc_startup.S"
+'Finished building: ../cyfx_gcc_startup.S'
+' '
+'Building file: ../cyfxtx.c'
+'Invoking: Cross ARM C Compiler'
+arm-none-eabi-gcc -mcpu=arm926ej-s -marm -mthumb-interwork -O0 -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -Wall  -g3 -D__CYU3P_TX__=1 -I"C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc" -std=gnu11 -MMD -MP -MF"cyfxtx.d" -MT"cyfxtx.o" -c -o "cyfxtx.o" "../cyfxtx.c"
+'Finished building: ../cyfxtx.c'
+' '
+'Building file: ../pocket_fw_v3.c'
+'Invoking: Cross ARM C Compiler'
+arm-none-eabi-gcc -mcpu=arm926ej-s -marm -mthumb-interwork -O0 -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -Wall  -g3 -D__CYU3P_TX__=1 -I"C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc" -std=gnu11 -MMD -MP -MF"pocket_fw_v3.d" -MT"pocket_fw_v3.o" -c -o "pocket_fw_v3.o" "../pocket_fw_v3.c"
+'Finished building: ../pocket_fw_v3.c'
+' '
+'Building file: ../pocket_usb_dscr.c'
+'Invoking: Cross ARM C Compiler'
+arm-none-eabi-gcc -mcpu=arm926ej-s -marm -mthumb-interwork -O0 -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -Wall  -g3 -D__CYU3P_TX__=1 -I"C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/inc" -std=gnu11 -MMD -MP -MF"pocket_usb_dscr.d" -MT"pocket_usb_dscr.o" -c -o "pocket_usb_dscr.o" "../pocket_usb_dscr.c"
+'Finished building: ../pocket_usb_dscr.c'
+' '
+'Building target: pocket_fw_v3.elf'
+'Invoking: Cross ARM C Linker'
+arm-none-eabi-gcc -mcpu=arm926ej-s -marm -mthumb-interwork -O0 -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -Wall  -g3 -T "C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_build/fx3_fw/fx3.ld" -nostartfiles -Xlinker --gc-sections -L"C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\/fw_lib/1_3_5/fx3_debug" -L"C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\ARM GCC\/lib/gcc/arm-none-eabi/4.8.1" -L"C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK\1.3\ARM GCC\/arm-none-eabi/lib" -Wl,-Map,"pocket_fw_v3.map" -Wl,-d  -Wl,--no-wchar-size-warning -Wl,--entry,CyU3PFirmwareEntry -o "pocket_fw_v3.elf"  ./cyfx_gcc_startup.o ./cyfxtx.o ./pocket_fw_v3.o ./pocket_usb_dscr.o   -lcyu3lpp -lcyfxapi -lcyu3threadx -lc -lgcc
+'Finished building target: pocket_fw_v3.elf'
+' '
+cs-make --no-print-directory post-build
+'Generate boot-loadable binary image'
+elf2img.exe -i pocket_fw_v3.elf -o pocket_fw_v3.img -v
+Endian-ness    : Little
+Entry point    : 0x40008364
+Program header table offset: 0x00000034
+Program header count       : 3
+Program header entry size  : 0x0020
+Copying data from program header:
+	Addr=0x00000100 Size(words)=0x000009e2 FileSize=0x000009e2 Offset=0x00000100 Flags=0x00000005
+Note: 256 bytes of interrupt vector code have been removed from the image.
+Copying data from program header:
+      Use the "-vectorload yes" option to retain this code.
+	Addr=0x40003000 Size(words)=0x00004000 FileSize=0x00004000 Offset=0x00003000 Flags=0x00000005
+
+Copying data from program header:
+	Addr=0x40013000 Size(words)=0x0000334a FileSize=0x0000334a Offset=0x00013000 Flags=0x00000005
+Copying data from program header:
+	Addr=0x40030000 Size(words)=0x00000745 FileSize=0x0000012e Offset=0x00020000 Flags=0x00000006
+' '
+
+15:39:32 Build Finished (took 2s.6ms)
+

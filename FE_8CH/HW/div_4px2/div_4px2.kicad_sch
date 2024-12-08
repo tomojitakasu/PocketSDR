@@ -1,0 +1,7815 @@
+(kicad_sch
+	(version 20231120)
+	(generator "eeschema")
+	(generator_version "8.0")
+	(uuid "dcf9faee-3f0e-43cc-9c10-935213a8e7cc")
+	(paper "User" 499.999 350.012)
+	(lib_symbols
+		(symbol "pocket_sdr_v2.3-eagle-import:C1005"
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" ""
+				(at 2.54 2.54 0)
+				(effects
+					(font
+						(size 1.27 1.0795)
+					)
+					(justify left bottom)
+					(hide yes)
+				)
+			)
+			(property "Value" ""
+				(at 2.54 -2.54 0)
+				(effects
+					(font
+						(size 1.27 1.0795)
+					)
+					(justify left bottom)
+				)
+			)
+			(property "Footprint" "pocket_sdr_v2.3:C1005"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_locked" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "C1005_1_0"
+				(polyline
+					(pts
+						(xy -1.905 -0.635) (xy 0 -0.635)
+					)
+					(stroke
+						(width 0.508)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -1.905 0.635) (xy 0 0.635)
+					)
+					(stroke
+						(width 0.508)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0 -0.635) (xy 0 -2.54)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0 -0.635) (xy 1.905 -0.635)
+					)
+					(stroke
+						(width 0.508)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0 0.635) (xy 1.905 0.635)
+					)
+					(stroke
+						(width 0.508)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0 2.54) (xy 0 0.635)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(pin passive line
+					(at 0 2.54 270)
+					(length 0)
+					(name "1"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -2.54 90)
+					(length 0)
+					(name "2"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+				)
+			)
+		)
+		(symbol "pocket_sdr_v2.3-eagle-import:CPAD_3.2MM"
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "PAD"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Value" "CPAD_3.2MM"
+				(at 0 3.81 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Footprint" "pocket_sdr_v2.3:CPAD_3.2MM"
+				(at 0 6.35 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "CPAD_3.2MM_1_0"
+				(circle
+					(center 0 0)
+					(radius 2.54)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(pin power_in line
+					(at -5.08 0 0)
+					(length 2.54)
+					(name "P$1"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+					(number "EP"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+				)
+			)
+		)
+		(symbol "pocket_sdr_v2.3-eagle-import:L1608"
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" ""
+				(at -4.826 2.032 0)
+				(effects
+					(font
+						(size 1.27 1.0795)
+					)
+					(justify left bottom)
+					(hide yes)
+				)
+			)
+			(property "Value" ""
+				(at 0 2.032 0)
+				(effects
+					(font
+						(size 1.27 1.0795)
+					)
+					(justify left bottom)
+				)
+			)
+			(property "Footprint" "pocket_sdr_v2.3:C1608"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_locked" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "L1608_1_0"
+				(arc
+					(start -1.27 0.762)
+					(mid -1.905 1.3943)
+					(end -2.54 0.762)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -2.54 0) (xy -2.54 0.762)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -1.27 0) (xy -1.27 0.762)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0 0) (xy 0 0.762)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 1.27 0) (xy 1.27 0.762)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 2.54 0.762) (xy 2.54 0)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(arc
+					(start 0 0.762)
+					(mid -0.635 1.3943)
+					(end -1.27 0.762)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(arc
+					(start 1.27 0.762)
+					(mid 0.635 1.3943)
+					(end 0 0.762)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(arc
+					(start 2.54 0.762)
+					(mid 1.905 1.3943)
+					(end 1.27 0.762)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(pin passive line
+					(at -2.54 0 0)
+					(length 0)
+					(name "P$1"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 2.54 0 0)
+					(length 0)
+					(name "P$2"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+				)
+			)
+		)
+		(symbol "pocket_sdr_v2.3-eagle-import:R1005"
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" ""
+				(at -4.826 2.032 0)
+				(effects
+					(font
+						(size 1.27 1.0795)
+					)
+					(justify left bottom)
+					(hide yes)
+				)
+			)
+			(property "Value" ""
+				(at 0 2.032 0)
+				(effects
+					(font
+						(size 1.27 1.0795)
+					)
+					(justify left bottom)
+				)
+			)
+			(property "Footprint" "pocket_sdr_v2.3:C1005"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_locked" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "R1005_1_0"
+				(polyline
+					(pts
+						(xy -2.54 0) (xy -2.2225 1.27)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -2.2225 1.27) (xy -1.5875 -1.27)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -1.5875 -1.27) (xy -0.9525 1.27)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -0.9525 1.27) (xy -0.3175 -1.27)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -0.3175 -1.27) (xy 0.3175 1.27)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0.3175 1.27) (xy 0.9525 -1.27)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0.9525 -1.27) (xy 1.5875 1.27)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 1.5875 1.27) (xy 2.2225 -1.27)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 2.2225 -1.27) (xy 2.54 0)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(pin passive line
+					(at -2.54 0 0)
+					(length 0)
+					(name "P$1"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 2.54 0 0)
+					(length 0)
+					(name "P$2"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+				)
+			)
+		)
+		(symbol "pocket_sdr_v2.3-eagle-import:RF_DIV"
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" ""
+				(at -8.89 11.43 0)
+				(effects
+					(font
+						(size 1.778 1.5113)
+					)
+					(justify left bottom)
+					(hide yes)
+				)
+			)
+			(property "Value" ""
+				(at 1.524 11.43 0)
+				(effects
+					(font
+						(size 1.778 1.5113)
+					)
+					(justify left bottom)
+				)
+			)
+			(property "Footprint" "pocket_sdr_v2.3:RF_DIV"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_locked" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "RF_DIV_1_0"
+				(polyline
+					(pts
+						(xy -10.16 -10.16) (xy 10.16 -10.16)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -10.16 10.16) (xy -10.16 -10.16)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 10.16 -10.16) (xy 10.16 10.16)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 10.16 10.16) (xy -10.16 10.16)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(pin bidirectional line
+					(at -12.7 5.08 0)
+					(length 2.54)
+					(name "GND@1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin input line
+					(at -12.7 0 0)
+					(length 2.54)
+					(name "INPUT"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin bidirectional line
+					(at -12.7 -5.08 0)
+					(length 2.54)
+					(name "GND@2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin bidirectional line
+					(at 12.7 -5.08 180)
+					(length 2.54)
+					(name "OUT1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "4"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin bidirectional line
+					(at 12.7 0 180)
+					(length 2.54)
+					(name "GND@3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "5"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin bidirectional line
+					(at 12.7 5.08 180)
+					(length 2.54)
+					(name "OUT2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "6"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+		)
+		(symbol "pocket_sdr_v2.3-eagle-import:SMA-ANG"
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "J"
+				(at -3.81 3.81 0)
+				(effects
+					(font
+						(size 1.778 1.5113)
+					)
+					(justify left bottom)
+					(hide yes)
+				)
+			)
+			(property "Value" "SMA-ANG"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Footprint" "pocket_sdr_v2.3:SMA-ANG"
+				(at -0.254 2.794 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "SMA-ANG_1_0"
+				(circle
+					(center 0 0)
+					(radius 1.27)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(circle
+					(center 0 0)
+					(radius 2.6181)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(pin passive line
+					(at 6.35 0 180)
+					(length 5.08)
+					(name "RF"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+					(number "P1"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -7.62 90)
+					(length 5.08)
+					(name "GND"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+					(number "P2"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -7.62 90)
+					(length 5.08)
+					(name "GND"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+					(number "P3"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -7.62 90)
+					(length 5.08)
+					(name "GND"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+					(number "P4"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -7.62 90)
+					(length 5.08)
+					(name "GND"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+					(number "P5"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+				)
+			)
+		)
+		(symbol "pocket_sdr_v2.3-eagle-import:ttaka_power_GND"
+			(power)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Value" "ttaka_power_GND"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_locked" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "ttaka_power_GND_1_0"
+				(polyline
+					(pts
+						(xy -2.54 -2.54) (xy -1.27 -2.54)
+					)
+					(stroke
+						(width 0.4064)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -1.27 -2.54) (xy -2.54 -4.445)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0.635 -2.54) (xy -1.27 -2.54)
+					)
+					(stroke
+						(width 0.4064)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0.635 -2.54) (xy -0.635 -4.445)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0.635 -2.54) (xy 2.54 -2.54)
+					)
+					(stroke
+						(width 0.4064)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 2.54 -2.54) (xy 1.27 -4.445)
+					)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(pin power_in line
+					(at 0 0 270)
+					(length 2.54)
+					(name "GND"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 0 0)
+							)
+						)
+					)
+				)
+			)
+		)
+	)
+	(junction
+		(at 226.06 225.425)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "0bac85bd-2076-4136-8a30-eee91fb34e70")
+	)
+	(junction
+		(at 201.93 175.895)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "0d3b9d44-82ce-4bde-bd0e-cc01fe78642c")
+	)
+	(junction
+		(at 189.23 225.425)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "1b2aadbf-1092-4c33-a690-88a8512d332e")
+	)
+	(junction
+		(at 162.56 237.49)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "29d71189-d0b9-400a-ba99-c0709710733b")
+	)
+	(junction
+		(at 226.06 110.49)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "3c154050-9ae2-4df2-a1b2-d2a83c6a24ae")
+	)
+	(junction
+		(at 162.56 115.57)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "48e8bd81-a4e6-4dfc-a49e-ff999228467b")
+	)
+	(junction
+		(at 162.56 132.715)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "58b506de-c7a3-43ff-b7a7-ea31b90387fe")
+	)
+	(junction
+		(at 296.545 180.975)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "694a7ecb-9818-4fc4-93f0-387fd6702b9d")
+	)
+	(junction
+		(at 236.22 250.19)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "6acbea6a-403f-4fcd-91c1-e18f601c5bfb")
+	)
+	(junction
+		(at 226.06 120.65)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "6f61a2c5-d665-42a0-80ce-e3618a807d27")
+	)
+	(junction
+		(at 273.05 83.82)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "75998dce-4e74-4328-8cb7-22cdd56016e7")
+	)
+	(junction
+		(at 273.05 250.19)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "7d374fcb-aa95-49d4-a67c-154396a2b259")
+	)
+	(junction
+		(at 273.05 240.03)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "8ba86570-d487-4ada-940a-c81b3eb99a63")
+	)
+	(junction
+		(at 273.05 188.595)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "975e9e6e-e5f2-46c7-851d-eba79ac70226")
+	)
+	(junction
+		(at 273.05 135.255)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "9c7f6e77-c8c2-4be2-9b09-4ea75ac551bb")
+	)
+	(junction
+		(at 273.05 93.98)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "a0d5564f-6897-457b-84e0-ba1818edc58c")
+	)
+	(junction
+		(at 162.56 220.345)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "a19c0b38-6184-47b9-8215-9181b40a1100")
+	)
+	(junction
+		(at 198.755 175.895)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "a1d93657-6b51-4399-af56-04207c8739e7")
+	)
+	(junction
+		(at 273.05 198.755)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "a368e493-90fb-4342-ab34-aa62c6d2bb59")
+	)
+	(junction
+		(at 195.58 175.895)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "b34843bd-5a12-48f3-be7f-015b3666d8c8")
+	)
+	(junction
+		(at 236.22 198.755)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "b43d71ab-5b50-422b-bdd2-dcd93474827e")
+	)
+	(junction
+		(at 226.06 215.265)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "b7eefc03-9be1-4f8e-8514-acb6d420f413")
+	)
+	(junction
+		(at 296.545 76.2)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "b81ad80f-7549-4722-8809-82c7dd1d1c95")
+	)
+	(junction
+		(at 273.05 145.415)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "bc165ffe-20d6-4486-88ba-b3f73b0e9f2a")
+	)
+	(junction
+		(at 236.22 145.415)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "e1b64c3e-29ca-4d7e-9c53-d03177495e24")
+	)
+	(junction
+		(at 189.23 120.65)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "e5fcff44-5431-4e05-83c2-23d073478ace")
+	)
+	(junction
+		(at 236.22 93.98)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "f8afedc0-2021-4604-bec4-3fe4f7f360a1")
+	)
+	(wire
+		(pts
+			(xy 317.5 265.43) (xy 311.15 265.43)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "002f647e-9986-4ca1-8dd6-7073f34be3c9")
+	)
+	(wire
+		(pts
+			(xy 162.56 220.345) (xy 162.56 225.425)
+		)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(uuid "00490e79-b3c7-4467-8e2b-e6b69f156f40")
+	)
+	(wire
+		(pts
+			(xy 317.5 93.98) (xy 317.5 109.22)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "02589756-cb03-464e-81fd-c0dc5d99391d")
+	)
+	(wire
+		(pts
+			(xy 317.5 173.355) (xy 317.5 188.595)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "02c8875c-55d6-4408-9cea-0e43415cb54c")
+	)
+	(wire
+		(pts
+			(xy 264.795 188.595) (xy 273.05 188.595)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "030ed406-c3fd-4ddc-bd82-3cae38885dbf")
+	)
+	(wire
+		(pts
+			(xy 189.23 110.49) (xy 189.23 120.65)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "0347b24b-6b69-40a5-af66-fd944fcdc0c8")
+	)
+	(wire
+		(pts
+			(xy 264.795 140.335) (xy 267.97 140.335)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "03580601-cfbc-45c2-83fb-40cee4974fa1")
+	)
+	(wire
+		(pts
+			(xy 295.91 127.635) (xy 295.91 135.255)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "04f323ad-368c-426e-a2b6-f8a52fa63aba")
+	)
+	(wire
+		(pts
+			(xy 236.22 135.255) (xy 236.22 145.415)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "0655dc7f-673c-4804-b1f7-b74eb1e2b51f")
+	)
+	(wire
+		(pts
+			(xy 295.91 257.81) (xy 304.8 257.81)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "086a18e6-8da8-417e-b8bc-db7ee43418b9")
+	)
+	(wire
+		(pts
+			(xy 226.06 215.265) (xy 226.06 217.805)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "09d240ad-3b59-4e9e-b391-8c43a60970a1")
+	)
+	(wire
+		(pts
+			(xy 295.91 250.19) (xy 295.91 257.81)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "0a5ff281-09f3-4308-9c47-454d4017bc53")
+	)
+	(wire
+		(pts
+			(xy 295.91 145.415) (xy 295.91 153.035)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "0be56d84-aeab-4d54-8aa1-adfafe4b3b73")
+	)
+	(wire
+		(pts
+			(xy 162.56 115.57) (xy 162.56 121.92)
+		)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(uuid "0e42b897-889c-460f-8158-b99fbc2862dd")
+	)
+	(wire
+		(pts
+			(xy 267.97 245.11) (xy 267.97 267.335)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "102ffc83-5aec-43d1-a1be-0571d7e9fe65")
+	)
+	(wire
+		(pts
+			(xy 217.805 215.265) (xy 226.06 215.265)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "12eec6f1-ee1f-4fbc-8e03-36126e52419d")
+	)
+	(wire
+		(pts
+			(xy 287.02 250.19) (xy 295.91 250.19)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "1326973a-666c-40cf-87b0-5194d5078244")
+	)
+	(wire
+		(pts
+			(xy 295.91 153.035) (xy 304.8 153.035)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "1468fce7-7087-480c-a90f-81f3777131d2")
+	)
+	(wire
+		(pts
+			(xy 189.23 120.65) (xy 189.23 130.175)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "149616dd-6a76-4430-bd2d-6a6556384a88")
+	)
+	(wire
+		(pts
+			(xy 264.795 198.755) (xy 273.05 198.755)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "15a797a8-eaeb-454d-9159-f56990586272")
+	)
+	(wire
+		(pts
+			(xy 177.8 220.345) (xy 192.405 220.345)
+		)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(uuid "15ba32d2-914e-47bd-a577-7d14e83c5af9")
+	)
+	(wire
+		(pts
+			(xy 317.5 224.79) (xy 317.5 240.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "1759fe3d-04e6-4f20-82f9-9457b4d6a818")
+	)
+	(wire
+		(pts
+			(xy 226.06 88.9) (xy 239.395 88.9)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "17e6fe39-10ca-46b5-94b6-7a5b665655e4")
+	)
+	(wire
+		(pts
+			(xy 310.515 240.03) (xy 310.515 241.935)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "18d1ed4b-11fa-42ce-8b74-5fe1aa8a2ebe")
+	)
+	(wire
+		(pts
+			(xy 195.58 173.99) (xy 195.58 175.895)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "19468d45-8973-4f39-aac7-74bb9255ada9")
+	)
+	(wire
+		(pts
+			(xy 208.28 175.895) (xy 208.28 173.99)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "22699ac4-e961-49bc-8661-156b6c807d23")
+	)
+	(wire
+		(pts
+			(xy 296.545 67.945) (xy 296.545 76.2)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "22784549-14df-46b1-86be-7ba318191da0")
+	)
+	(wire
+		(pts
+			(xy 236.22 198.755) (xy 236.22 215.9)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "25026c52-08b5-4e27-b2d9-20f1d544c6ff")
+	)
+	(wire
+		(pts
+			(xy 236.22 188.595) (xy 239.395 188.595)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "2722ee68-cecb-4039-891e-bfe5a6328874")
+	)
+	(wire
+		(pts
+			(xy 236.22 188.595) (xy 236.22 198.755)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "2c1a81aa-a6f5-46a2-983d-187b79778f74")
+	)
+	(wire
+		(pts
+			(xy 273.05 240.03) (xy 281.94 240.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "2e580256-3a63-4236-aaf0-7b2941271fea")
+	)
+	(wire
+		(pts
+			(xy 310.515 135.255) (xy 310.515 137.16)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "2e6003b7-7053-4941-9219-966f08702d6b")
+	)
+	(wire
+		(pts
+			(xy 264.795 145.415) (xy 273.05 145.415)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "2f322e0e-d567-42c7-9850-3de597b66d7a")
+	)
+	(wire
+		(pts
+			(xy 311.15 160.655) (xy 311.15 162.56)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "30218dbe-f26d-4a8c-8937-0674a01af442")
+	)
+	(wire
+		(pts
+			(xy 273.05 250.19) (xy 281.94 250.19)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "308cf733-72a2-483e-82be-a63080e8a4c3")
+	)
+	(wire
+		(pts
+			(xy 217.805 110.49) (xy 226.06 110.49)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "31fb1b8d-b5f0-4570-b2fa-bd54119a5ca8")
+	)
+	(wire
+		(pts
+			(xy 273.05 83.82) (xy 273.05 86.36)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "33c5dd71-9c18-4f5f-b921-882a4c55c19d")
+	)
+	(wire
+		(pts
+			(xy 264.795 88.9) (xy 267.97 88.9)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "33ff24df-fc5a-4f69-bf4f-8b02afaab6f5")
+	)
+	(wire
+		(pts
+			(xy 236.22 267.335) (xy 236.22 250.19)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "366308e8-d80f-4454-a4bf-90a979df1cfe")
+	)
+	(wire
+		(pts
+			(xy 236.22 198.755) (xy 239.395 198.755)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "369895fa-78c8-4a42-abbe-120dfd4254fa")
+	)
+	(wire
+		(pts
+			(xy 317.5 188.595) (xy 310.515 188.595)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "3b510e43-3476-47b9-9fee-1f8f3fac1bcb")
+	)
+	(wire
+		(pts
+			(xy 295.91 232.41) (xy 295.91 240.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "3d5a5cec-631d-40b0-814a-7206f8907d29")
+	)
+	(wire
+		(pts
+			(xy 317.5 135.255) (xy 310.515 135.255)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "3daf7718-768d-44dc-8365-34a8bef19bdd")
+	)
+	(wire
+		(pts
+			(xy 317.5 160.655) (xy 311.15 160.655)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "3de7bed9-c3c3-4cfa-b5f5-f5b6e6a91e95")
+	)
+	(wire
+		(pts
+			(xy 287.02 135.255) (xy 295.91 135.255)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4193b711-bc69-4b58-8bc0-435724605acd")
+	)
+	(wire
+		(pts
+			(xy 296.545 188.595) (xy 287.02 188.595)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "41ccc375-1a0b-4547-a913-0535b1e91746")
+	)
+	(wire
+		(pts
+			(xy 226.06 140.335) (xy 239.395 140.335)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4361fd54-c08e-4568-8a33-5a70449e767e")
+	)
+	(wire
+		(pts
+			(xy 317.5 68.58) (xy 317.5 83.82)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "457109f6-7f38-41e7-b4bd-ae14cfd47d3e")
+	)
+	(wire
+		(pts
+			(xy 273.05 83.82) (xy 281.94 83.82)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "46d0378d-7023-423e-b1d1-00dcacee6507")
+	)
+	(wire
+		(pts
+			(xy 264.795 245.11) (xy 267.97 245.11)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "473f8f1c-51a2-4310-b7c1-c4f515c7defc")
+	)
+	(wire
+		(pts
+			(xy 296.545 206.375) (xy 304.8 206.375)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "478bce5c-b9ab-47c7-a51e-484a4bb695d4")
+	)
+	(wire
+		(pts
+			(xy 201.93 173.99) (xy 201.93 175.895)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4998bb71-6688-497f-bc65-17c7be050c40")
+	)
+	(wire
+		(pts
+			(xy 236.22 250.19) (xy 239.395 250.19)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4e032fa4-a3cf-4ff9-893e-c9b790df9173")
+	)
+	(wire
+		(pts
+			(xy 226.06 245.11) (xy 239.395 245.11)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "50433216-9f16-470b-89d1-fa9c4a747994")
+	)
+	(wire
+		(pts
+			(xy 273.05 91.44) (xy 273.05 93.98)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "50a1948a-61d0-48c4-a740-91d2a032b32f")
+	)
+	(wire
+		(pts
+			(xy 311.15 145.415) (xy 317.5 145.415)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "52866c69-bd3c-4cfb-a90a-13805954b633")
+	)
+	(wire
+		(pts
+			(xy 273.05 198.755) (xy 281.94 198.755)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "54b880a9-406b-4f28-b498-cc884bb026cf")
+	)
+	(wire
+		(pts
+			(xy 198.755 175.895) (xy 198.755 177.165)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "555d8530-bf0f-4b10-a2e6-e6301cc6420b")
+	)
+	(wire
+		(pts
+			(xy 317.5 145.415) (xy 317.5 160.655)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "560bc2ff-9a4d-429d-922c-a39396f0d706")
+	)
+	(wire
+		(pts
+			(xy 304.165 232.41) (xy 295.91 232.41)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "56f2d20e-6cb6-4c7f-825e-4c10cc3d837b")
+	)
+	(wire
+		(pts
+			(xy 217.805 220.345) (xy 220.98 220.345)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "57d49af2-ee68-43e3-8f33-aa962807ab46")
+	)
+	(wire
+		(pts
+			(xy 189.23 225.425) (xy 192.405 225.425)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "598a937c-c81e-40fb-ae49-349571674b97")
+	)
+	(wire
+		(pts
+			(xy 317.5 83.82) (xy 310.515 83.82)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "5d052448-1e3b-417e-a6fb-8f783f1d0a0d")
+	)
+	(wire
+		(pts
+			(xy 201.93 175.895) (xy 208.28 175.895)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "5dee91ac-e6c2-4852-96bf-f346202b6dad")
+	)
+	(wire
+		(pts
+			(xy 162.56 237.49) (xy 162.56 241.3)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "5df25754-d3ac-457d-b2d4-886df347c7b7")
+	)
+	(wire
+		(pts
+			(xy 287.02 240.03) (xy 295.91 240.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "61d141b9-7147-4d6f-9bc3-3e5cc8b06f82")
+	)
+	(wire
+		(pts
+			(xy 311.15 213.995) (xy 311.15 215.9)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "6247ba58-2064-461d-815d-c87b9e41d005")
+	)
+	(wire
+		(pts
+			(xy 273.05 145.415) (xy 281.94 145.415)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "6507732c-65f6-4c73-af3a-fd232f95cd7c")
+	)
+	(wire
+		(pts
+			(xy 217.805 120.65) (xy 226.06 120.65)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "653988fd-5589-47c1-870a-99c6cf106131")
+	)
+	(wire
+		(pts
+			(xy 146.685 227.965) (xy 146.685 234.95)
+		)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(uuid "656381ff-2ff6-4f4a-bfee-31ef57e82df8")
+	)
+	(wire
+		(pts
+			(xy 310.515 224.79) (xy 317.5 224.79)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "671cb355-1d99-4c44-84b8-0142fa77b9e1")
+	)
+	(wire
+		(pts
+			(xy 296.545 173.355) (xy 296.545 180.975)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "685c7b0d-b65e-407d-a619-2a323a27af33")
+	)
+	(wire
+		(pts
+			(xy 317.5 120.015) (xy 317.5 135.255)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "6974d93b-2820-4cdf-80ad-363df577daef")
+	)
+	(wire
+		(pts
+			(xy 162.56 127) (xy 162.56 132.715)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "6f8d7835-1d41-4895-a789-6c61af10a00c")
+	)
+	(wire
+		(pts
+			(xy 162.56 132.715) (xy 162.56 136.525)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "70f6e205-a0ee-4970-b0ee-ab05e435448a")
+	)
+	(wire
+		(pts
+			(xy 192.405 110.49) (xy 189.23 110.49)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "71549a19-6089-42cd-b9b1-b5d20a877ac8")
+	)
+	(wire
+		(pts
+			(xy 189.23 215.265) (xy 189.23 225.425)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "75b10376-6667-4750-8bc5-50ec9a64f402")
+	)
+	(wire
+		(pts
+			(xy 236.22 93.98) (xy 236.22 111.125)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "79375f6e-846f-4cdf-a9cb-4f56c882937e")
+	)
+	(wire
+		(pts
+			(xy 317.5 213.995) (xy 311.15 213.995)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7a03cc92-3016-47d1-aeb9-38bcd65de6b9")
+	)
+	(wire
+		(pts
+			(xy 226.06 118.11) (xy 226.06 120.65)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7bae45a7-40e3-4f33-b29b-2c0ff07f926a")
+	)
+	(wire
+		(pts
+			(xy 217.805 225.425) (xy 226.06 225.425)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7d94b005-41de-4883-b3c0-ac7a71defe47")
+	)
+	(wire
+		(pts
+			(xy 292.735 173.355) (xy 296.545 173.355)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7f9477fa-b40b-4767-a450-0c68521c664a")
+	)
+	(wire
+		(pts
+			(xy 162.56 220.345) (xy 153.035 220.345)
+		)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(uuid "828c5e12-7163-4697-9ea0-fab3fcaef178")
+	)
+	(wire
+		(pts
+			(xy 273.05 240.03) (xy 273.05 242.57)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "835b85e3-9e4c-4b6b-9e52-143f32c90f0f")
+	)
+	(wire
+		(pts
+			(xy 296.545 180.975) (xy 296.545 188.595)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "87794879-63b1-4eb3-9faf-70a1f43ffaff")
+	)
+	(wire
+		(pts
+			(xy 317.5 240.03) (xy 310.515 240.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "8a904c9e-f53f-43f8-9e6c-9acc08abfaa2")
+	)
+	(wire
+		(pts
+			(xy 310.515 68.58) (xy 317.5 68.58)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "8e489249-6218-4913-b6bb-10b4420c869b")
+	)
+	(wire
+		(pts
+			(xy 162.56 220.345) (xy 172.72 220.345)
+		)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(uuid "8edc8893-79b2-43a1-ac8a-a2068f4c2875")
+	)
+	(wire
+		(pts
+			(xy 293.37 67.945) (xy 296.545 67.945)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "91f688e0-405f-4b50-a331-d73806277bf2")
+	)
+	(wire
+		(pts
+			(xy 310.515 173.355) (xy 317.5 173.355)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "95f67f5a-448e-4b7b-b362-9a3f5abe2f2e")
+	)
+	(wire
+		(pts
+			(xy 267.97 67.945) (xy 288.29 67.945)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "982ef79d-2594-42d1-8b82-820101825d5e")
+	)
+	(wire
+		(pts
+			(xy 226.06 215.265) (xy 226.06 193.675)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "98e80e27-691d-4843-8a6c-6f1aa8f7f7db")
+	)
+	(wire
+		(pts
+			(xy 304.165 76.2) (xy 296.545 76.2)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "997a93e4-d2e0-476f-817f-405da1a76fb5")
+	)
+	(wire
+		(pts
+			(xy 311.15 250.19) (xy 317.5 250.19)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9a1c1e67-f903-4d5c-97ac-678f3724a063")
+	)
+	(wire
+		(pts
+			(xy 287.02 145.415) (xy 295.91 145.415)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9a3fc503-ad1d-4fa5-b4a9-bd80c7faac81")
+	)
+	(wire
+		(pts
+			(xy 226.06 110.49) (xy 226.06 88.9)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9f030495-5b23-4d83-b30e-cff49a0053c6")
+	)
+	(wire
+		(pts
+			(xy 304.165 180.975) (xy 296.545 180.975)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "a01d7b6c-2f82-4f94-9ee7-400621d82072")
+	)
+	(wire
+		(pts
+			(xy 189.23 173.99) (xy 189.23 175.895)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "a0f47ccf-6a5d-4e14-87b9-d4404db122d2")
+	)
+	(wire
+		(pts
+			(xy 296.545 76.2) (xy 296.545 83.82)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "a32913d1-612b-4f29-ae70-a94abca4afa3")
+	)
+	(wire
+		(pts
+			(xy 267.97 88.9) (xy 267.97 111.125)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "a52ec073-0adf-439e-b1c0-56e95b7f7e3f")
+	)
+	(wire
+		(pts
+			(xy 311.15 93.98) (xy 317.5 93.98)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "a58a75d5-9962-4b82-82b0-5b09523a0fd9")
+	)
+	(wire
+		(pts
+			(xy 236.22 240.03) (xy 239.395 240.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "a673e90b-2f8f-47f6-ac60-716db5ed25ae")
+	)
+	(wire
+		(pts
+			(xy 264.795 240.03) (xy 273.05 240.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "a6a90814-325b-46c2-96c6-569ef4a00776")
+	)
+	(wire
+		(pts
+			(xy 304.165 127.635) (xy 295.91 127.635)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "a6e53bb1-9517-49c9-8a62-a955dd4513a8")
+	)
+	(wire
+		(pts
+			(xy 162.56 141.605) (xy 162.56 142.875)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "aa11f319-629d-4293-98c8-7fa541faad64")
+	)
+	(wire
+		(pts
+			(xy 162.56 230.505) (xy 162.56 237.49)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "ab52143f-bb2f-4a4b-9ccb-c7140696e1f1")
+	)
+	(wire
+		(pts
+			(xy 264.795 135.255) (xy 273.05 135.255)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "abea12da-353c-4944-8742-6a129e91d97b")
+	)
+	(wire
+		(pts
+			(xy 296.545 83.82) (xy 287.02 83.82)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "aca803b7-96d4-4e29-b0ce-744afc2e631d")
+	)
+	(wire
+		(pts
+			(xy 264.795 193.675) (xy 267.97 193.675)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "ad9838a5-4c07-4657-b247-6b818e6f27be")
+	)
+	(wire
+		(pts
+			(xy 273.05 188.595) (xy 281.94 188.595)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "b4dcc7e6-d8e7-4480-8843-4ddd33b1aa57")
+	)
+	(wire
+		(pts
+			(xy 273.05 142.875) (xy 273.05 145.415)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "b520a71d-e2e4-4b14-8a93-6fc2a87cda90")
+	)
+	(wire
+		(pts
+			(xy 217.805 115.57) (xy 220.98 115.57)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "b5395167-1b43-4190-8901-a863cb3bd85d")
+	)
+	(wire
+		(pts
+			(xy 189.23 225.425) (xy 189.23 234.95)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "b97f2ac3-e236-4d9b-a8d5-726cf1e83644")
+	)
+	(wire
+		(pts
+			(xy 189.23 120.65) (xy 192.405 120.65)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "ba6f2600-63ed-4a8b-a511-17713020e190")
+	)
+	(wire
+		(pts
+			(xy 317.5 250.19) (xy 317.5 265.43)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "badc3069-821c-4420-8876-295607675d86")
+	)
+	(wire
+		(pts
+			(xy 236.22 83.82) (xy 239.395 83.82)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "bb7c1b8b-48b1-402d-a6ff-7f4cf9a7bfbe")
+	)
+	(wire
+		(pts
+			(xy 267.97 193.675) (xy 267.97 215.9)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "bb9d1e66-aa2c-407d-bd9d-bc83ceb774a9")
+	)
+	(wire
+		(pts
+			(xy 273.05 135.255) (xy 281.94 135.255)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "be4b740d-a3c2-4622-8927-ed4a9c7ed05f")
+	)
+	(wire
+		(pts
+			(xy 311.15 109.22) (xy 311.15 111.125)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c0ac8bac-ff08-41a7-bb7d-c9b0ac84f092")
+	)
+	(wire
+		(pts
+			(xy 162.56 237.49) (xy 173.99 237.49)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c0bb6900-9aa9-449d-8d3a-abce6cbc457a")
+	)
+	(wire
+		(pts
+			(xy 236.22 145.415) (xy 239.395 145.415)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c148e312-6fa4-4dec-95dc-5d05397e4e7b")
+	)
+	(wire
+		(pts
+			(xy 273.05 135.255) (xy 273.05 137.795)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c28acf47-aee5-4b11-a0b7-ab0f9cdfd3b7")
+	)
+	(wire
+		(pts
+			(xy 264.795 93.98) (xy 273.05 93.98)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c44e1482-507d-4ffb-a404-2c8ed1ee0a21")
+	)
+	(wire
+		(pts
+			(xy 226.06 120.65) (xy 226.06 140.335)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c4a74113-b2a8-4b69-a4cc-5fa770d15d7a")
+	)
+	(wire
+		(pts
+			(xy 273.05 188.595) (xy 273.05 191.135)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c523b5d4-a5af-430f-b880-a9ea105914fa")
+	)
+	(wire
+		(pts
+			(xy 226.06 110.49) (xy 226.06 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c74ecd4e-ae00-4e78-b39f-48804cc4df98")
+	)
+	(wire
+		(pts
+			(xy 177.8 115.57) (xy 192.405 115.57)
+		)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(uuid "c78aebf0-7e45-4e10-ae2f-ced0c800b59d")
+	)
+	(wire
+		(pts
+			(xy 226.06 225.425) (xy 226.06 245.11)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c8f40a0b-6581-4e58-9bf4-a81102de405b")
+	)
+	(wire
+		(pts
+			(xy 267.97 173.355) (xy 287.655 173.355)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c9a16f66-4796-450c-a065-5c008b9ac3ca")
+	)
+	(wire
+		(pts
+			(xy 273.05 196.215) (xy 273.05 198.755)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c9e3db78-b2e8-4c21-a113-f013466d3db3")
+	)
+	(wire
+		(pts
+			(xy 189.23 175.895) (xy 195.58 175.895)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "cd217fc3-e73c-4d77-90f3-7ed76bf39ea5")
+	)
+	(wire
+		(pts
+			(xy 226.06 222.885) (xy 226.06 225.425)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d04c990b-f0ee-4a34-be3e-c5ee43191780")
+	)
+	(wire
+		(pts
+			(xy 220.98 115.57) (xy 220.98 130.175)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d0d8b2c8-633a-4a2f-a2f3-9a521957846f")
+	)
+	(wire
+		(pts
+			(xy 198.755 175.895) (xy 201.93 175.895)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d14e492a-bed4-47e1-ad6b-1df03247d54d")
+	)
+	(wire
+		(pts
+			(xy 273.05 93.98) (xy 281.94 93.98)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d2d2564b-a53e-4401-9cdc-87a9b484e3c4")
+	)
+	(wire
+		(pts
+			(xy 296.545 93.98) (xy 296.545 101.6)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d4ce30fc-684e-4d95-8a9c-41898429398b")
+	)
+	(wire
+		(pts
+			(xy 317.5 109.22) (xy 311.15 109.22)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d5a349fd-3e25-4c32-a5be-54988bd41290")
+	)
+	(wire
+		(pts
+			(xy 236.22 93.98) (xy 239.395 93.98)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d70afce4-8b08-471d-a6a0-1dda88dd2e11")
+	)
+	(wire
+		(pts
+			(xy 236.22 240.03) (xy 236.22 250.19)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d7fd8171-8f95-4b01-9dd1-dc39481acbe0")
+	)
+	(wire
+		(pts
+			(xy 162.56 115.57) (xy 153.035 115.57)
+		)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(uuid "d96d3e59-e36f-4d7e-b051-4043824ae7df")
+	)
+	(wire
+		(pts
+			(xy 311.15 265.43) (xy 311.15 267.335)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d9cbf52c-c69c-448a-b4dc-7bbbe6ca808d")
+	)
+	(wire
+		(pts
+			(xy 226.06 193.675) (xy 239.395 193.675)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d9eb6942-2704-427c-acb4-633521042b4e")
+	)
+	(wire
+		(pts
+			(xy 162.56 246.38) (xy 162.56 247.65)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "dbe3d00b-365b-493c-aae6-3ffca6926045")
+	)
+	(wire
+		(pts
+			(xy 310.515 120.015) (xy 317.5 120.015)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "dc49f541-19e0-4153-9089-2aa2b8ce279c")
+	)
+	(wire
+		(pts
+			(xy 236.22 135.255) (xy 239.395 135.255)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "dda7e257-d39c-4d4a-be94-7b723896db7e")
+	)
+	(wire
+		(pts
+			(xy 192.405 215.265) (xy 189.23 215.265)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "de0fc85d-50aa-4156-90fa-f69f20a816d2")
+	)
+	(wire
+		(pts
+			(xy 264.795 250.19) (xy 273.05 250.19)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e11dc334-7992-4e35-a1b2-e45177f6d3b3")
+	)
+	(wire
+		(pts
+			(xy 317.5 198.755) (xy 317.5 213.995)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e43c7e01-31e1-44d4-a519-439383fb7d99")
+	)
+	(wire
+		(pts
+			(xy 236.22 162.56) (xy 236.22 145.415)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e5fca951-a94c-4f0d-ab40-f2e0f231fbd9")
+	)
+	(wire
+		(pts
+			(xy 296.545 198.755) (xy 296.545 206.375)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e61b1194-0f78-4ea3-bdde-bdebd0faea6a")
+	)
+	(wire
+		(pts
+			(xy 162.56 115.57) (xy 172.72 115.57)
+		)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(uuid "e9ec9c74-0d94-4ce1-a549-9105323716af")
+	)
+	(wire
+		(pts
+			(xy 310.515 83.82) (xy 310.515 85.725)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "ea5377a9-ba0a-4057-8668-590a5f0528be")
+	)
+	(wire
+		(pts
+			(xy 287.02 198.755) (xy 296.545 198.755)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "ec15de16-9d6f-4296-94c9-e8cf7d150519")
+	)
+	(wire
+		(pts
+			(xy 146.685 123.19) (xy 146.685 130.175)
+		)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(uuid "ee86e2e0-311e-4cd2-a404-ec688872ef0b")
+	)
+	(wire
+		(pts
+			(xy 287.02 93.98) (xy 296.545 93.98)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "ef58eca2-c019-451d-ae13-46e74e697ea2")
+	)
+	(wire
+		(pts
+			(xy 296.545 101.6) (xy 304.8 101.6)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f055894c-1c6b-4193-97b6-b92694aafeda")
+	)
+	(wire
+		(pts
+			(xy 236.22 83.82) (xy 236.22 93.98)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f12689e8-a7d9-40a2-826c-a68ce859af61")
+	)
+	(wire
+		(pts
+			(xy 162.56 132.715) (xy 173.99 132.715)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f179a2b3-7308-4fee-ad88-9e4c9f002bb9")
+	)
+	(wire
+		(pts
+			(xy 273.05 247.65) (xy 273.05 250.19)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f61801ae-370c-44cf-a230-80d098380794")
+	)
+	(wire
+		(pts
+			(xy 267.97 140.335) (xy 267.97 162.56)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f9d8d905-6962-4113-adf8-735bb4602d75")
+	)
+	(wire
+		(pts
+			(xy 220.98 220.345) (xy 220.98 234.95)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "fb61b157-4937-4f16-a7ee-70c2aa4c09d3")
+	)
+	(wire
+		(pts
+			(xy 311.15 198.755) (xy 317.5 198.755)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "fb851d46-8542-41f6-955e-6f8dd864b66c")
+	)
+	(wire
+		(pts
+			(xy 195.58 175.895) (xy 198.755 175.895)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "fdd81f54-e3d0-48e0-bc49-53ab1c6273b1")
+	)
+	(wire
+		(pts
+			(xy 264.795 83.82) (xy 273.05 83.82)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "fde12572-1969-4535-a6c0-e204c8855110")
+	)
+	(wire
+		(pts
+			(xy 310.515 188.595) (xy 310.515 190.5)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "fef23649-939f-425f-9624-5d74c8a669ab")
+	)
+	(text "RF_Divider_4PX2"
+		(exclude_from_sim no)
+		(at 282.575 342.265 0)
+		(effects
+			(font
+				(size 6 6)
+			)
+			(justify left bottom)
+		)
+		(uuid "31c60c35-adfa-4445-805f-6c0d8c319ac6")
+	)
+	(text "ver.1.0 2024-11-26"
+		(exclude_from_sim no)
+		(at 404.495 341.63 0)
+		(effects
+			(font
+				(size 4 4)
+			)
+			(justify left bottom)
+		)
+		(uuid "c42922e6-b2fc-436c-8af3-ef7636c9f962")
+	)
+	(label "ANT_DC1"
+		(at 173.99 132.715 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "21549502-ef1b-45d5-a682-78ee5cfa74c3")
+	)
+	(label "ANT_DC1"
+		(at 267.97 67.945 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "3323fcbb-e933-48a0-a3fe-c11220dd5ad4")
+	)
+	(label "ANT_DC2"
+		(at 173.99 237.49 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "8b609b43-5a74-45b1-bb81-f1cb0bde4bc5")
+	)
+	(label "ANT_DC2"
+		(at 267.97 173.355 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "f5d019af-ba22-4e30-8de5-d422ecf343bd")
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:SMA-ANG")
+		(at 146.685 220.345 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "09fe82a5-88ba-48ab-b90e-6d7241260dd1")
+		(property "Reference" "J2"
+			(at 145.415 215.9 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(bold yes)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "SMA-ANG"
+			(at 135.255 220.345 0)
+			(effects
+				(font
+					(size 1.5113 1.5113)
+					(bold yes)
+				)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:SMA-ANG"
+			(at 146.685 220.345 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 146.685 220.345 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 146.685 220.345 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "P1"
+			(uuid "b30d2b47-6bae-4033-a107-f0bcc3be0959")
+		)
+		(pin "P2"
+			(uuid "91ccb76d-d4e3-46b9-aee2-9d8a5a290257")
+		)
+		(pin "P3"
+			(uuid "73137d11-ba06-4090-b8d4-1e7c74981e95")
+		)
+		(pin "P4"
+			(uuid "1840c96f-8556-4cb5-bf17-6a8f5f3f9eb0")
+		)
+		(pin "P5"
+			(uuid "fe68cc02-475c-4573-85cd-4bb8ef930c54")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "J2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:C1005")
+		(at 284.48 198.755 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "0bd471c0-5700-4197-955a-09915a96b470")
+		(property "Reference" "C12"
+			(at 283.21 194.945 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "100pF"
+			(at 288.925 194.945 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1005"
+			(at 284.48 198.755 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 284.48 198.755 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 284.48 198.755 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "a00e79a9-a94e-403e-afbc-296d8a04a5d0")
+		)
+		(pin "2"
+			(uuid "b0d43936-2d80-4d25-a306-a4931c5a0314")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "C12")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:SMA-ANG")
+		(at 311.15 153.035 180)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "170a23f5-f75c-4aca-9e71-082130ca22c6")
+		(property "Reference" "J6"
+			(at 307.34 149.225 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(bold yes)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "SMA-ANG"
+			(at 325.12 153.035 0)
+			(effects
+				(font
+					(size 1.5113 1.5113)
+					(bold yes)
+				)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:SMA-ANG"
+			(at 311.15 153.035 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 311.15 153.035 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 311.15 153.035 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "P1"
+			(uuid "66d7ebec-0e84-4145-8425-cedbbdca822a")
+		)
+		(pin "P2"
+			(uuid "2d5d6b2b-084c-4dee-82ce-733ac5a089e3")
+		)
+		(pin "P3"
+			(uuid "413cca15-8a39-4cbf-9dbc-23c9fd4d5e5b")
+		)
+		(pin "P4"
+			(uuid "5341a483-fe73-4754-ac11-eae1d051fce7")
+		)
+		(pin "P5"
+			(uuid "286774c3-b080-4c81-821b-74f6063ecde9")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "J6")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 311.15 111.125 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "28abf7d3-00cb-422f-972e-4298e8f67467")
+		(property "Reference" "#U$021"
+			(at 311.15 111.125 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 311.15 111.125 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 311.15 111.125 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 311.15 111.125 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 311.15 111.125 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "5133046c-b334-4045-bf5e-473a1cfe37b9")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$021")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:R1005")
+		(at 273.05 88.9 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "2e2bfee4-81a8-44a1-b09e-9a1888e2df89")
+		(property "Reference" "R3"
+			(at 277.495 85.725 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "100"
+			(at 274.955 91.44 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify right)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1005"
+			(at 273.05 88.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 273.05 88.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 273.05 88.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "dea6d890-e03d-4e3a-b2a2-857d232d1bfd")
+		)
+		(pin "2"
+			(uuid "b7997374-40ca-4525-afe8-5a136778c115")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "R3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:RF_DIV")
+		(at 205.105 220.345 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "2fdb2105-0fd3-47f9-b228-3bf141240cfb")
+		(property "Reference" "U2"
+			(at 203.2 220.98 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(thickness 0.3023)
+					(bold yes)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "PD0922J5050S2HF"
+			(at 205.105 208.28 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(thickness 0.3023)
+					(bold yes)
+				)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:RF_DIV"
+			(at 205.105 220.345 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 205.105 220.345 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 205.105 220.345 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "3"
+			(uuid "874b95c0-c6b2-4168-9b7e-51b039383e30")
+		)
+		(pin "5"
+			(uuid "4ce3ca1e-594e-469d-8ff7-a2bd3974d592")
+		)
+		(pin "2"
+			(uuid "dcb231c8-64cd-484f-bfd7-9702af0a0c29")
+		)
+		(pin "6"
+			(uuid "36f1be0a-578f-47e1-8403-b7399ed880c2")
+		)
+		(pin "4"
+			(uuid "50c420e9-2c15-4ff5-8ddb-c460694ff1d8")
+		)
+		(pin "1"
+			(uuid "70ed06fb-f692-49db-90c4-1dcce5d00167")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "U2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:L1608")
+		(at 162.56 227.965 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "32b537a7-d1df-4f8a-8c25-cd2bad325910")
+		(property "Reference" "L2"
+			(at 165.735 224.155 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "68nH"
+			(at 167.64 229.87 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1608"
+			(at 162.56 227.965 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 162.56 227.965 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 162.56 227.965 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "b969c775-726d-44d6-ab87-110b33dd8eda")
+		)
+		(pin "2"
+			(uuid "747b9910-c402-4292-8013-57612a22af14")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "L2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:SMA-ANG")
+		(at 146.685 115.57 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "33b1921c-6e52-4027-824c-e3cdb58ff397")
+		(property "Reference" "J1"
+			(at 145.415 111.125 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(bold yes)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "SMA-ANG"
+			(at 135.255 115.57 0)
+			(effects
+				(font
+					(size 1.5113 1.5113)
+					(bold yes)
+				)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:SMA-ANG"
+			(at 146.685 115.57 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 146.685 115.57 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 146.685 115.57 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "P1"
+			(uuid "662770d9-992e-4ac9-ac8a-13f27745c8f8")
+		)
+		(pin "P2"
+			(uuid "d0818ffb-abbb-4161-95dd-0e484ee7e92f")
+		)
+		(pin "P3"
+			(uuid "51a085f5-9a71-4a3b-8131-9e8ea1c3a7a8")
+		)
+		(pin "P4"
+			(uuid "7dae6fec-4f16-40ec-9287-d8e2912e54e4")
+		)
+		(pin "P5"
+			(uuid "e3035c42-9f1c-4577-b382-8aab103e4e87")
+		)
+		(instances
+			(project "v3.0"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "J1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 310.515 241.935 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "3503c9fa-8a66-49e3-82cd-37ea29fb83ea")
+		(property "Reference" "#U$020"
+			(at 310.515 241.935 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 310.515 241.935 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 310.515 241.935 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 310.515 241.935 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 310.515 241.935 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "be5e44ea-167a-410c-8498-0e9daa6db156")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$020")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:SMA-ANG")
+		(at 311.15 206.375 180)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "376d58cf-b87f-42b8-9bf4-048afa82bbcc")
+		(property "Reference" "J8"
+			(at 306.705 202.565 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(bold yes)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "SMA-ANG"
+			(at 325.12 207.01 0)
+			(effects
+				(font
+					(size 1.5113 1.5113)
+					(bold yes)
+				)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:SMA-ANG"
+			(at 311.15 206.375 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 311.15 206.375 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 311.15 206.375 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "P1"
+			(uuid "a57f8f3b-0aa7-46aa-9478-bded90826481")
+		)
+		(pin "P2"
+			(uuid "e1efa56d-2d70-464a-ac44-57c8823b9dc6")
+		)
+		(pin "P3"
+			(uuid "075e0ded-c4c9-4ffd-9bb0-6029e9f84d29")
+		)
+		(pin "P4"
+			(uuid "16cd973e-d29b-4dab-bf4a-4027a127d730")
+		)
+		(pin "P5"
+			(uuid "315436a1-dc35-4bc8-98c1-6d357e978017")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "J8")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 310.515 137.16 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "381731cb-eb93-43b0-b433-90758fc0e699")
+		(property "Reference" "#U$018"
+			(at 310.515 137.16 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 310.515 137.16 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 310.515 137.16 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 310.515 137.16 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 310.515 137.16 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "aed15bc4-1844-41d1-8be1-83e90c9b768d")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$018")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 236.22 162.56 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "3d1015a8-c8cb-466b-a535-8fbdc9ab8ac6")
+		(property "Reference" "#U$010"
+			(at 236.22 162.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 236.22 162.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 236.22 162.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 236.22 162.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 236.22 162.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "024d5b77-5171-4bd9-9be8-c5c1673e0c89")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$010")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 267.97 215.9 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "4c84b7d5-0d80-4f4a-9116-1a1251755cc1")
+		(property "Reference" "#U$015"
+			(at 267.97 215.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 267.97 215.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 267.97 215.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 267.97 215.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 267.97 215.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "f6f931c9-8542-4a5c-83cd-0cfeb8070f4a")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$015")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 220.98 130.175 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "4cac6d83-1321-4ef6-b3c1-ffa6429d61a0")
+		(property "Reference" "#U$07"
+			(at 220.98 130.175 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 220.98 130.175 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 220.98 130.175 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 220.98 130.175 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 220.98 130.175 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "d7f5dd9c-9dc3-4442-9df3-9b30500cf15f")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$07")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:SMA-ANG")
+		(at 310.515 180.975 180)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "4ea019b5-5129-47be-b82c-5d6fb5248e56")
+		(property "Reference" "J7"
+			(at 306.705 177.165 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(bold yes)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "SMA-ANG"
+			(at 325.12 181.61 0)
+			(effects
+				(font
+					(size 1.5113 1.5113)
+					(bold yes)
+				)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:SMA-ANG"
+			(at 310.515 180.975 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 310.515 180.975 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 310.515 180.975 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "P1"
+			(uuid "2ad5839d-d315-4139-9090-57f9a1382829")
+		)
+		(pin "P2"
+			(uuid "0c515d71-bd7c-4008-a7fb-5a1d1dc3228b")
+		)
+		(pin "P3"
+			(uuid "a6b07658-5c31-4ff2-87f5-313da85e2361")
+		)
+		(pin "P4"
+			(uuid "a886f11f-b0f6-468d-860d-ba24ea9e4beb")
+		)
+		(pin "P5"
+			(uuid "9c7b8a53-7c74-40ba-b7c0-815f79c18346")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "J7")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:C1005")
+		(at 284.48 145.415 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "50ee4df1-07ff-45e6-b820-4506f3b899d1")
+		(property "Reference" "C10"
+			(at 283.21 141.605 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "100pF"
+			(at 288.925 141.605 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1005"
+			(at 284.48 145.415 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 284.48 145.415 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 284.48 145.415 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "be433a07-db1a-465e-9628-6cf5d0d59e01")
+		)
+		(pin "2"
+			(uuid "0e45484e-e7b6-4664-a950-c95dfdfb8cba")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "C10")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 310.515 190.5 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "515e8d09-4fe4-4916-b96c-1fdfedc87013")
+		(property "Reference" "#U$019"
+			(at 310.515 190.5 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 310.515 190.5 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 310.515 190.5 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 310.515 190.5 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 310.515 190.5 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "727b3e60-9096-4eeb-b535-3c1d08c17259")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$019")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 236.22 267.335 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "53061136-728f-4b25-8a88-393a8ed00fc6")
+		(property "Reference" "#U$012"
+			(at 236.22 267.335 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 236.22 267.335 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 236.22 267.335 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 236.22 267.335 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 236.22 267.335 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "2e1126a5-99e3-4af9-b805-8873c8965402")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$012")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 198.755 177.165 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "57a54d31-22f8-4cf0-bb81-8c21bf2e0578")
+		(property "Reference" "#U$025"
+			(at 198.755 177.165 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 198.755 177.165 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 198.755 177.165 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 198.755 177.165 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 198.755 177.165 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "da0c4e2f-008b-495e-96e5-0ab4917dc20e")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$025")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 146.685 234.95 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "5983594c-8ae4-45f4-a062-c6b2d7439b61")
+		(property "Reference" "#U$02"
+			(at 146.685 234.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 146.685 234.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 146.685 234.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 146.685 234.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 146.685 234.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "6a810420-207d-4461-a397-fdd85425ffa0")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$02")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 146.685 130.175 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "5c8eb88a-969a-4886-abf5-3756403bb859")
+		(property "Reference" "#U$01"
+			(at 146.685 130.175 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 146.685 130.175 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 146.685 130.175 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 146.685 130.175 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 146.685 130.175 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "0b22f498-0bfd-4b6d-a225-fed0f987bf26")
+		)
+		(instances
+			(project "v1.0"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$01")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:R1005")
+		(at 273.05 140.335 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "5d443248-1c75-415f-ac97-c21b711e2d7b")
+		(property "Reference" "R4"
+			(at 277.495 137.16 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "100"
+			(at 274.955 142.875 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify right)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1005"
+			(at 273.05 140.335 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 273.05 140.335 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 273.05 140.335 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "65319e50-0898-4d30-808f-1c6e9aefaf28")
+		)
+		(pin "2"
+			(uuid "2fc80eff-14c1-476a-9b1e-91c20a7518a7")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "R4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 189.23 130.175 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "60e1efe2-d41e-4039-8f68-35995dda0cb9")
+		(property "Reference" "#U$05"
+			(at 189.23 130.175 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 189.23 130.175 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 189.23 130.175 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 189.23 130.175 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 189.23 130.175 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "4280c7ad-6c9f-4a44-8fa7-a0022579b246")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$05")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 162.56 247.65 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "63087664-04a4-42c6-ad18-41e8396c0908")
+		(property "Reference" "#U$04"
+			(at 162.56 247.65 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 162.56 247.65 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 162.56 247.65 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 162.56 247.65 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 162.56 247.65 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "9130f472-3b9f-4417-8652-2468891c6fb1")
+		)
+		(instances
+			(project "div_4px2"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$04")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:RF_DIV")
+		(at 252.095 193.675 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "64b4499d-05cd-4e14-bbb6-8002173cdac4")
+		(property "Reference" "U5"
+			(at 250.825 194.31 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(thickness 0.3023)
+					(bold yes)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "PD0922J5050S2HF"
+			(at 252.095 181.61 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(thickness 0.3023)
+					(bold yes)
+				)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:RF_DIV"
+			(at 252.095 193.675 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 252.095 193.675 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 252.095 193.675 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "3"
+			(uuid "89ebc56b-b57d-4884-af9c-d8fd5a8065c9")
+		)
+		(pin "5"
+			(uuid "9100f9e2-5da2-41c1-b296-9d47289cbcb7")
+		)
+		(pin "2"
+			(uuid "ff4e5635-1f52-41b7-97e0-0d5bead0a79c")
+		)
+		(pin "6"
+			(uuid "e8d3cc66-9493-4ba1-9832-127fd87d8588")
+		)
+		(pin "4"
+			(uuid "d3af1b1e-0fb0-4dc7-a645-5adeae992427")
+		)
+		(pin "1"
+			(uuid "6e2974b6-0053-4cd4-9583-f951b0b4b367")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "U5")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:C1005")
+		(at 175.26 115.57 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "68dd4815-5b71-4a48-8bb6-4725c5223f31")
+		(property "Reference" "C5"
+			(at 173.99 111.76 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "100pF"
+			(at 179.705 111.76 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1005"
+			(at 175.26 115.57 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 175.26 115.57 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 175.26 115.57 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "606bcea8-2e56-45d5-9cd6-b14c61f50bd2")
+		)
+		(pin "2"
+			(uuid "abc06de6-7a21-44c9-80aa-2d7e26b87ebe")
+		)
+		(instances
+			(project "v3.0"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "C5")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:C1005")
+		(at 284.48 240.03 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "69c54998-5f5e-422a-aa5d-f299f8e3fc45")
+		(property "Reference" "C13"
+			(at 283.21 236.22 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "100pF"
+			(at 288.925 236.22 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1005"
+			(at 284.48 240.03 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 284.48 240.03 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 284.48 240.03 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "0d57f859-a011-4e79-8de5-598a584e7f91")
+		)
+		(pin "2"
+			(uuid "878baede-7c78-4941-8be5-9961f3a41a4e")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "C13")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:L1608")
+		(at 290.195 173.355 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "6fbe7232-4599-41a9-a572-3929d2eb4509")
+		(property "Reference" "L4"
+			(at 285.115 170.815 0)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "68nH"
+			(at 291.465 170.815 0)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1608"
+			(at 290.195 173.355 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 290.195 173.355 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 290.195 173.355 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "064e0ead-2193-4f24-a7d4-64205b78f666")
+		)
+		(pin "2"
+			(uuid "504946f3-a073-4f1a-878e-24a144a483ee")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "L4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 189.23 234.95 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "7120629e-34f8-4331-8a5f-2aeab3dfdc17")
+		(property "Reference" "#U$06"
+			(at 189.23 234.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 189.23 234.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 189.23 234.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 189.23 234.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 189.23 234.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "c5c165fa-9c9b-4d5b-8412-a52fe971efff")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$06")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:RF_DIV")
+		(at 252.095 140.335 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "783846da-7907-4e67-b566-1c754dfaacdc")
+		(property "Reference" "U4"
+			(at 250.19 140.97 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(thickness 0.3023)
+					(bold yes)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "PD0922J5050S2HF"
+			(at 252.095 128.27 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(thickness 0.3023)
+					(bold yes)
+				)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:RF_DIV"
+			(at 252.095 140.335 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 252.095 140.335 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 252.095 140.335 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "3"
+			(uuid "62e8c439-c1bb-4f7c-a474-3f61a4101c36")
+		)
+		(pin "5"
+			(uuid "dc2dd5ff-c95a-4d41-978f-740cef2465cf")
+		)
+		(pin "2"
+			(uuid "9d0e6ec3-ec52-4b66-8d34-0ff894077dde")
+		)
+		(pin "6"
+			(uuid "0739a260-9010-4e15-a96c-e953e95a2868")
+		)
+		(pin "4"
+			(uuid "1b2943bc-b09c-45d8-8d26-e8cb88f02483")
+		)
+		(pin "1"
+			(uuid "900b88fb-95fb-4547-a58c-c7f3e5c4780b")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "U4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 236.22 215.9 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "7a3cfef6-f915-42ea-9954-0345a72e2b3b")
+		(property "Reference" "#U$011"
+			(at 236.22 215.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 236.22 215.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 236.22 215.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 236.22 215.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 236.22 215.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "afce24dd-c475-4a59-acc8-bbc3e4cdaf4d")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$011")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:SMA-ANG")
+		(at 310.515 232.41 180)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "7a8658f2-f115-41e6-8a83-b1a572799c1f")
+		(property "Reference" "J9"
+			(at 307.34 228.6 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(bold yes)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "SMA-ANG"
+			(at 325.755 232.41 0)
+			(effects
+				(font
+					(size 1.5113 1.5113)
+					(bold yes)
+				)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:SMA-ANG"
+			(at 310.515 232.41 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 310.515 232.41 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 310.515 232.41 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "P1"
+			(uuid "e9700a17-0aaf-42d1-92d6-348bc78d76f9")
+		)
+		(pin "P2"
+			(uuid "20cff19b-9bc9-4617-a814-08a42638f5b5")
+		)
+		(pin "P3"
+			(uuid "4b6423b7-fa75-4cf7-b8a8-99c413bb38fe")
+		)
+		(pin "P4"
+			(uuid "e3aac347-3fdb-48c6-ac6b-41023e733c0f")
+		)
+		(pin "P5"
+			(uuid "39072637-cc95-411b-96ec-b5178a101a79")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "J9")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:RF_DIV")
+		(at 252.095 88.9 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "7b81878b-898b-4e9a-aedd-31ef5362001c")
+		(property "Reference" "U3"
+			(at 250.19 89.535 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(thickness 0.3023)
+					(bold yes)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "PD0922J5050S2HF"
+			(at 252.095 76.835 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(thickness 0.3023)
+					(bold yes)
+				)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:RF_DIV"
+			(at 252.095 88.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 252.095 88.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 252.095 88.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "3"
+			(uuid "eba75fcd-bdc1-43ff-9648-f499fb7dd6d0")
+		)
+		(pin "5"
+			(uuid "a9a84ad4-ce8d-4aba-9b8d-abf96e98657b")
+		)
+		(pin "2"
+			(uuid "a7c8685d-3bb7-4988-9336-1cc538880feb")
+		)
+		(pin "6"
+			(uuid "720d3fb1-f1b4-469e-9790-696fcb1f6c50")
+		)
+		(pin "4"
+			(uuid "85f583c9-0e8f-47ff-84df-495f2b9b1911")
+		)
+		(pin "1"
+			(uuid "4c92d411-d211-4bd2-8764-73d36928861e")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "U3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:C1005")
+		(at 175.26 220.345 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "7fde971c-ec81-480c-bfdb-91ed18d570b9")
+		(property "Reference" "C6"
+			(at 173.99 216.535 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "100pF"
+			(at 179.705 216.535 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1005"
+			(at 175.26 220.345 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 175.26 220.345 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 175.26 220.345 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "0c52de4a-b1f6-4330-8a16-fb929e7c7c40")
+		)
+		(pin "2"
+			(uuid "4b72f881-db46-44f4-bbee-316704554be5")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "C6")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:SMA-ANG")
+		(at 310.515 76.2 180)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "87632614-29c1-45db-8e9d-9d6249c27d24")
+		(property "Reference" "J3"
+			(at 306.705 72.39 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(bold yes)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "SMA-ANG"
+			(at 325.12 76.835 0)
+			(effects
+				(font
+					(size 1.5113 1.5113)
+					(bold yes)
+				)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:SMA-ANG"
+			(at 310.515 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 310.515 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 310.515 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "P1"
+			(uuid "8d137a83-e08b-4d2c-806d-0d1258d8a744")
+		)
+		(pin "P2"
+			(uuid "297c4686-d572-4159-b44b-e683d44688c9")
+		)
+		(pin "P3"
+			(uuid "1f7000a1-8127-4bd2-ad1c-1a2fba9ee52d")
+		)
+		(pin "P4"
+			(uuid "71156a5c-6a79-4629-9600-16dd3c899549")
+		)
+		(pin "P5"
+			(uuid "5a7d4471-2735-4016-b148-72de868a1990")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "J3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 311.15 267.335 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "89ee209e-dd3b-40b3-a7c6-433be8b2f763")
+		(property "Reference" "#U$024"
+			(at 311.15 267.335 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 311.15 267.335 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 311.15 267.335 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 311.15 267.335 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 311.15 267.335 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "e8e8965d-5d50-4200-8084-b5d1dba2e261")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$024")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 267.97 111.125 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "8c60742f-ced0-4667-8210-776915a94a74")
+		(property "Reference" "#U$013"
+			(at 267.97 111.125 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 267.97 111.125 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 267.97 111.125 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 267.97 111.125 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 267.97 111.125 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "c5312426-1326-42b8-9abf-1b95711b3c1f")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$013")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:L1608")
+		(at 162.56 124.46 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "8fac2a5b-0774-4ad3-897f-c50168458e67")
+		(property "Reference" "L1"
+			(at 165.735 120.65 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "68nH"
+			(at 167.64 126.365 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1608"
+			(at 162.56 124.46 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 162.56 124.46 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 162.56 124.46 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "5fa736f7-b511-4d36-8f78-efc4cbf43248")
+		)
+		(pin "2"
+			(uuid "ec25f6c4-0065-47b7-bc09-990326efe4e1")
+		)
+		(instances
+			(project "v3.0"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "L1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 162.56 142.875 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "8fbb8d33-953e-4d24-a5f3-a178227f3e89")
+		(property "Reference" "#U$03"
+			(at 162.56 142.875 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 162.56 142.875 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 162.56 142.875 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 162.56 142.875 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 162.56 142.875 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "2db5d601-360f-46b7-971d-cf097cbae4a2")
+		)
+		(instances
+			(project "div_4px2"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$03")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 267.97 267.335 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "97b7d162-1fd2-4f7a-a2fa-d9a12d801a3c")
+		(property "Reference" "#U$016"
+			(at 267.97 267.335 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 267.97 267.335 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 267.97 267.335 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 267.97 267.335 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 267.97 267.335 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "5114b049-3d99-42b5-b44f-417c7ec43522")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$016")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 311.15 162.56 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "990de9a6-1231-470f-9940-afed1765148f")
+		(property "Reference" "#U$022"
+			(at 311.15 162.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 311.15 162.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 311.15 162.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 311.15 162.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 311.15 162.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "eebd88d2-d5c3-4db3-8a65-9e9ad6bb8ff9")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$022")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:L1608")
+		(at 290.83 67.945 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "9c3fcf5f-8fb9-4aba-9df9-f0415bbe7e39")
+		(property "Reference" "L3"
+			(at 285.75 65.405 0)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "68nH"
+			(at 292.1 65.405 0)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1608"
+			(at 290.83 67.945 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 290.83 67.945 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 290.83 67.945 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "0f873e59-6de1-4c7e-9a7a-497405605673")
+		)
+		(pin "2"
+			(uuid "82165b60-0cd5-433d-8545-6a8d3e2da375")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "L3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:R1005")
+		(at 226.06 220.345 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "9c88d3b5-326c-4097-86ae-ef7c60f5b6f4")
+		(property "Reference" "R2"
+			(at 231.14 217.17 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "100"
+			(at 228.6 222.885 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify right)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1005"
+			(at 226.06 220.345 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 226.06 220.345 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 226.06 220.345 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "de5dd974-ef23-419a-b529-6ddba1ca4423")
+		)
+		(pin "2"
+			(uuid "916c9b07-a82e-48a0-8feb-73f59493ef24")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "R2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:C1005")
+		(at 284.48 135.255 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "a403bf0e-954c-4825-9b92-0f7f8becd821")
+		(property "Reference" "C9"
+			(at 283.21 131.445 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "100pF"
+			(at 288.925 131.445 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1005"
+			(at 284.48 135.255 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 284.48 135.255 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 284.48 135.255 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "94ce005c-b6aa-4ff9-9b76-4e92218e00fa")
+		)
+		(pin "2"
+			(uuid "25035540-c05b-43ae-994d-1f6dc410f374")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "C9")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:C1005")
+		(at 162.56 243.84 180)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "aa19a74a-97c3-4739-9fa4-987245ee204d")
+		(property "Reference" "C2"
+			(at 166.37 240.03 0)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "0.1uF"
+			(at 169.545 246.38 0)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1005"
+			(at 162.56 243.84 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 162.56 243.84 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 162.56 243.84 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "4e01ea2f-8c21-4038-bbd6-d5f6fc947f48")
+		)
+		(pin "2"
+			(uuid "3702d1c0-7c86-4297-a7fe-ce13f05e86e9")
+		)
+		(instances
+			(project "div_4px2"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "C2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:CPAD_3.2MM")
+		(at 189.23 168.91 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "aa740464-6f3c-4b2a-b1b5-ce801a9b0f35")
+		(property "Reference" "PAD1"
+			(at 189.23 168.91 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "CPAD_3.2MM"
+			(at 185.42 168.91 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:CPAD_3.2MM"
+			(at 182.88 168.91 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 189.23 168.91 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 189.23 168.91 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "EP"
+			(uuid "3df2ce17-3420-400f-a998-52db2925f75d")
+		)
+		(instances
+			(project ""
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "PAD1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:C1005")
+		(at 284.48 93.98 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "adf29ba7-7a16-4be7-889d-94fd961391b5")
+		(property "Reference" "C8"
+			(at 283.21 90.17 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "100pF"
+			(at 288.925 90.17 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1005"
+			(at 284.48 93.98 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 284.48 93.98 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 284.48 93.98 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "fe31c802-c521-466a-884e-c039f4e2c417")
+		)
+		(pin "2"
+			(uuid "e1d87430-ebbf-4484-9b45-980eb40c7d41")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "C8")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:CPAD_3.2MM")
+		(at 208.28 168.91 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "b079f287-ddff-4d9c-8e83-966fe8cedcf3")
+		(property "Reference" "PAD4"
+			(at 208.28 168.91 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "CPAD_3.2MM"
+			(at 204.47 168.91 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:CPAD_3.2MM"
+			(at 201.93 168.91 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 208.28 168.91 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 208.28 168.91 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "EP"
+			(uuid "a1a59fd2-ba10-4478-85f1-8fa16a00f10f")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "PAD4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 236.22 111.125 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "b0aa3d55-2746-46d1-aac6-e94b96caf9af")
+		(property "Reference" "#U$09"
+			(at 236.22 111.125 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 236.22 111.125 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 236.22 111.125 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 236.22 111.125 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 236.22 111.125 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "3e930a1e-2859-4544-b725-f8a21f9a8c73")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$09")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:C1005")
+		(at 284.48 188.595 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "b295b9ba-cdb9-4f15-bc0b-9bcc9373a7bf")
+		(property "Reference" "C11"
+			(at 283.21 184.785 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "100pF"
+			(at 288.925 184.785 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1005"
+			(at 284.48 188.595 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 284.48 188.595 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 284.48 188.595 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "04575a94-dfdf-4557-9f78-6c7636eaff2b")
+		)
+		(pin "2"
+			(uuid "f59fc100-280e-4c75-91c5-cc1f535511c1")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "C11")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:RF_DIV")
+		(at 252.095 245.11 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "b4809d80-f12f-4e17-8ae7-6839a17480c5")
+		(property "Reference" "U6"
+			(at 250.19 245.745 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(thickness 0.3023)
+					(bold yes)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "PD0922J5050S2HF"
+			(at 252.095 233.045 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(thickness 0.3023)
+					(bold yes)
+				)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:RF_DIV"
+			(at 252.095 245.11 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 252.095 245.11 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 252.095 245.11 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "3"
+			(uuid "406757f3-efa1-46b9-ac14-96b01d122b78")
+		)
+		(pin "5"
+			(uuid "b0d5fd58-a764-4f51-bb97-bf9a8c5d7860")
+		)
+		(pin "2"
+			(uuid "4720dbd1-d3b3-4772-bc6a-75aa50d69637")
+		)
+		(pin "6"
+			(uuid "701b05ae-1d56-44e7-ac00-c02011f829fc")
+		)
+		(pin "4"
+			(uuid "fde88004-f634-4754-a686-e38a45d91976")
+		)
+		(pin "1"
+			(uuid "bc05ab58-299f-493f-96b9-aed52b324df5")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "U6")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:C1005")
+		(at 284.48 83.82 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "becf59e8-433d-4728-9152-575042756563")
+		(property "Reference" "C7"
+			(at 283.21 80.01 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "100pF"
+			(at 288.925 80.01 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1005"
+			(at 284.48 83.82 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 284.48 83.82 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 284.48 83.82 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "16e52d12-d6af-40de-ab46-60ad422381cc")
+		)
+		(pin "2"
+			(uuid "c7d5b5ef-d303-476a-bf25-ef59e26c2764")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "C7")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:C1005")
+		(at 162.56 139.065 180)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "bee6ac1b-77ea-4c08-a4a9-1d26a9831210")
+		(property "Reference" "C1"
+			(at 166.37 135.255 0)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "0.1uF"
+			(at 169.545 141.605 0)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1005"
+			(at 162.56 139.065 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 162.56 139.065 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 162.56 139.065 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "25fbd004-4f2c-47c8-b073-1a1e82ee0813")
+		)
+		(pin "2"
+			(uuid "9eb72613-df2f-452a-aa6a-cd3942e6a3cf")
+		)
+		(instances
+			(project "div_4px2"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "C1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:SMA-ANG")
+		(at 311.15 101.6 180)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "c02ea79f-b390-4af5-a9f5-0000dd66b153")
+		(property "Reference" "J4"
+			(at 306.705 97.79 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(bold yes)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "SMA-ANG"
+			(at 325.12 102.235 0)
+			(effects
+				(font
+					(size 1.5113 1.5113)
+					(bold yes)
+				)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:SMA-ANG"
+			(at 311.15 101.6 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 311.15 101.6 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 311.15 101.6 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "P1"
+			(uuid "6f5f4a7a-0791-4352-b1f8-e26fef247ea5")
+		)
+		(pin "P2"
+			(uuid "8bcf1c96-792e-469f-9039-e321acd6b7d6")
+		)
+		(pin "P3"
+			(uuid "c073d4f9-162b-4dd1-b31a-e57a8789ea46")
+		)
+		(pin "P4"
+			(uuid "363e47e2-9e65-4d5f-91a3-938bb8d9b2a4")
+		)
+		(pin "P5"
+			(uuid "cd769ef7-5660-4353-b3cd-2b1ef7380d36")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "J4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:C1005")
+		(at 284.48 250.19 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "c58bb00c-df43-43f0-b882-0286f2758e6d")
+		(property "Reference" "C14"
+			(at 283.21 246.38 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "100pF"
+			(at 288.925 246.38 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1005"
+			(at 284.48 250.19 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 284.48 250.19 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 284.48 250.19 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "880cd376-c1f3-4de7-8dca-7de9793497b6")
+		)
+		(pin "2"
+			(uuid "c13a1dd6-33f5-428b-b215-06d80737461b")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "C14")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:RF_DIV")
+		(at 205.105 115.57 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "cb242d5a-f7bf-41fc-a51a-de4f96273b70")
+		(property "Reference" "U1"
+			(at 203.2 116.205 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(thickness 0.3023)
+					(bold yes)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "PD0922J5050S2HF"
+			(at 205.105 103.505 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(thickness 0.3023)
+					(bold yes)
+				)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:RF_DIV"
+			(at 205.105 115.57 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 205.105 115.57 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 205.105 115.57 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "3"
+			(uuid "3ddbae1a-f8c6-414c-a1ae-9dd6be4caee3")
+		)
+		(pin "5"
+			(uuid "72d3b8a0-1b98-405f-8570-b569b1612644")
+		)
+		(pin "2"
+			(uuid "31f6b1aa-a323-4bee-bb7b-f336c74abace")
+		)
+		(pin "6"
+			(uuid "44e3b769-3550-477e-9378-b46e69c31d96")
+		)
+		(pin "4"
+			(uuid "b640ac5e-5b0f-4290-baba-01d41f98fdea")
+		)
+		(pin "1"
+			(uuid "db578d9c-ee0f-4bba-8148-57271926bf3f")
+		)
+		(instances
+			(project ""
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "U1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:SMA-ANG")
+		(at 311.15 257.81 180)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "cb7af128-d40e-45d6-8744-d537ec404d99")
+		(property "Reference" "J10"
+			(at 307.34 254 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(bold yes)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "SMA-ANG"
+			(at 325.12 257.81 0)
+			(effects
+				(font
+					(size 1.5113 1.5113)
+					(bold yes)
+				)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:SMA-ANG"
+			(at 311.15 257.81 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 311.15 257.81 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 311.15 257.81 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "P1"
+			(uuid "f44afac6-c21f-49c8-97a3-3ea7536348a6")
+		)
+		(pin "P2"
+			(uuid "3ea5936e-324e-4782-a2e7-404f36ad5d64")
+		)
+		(pin "P3"
+			(uuid "3a9ccd08-08fc-4070-abe7-26876c691cd4")
+		)
+		(pin "P4"
+			(uuid "28678af4-fcd5-4ec4-9b92-28819b2f1dca")
+		)
+		(pin "P5"
+			(uuid "f62d4f44-b20d-4f49-8066-b5506b69d131")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "J10")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 220.98 234.95 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "d5dedcc2-498c-4040-87f5-9907e06ca9b2")
+		(property "Reference" "#U$08"
+			(at 220.98 234.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 220.98 234.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 220.98 234.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 220.98 234.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 220.98 234.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "9a82da68-2a11-4456-b420-7306c687f65b")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$08")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 267.97 162.56 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "dc7cba3c-c793-4baa-b3df-9bb631584da5")
+		(property "Reference" "#U$014"
+			(at 267.97 162.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 267.97 162.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 267.97 162.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 267.97 162.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 267.97 162.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "b01b857e-b8fd-4653-baa5-0ca309e51bbe")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$014")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:CPAD_3.2MM")
+		(at 201.93 168.91 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "dcd7fa74-90b6-4627-aeba-b5ff59ea7914")
+		(property "Reference" "PAD3"
+			(at 201.93 168.91 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "CPAD_3.2MM"
+			(at 198.12 168.91 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:CPAD_3.2MM"
+			(at 195.58 168.91 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 201.93 168.91 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 201.93 168.91 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "EP"
+			(uuid "7e995772-1af1-4b0c-afc6-2d72f4b8a30a")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "PAD3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:R1005")
+		(at 273.05 193.675 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "def7ab85-9301-4349-abe8-6b6e15851c80")
+		(property "Reference" "R5"
+			(at 277.495 190.5 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "100"
+			(at 274.955 196.215 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify right)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1005"
+			(at 273.05 193.675 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 273.05 193.675 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 273.05 193.675 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "c754bdbe-c198-437d-8a14-7e7bd4d33cd9")
+		)
+		(pin "2"
+			(uuid "2e86f3c4-aeb4-419e-9dd6-2ccae50fa67d")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "R5")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:R1005")
+		(at 273.05 245.11 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "e845ac21-888e-410a-9ce2-2f94aed0218a")
+		(property "Reference" "R6"
+			(at 277.495 241.935 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "100"
+			(at 274.955 247.65 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify right)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1005"
+			(at 273.05 245.11 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 273.05 245.11 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 273.05 245.11 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "2d657f74-8d94-4f93-97eb-f1278dd25c23")
+		)
+		(pin "2"
+			(uuid "d8aa1e1f-21d1-49b8-b575-7de0847eb816")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "R6")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:R1005")
+		(at 226.06 115.57 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "edaf37fb-c85d-48b9-b13a-ce0fc7e385da")
+		(property "Reference" "R1"
+			(at 231.14 112.395 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "100"
+			(at 228.6 118.11 90)
+			(effects
+				(font
+					(size 1.27 1.0795)
+				)
+				(justify right)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:C1005"
+			(at 226.06 115.57 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 226.06 115.57 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 226.06 115.57 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "86c4180c-a096-4409-b279-20b2db2bc887")
+		)
+		(pin "2"
+			(uuid "95a0c483-87fe-40d1-aa8d-177eca386fcb")
+		)
+		(instances
+			(project ""
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "R1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:SMA-ANG")
+		(at 310.515 127.635 180)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "fa32272b-6bf7-42e1-a630-d4c432f35053")
+		(property "Reference" "J5"
+			(at 307.34 123.825 0)
+			(effects
+				(font
+					(size 1.778 1.5113)
+					(bold yes)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "SMA-ANG"
+			(at 325.755 127.635 0)
+			(effects
+				(font
+					(size 1.5113 1.5113)
+					(bold yes)
+				)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:SMA-ANG"
+			(at 310.515 127.635 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 310.515 127.635 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 310.515 127.635 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "P1"
+			(uuid "29d11093-4a35-4fbe-8e37-7048eedc43f6")
+		)
+		(pin "P2"
+			(uuid "98df44d5-463d-4b6e-a2c0-3914139fe685")
+		)
+		(pin "P3"
+			(uuid "5a863f83-80b5-49b9-993f-c65759f98317")
+		)
+		(pin "P4"
+			(uuid "06a0573e-50dc-4735-8533-a5ba679e1ed4")
+		)
+		(pin "P5"
+			(uuid "ef8271d9-60e5-4d80-a752-86024955d48d")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "J5")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 311.15 215.9 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "faaefd98-7dfe-4f89-8ac4-356f09e658e3")
+		(property "Reference" "#U$023"
+			(at 311.15 215.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 311.15 215.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 311.15 215.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 311.15 215.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 311.15 215.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "6e6f21cf-f79a-42d6-a61f-57245b8454e9")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$023")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:ttaka_power_GND")
+		(at 310.515 85.725 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "fc4b4b74-c630-4b9c-9da2-a3c2d2335214")
+		(property "Reference" "#U$017"
+			(at 310.515 85.725 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 310.515 85.725 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 310.515 85.725 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 310.515 85.725 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 310.515 85.725 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "0dcca9f2-0a00-4273-bf2c-050956ad903d")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "#U$017")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "pocket_sdr_v2.3-eagle-import:CPAD_3.2MM")
+		(at 195.58 168.91 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "fdd6421d-f80d-43b8-bd47-2db91a9de1d4")
+		(property "Reference" "PAD2"
+			(at 195.58 168.91 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "CPAD_3.2MM"
+			(at 191.77 168.91 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" "pocket_sdr_v2.3:CPAD_3.2MM"
+			(at 189.23 168.91 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 195.58 168.91 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 195.58 168.91 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "EP"
+			(uuid "b56bbdea-0849-4bd9-a2ed-e5b67a9cb1ed")
+		)
+		(instances
+			(project "div_4p"
+				(path "/dcf9faee-3f0e-43cc-9c10-935213a8e7cc"
+					(reference "PAD2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(sheet_instances
+		(path "/"
+			(page "1")
+		)
+	)
+)

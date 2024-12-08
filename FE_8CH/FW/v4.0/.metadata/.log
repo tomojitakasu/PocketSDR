@@ -1,0 +1,1417 @@
+!SESSION 2024-11-15 15:38:05.656 -----------------------------------------------
+eclipse.buildId=unknown
+java.version=1.7.0_05
+java.vendor=Oracle Corporation
+BootLoader constants: OS=win32, ARCH=x86, WS=win32, NL=ja_JP
+Command-line arguments:  -os win32 -ws win32 -arch x86
+
+!ENTRY org.eclipse.egit.ui 2 0 2024-11-15 15:38:08.025
+!MESSAGE Warning: The environment variable HOME is not set. The following directory will be used to store the Git
+user global configuration and to define the default location to store repositories: 'C:\Users\ttaka'. If this is
+not correct please set the HOME environment variable and restart Eclipse. Otherwise Git for Windows and
+EGit might behave differently since they see different configuration options.
+This warning can be switched off on the Team > Git > Confirmations and Warnings preference page.
+!SESSION 2024-11-15 15:38:29.428 -----------------------------------------------
+eclipse.buildId=unknown
+java.version=1.7.0_05
+java.vendor=Oracle Corporation
+BootLoader constants: OS=win32, ARCH=x86, WS=win32, NL=ja_JP
+Command-line arguments:  -os win32 -ws win32 -arch x86 -data D:\share\PocketSDR\FE_8CH\FW\v4.0
+
+!ENTRY org.eclipse.egit.ui 2 0 2024-11-15 15:38:31.618
+!MESSAGE Warning: The environment variable HOME is not set. The following directory will be used to store the Git
+user global configuration and to define the default location to store repositories: 'C:\Users\ttaka'. If this is
+not correct please set the HOME environment variable and restart Eclipse. Otherwise Git for Windows and
+EGit might behave differently since they see different configuration options.
+This warning can be switched off on the Team > Git > Confirmations and Warnings preference page.
+
+!ENTRY org.eclipse.cdt.core 4 0 2024-11-15 15:39:12.489
+!MESSAGE no spawner in java.library.path
+
+!ENTRY org.eclipse.cdt.core 1 0 2024-11-15 15:39:13.743
+!MESSAGE Indexed 'pocket_fw_v3' (3 sources, 53 headers) in 0.50 sec: 4,561 declarations; 5,634 references; 0 unresolved inclusions; 0 syntax errors; 0 unresolved names (0.00%)
+
+!ENTRY org.eclipse.cdt.core 1 0 2024-11-15 15:39:49.523
+!MESSAGE Indexed 'pocket_fw_v4' (0 sources, 0 headers) in 0.00 sec: 0 declarations; 0 references; 0 unresolved inclusions; 0 syntax errors; 0 unresolved names (0.00%)
+
+!ENTRY org.eclipse.ui 4 0 2024-11-15 15:44:41.996
+!MESSAGE Unhandled event loop exception
+!STACK 0
+java.lang.NullPointerException
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:611)
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:378)
+	at org.eclipse.cdt.managedbuilder.internal.macros.BuildCdtVariablesSupplierBase.getVariable(BuildCdtVariablesSupplierBase.java:43)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.managedbuilder.internal.dataprovider.BuildVariablesContributor.getVariable(BuildVariablesContributor.java:127)
+	at org.eclipse.cdt.internal.core.cdtvariables.BuildSystemVariableSupplier.getMacro(BuildSystemVariableSupplier.java:106)
+	at org.eclipse.cdt.internal.core.cdtvariables.CoreMacroSupplierBase.getVariable(CoreMacroSupplierBase.java:23)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:288)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:275)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.getResolvedMacro(SupplierBasedCdtVariableSubstitutor.java:260)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:222)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:241)
+	at org.eclipse.cdt.utils.cdtvariables.CdtVariableResolver.checkIntegrity(CdtVariableResolver.java:280)
+	at org.eclipse.cdt.internal.core.cdtvariables.CdtVariableManager.checkVariableIntegrity(CdtVariableManager.java:175)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.checkVariableIntegrity(CPropertyVarsTab.java:492)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:517)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:476)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.configChanged(AbstractCPropertyTab.java:231)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.handleTabEvent(AbstractCPropertyTab.java:568)
+	at org.eclipse.cdt.ui.newui.AbstractPage.forEach(AbstractPage.java:1059)
+	at org.eclipse.cdt.ui.newui.AbstractPage.cfgChanged(AbstractPage.java:1010)
+	at org.eclipse.cdt.ui.newui.AbstractPage.handleConfigSelection(AbstractPage.java:472)
+	at org.eclipse.cdt.ui.newui.AbstractPage.access$0(AbstractPage.java:428)
+	at org.eclipse.cdt.ui.newui.AbstractPage$1.handleEvent(AbstractPage.java:280)
+	at org.eclipse.swt.widgets.EventTable.sendEvent(EventTable.java:84)
+	at org.eclipse.swt.widgets.Widget.sendEvent(Widget.java:1057)
+	at org.eclipse.swt.widgets.Display.runDeferredEvents(Display.java:4170)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3759)
+	at org.eclipse.jface.window.Window.runEventLoop(Window.java:826)
+	at org.eclipse.jface.window.Window.open(Window.java:802)
+	at org.eclipse.ui.dialogs.PropertyDialogAction.run(PropertyDialogAction.java:158)
+	at org.eclipse.ui.internal.ide.actions.ProjectPropertyDialogAction.run(ProjectPropertyDialogAction.java:77)
+	at org.eclipse.jface.action.Action.runWithEvent(Action.java:499)
+	at org.eclipse.jface.action.ActionContributionItem.handleWidgetSelection(ActionContributionItem.java:584)
+	at org.eclipse.jface.action.ActionContributionItem.access$2(ActionContributionItem.java:501)
+	at org.eclipse.jface.action.ActionContributionItem$5.handleEvent(ActionContributionItem.java:411)
+	at org.eclipse.swt.widgets.EventTable.sendEvent(EventTable.java:84)
+	at org.eclipse.swt.widgets.Widget.sendEvent(Widget.java:1057)
+	at org.eclipse.swt.widgets.Display.runDeferredEvents(Display.java:4170)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3759)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine$9.run(PartRenderingEngine.java:1113)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine.run(PartRenderingEngine.java:997)
+	at org.eclipse.e4.ui.internal.workbench.E4Workbench.createAndRunUI(E4Workbench.java:140)
+	at org.eclipse.ui.internal.Workbench$5.run(Workbench.java:611)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.ui.internal.Workbench.createAndRunWorkbench(Workbench.java:567)
+	at org.eclipse.ui.PlatformUI.createAndRunWorkbench(PlatformUI.java:150)
+	at org.eclipse.ui.internal.ide.application.IDEApplication.start(IDEApplication.java:124)
+	at org.eclipse.equinox.internal.app.EclipseAppHandle.run(EclipseAppHandle.java:196)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.runApplication(EclipseAppLauncher.java:110)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.start(EclipseAppLauncher.java:79)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:354)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:181)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(Unknown Source)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(Unknown Source)
+	at java.lang.reflect.Method.invoke(Unknown Source)
+	at org.eclipse.equinox.launcher.Main.invokeFramework(Main.java:636)
+	at org.eclipse.equinox.launcher.Main.basicRun(Main.java:591)
+	at org.eclipse.equinox.launcher.Main.run(Main.java:1450)
+
+!ENTRY org.eclipse.jface 4 2 2024-11-15 15:44:45.611
+!MESSAGE Problems occurred when invoking code from plug-in: "org.eclipse.jface".
+!STACK 0
+java.lang.NullPointerException
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:611)
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:378)
+	at org.eclipse.cdt.managedbuilder.internal.macros.BuildCdtVariablesSupplierBase.getVariable(BuildCdtVariablesSupplierBase.java:43)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.managedbuilder.internal.dataprovider.BuildVariablesContributor.getVariable(BuildVariablesContributor.java:127)
+	at org.eclipse.cdt.internal.core.cdtvariables.BuildSystemVariableSupplier.getMacro(BuildSystemVariableSupplier.java:106)
+	at org.eclipse.cdt.internal.core.cdtvariables.CoreMacroSupplierBase.getVariable(CoreMacroSupplierBase.java:23)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:288)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:275)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.getResolvedMacro(SupplierBasedCdtVariableSubstitutor.java:260)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:222)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:241)
+	at org.eclipse.cdt.utils.cdtvariables.CdtVariableResolver.checkIntegrity(CdtVariableResolver.java:280)
+	at org.eclipse.cdt.internal.core.cdtvariables.CdtVariableManager.checkVariableIntegrity(CdtVariableManager.java:175)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.checkVariableIntegrity(CPropertyVarsTab.java:492)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:517)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:476)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.configChanged(AbstractCPropertyTab.java:231)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.handleTabEvent(AbstractCPropertyTab.java:568)
+	at org.eclipse.cdt.ui.newui.AbstractPage.forEach(AbstractPage.java:1059)
+	at org.eclipse.cdt.ui.newui.AbstractPage.cfgChanged(AbstractPage.java:1010)
+	at org.eclipse.cdt.ui.newui.AbstractPage.handleConfigSelection(AbstractPage.java:472)
+	at org.eclipse.cdt.ui.newui.AbstractPage.populateConfigurations(AbstractPage.java:804)
+	at org.eclipse.cdt.ui.newui.AbstractPage.contentForCDT(AbstractPage.java:345)
+	at org.eclipse.cdt.ui.newui.AbstractPage.createContents(AbstractPage.java:247)
+	at org.eclipse.jface.preference.PreferencePage.createControl(PreferencePage.java:232)
+	at org.eclipse.jface.preference.PreferenceDialog.createPageControl(PreferenceDialog.java:1502)
+	at org.eclipse.jface.preference.PreferenceDialog$14.run(PreferenceDialog.java:1259)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:42)
+	at org.eclipse.ui.internal.JFaceUtil$1.run(JFaceUtil.java:49)
+	at org.eclipse.jface.util.SafeRunnable.run(SafeRunnable.java:175)
+	at org.eclipse.jface.preference.PreferenceDialog.showPage(PreferenceDialog.java:1253)
+	at org.eclipse.ui.internal.dialogs.FilteredPreferenceDialog.showPage(FilteredPreferenceDialog.java:675)
+	at org.eclipse.jface.preference.PreferenceDialog$10.run(PreferenceDialog.java:709)
+	at org.eclipse.swt.custom.BusyIndicator.showWhile(BusyIndicator.java:70)
+	at org.eclipse.jface.preference.PreferenceDialog$9.selectionChanged(PreferenceDialog.java:705)
+	at org.eclipse.jface.viewers.StructuredViewer$3.run(StructuredViewer.java:888)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:42)
+	at org.eclipse.ui.internal.JFaceUtil$1.run(JFaceUtil.java:49)
+	at org.eclipse.jface.util.SafeRunnable.run(SafeRunnable.java:175)
+	at org.eclipse.jface.viewers.StructuredViewer.firePostSelectionChanged(StructuredViewer.java:886)
+	at org.eclipse.jface.viewers.StructuredViewer.handlePostSelect(StructuredViewer.java:1226)
+	at org.eclipse.jface.viewers.StructuredViewer$5.widgetSelected(StructuredViewer.java:1251)
+	at org.eclipse.jface.util.OpenStrategy.firePostSelectionEvent(OpenStrategy.java:262)
+	at org.eclipse.jface.util.OpenStrategy.access$5(OpenStrategy.java:256)
+	at org.eclipse.jface.util.OpenStrategy$3.run(OpenStrategy.java:433)
+	at org.eclipse.swt.widgets.RunnableLock.run(RunnableLock.java:35)
+	at org.eclipse.swt.widgets.Synchronizer.runAsyncMessages(Synchronizer.java:135)
+	at org.eclipse.swt.widgets.Display.runAsyncMessages(Display.java:4145)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3762)
+	at org.eclipse.jface.window.Window.runEventLoop(Window.java:826)
+	at org.eclipse.jface.window.Window.open(Window.java:802)
+	at org.eclipse.ui.dialogs.PropertyDialogAction.run(PropertyDialogAction.java:158)
+	at org.eclipse.ui.internal.ide.actions.ProjectPropertyDialogAction.run(ProjectPropertyDialogAction.java:77)
+	at org.eclipse.jface.action.Action.runWithEvent(Action.java:499)
+	at org.eclipse.jface.action.ActionContributionItem.handleWidgetSelection(ActionContributionItem.java:584)
+	at org.eclipse.jface.action.ActionContributionItem.access$2(ActionContributionItem.java:501)
+	at org.eclipse.jface.action.ActionContributionItem$5.handleEvent(ActionContributionItem.java:411)
+	at org.eclipse.swt.widgets.EventTable.sendEvent(EventTable.java:84)
+	at org.eclipse.swt.widgets.Widget.sendEvent(Widget.java:1057)
+	at org.eclipse.swt.widgets.Display.runDeferredEvents(Display.java:4170)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3759)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine$9.run(PartRenderingEngine.java:1113)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine.run(PartRenderingEngine.java:997)
+	at org.eclipse.e4.ui.internal.workbench.E4Workbench.createAndRunUI(E4Workbench.java:140)
+	at org.eclipse.ui.internal.Workbench$5.run(Workbench.java:611)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.ui.internal.Workbench.createAndRunWorkbench(Workbench.java:567)
+	at org.eclipse.ui.PlatformUI.createAndRunWorkbench(PlatformUI.java:150)
+	at org.eclipse.ui.internal.ide.application.IDEApplication.start(IDEApplication.java:124)
+	at org.eclipse.equinox.internal.app.EclipseAppHandle.run(EclipseAppHandle.java:196)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.runApplication(EclipseAppLauncher.java:110)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.start(EclipseAppLauncher.java:79)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:354)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:181)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(Unknown Source)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(Unknown Source)
+	at java.lang.reflect.Method.invoke(Unknown Source)
+	at org.eclipse.equinox.launcher.Main.invokeFramework(Main.java:636)
+	at org.eclipse.equinox.launcher.Main.basicRun(Main.java:591)
+	at org.eclipse.equinox.launcher.Main.run(Main.java:1450)
+
+!ENTRY org.eclipse.jface 4 2 2024-11-15 15:44:49.484
+!MESSAGE Problems occurred when invoking code from plug-in: "org.eclipse.jface".
+!STACK 0
+java.lang.NullPointerException
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:611)
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:378)
+	at org.eclipse.cdt.managedbuilder.internal.macros.BuildCdtVariablesSupplierBase.getVariable(BuildCdtVariablesSupplierBase.java:43)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.managedbuilder.internal.dataprovider.BuildVariablesContributor.getVariable(BuildVariablesContributor.java:127)
+	at org.eclipse.cdt.internal.core.cdtvariables.BuildSystemVariableSupplier.getMacro(BuildSystemVariableSupplier.java:106)
+	at org.eclipse.cdt.internal.core.cdtvariables.CoreMacroSupplierBase.getVariable(CoreMacroSupplierBase.java:23)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:288)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:275)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.getResolvedMacro(SupplierBasedCdtVariableSubstitutor.java:260)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:222)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:241)
+	at org.eclipse.cdt.utils.cdtvariables.CdtVariableResolver.checkIntegrity(CdtVariableResolver.java:280)
+	at org.eclipse.cdt.internal.core.cdtvariables.CdtVariableManager.checkVariableIntegrity(CdtVariableManager.java:175)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.checkVariableIntegrity(CPropertyVarsTab.java:492)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:517)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:476)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.configChanged(AbstractCPropertyTab.java:231)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.handleTabEvent(AbstractCPropertyTab.java:568)
+	at org.eclipse.cdt.ui.newui.AbstractPage.forEach(AbstractPage.java:1059)
+	at org.eclipse.cdt.ui.newui.AbstractPage.cfgChanged(AbstractPage.java:1010)
+	at org.eclipse.cdt.ui.newui.AbstractPage.handleConfigSelection(AbstractPage.java:472)
+	at org.eclipse.cdt.ui.newui.AbstractPage.populateConfigurations(AbstractPage.java:804)
+	at org.eclipse.cdt.ui.newui.AbstractPage.setVisible(AbstractPage.java:830)
+	at org.eclipse.jface.preference.PreferenceDialog.selectCurrentPageAgain(PreferenceDialog.java:1021)
+	at org.eclipse.jface.preference.PreferenceDialog$9.handleError(PreferenceDialog.java:695)
+	at org.eclipse.jface.preference.PreferenceDialog$9.access$0(PreferenceDialog.java:688)
+	at org.eclipse.jface.preference.PreferenceDialog$10.run(PreferenceDialog.java:711)
+	at org.eclipse.swt.custom.BusyIndicator.showWhile(BusyIndicator.java:70)
+	at org.eclipse.jface.preference.PreferenceDialog$9.selectionChanged(PreferenceDialog.java:705)
+	at org.eclipse.jface.viewers.StructuredViewer$3.run(StructuredViewer.java:888)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:42)
+	at org.eclipse.ui.internal.JFaceUtil$1.run(JFaceUtil.java:49)
+	at org.eclipse.jface.util.SafeRunnable.run(SafeRunnable.java:175)
+	at org.eclipse.jface.viewers.StructuredViewer.firePostSelectionChanged(StructuredViewer.java:886)
+	at org.eclipse.jface.viewers.StructuredViewer.handlePostSelect(StructuredViewer.java:1226)
+	at org.eclipse.jface.viewers.StructuredViewer$5.widgetSelected(StructuredViewer.java:1251)
+	at org.eclipse.jface.util.OpenStrategy.firePostSelectionEvent(OpenStrategy.java:262)
+	at org.eclipse.jface.util.OpenStrategy.access$5(OpenStrategy.java:256)
+	at org.eclipse.jface.util.OpenStrategy$3.run(OpenStrategy.java:433)
+	at org.eclipse.swt.widgets.RunnableLock.run(RunnableLock.java:35)
+	at org.eclipse.swt.widgets.Synchronizer.runAsyncMessages(Synchronizer.java:135)
+	at org.eclipse.swt.widgets.Display.runAsyncMessages(Display.java:4145)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3762)
+	at org.eclipse.jface.window.Window.runEventLoop(Window.java:826)
+	at org.eclipse.jface.window.Window.open(Window.java:802)
+	at org.eclipse.ui.dialogs.PropertyDialogAction.run(PropertyDialogAction.java:158)
+	at org.eclipse.ui.internal.ide.actions.ProjectPropertyDialogAction.run(ProjectPropertyDialogAction.java:77)
+	at org.eclipse.jface.action.Action.runWithEvent(Action.java:499)
+	at org.eclipse.jface.action.ActionContributionItem.handleWidgetSelection(ActionContributionItem.java:584)
+	at org.eclipse.jface.action.ActionContributionItem.access$2(ActionContributionItem.java:501)
+	at org.eclipse.jface.action.ActionContributionItem$5.handleEvent(ActionContributionItem.java:411)
+	at org.eclipse.swt.widgets.EventTable.sendEvent(EventTable.java:84)
+	at org.eclipse.swt.widgets.Widget.sendEvent(Widget.java:1057)
+	at org.eclipse.swt.widgets.Display.runDeferredEvents(Display.java:4170)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3759)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine$9.run(PartRenderingEngine.java:1113)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine.run(PartRenderingEngine.java:997)
+	at org.eclipse.e4.ui.internal.workbench.E4Workbench.createAndRunUI(E4Workbench.java:140)
+	at org.eclipse.ui.internal.Workbench$5.run(Workbench.java:611)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.ui.internal.Workbench.createAndRunWorkbench(Workbench.java:567)
+	at org.eclipse.ui.PlatformUI.createAndRunWorkbench(PlatformUI.java:150)
+	at org.eclipse.ui.internal.ide.application.IDEApplication.start(IDEApplication.java:124)
+	at org.eclipse.equinox.internal.app.EclipseAppHandle.run(EclipseAppHandle.java:196)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.runApplication(EclipseAppLauncher.java:110)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.start(EclipseAppLauncher.java:79)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:354)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:181)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(Unknown Source)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(Unknown Source)
+	at java.lang.reflect.Method.invoke(Unknown Source)
+	at org.eclipse.equinox.launcher.Main.invokeFramework(Main.java:636)
+	at org.eclipse.equinox.launcher.Main.basicRun(Main.java:591)
+	at org.eclipse.equinox.launcher.Main.run(Main.java:1450)
+
+!ENTRY org.eclipse.jface 4 2 2024-11-15 15:44:59.301
+!MESSAGE Problems occurred when invoking code from plug-in: "org.eclipse.jface".
+!STACK 0
+java.lang.NullPointerException
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:611)
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:378)
+	at org.eclipse.cdt.managedbuilder.internal.macros.BuildCdtVariablesSupplierBase.getVariable(BuildCdtVariablesSupplierBase.java:43)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.managedbuilder.internal.dataprovider.BuildVariablesContributor.getVariable(BuildVariablesContributor.java:127)
+	at org.eclipse.cdt.internal.core.cdtvariables.BuildSystemVariableSupplier.getMacro(BuildSystemVariableSupplier.java:106)
+	at org.eclipse.cdt.internal.core.cdtvariables.CoreMacroSupplierBase.getVariable(CoreMacroSupplierBase.java:23)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:288)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:275)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.getResolvedMacro(SupplierBasedCdtVariableSubstitutor.java:260)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:222)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:241)
+	at org.eclipse.cdt.utils.cdtvariables.CdtVariableResolver.checkIntegrity(CdtVariableResolver.java:280)
+	at org.eclipse.cdt.internal.core.cdtvariables.CdtVariableManager.checkVariableIntegrity(CdtVariableManager.java:175)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.checkVariableIntegrity(CPropertyVarsTab.java:492)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:517)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:476)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.configChanged(AbstractCPropertyTab.java:231)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.handleTabEvent(AbstractCPropertyTab.java:568)
+	at org.eclipse.cdt.ui.newui.AbstractPage.forEach(AbstractPage.java:1059)
+	at org.eclipse.cdt.ui.newui.AbstractPage.cfgChanged(AbstractPage.java:1010)
+	at org.eclipse.cdt.ui.newui.AbstractPage.handleConfigSelection(AbstractPage.java:472)
+	at org.eclipse.cdt.ui.newui.AbstractPage.populateConfigurations(AbstractPage.java:804)
+	at org.eclipse.cdt.ui.newui.AbstractPage.setVisible(AbstractPage.java:830)
+	at org.eclipse.jface.preference.PreferenceDialog.showPage(PreferenceDialog.java:1324)
+	at org.eclipse.ui.internal.dialogs.FilteredPreferenceDialog.showPage(FilteredPreferenceDialog.java:675)
+	at org.eclipse.jface.preference.PreferenceDialog$10.run(PreferenceDialog.java:709)
+	at org.eclipse.swt.custom.BusyIndicator.showWhile(BusyIndicator.java:70)
+	at org.eclipse.jface.preference.PreferenceDialog$9.selectionChanged(PreferenceDialog.java:705)
+	at org.eclipse.jface.viewers.StructuredViewer$3.run(StructuredViewer.java:888)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:42)
+	at org.eclipse.ui.internal.JFaceUtil$1.run(JFaceUtil.java:49)
+	at org.eclipse.jface.util.SafeRunnable.run(SafeRunnable.java:175)
+	at org.eclipse.jface.viewers.StructuredViewer.firePostSelectionChanged(StructuredViewer.java:886)
+	at org.eclipse.jface.viewers.StructuredViewer.handlePostSelect(StructuredViewer.java:1226)
+	at org.eclipse.jface.viewers.StructuredViewer$5.widgetSelected(StructuredViewer.java:1251)
+	at org.eclipse.jface.util.OpenStrategy.firePostSelectionEvent(OpenStrategy.java:262)
+	at org.eclipse.jface.util.OpenStrategy.access$5(OpenStrategy.java:256)
+	at org.eclipse.jface.util.OpenStrategy$3.run(OpenStrategy.java:433)
+	at org.eclipse.swt.widgets.RunnableLock.run(RunnableLock.java:35)
+	at org.eclipse.swt.widgets.Synchronizer.runAsyncMessages(Synchronizer.java:135)
+	at org.eclipse.swt.widgets.Display.runAsyncMessages(Display.java:4145)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3762)
+	at org.eclipse.jface.window.Window.runEventLoop(Window.java:826)
+	at org.eclipse.jface.window.Window.open(Window.java:802)
+	at org.eclipse.ui.dialogs.PropertyDialogAction.run(PropertyDialogAction.java:158)
+	at org.eclipse.ui.internal.ide.actions.ProjectPropertyDialogAction.run(ProjectPropertyDialogAction.java:77)
+	at org.eclipse.jface.action.Action.runWithEvent(Action.java:499)
+	at org.eclipse.jface.action.ActionContributionItem.handleWidgetSelection(ActionContributionItem.java:584)
+	at org.eclipse.jface.action.ActionContributionItem.access$2(ActionContributionItem.java:501)
+	at org.eclipse.jface.action.ActionContributionItem$5.handleEvent(ActionContributionItem.java:411)
+	at org.eclipse.swt.widgets.EventTable.sendEvent(EventTable.java:84)
+	at org.eclipse.swt.widgets.Widget.sendEvent(Widget.java:1057)
+	at org.eclipse.swt.widgets.Display.runDeferredEvents(Display.java:4170)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3759)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine$9.run(PartRenderingEngine.java:1113)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine.run(PartRenderingEngine.java:997)
+	at org.eclipse.e4.ui.internal.workbench.E4Workbench.createAndRunUI(E4Workbench.java:140)
+	at org.eclipse.ui.internal.Workbench$5.run(Workbench.java:611)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.ui.internal.Workbench.createAndRunWorkbench(Workbench.java:567)
+	at org.eclipse.ui.PlatformUI.createAndRunWorkbench(PlatformUI.java:150)
+	at org.eclipse.ui.internal.ide.application.IDEApplication.start(IDEApplication.java:124)
+	at org.eclipse.equinox.internal.app.EclipseAppHandle.run(EclipseAppHandle.java:196)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.runApplication(EclipseAppLauncher.java:110)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.start(EclipseAppLauncher.java:79)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:354)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:181)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(Unknown Source)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(Unknown Source)
+	at java.lang.reflect.Method.invoke(Unknown Source)
+	at org.eclipse.equinox.launcher.Main.invokeFramework(Main.java:636)
+	at org.eclipse.equinox.launcher.Main.basicRun(Main.java:591)
+	at org.eclipse.equinox.launcher.Main.run(Main.java:1450)
+
+!ENTRY org.eclipse.jface 4 2 2024-11-15 15:45:04.806
+!MESSAGE Problems occurred when invoking code from plug-in: "org.eclipse.jface".
+!STACK 0
+java.lang.NullPointerException
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:611)
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:378)
+	at org.eclipse.cdt.managedbuilder.internal.macros.BuildCdtVariablesSupplierBase.getVariable(BuildCdtVariablesSupplierBase.java:43)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.managedbuilder.internal.dataprovider.BuildVariablesContributor.getVariable(BuildVariablesContributor.java:127)
+	at org.eclipse.cdt.internal.core.cdtvariables.BuildSystemVariableSupplier.getMacro(BuildSystemVariableSupplier.java:106)
+	at org.eclipse.cdt.internal.core.cdtvariables.CoreMacroSupplierBase.getVariable(CoreMacroSupplierBase.java:23)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:288)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:275)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.getResolvedMacro(SupplierBasedCdtVariableSubstitutor.java:260)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:222)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:241)
+	at org.eclipse.cdt.utils.cdtvariables.CdtVariableResolver.checkIntegrity(CdtVariableResolver.java:280)
+	at org.eclipse.cdt.internal.core.cdtvariables.CdtVariableManager.checkVariableIntegrity(CdtVariableManager.java:175)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.checkVariableIntegrity(CPropertyVarsTab.java:492)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:517)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:476)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.configChanged(AbstractCPropertyTab.java:231)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.handleTabEvent(AbstractCPropertyTab.java:568)
+	at org.eclipse.cdt.ui.newui.AbstractPage.forEach(AbstractPage.java:1059)
+	at org.eclipse.cdt.ui.newui.AbstractPage.cfgChanged(AbstractPage.java:1010)
+	at org.eclipse.cdt.ui.newui.AbstractPage.handleConfigSelection(AbstractPage.java:472)
+	at org.eclipse.cdt.ui.newui.AbstractPage.populateConfigurations(AbstractPage.java:804)
+	at org.eclipse.cdt.ui.newui.AbstractPage.setVisible(AbstractPage.java:830)
+	at org.eclipse.jface.preference.PreferenceDialog.showPage(PreferenceDialog.java:1324)
+	at org.eclipse.ui.internal.dialogs.FilteredPreferenceDialog.showPage(FilteredPreferenceDialog.java:675)
+	at org.eclipse.jface.preference.PreferenceDialog$10.run(PreferenceDialog.java:709)
+	at org.eclipse.swt.custom.BusyIndicator.showWhile(BusyIndicator.java:70)
+	at org.eclipse.jface.preference.PreferenceDialog$9.selectionChanged(PreferenceDialog.java:705)
+	at org.eclipse.jface.viewers.StructuredViewer$3.run(StructuredViewer.java:888)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:42)
+	at org.eclipse.ui.internal.JFaceUtil$1.run(JFaceUtil.java:49)
+	at org.eclipse.jface.util.SafeRunnable.run(SafeRunnable.java:175)
+	at org.eclipse.jface.viewers.StructuredViewer.firePostSelectionChanged(StructuredViewer.java:886)
+	at org.eclipse.jface.viewers.StructuredViewer.handlePostSelect(StructuredViewer.java:1226)
+	at org.eclipse.jface.viewers.StructuredViewer$5.widgetSelected(StructuredViewer.java:1251)
+	at org.eclipse.jface.util.OpenStrategy.firePostSelectionEvent(OpenStrategy.java:262)
+	at org.eclipse.jface.util.OpenStrategy.access$5(OpenStrategy.java:256)
+	at org.eclipse.jface.util.OpenStrategy$3.run(OpenStrategy.java:433)
+	at org.eclipse.swt.widgets.RunnableLock.run(RunnableLock.java:35)
+	at org.eclipse.swt.widgets.Synchronizer.runAsyncMessages(Synchronizer.java:135)
+	at org.eclipse.swt.widgets.Display.runAsyncMessages(Display.java:4145)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3762)
+	at org.eclipse.jface.window.Window.runEventLoop(Window.java:826)
+	at org.eclipse.jface.window.Window.open(Window.java:802)
+	at org.eclipse.ui.dialogs.PropertyDialogAction.run(PropertyDialogAction.java:158)
+	at org.eclipse.ui.internal.ide.actions.ProjectPropertyDialogAction.run(ProjectPropertyDialogAction.java:77)
+	at org.eclipse.jface.action.Action.runWithEvent(Action.java:499)
+	at org.eclipse.jface.action.ActionContributionItem.handleWidgetSelection(ActionContributionItem.java:584)
+	at org.eclipse.jface.action.ActionContributionItem.access$2(ActionContributionItem.java:501)
+	at org.eclipse.jface.action.ActionContributionItem$5.handleEvent(ActionContributionItem.java:411)
+	at org.eclipse.swt.widgets.EventTable.sendEvent(EventTable.java:84)
+	at org.eclipse.swt.widgets.Widget.sendEvent(Widget.java:1057)
+	at org.eclipse.swt.widgets.Display.runDeferredEvents(Display.java:4170)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3759)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine$9.run(PartRenderingEngine.java:1113)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine.run(PartRenderingEngine.java:997)
+	at org.eclipse.e4.ui.internal.workbench.E4Workbench.createAndRunUI(E4Workbench.java:140)
+	at org.eclipse.ui.internal.Workbench$5.run(Workbench.java:611)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.ui.internal.Workbench.createAndRunWorkbench(Workbench.java:567)
+	at org.eclipse.ui.PlatformUI.createAndRunWorkbench(PlatformUI.java:150)
+	at org.eclipse.ui.internal.ide.application.IDEApplication.start(IDEApplication.java:124)
+	at org.eclipse.equinox.internal.app.EclipseAppHandle.run(EclipseAppHandle.java:196)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.runApplication(EclipseAppLauncher.java:110)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.start(EclipseAppLauncher.java:79)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:354)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:181)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(Unknown Source)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(Unknown Source)
+	at java.lang.reflect.Method.invoke(Unknown Source)
+	at org.eclipse.equinox.launcher.Main.invokeFramework(Main.java:636)
+	at org.eclipse.equinox.launcher.Main.basicRun(Main.java:591)
+	at org.eclipse.equinox.launcher.Main.run(Main.java:1450)
+
+!ENTRY org.eclipse.jface 4 2 2024-11-15 15:45:08.359
+!MESSAGE Problems occurred when invoking code from plug-in: "org.eclipse.jface".
+!STACK 0
+java.lang.NullPointerException
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:611)
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:378)
+	at org.eclipse.cdt.managedbuilder.internal.macros.BuildCdtVariablesSupplierBase.getVariable(BuildCdtVariablesSupplierBase.java:43)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.managedbuilder.internal.dataprovider.BuildVariablesContributor.getVariable(BuildVariablesContributor.java:127)
+	at org.eclipse.cdt.internal.core.cdtvariables.BuildSystemVariableSupplier.getMacro(BuildSystemVariableSupplier.java:106)
+	at org.eclipse.cdt.internal.core.cdtvariables.CoreMacroSupplierBase.getVariable(CoreMacroSupplierBase.java:23)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:288)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:275)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.getResolvedMacro(SupplierBasedCdtVariableSubstitutor.java:260)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:222)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:241)
+	at org.eclipse.cdt.utils.cdtvariables.CdtVariableResolver.checkIntegrity(CdtVariableResolver.java:280)
+	at org.eclipse.cdt.internal.core.cdtvariables.CdtVariableManager.checkVariableIntegrity(CdtVariableManager.java:175)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.checkVariableIntegrity(CPropertyVarsTab.java:492)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:517)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:476)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.configChanged(AbstractCPropertyTab.java:231)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.handleTabEvent(AbstractCPropertyTab.java:568)
+	at org.eclipse.cdt.ui.newui.AbstractPage.forEach(AbstractPage.java:1059)
+	at org.eclipse.cdt.ui.newui.AbstractPage.cfgChanged(AbstractPage.java:1010)
+	at org.eclipse.cdt.ui.newui.AbstractPage.handleConfigSelection(AbstractPage.java:472)
+	at org.eclipse.cdt.ui.newui.AbstractPage.populateConfigurations(AbstractPage.java:804)
+	at org.eclipse.cdt.ui.newui.AbstractPage.contentForCDT(AbstractPage.java:345)
+	at org.eclipse.cdt.ui.newui.AbstractPage.createContents(AbstractPage.java:247)
+	at org.eclipse.jface.preference.PreferencePage.createControl(PreferencePage.java:232)
+	at org.eclipse.jface.preference.PreferenceDialog.createPageControl(PreferenceDialog.java:1502)
+	at org.eclipse.jface.preference.PreferenceDialog$14.run(PreferenceDialog.java:1259)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:42)
+	at org.eclipse.ui.internal.JFaceUtil$1.run(JFaceUtil.java:49)
+	at org.eclipse.jface.util.SafeRunnable.run(SafeRunnable.java:175)
+	at org.eclipse.jface.preference.PreferenceDialog.showPage(PreferenceDialog.java:1253)
+	at org.eclipse.ui.internal.dialogs.FilteredPreferenceDialog.showPage(FilteredPreferenceDialog.java:675)
+	at org.eclipse.jface.preference.PreferenceDialog$10.run(PreferenceDialog.java:709)
+	at org.eclipse.swt.custom.BusyIndicator.showWhile(BusyIndicator.java:70)
+	at org.eclipse.jface.preference.PreferenceDialog$9.selectionChanged(PreferenceDialog.java:705)
+	at org.eclipse.jface.viewers.StructuredViewer$3.run(StructuredViewer.java:888)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:42)
+	at org.eclipse.ui.internal.JFaceUtil$1.run(JFaceUtil.java:49)
+	at org.eclipse.jface.util.SafeRunnable.run(SafeRunnable.java:175)
+	at org.eclipse.jface.viewers.StructuredViewer.firePostSelectionChanged(StructuredViewer.java:886)
+	at org.eclipse.jface.viewers.StructuredViewer.handlePostSelect(StructuredViewer.java:1226)
+	at org.eclipse.jface.viewers.StructuredViewer$5.widgetSelected(StructuredViewer.java:1251)
+	at org.eclipse.jface.util.OpenStrategy.firePostSelectionEvent(OpenStrategy.java:262)
+	at org.eclipse.jface.util.OpenStrategy.access$5(OpenStrategy.java:256)
+	at org.eclipse.jface.util.OpenStrategy$3.run(OpenStrategy.java:433)
+	at org.eclipse.swt.widgets.RunnableLock.run(RunnableLock.java:35)
+	at org.eclipse.swt.widgets.Synchronizer.runAsyncMessages(Synchronizer.java:135)
+	at org.eclipse.swt.widgets.Display.runAsyncMessages(Display.java:4145)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3762)
+	at org.eclipse.jface.window.Window.runEventLoop(Window.java:826)
+	at org.eclipse.jface.window.Window.open(Window.java:802)
+	at org.eclipse.ui.dialogs.PropertyDialogAction.run(PropertyDialogAction.java:158)
+	at org.eclipse.ui.internal.ide.actions.ProjectPropertyDialogAction.run(ProjectPropertyDialogAction.java:77)
+	at org.eclipse.jface.action.Action.runWithEvent(Action.java:499)
+	at org.eclipse.jface.action.ActionContributionItem.handleWidgetSelection(ActionContributionItem.java:584)
+	at org.eclipse.jface.action.ActionContributionItem.access$2(ActionContributionItem.java:501)
+	at org.eclipse.jface.action.ActionContributionItem$5.handleEvent(ActionContributionItem.java:411)
+	at org.eclipse.swt.widgets.EventTable.sendEvent(EventTable.java:84)
+	at org.eclipse.swt.widgets.Widget.sendEvent(Widget.java:1057)
+	at org.eclipse.swt.widgets.Display.runDeferredEvents(Display.java:4170)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3759)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine$9.run(PartRenderingEngine.java:1113)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine.run(PartRenderingEngine.java:997)
+	at org.eclipse.e4.ui.internal.workbench.E4Workbench.createAndRunUI(E4Workbench.java:140)
+	at org.eclipse.ui.internal.Workbench$5.run(Workbench.java:611)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.ui.internal.Workbench.createAndRunWorkbench(Workbench.java:567)
+	at org.eclipse.ui.PlatformUI.createAndRunWorkbench(PlatformUI.java:150)
+	at org.eclipse.ui.internal.ide.application.IDEApplication.start(IDEApplication.java:124)
+	at org.eclipse.equinox.internal.app.EclipseAppHandle.run(EclipseAppHandle.java:196)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.runApplication(EclipseAppLauncher.java:110)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.start(EclipseAppLauncher.java:79)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:354)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:181)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(Unknown Source)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(Unknown Source)
+	at java.lang.reflect.Method.invoke(Unknown Source)
+	at org.eclipse.equinox.launcher.Main.invokeFramework(Main.java:636)
+	at org.eclipse.equinox.launcher.Main.basicRun(Main.java:591)
+	at org.eclipse.equinox.launcher.Main.run(Main.java:1450)
+
+!ENTRY org.eclipse.jface 4 2 2024-11-15 15:45:10.420
+!MESSAGE Problems occurred when invoking code from plug-in: "org.eclipse.jface".
+!STACK 0
+java.lang.NullPointerException
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:611)
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:378)
+	at org.eclipse.cdt.managedbuilder.internal.macros.BuildCdtVariablesSupplierBase.getVariable(BuildCdtVariablesSupplierBase.java:43)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.managedbuilder.internal.dataprovider.BuildVariablesContributor.getVariable(BuildVariablesContributor.java:127)
+	at org.eclipse.cdt.internal.core.cdtvariables.BuildSystemVariableSupplier.getMacro(BuildSystemVariableSupplier.java:106)
+	at org.eclipse.cdt.internal.core.cdtvariables.CoreMacroSupplierBase.getVariable(CoreMacroSupplierBase.java:23)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:288)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:275)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.getResolvedMacro(SupplierBasedCdtVariableSubstitutor.java:260)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:222)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:241)
+	at org.eclipse.cdt.utils.cdtvariables.CdtVariableResolver.checkIntegrity(CdtVariableResolver.java:280)
+	at org.eclipse.cdt.internal.core.cdtvariables.CdtVariableManager.checkVariableIntegrity(CdtVariableManager.java:175)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.checkVariableIntegrity(CPropertyVarsTab.java:492)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:517)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:476)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.configChanged(AbstractCPropertyTab.java:231)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.handleTabEvent(AbstractCPropertyTab.java:568)
+	at org.eclipse.cdt.ui.newui.AbstractPage.forEach(AbstractPage.java:1059)
+	at org.eclipse.cdt.ui.newui.AbstractPage.cfgChanged(AbstractPage.java:1010)
+	at org.eclipse.cdt.ui.newui.AbstractPage.handleConfigSelection(AbstractPage.java:472)
+	at org.eclipse.cdt.ui.newui.AbstractPage.populateConfigurations(AbstractPage.java:804)
+	at org.eclipse.cdt.ui.newui.AbstractPage.setVisible(AbstractPage.java:830)
+	at org.eclipse.jface.preference.PreferenceDialog.selectCurrentPageAgain(PreferenceDialog.java:1021)
+	at org.eclipse.jface.preference.PreferenceDialog$9.handleError(PreferenceDialog.java:695)
+	at org.eclipse.jface.preference.PreferenceDialog$9.access$0(PreferenceDialog.java:688)
+	at org.eclipse.jface.preference.PreferenceDialog$10.run(PreferenceDialog.java:711)
+	at org.eclipse.swt.custom.BusyIndicator.showWhile(BusyIndicator.java:70)
+	at org.eclipse.jface.preference.PreferenceDialog$9.selectionChanged(PreferenceDialog.java:705)
+	at org.eclipse.jface.viewers.StructuredViewer$3.run(StructuredViewer.java:888)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:42)
+	at org.eclipse.ui.internal.JFaceUtil$1.run(JFaceUtil.java:49)
+	at org.eclipse.jface.util.SafeRunnable.run(SafeRunnable.java:175)
+	at org.eclipse.jface.viewers.StructuredViewer.firePostSelectionChanged(StructuredViewer.java:886)
+	at org.eclipse.jface.viewers.StructuredViewer.handlePostSelect(StructuredViewer.java:1226)
+	at org.eclipse.jface.viewers.StructuredViewer$5.widgetSelected(StructuredViewer.java:1251)
+	at org.eclipse.jface.util.OpenStrategy.firePostSelectionEvent(OpenStrategy.java:262)
+	at org.eclipse.jface.util.OpenStrategy.access$5(OpenStrategy.java:256)
+	at org.eclipse.jface.util.OpenStrategy$3.run(OpenStrategy.java:433)
+	at org.eclipse.swt.widgets.RunnableLock.run(RunnableLock.java:35)
+	at org.eclipse.swt.widgets.Synchronizer.runAsyncMessages(Synchronizer.java:135)
+	at org.eclipse.swt.widgets.Display.runAsyncMessages(Display.java:4145)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3762)
+	at org.eclipse.jface.window.Window.runEventLoop(Window.java:826)
+	at org.eclipse.jface.window.Window.open(Window.java:802)
+	at org.eclipse.ui.dialogs.PropertyDialogAction.run(PropertyDialogAction.java:158)
+	at org.eclipse.ui.internal.ide.actions.ProjectPropertyDialogAction.run(ProjectPropertyDialogAction.java:77)
+	at org.eclipse.jface.action.Action.runWithEvent(Action.java:499)
+	at org.eclipse.jface.action.ActionContributionItem.handleWidgetSelection(ActionContributionItem.java:584)
+	at org.eclipse.jface.action.ActionContributionItem.access$2(ActionContributionItem.java:501)
+	at org.eclipse.jface.action.ActionContributionItem$5.handleEvent(ActionContributionItem.java:411)
+	at org.eclipse.swt.widgets.EventTable.sendEvent(EventTable.java:84)
+	at org.eclipse.swt.widgets.Widget.sendEvent(Widget.java:1057)
+	at org.eclipse.swt.widgets.Display.runDeferredEvents(Display.java:4170)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3759)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine$9.run(PartRenderingEngine.java:1113)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine.run(PartRenderingEngine.java:997)
+	at org.eclipse.e4.ui.internal.workbench.E4Workbench.createAndRunUI(E4Workbench.java:140)
+	at org.eclipse.ui.internal.Workbench$5.run(Workbench.java:611)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.ui.internal.Workbench.createAndRunWorkbench(Workbench.java:567)
+	at org.eclipse.ui.PlatformUI.createAndRunWorkbench(PlatformUI.java:150)
+	at org.eclipse.ui.internal.ide.application.IDEApplication.start(IDEApplication.java:124)
+	at org.eclipse.equinox.internal.app.EclipseAppHandle.run(EclipseAppHandle.java:196)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.runApplication(EclipseAppLauncher.java:110)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.start(EclipseAppLauncher.java:79)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:354)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:181)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(Unknown Source)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(Unknown Source)
+	at java.lang.reflect.Method.invoke(Unknown Source)
+	at org.eclipse.equinox.launcher.Main.invokeFramework(Main.java:636)
+	at org.eclipse.equinox.launcher.Main.basicRun(Main.java:591)
+	at org.eclipse.equinox.launcher.Main.run(Main.java:1450)
+
+!ENTRY org.eclipse.jface 4 2 2024-11-15 15:45:15.972
+!MESSAGE Problems occurred when invoking code from plug-in: "org.eclipse.jface".
+!STACK 0
+java.lang.NullPointerException
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:611)
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:378)
+	at org.eclipse.cdt.managedbuilder.internal.macros.BuildCdtVariablesSupplierBase.getVariable(BuildCdtVariablesSupplierBase.java:43)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.managedbuilder.internal.dataprovider.BuildVariablesContributor.getVariable(BuildVariablesContributor.java:127)
+	at org.eclipse.cdt.internal.core.cdtvariables.BuildSystemVariableSupplier.getMacro(BuildSystemVariableSupplier.java:106)
+	at org.eclipse.cdt.internal.core.cdtvariables.CoreMacroSupplierBase.getVariable(CoreMacroSupplierBase.java:23)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:288)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:275)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.getResolvedMacro(SupplierBasedCdtVariableSubstitutor.java:260)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:222)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:241)
+	at org.eclipse.cdt.utils.cdtvariables.CdtVariableResolver.checkIntegrity(CdtVariableResolver.java:280)
+	at org.eclipse.cdt.internal.core.cdtvariables.CdtVariableManager.checkVariableIntegrity(CdtVariableManager.java:175)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.checkVariableIntegrity(CPropertyVarsTab.java:492)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:517)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:476)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.configChanged(AbstractCPropertyTab.java:231)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.handleTabEvent(AbstractCPropertyTab.java:568)
+	at org.eclipse.cdt.ui.newui.AbstractPage.forEach(AbstractPage.java:1059)
+	at org.eclipse.cdt.ui.newui.AbstractPage.cfgChanged(AbstractPage.java:1010)
+	at org.eclipse.cdt.ui.newui.AbstractPage.handleConfigSelection(AbstractPage.java:472)
+	at org.eclipse.cdt.ui.newui.AbstractPage.populateConfigurations(AbstractPage.java:804)
+	at org.eclipse.cdt.ui.newui.AbstractPage.setVisible(AbstractPage.java:830)
+	at org.eclipse.jface.preference.PreferenceDialog.showPage(PreferenceDialog.java:1324)
+	at org.eclipse.ui.internal.dialogs.FilteredPreferenceDialog.showPage(FilteredPreferenceDialog.java:675)
+	at org.eclipse.jface.preference.PreferenceDialog$10.run(PreferenceDialog.java:709)
+	at org.eclipse.swt.custom.BusyIndicator.showWhile(BusyIndicator.java:70)
+	at org.eclipse.jface.preference.PreferenceDialog$9.selectionChanged(PreferenceDialog.java:705)
+	at org.eclipse.jface.viewers.StructuredViewer$3.run(StructuredViewer.java:888)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:42)
+	at org.eclipse.ui.internal.JFaceUtil$1.run(JFaceUtil.java:49)
+	at org.eclipse.jface.util.SafeRunnable.run(SafeRunnable.java:175)
+	at org.eclipse.jface.viewers.StructuredViewer.firePostSelectionChanged(StructuredViewer.java:886)
+	at org.eclipse.jface.viewers.StructuredViewer.handlePostSelect(StructuredViewer.java:1226)
+	at org.eclipse.jface.viewers.StructuredViewer$5.widgetSelected(StructuredViewer.java:1251)
+	at org.eclipse.jface.util.OpenStrategy.firePostSelectionEvent(OpenStrategy.java:262)
+	at org.eclipse.jface.util.OpenStrategy.access$5(OpenStrategy.java:256)
+	at org.eclipse.jface.util.OpenStrategy$3.run(OpenStrategy.java:433)
+	at org.eclipse.swt.widgets.RunnableLock.run(RunnableLock.java:35)
+	at org.eclipse.swt.widgets.Synchronizer.runAsyncMessages(Synchronizer.java:135)
+	at org.eclipse.swt.widgets.Display.runAsyncMessages(Display.java:4145)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3762)
+	at org.eclipse.jface.window.Window.runEventLoop(Window.java:826)
+	at org.eclipse.jface.window.Window.open(Window.java:802)
+	at org.eclipse.ui.dialogs.PropertyDialogAction.run(PropertyDialogAction.java:158)
+	at org.eclipse.ui.internal.ide.actions.ProjectPropertyDialogAction.run(ProjectPropertyDialogAction.java:77)
+	at org.eclipse.jface.action.Action.runWithEvent(Action.java:499)
+	at org.eclipse.jface.action.ActionContributionItem.handleWidgetSelection(ActionContributionItem.java:584)
+	at org.eclipse.jface.action.ActionContributionItem.access$2(ActionContributionItem.java:501)
+	at org.eclipse.jface.action.ActionContributionItem$5.handleEvent(ActionContributionItem.java:411)
+	at org.eclipse.swt.widgets.EventTable.sendEvent(EventTable.java:84)
+	at org.eclipse.swt.widgets.Widget.sendEvent(Widget.java:1057)
+	at org.eclipse.swt.widgets.Display.runDeferredEvents(Display.java:4170)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3759)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine$9.run(PartRenderingEngine.java:1113)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine.run(PartRenderingEngine.java:997)
+	at org.eclipse.e4.ui.internal.workbench.E4Workbench.createAndRunUI(E4Workbench.java:140)
+	at org.eclipse.ui.internal.Workbench$5.run(Workbench.java:611)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.ui.internal.Workbench.createAndRunWorkbench(Workbench.java:567)
+	at org.eclipse.ui.PlatformUI.createAndRunWorkbench(PlatformUI.java:150)
+	at org.eclipse.ui.internal.ide.application.IDEApplication.start(IDEApplication.java:124)
+	at org.eclipse.equinox.internal.app.EclipseAppHandle.run(EclipseAppHandle.java:196)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.runApplication(EclipseAppLauncher.java:110)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.start(EclipseAppLauncher.java:79)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:354)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:181)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(Unknown Source)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(Unknown Source)
+	at java.lang.reflect.Method.invoke(Unknown Source)
+	at org.eclipse.equinox.launcher.Main.invokeFramework(Main.java:636)
+	at org.eclipse.equinox.launcher.Main.basicRun(Main.java:591)
+	at org.eclipse.equinox.launcher.Main.run(Main.java:1450)
+
+!ENTRY org.eclipse.jface 4 2 2024-11-15 15:45:18.448
+!MESSAGE Problems occurred when invoking code from plug-in: "org.eclipse.jface".
+!STACK 0
+java.lang.NullPointerException
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:611)
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:378)
+	at org.eclipse.cdt.managedbuilder.internal.macros.BuildCdtVariablesSupplierBase.getVariable(BuildCdtVariablesSupplierBase.java:43)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.managedbuilder.internal.dataprovider.BuildVariablesContributor.getVariable(BuildVariablesContributor.java:127)
+	at org.eclipse.cdt.internal.core.cdtvariables.BuildSystemVariableSupplier.getMacro(BuildSystemVariableSupplier.java:106)
+	at org.eclipse.cdt.internal.core.cdtvariables.CoreMacroSupplierBase.getVariable(CoreMacroSupplierBase.java:23)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:288)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:275)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.getResolvedMacro(SupplierBasedCdtVariableSubstitutor.java:260)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:222)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:241)
+	at org.eclipse.cdt.utils.cdtvariables.CdtVariableResolver.checkIntegrity(CdtVariableResolver.java:280)
+	at org.eclipse.cdt.internal.core.cdtvariables.CdtVariableManager.checkVariableIntegrity(CdtVariableManager.java:175)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.checkVariableIntegrity(CPropertyVarsTab.java:492)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:517)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:476)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.configChanged(AbstractCPropertyTab.java:231)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.handleTabEvent(AbstractCPropertyTab.java:568)
+	at org.eclipse.cdt.ui.newui.AbstractPage.forEach(AbstractPage.java:1059)
+	at org.eclipse.cdt.ui.newui.AbstractPage.cfgChanged(AbstractPage.java:1010)
+	at org.eclipse.cdt.ui.newui.AbstractPage.handleConfigSelection(AbstractPage.java:472)
+	at org.eclipse.cdt.ui.newui.AbstractPage.populateConfigurations(AbstractPage.java:804)
+	at org.eclipse.cdt.ui.newui.AbstractPage.setVisible(AbstractPage.java:830)
+	at org.eclipse.jface.preference.PreferenceDialog.showPage(PreferenceDialog.java:1324)
+	at org.eclipse.ui.internal.dialogs.FilteredPreferenceDialog.showPage(FilteredPreferenceDialog.java:675)
+	at org.eclipse.jface.preference.PreferenceDialog$10.run(PreferenceDialog.java:709)
+	at org.eclipse.swt.custom.BusyIndicator.showWhile(BusyIndicator.java:70)
+	at org.eclipse.jface.preference.PreferenceDialog$9.selectionChanged(PreferenceDialog.java:705)
+	at org.eclipse.jface.viewers.StructuredViewer$3.run(StructuredViewer.java:888)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:42)
+	at org.eclipse.ui.internal.JFaceUtil$1.run(JFaceUtil.java:49)
+	at org.eclipse.jface.util.SafeRunnable.run(SafeRunnable.java:175)
+	at org.eclipse.jface.viewers.StructuredViewer.firePostSelectionChanged(StructuredViewer.java:886)
+	at org.eclipse.jface.viewers.StructuredViewer.handlePostSelect(StructuredViewer.java:1226)
+	at org.eclipse.jface.viewers.StructuredViewer$5.widgetSelected(StructuredViewer.java:1251)
+	at org.eclipse.jface.util.OpenStrategy.firePostSelectionEvent(OpenStrategy.java:262)
+	at org.eclipse.jface.util.OpenStrategy.access$5(OpenStrategy.java:256)
+	at org.eclipse.jface.util.OpenStrategy$3.run(OpenStrategy.java:433)
+	at org.eclipse.swt.widgets.RunnableLock.run(RunnableLock.java:35)
+	at org.eclipse.swt.widgets.Synchronizer.runAsyncMessages(Synchronizer.java:135)
+	at org.eclipse.swt.widgets.Display.runAsyncMessages(Display.java:4145)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3762)
+	at org.eclipse.jface.window.Window.runEventLoop(Window.java:826)
+	at org.eclipse.jface.window.Window.open(Window.java:802)
+	at org.eclipse.ui.dialogs.PropertyDialogAction.run(PropertyDialogAction.java:158)
+	at org.eclipse.ui.internal.ide.actions.ProjectPropertyDialogAction.run(ProjectPropertyDialogAction.java:77)
+	at org.eclipse.jface.action.Action.runWithEvent(Action.java:499)
+	at org.eclipse.jface.action.ActionContributionItem.handleWidgetSelection(ActionContributionItem.java:584)
+	at org.eclipse.jface.action.ActionContributionItem.access$2(ActionContributionItem.java:501)
+	at org.eclipse.jface.action.ActionContributionItem$5.handleEvent(ActionContributionItem.java:411)
+	at org.eclipse.swt.widgets.EventTable.sendEvent(EventTable.java:84)
+	at org.eclipse.swt.widgets.Widget.sendEvent(Widget.java:1057)
+	at org.eclipse.swt.widgets.Display.runDeferredEvents(Display.java:4170)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3759)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine$9.run(PartRenderingEngine.java:1113)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine.run(PartRenderingEngine.java:997)
+	at org.eclipse.e4.ui.internal.workbench.E4Workbench.createAndRunUI(E4Workbench.java:140)
+	at org.eclipse.ui.internal.Workbench$5.run(Workbench.java:611)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.ui.internal.Workbench.createAndRunWorkbench(Workbench.java:567)
+	at org.eclipse.ui.PlatformUI.createAndRunWorkbench(PlatformUI.java:150)
+	at org.eclipse.ui.internal.ide.application.IDEApplication.start(IDEApplication.java:124)
+	at org.eclipse.equinox.internal.app.EclipseAppHandle.run(EclipseAppHandle.java:196)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.runApplication(EclipseAppLauncher.java:110)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.start(EclipseAppLauncher.java:79)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:354)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:181)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(Unknown Source)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(Unknown Source)
+	at java.lang.reflect.Method.invoke(Unknown Source)
+	at org.eclipse.equinox.launcher.Main.invokeFramework(Main.java:636)
+	at org.eclipse.equinox.launcher.Main.basicRun(Main.java:591)
+	at org.eclipse.equinox.launcher.Main.run(Main.java:1450)
+
+!ENTRY org.eclipse.ui 4 0 2024-11-15 15:45:29.109
+!MESSAGE Unhandled event loop exception
+!STACK 0
+java.lang.NullPointerException
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:611)
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:378)
+	at org.eclipse.cdt.managedbuilder.internal.macros.BuildCdtVariablesSupplierBase.getVariable(BuildCdtVariablesSupplierBase.java:43)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.managedbuilder.internal.dataprovider.BuildVariablesContributor.getVariable(BuildVariablesContributor.java:127)
+	at org.eclipse.cdt.internal.core.cdtvariables.BuildSystemVariableSupplier.getMacro(BuildSystemVariableSupplier.java:106)
+	at org.eclipse.cdt.internal.core.cdtvariables.CoreMacroSupplierBase.getVariable(CoreMacroSupplierBase.java:23)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:288)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:275)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.getResolvedMacro(SupplierBasedCdtVariableSubstitutor.java:260)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:222)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:241)
+	at org.eclipse.cdt.utils.cdtvariables.CdtVariableResolver.checkIntegrity(CdtVariableResolver.java:280)
+	at org.eclipse.cdt.internal.core.cdtvariables.CdtVariableManager.checkVariableIntegrity(CdtVariableManager.java:175)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.checkVariableIntegrity(CPropertyVarsTab.java:492)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:517)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:476)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.configChanged(AbstractCPropertyTab.java:231)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.handleTabEvent(AbstractCPropertyTab.java:568)
+	at org.eclipse.cdt.ui.newui.AbstractPage.forEach(AbstractPage.java:1059)
+	at org.eclipse.cdt.ui.newui.AbstractPage.cfgChanged(AbstractPage.java:1010)
+	at org.eclipse.cdt.ui.newui.AbstractPage.handleConfigSelection(AbstractPage.java:472)
+	at org.eclipse.cdt.ui.newui.AbstractPage.populateConfigurations(AbstractPage.java:804)
+	at org.eclipse.cdt.ui.newui.AbstractPage.access$2(AbstractPage.java:745)
+	at org.eclipse.cdt.ui.newui.AbstractPage$2.widgetSelected(AbstractPage.java:299)
+	at org.eclipse.swt.widgets.TypedListener.handleEvent(TypedListener.java:248)
+	at org.eclipse.swt.widgets.EventTable.sendEvent(EventTable.java:84)
+	at org.eclipse.swt.widgets.Widget.sendEvent(Widget.java:1057)
+	at org.eclipse.swt.widgets.Display.runDeferredEvents(Display.java:4170)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3759)
+	at org.eclipse.jface.window.Window.runEventLoop(Window.java:826)
+	at org.eclipse.jface.window.Window.open(Window.java:802)
+	at org.eclipse.ui.dialogs.PropertyDialogAction.run(PropertyDialogAction.java:158)
+	at org.eclipse.ui.internal.ide.actions.ProjectPropertyDialogAction.run(ProjectPropertyDialogAction.java:77)
+	at org.eclipse.jface.action.Action.runWithEvent(Action.java:499)
+	at org.eclipse.jface.action.ActionContributionItem.handleWidgetSelection(ActionContributionItem.java:584)
+	at org.eclipse.jface.action.ActionContributionItem.access$2(ActionContributionItem.java:501)
+	at org.eclipse.jface.action.ActionContributionItem$5.handleEvent(ActionContributionItem.java:411)
+	at org.eclipse.swt.widgets.EventTable.sendEvent(EventTable.java:84)
+	at org.eclipse.swt.widgets.Widget.sendEvent(Widget.java:1057)
+	at org.eclipse.swt.widgets.Display.runDeferredEvents(Display.java:4170)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3759)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine$9.run(PartRenderingEngine.java:1113)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine.run(PartRenderingEngine.java:997)
+	at org.eclipse.e4.ui.internal.workbench.E4Workbench.createAndRunUI(E4Workbench.java:140)
+	at org.eclipse.ui.internal.Workbench$5.run(Workbench.java:611)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.ui.internal.Workbench.createAndRunWorkbench(Workbench.java:567)
+	at org.eclipse.ui.PlatformUI.createAndRunWorkbench(PlatformUI.java:150)
+	at org.eclipse.ui.internal.ide.application.IDEApplication.start(IDEApplication.java:124)
+	at org.eclipse.equinox.internal.app.EclipseAppHandle.run(EclipseAppHandle.java:196)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.runApplication(EclipseAppLauncher.java:110)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.start(EclipseAppLauncher.java:79)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:354)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:181)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(Unknown Source)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(Unknown Source)
+	at java.lang.reflect.Method.invoke(Unknown Source)
+	at org.eclipse.equinox.launcher.Main.invokeFramework(Main.java:636)
+	at org.eclipse.equinox.launcher.Main.basicRun(Main.java:591)
+	at org.eclipse.equinox.launcher.Main.run(Main.java:1450)
+
+!ENTRY org.eclipse.jface 4 2 2024-11-15 15:46:03.952
+!MESSAGE Problems occurred when invoking code from plug-in: "org.eclipse.jface".
+!STACK 0
+java.lang.NullPointerException
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:611)
+	at org.eclipse.cdt.managedbuilder.internal.macros.MbsMacroSupplier.getMacro(MbsMacroSupplier.java:378)
+	at org.eclipse.cdt.managedbuilder.internal.macros.BuildCdtVariablesSupplierBase.getVariable(BuildCdtVariablesSupplierBase.java:43)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.managedbuilder.internal.dataprovider.BuildVariablesContributor.getVariable(BuildVariablesContributor.java:127)
+	at org.eclipse.cdt.internal.core.cdtvariables.BuildSystemVariableSupplier.getMacro(BuildSystemVariableSupplier.java:106)
+	at org.eclipse.cdt.internal.core.cdtvariables.CoreMacroSupplierBase.getVariable(CoreMacroSupplierBase.java:23)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableManager.getVariable(SupplierBasedCdtVariableManager.java:31)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:288)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveMacro(SupplierBasedCdtVariableSubstitutor.java:275)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.getResolvedMacro(SupplierBasedCdtVariableSubstitutor.java:260)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:222)
+	at org.eclipse.cdt.utils.cdtvariables.SupplierBasedCdtVariableSubstitutor.resolveToString(SupplierBasedCdtVariableSubstitutor.java:241)
+	at org.eclipse.cdt.utils.cdtvariables.CdtVariableResolver.checkIntegrity(CdtVariableResolver.java:280)
+	at org.eclipse.cdt.internal.core.cdtvariables.CdtVariableManager.checkVariableIntegrity(CdtVariableManager.java:175)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.checkVariableIntegrity(CPropertyVarsTab.java:492)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:517)
+	at org.eclipse.cdt.managedbuilder.ui.properties.CPropertyVarsTab.updateData(CPropertyVarsTab.java:476)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.setVisible(AbstractCPropertyTab.java:248)
+	at org.eclipse.cdt.ui.newui.AbstractCPropertyTab.handleTabEvent(AbstractCPropertyTab.java:580)
+	at org.eclipse.cdt.ui.newui.AbstractPage.setVisible(AbstractPage.java:840)
+	at org.eclipse.jface.preference.PreferenceDialog.showPage(PreferenceDialog.java:1324)
+	at org.eclipse.ui.internal.dialogs.FilteredPreferenceDialog.showPage(FilteredPreferenceDialog.java:675)
+	at org.eclipse.jface.preference.PreferenceDialog$10.run(PreferenceDialog.java:709)
+	at org.eclipse.swt.custom.BusyIndicator.showWhile(BusyIndicator.java:70)
+	at org.eclipse.jface.preference.PreferenceDialog$9.selectionChanged(PreferenceDialog.java:705)
+	at org.eclipse.jface.viewers.StructuredViewer$3.run(StructuredViewer.java:888)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:42)
+	at org.eclipse.ui.internal.JFaceUtil$1.run(JFaceUtil.java:49)
+	at org.eclipse.jface.util.SafeRunnable.run(SafeRunnable.java:175)
+	at org.eclipse.jface.viewers.StructuredViewer.firePostSelectionChanged(StructuredViewer.java:886)
+	at org.eclipse.jface.viewers.StructuredViewer.handlePostSelect(StructuredViewer.java:1226)
+	at org.eclipse.jface.viewers.StructuredViewer$5.widgetSelected(StructuredViewer.java:1251)
+	at org.eclipse.jface.util.OpenStrategy.firePostSelectionEvent(OpenStrategy.java:262)
+	at org.eclipse.jface.util.OpenStrategy.access$5(OpenStrategy.java:256)
+	at org.eclipse.jface.util.OpenStrategy$3.run(OpenStrategy.java:433)
+	at org.eclipse.swt.widgets.RunnableLock.run(RunnableLock.java:35)
+	at org.eclipse.swt.widgets.Synchronizer.runAsyncMessages(Synchronizer.java:135)
+	at org.eclipse.swt.widgets.Display.runAsyncMessages(Display.java:4145)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3762)
+	at org.eclipse.jface.window.Window.runEventLoop(Window.java:826)
+	at org.eclipse.jface.window.Window.open(Window.java:802)
+	at org.eclipse.ui.dialogs.PropertyDialogAction.run(PropertyDialogAction.java:158)
+	at org.eclipse.ui.internal.ide.actions.ProjectPropertyDialogAction.run(ProjectPropertyDialogAction.java:77)
+	at org.eclipse.jface.action.Action.runWithEvent(Action.java:499)
+	at org.eclipse.jface.action.ActionContributionItem.handleWidgetSelection(ActionContributionItem.java:584)
+	at org.eclipse.jface.action.ActionContributionItem.access$2(ActionContributionItem.java:501)
+	at org.eclipse.jface.action.ActionContributionItem$5.handleEvent(ActionContributionItem.java:411)
+	at org.eclipse.swt.widgets.EventTable.sendEvent(EventTable.java:84)
+	at org.eclipse.swt.widgets.Widget.sendEvent(Widget.java:1057)
+	at org.eclipse.swt.widgets.Display.runDeferredEvents(Display.java:4170)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3759)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine$9.run(PartRenderingEngine.java:1113)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine.run(PartRenderingEngine.java:997)
+	at org.eclipse.e4.ui.internal.workbench.E4Workbench.createAndRunUI(E4Workbench.java:140)
+	at org.eclipse.ui.internal.Workbench$5.run(Workbench.java:611)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.ui.internal.Workbench.createAndRunWorkbench(Workbench.java:567)
+	at org.eclipse.ui.PlatformUI.createAndRunWorkbench(PlatformUI.java:150)
+	at org.eclipse.ui.internal.ide.application.IDEApplication.start(IDEApplication.java:124)
+	at org.eclipse.equinox.internal.app.EclipseAppHandle.run(EclipseAppHandle.java:196)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.runApplication(EclipseAppLauncher.java:110)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.start(EclipseAppLauncher.java:79)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:354)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:181)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(Unknown Source)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(Unknown Source)
+	at java.lang.reflect.Method.invoke(Unknown Source)
+	at org.eclipse.equinox.launcher.Main.invokeFramework(Main.java:636)
+	at org.eclipse.equinox.launcher.Main.basicRun(Main.java:591)
+	at org.eclipse.equinox.launcher.Main.run(Main.java:1450)
+
+!ENTRY ilg.gnuarmeclipse.packs.data 4 1 2024-11-15 15:47:52.825
+!MESSAGE File .repos.xml does not exist, using defaults.
+
+!ENTRY org.eclipse.jface 4 2 2024-11-15 15:50:38.084
+!MESSAGE Problems occurred when invoking code from plug-in: "org.eclipse.jface".
+!STACK 0
+java.lang.NullPointerException
+	at org.eclipse.cdt.internal.ui.preferences.formatter.CustomCodeFormatterBlock.initDefault(CustomCodeFormatterBlock.java:193)
+	at org.eclipse.cdt.internal.ui.preferences.formatter.CustomCodeFormatterBlock.enableProjectSpecificSettings(CustomCodeFormatterBlock.java:122)
+	at org.eclipse.cdt.internal.ui.preferences.formatter.CodeFormatterConfigurationBlock.enableProjectSpecificSettings(CodeFormatterConfigurationBlock.java:172)
+	at org.eclipse.cdt.internal.ui.preferences.CodeFormatterPreferencePage.enableProjectSpecificSettings(CodeFormatterPreferencePage.java:74)
+	at org.eclipse.cdt.internal.ui.preferences.PropertyAndPreferencePage.createContents(PropertyAndPreferencePage.java:153)
+	at org.eclipse.jface.preference.PreferencePage.createControl(PreferencePage.java:232)
+	at org.eclipse.cdt.internal.ui.preferences.CodeFormatterPreferencePage.createControl(CodeFormatterPreferencePage.java:56)
+	at org.eclipse.jface.preference.PreferenceDialog.createPageControl(PreferenceDialog.java:1502)
+	at org.eclipse.jface.preference.PreferenceDialog$14.run(PreferenceDialog.java:1259)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:42)
+	at org.eclipse.ui.internal.JFaceUtil$1.run(JFaceUtil.java:49)
+	at org.eclipse.jface.util.SafeRunnable.run(SafeRunnable.java:175)
+	at org.eclipse.jface.preference.PreferenceDialog.showPage(PreferenceDialog.java:1253)
+	at org.eclipse.ui.internal.dialogs.FilteredPreferenceDialog.showPage(FilteredPreferenceDialog.java:675)
+	at org.eclipse.jface.preference.PreferenceDialog$10.run(PreferenceDialog.java:709)
+	at org.eclipse.swt.custom.BusyIndicator.showWhile(BusyIndicator.java:70)
+	at org.eclipse.jface.preference.PreferenceDialog$9.selectionChanged(PreferenceDialog.java:705)
+	at org.eclipse.jface.viewers.StructuredViewer$3.run(StructuredViewer.java:888)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:42)
+	at org.eclipse.ui.internal.JFaceUtil$1.run(JFaceUtil.java:49)
+	at org.eclipse.jface.util.SafeRunnable.run(SafeRunnable.java:175)
+	at org.eclipse.jface.viewers.StructuredViewer.firePostSelectionChanged(StructuredViewer.java:886)
+	at org.eclipse.jface.viewers.StructuredViewer.handlePostSelect(StructuredViewer.java:1226)
+	at org.eclipse.jface.viewers.StructuredViewer$5.widgetSelected(StructuredViewer.java:1251)
+	at org.eclipse.jface.util.OpenStrategy.firePostSelectionEvent(OpenStrategy.java:262)
+	at org.eclipse.jface.util.OpenStrategy.access$5(OpenStrategy.java:256)
+	at org.eclipse.jface.util.OpenStrategy$3.run(OpenStrategy.java:433)
+	at org.eclipse.swt.widgets.RunnableLock.run(RunnableLock.java:35)
+	at org.eclipse.swt.widgets.Synchronizer.runAsyncMessages(Synchronizer.java:135)
+	at org.eclipse.swt.widgets.Display.runAsyncMessages(Display.java:4145)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3762)
+	at org.eclipse.jface.window.Window.runEventLoop(Window.java:826)
+	at org.eclipse.jface.window.Window.open(Window.java:802)
+	at org.eclipse.ui.dialogs.PropertyDialogAction.run(PropertyDialogAction.java:158)
+	at org.eclipse.ui.internal.ide.actions.ProjectPropertyDialogAction.run(ProjectPropertyDialogAction.java:77)
+	at org.eclipse.jface.action.Action.runWithEvent(Action.java:499)
+	at org.eclipse.jface.action.ActionContributionItem.handleWidgetSelection(ActionContributionItem.java:584)
+	at org.eclipse.jface.action.ActionContributionItem.access$2(ActionContributionItem.java:501)
+	at org.eclipse.jface.action.ActionContributionItem$5.handleEvent(ActionContributionItem.java:411)
+	at org.eclipse.swt.widgets.EventTable.sendEvent(EventTable.java:84)
+	at org.eclipse.swt.widgets.Widget.sendEvent(Widget.java:1057)
+	at org.eclipse.swt.widgets.Display.runDeferredEvents(Display.java:4170)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:3759)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine$9.run(PartRenderingEngine.java:1113)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine.run(PartRenderingEngine.java:997)
+	at org.eclipse.e4.ui.internal.workbench.E4Workbench.createAndRunUI(E4Workbench.java:140)
+	at org.eclipse.ui.internal.Workbench$5.run(Workbench.java:611)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:332)
+	at org.eclipse.ui.internal.Workbench.createAndRunWorkbench(Workbench.java:567)
+	at org.eclipse.ui.PlatformUI.createAndRunWorkbench(PlatformUI.java:150)
+	at org.eclipse.ui.internal.ide.application.IDEApplication.start(IDEApplication.java:124)
+	at org.eclipse.equinox.internal.app.EclipseAppHandle.run(EclipseAppHandle.java:196)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.runApplication(EclipseAppLauncher.java:110)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.start(EclipseAppLauncher.java:79)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:354)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:181)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(Unknown Source)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(Unknown Source)
+	at java.lang.reflect.Method.invoke(Unknown Source)
+	at org.eclipse.equinox.launcher.Main.invokeFramework(Main.java:636)
+	at org.eclipse.equinox.launcher.Main.basicRun(Main.java:591)
+	at org.eclipse.equinox.launcher.Main.run(Main.java:1450)
+
+!ENTRY org.eclipse.core.resources 4 2 2024-11-15 15:53:26.111
+!MESSAGE Problems occurred when invoking code from plug-in: "org.eclipse.core.resources".
+!STACK 1
+org.eclipse.core.internal.resources.ResourceException: Resource '/pocket_fw_v4/Release/sources.mk' does not exist.
+	at org.eclipse.core.internal.resources.Resource.checkExists(Resource.java:341)
+	at org.eclipse.core.internal.resources.Resource.checkAccessible(Resource.java:215)
+	at org.eclipse.core.internal.resources.File.setContents(File.java:357)
+	at org.eclipse.core.internal.resources.File.setContents(File.java:464)
+	at org.eclipse.cdt.managedbuilder.makegen.gnu.GnuMakefileGenerator.save(GnuMakefileGenerator.java:838)
+	at org.eclipse.cdt.managedbuilder.makegen.gnu.GnuMakefileGenerator.populateSourcesMakefile(GnuMakefileGenerator.java:1167)
+	at org.eclipse.cdt.managedbuilder.makegen.gnu.GnuMakefileGenerator.generateMakefiles(GnuMakefileGenerator.java:676)
+	at org.eclipse.cdt.managedbuilder.internal.core.CommonBuilder.performMakefileGeneration(CommonBuilder.java:1008)
+	at org.eclipse.cdt.managedbuilder.internal.core.CommonBuilder.performPrebuildGeneration(CommonBuilder.java:873)
+	at org.eclipse.cdt.managedbuilder.internal.core.CommonBuilder.build(CommonBuilder.java:748)
+	at org.eclipse.cdt.managedbuilder.internal.core.CommonBuilder.build(CommonBuilder.java:510)
+	at org.eclipse.cdt.managedbuilder.internal.core.CommonBuilder.build(CommonBuilder.java:459)
+	at org.eclipse.core.internal.events.BuildManager$2.run(BuildManager.java:733)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:42)
+	at org.eclipse.core.internal.events.BuildManager.basicBuild(BuildManager.java:206)
+	at org.eclipse.core.internal.events.BuildManager.basicBuild(BuildManager.java:246)
+	at org.eclipse.core.internal.events.BuildManager$1.run(BuildManager.java:299)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:42)
+	at org.eclipse.core.internal.events.BuildManager.basicBuild(BuildManager.java:302)
+	at org.eclipse.core.internal.events.BuildManager.basicBuildLoop(BuildManager.java:358)
+	at org.eclipse.core.internal.events.BuildManager.build(BuildManager.java:381)
+	at org.eclipse.core.internal.resources.Workspace.buildInternal(Workspace.java:514)
+	at org.eclipse.core.internal.resources.Workspace.build(Workspace.java:423)
+	at org.eclipse.ui.actions.GlobalBuildAction$1.run(GlobalBuildAction.java:180)
+	at org.eclipse.core.internal.jobs.Worker.run(Worker.java:53)
+!SUBENTRY 1 org.eclipse.core.resources 4 368 2024-11-15 15:53:26.112
+!MESSAGE Resource '/pocket_fw_v4/Release/sources.mk' does not exist.
+!SUBENTRY 1 org.eclipse.core.resources 4 368 2024-11-15 15:53:26.112
+!MESSAGE Resource '/pocket_fw_v4/Release/sources.mk' does not exist.
+
+!ENTRY org.eclipse.core.resources 4 75 2024-11-15 15:53:26.244
+!MESSAGE Errors occurred during the build.
+!SUBENTRY 1 org.eclipse.cdt.managedbuilder.core 4 75 2024-11-15 15:53:26.244
+!MESSAGE Errors running builder 'CDT Builder' on project 'pocket_fw_v4'.
+!STACK 1
+org.eclipse.core.internal.resources.ResourceException: Resource '/pocket_fw_v4/Release/sources.mk' does not exist.
+	at org.eclipse.core.internal.resources.Resource.checkExists(Resource.java:341)
+	at org.eclipse.core.internal.resources.Resource.checkAccessible(Resource.java:215)
+	at org.eclipse.core.internal.resources.File.setContents(File.java:357)
+	at org.eclipse.core.internal.resources.File.setContents(File.java:464)
+	at org.eclipse.cdt.managedbuilder.makegen.gnu.GnuMakefileGenerator.save(GnuMakefileGenerator.java:838)
+	at org.eclipse.cdt.managedbuilder.makegen.gnu.GnuMakefileGenerator.populateSourcesMakefile(GnuMakefileGenerator.java:1167)
+	at org.eclipse.cdt.managedbuilder.makegen.gnu.GnuMakefileGenerator.generateMakefiles(GnuMakefileGenerator.java:676)
+	at org.eclipse.cdt.managedbuilder.internal.core.CommonBuilder.performMakefileGeneration(CommonBuilder.java:1008)
+	at org.eclipse.cdt.managedbuilder.internal.core.CommonBuilder.performPrebuildGeneration(CommonBuilder.java:873)
+	at org.eclipse.cdt.managedbuilder.internal.core.CommonBuilder.build(CommonBuilder.java:748)
+	at org.eclipse.cdt.managedbuilder.internal.core.CommonBuilder.build(CommonBuilder.java:510)
+	at org.eclipse.cdt.managedbuilder.internal.core.CommonBuilder.build(CommonBuilder.java:459)
+	at org.eclipse.core.internal.events.BuildManager$2.run(BuildManager.java:733)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:42)
+	at org.eclipse.core.internal.events.BuildManager.basicBuild(BuildManager.java:206)
+	at org.eclipse.core.internal.events.BuildManager.basicBuild(BuildManager.java:246)
+	at org.eclipse.core.internal.events.BuildManager$1.run(BuildManager.java:299)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:42)
+	at org.eclipse.core.internal.events.BuildManager.basicBuild(BuildManager.java:302)
+	at org.eclipse.core.internal.events.BuildManager.basicBuildLoop(BuildManager.java:358)
+	at org.eclipse.core.internal.events.BuildManager.build(BuildManager.java:381)
+	at org.eclipse.core.internal.resources.Workspace.buildInternal(Workspace.java:514)
+	at org.eclipse.core.internal.resources.Workspace.build(Workspace.java:423)
+	at org.eclipse.ui.actions.GlobalBuildAction$1.run(GlobalBuildAction.java:180)
+	at org.eclipse.core.internal.jobs.Worker.run(Worker.java:53)
+!SUBENTRY 2 org.eclipse.core.resources 4 368 2024-11-15 15:53:26.244
+!MESSAGE Resource '/pocket_fw_v4/Release/sources.mk' does not exist.
+!SUBENTRY 1 org.eclipse.core.resources 4 368 2024-11-15 15:53:26.244
+!MESSAGE Resource '/pocket_fw_v4/Release/sources.mk' does not exist.
+
+!ENTRY org.eclipse.core.resources 4 2 2024-11-15 15:53:58.332
+!MESSAGE Problems occurred when invoking code from plug-in: "org.eclipse.core.resources".
+!STACK 1
+org.eclipse.core.internal.resources.ResourceException: A resource already exists on disk 'D:\share\PocketSDR\FE_8CH\FW\v4.0\pocket_fw_v4\Release\sources.mk'.
+	at org.eclipse.core.internal.resources.File.create(File.java:145)
+	at org.eclipse.core.internal.resources.File.create(File.java:187)
+	at org.eclipse.cdt.managedbuilder.makegen.gnu.GnuMakefileGenerator.createFile(GnuMakefileGenerator.java:4340)
+	at org.eclipse.cdt.managedbuilder.makegen.gnu.GnuMakefileGenerator.generateMakefiles(GnuMakefileGenerator.java:671)
+	at org.eclipse.cdt.managedbuilder.internal.core.CommonBuilder.performMakefileGeneration(CommonBuilder.java:1008)
+	at org.eclipse.cdt.managedbuilder.internal.core.CommonBuilder.performPrebuildGeneration(CommonBuilder.java:873)
+	at org.eclipse.cdt.managedbuilder.internal.core.CommonBuilder.build(CommonBuilder.java:748)
+	at org.eclipse.cdt.managedbuilder.internal.core.CommonBuilder.build(CommonBuilder.java:510)
+	at org.eclipse.cdt.managedbuilder.internal.core.CommonBuilder.build(CommonBuilder.java:459)
+	at org.eclipse.core.internal.events.BuildManager$2.run(BuildManager.java:733)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:42)
+	at org.eclipse.core.internal.events.BuildManager.basicBuild(BuildManager.java:206)
+	at org.eclipse.core.internal.events.BuildManager.basicBuild(BuildManager.java:246)
+	at org.eclipse.core.internal.events.BuildManager$1.run(BuildManager.java:299)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:42)
+	at org.eclipse.core.internal.events.BuildManager.basicBuild(BuildManager.java:302)
+	at org.eclipse.core.internal.events.BuildManager.basicBuildLoop(BuildManager.java:358)
+	at org.eclipse.core.internal.events.BuildManager.build(BuildManager.java:381)
+	at org.eclipse.core.internal.resources.Workspace.buildInternal(Workspace.java:514)
+	at org.eclipse.core.internal.resources.Workspace.build(Workspace.java:423)
+	at org.eclipse.ui.actions.GlobalBuildAction$1.run(GlobalBuildAction.java:180)
+	at org.eclipse.core.internal.jobs.Worker.run(Worker.java:53)
+!SUBENTRY 1 org.eclipse.core.resources 4 272 2024-11-15 15:53:58.333
+!MESSAGE A resource already exists on disk 'D:\share\PocketSDR\FE_8CH\FW\v4.0\pocket_fw_v4\Release\sources.mk'.
+!SUBENTRY 1 org.eclipse.core.resources 4 272 2024-11-15 15:53:58.333
+!MESSAGE A resource already exists on disk 'D:\share\PocketSDR\FE_8CH\FW\v4.0\pocket_fw_v4\Release\sources.mk'.
+
+!ENTRY org.eclipse.core.resources 4 75 2024-11-15 15:53:58.356
+!MESSAGE Errors occurred during the build.
+!SUBENTRY 1 org.eclipse.cdt.managedbuilder.core 4 75 2024-11-15 15:53:58.356
+!MESSAGE Errors running builder 'CDT Builder' on project 'pocket_fw_v4'.
+!STACK 1
+org.eclipse.core.internal.resources.ResourceException: A resource already exists on disk 'D:\share\PocketSDR\FE_8CH\FW\v4.0\pocket_fw_v4\Release\sources.mk'.
+	at org.eclipse.core.internal.resources.File.create(File.java:145)
+	at org.eclipse.core.internal.resources.File.create(File.java:187)
+	at org.eclipse.cdt.managedbuilder.makegen.gnu.GnuMakefileGenerator.createFile(GnuMakefileGenerator.java:4340)
+	at org.eclipse.cdt.managedbuilder.makegen.gnu.GnuMakefileGenerator.generateMakefiles(GnuMakefileGenerator.java:671)
+	at org.eclipse.cdt.managedbuilder.internal.core.CommonBuilder.performMakefileGeneration(CommonBuilder.java:1008)
+	at org.eclipse.cdt.managedbuilder.internal.core.CommonBuilder.performPrebuildGeneration(CommonBuilder.java:873)
+	at org.eclipse.cdt.managedbuilder.internal.core.CommonBuilder.build(CommonBuilder.java:748)
+	at org.eclipse.cdt.managedbuilder.internal.core.CommonBuilder.build(CommonBuilder.java:510)
+	at org.eclipse.cdt.managedbuilder.internal.core.CommonBuilder.build(CommonBuilder.java:459)
+	at org.eclipse.core.internal.events.BuildManager$2.run(BuildManager.java:733)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:42)
+	at org.eclipse.core.internal.events.BuildManager.basicBuild(BuildManager.java:206)
+	at org.eclipse.core.internal.events.BuildManager.basicBuild(BuildManager.java:246)
+	at org.eclipse.core.internal.events.BuildManager$1.run(BuildManager.java:299)
+	at org.eclipse.core.runtime.SafeRunner.run(SafeRunner.java:42)
+	at org.eclipse.core.internal.events.BuildManager.basicBuild(BuildManager.java:302)
+	at org.eclipse.core.internal.events.BuildManager.basicBuildLoop(BuildManager.java:358)
+	at org.eclipse.core.internal.events.BuildManager.build(BuildManager.java:381)
+	at org.eclipse.core.internal.resources.Workspace.buildInternal(Workspace.java:514)
+	at org.eclipse.core.internal.resources.Workspace.build(Workspace.java:423)
+	at org.eclipse.ui.actions.GlobalBuildAction$1.run(GlobalBuildAction.java:180)
+	at org.eclipse.core.internal.jobs.Worker.run(Worker.java:53)
+!SUBENTRY 2 org.eclipse.core.resources 4 272 2024-11-15 15:53:58.357
+!MESSAGE A resource already exists on disk 'D:\share\PocketSDR\FE_8CH\FW\v4.0\pocket_fw_v4\Release\sources.mk'.
+!SUBENTRY 1 org.eclipse.core.resources 4 272 2024-11-15 15:53:58.357
+!MESSAGE A resource already exists on disk 'D:\share\PocketSDR\FE_8CH\FW\v4.0\pocket_fw_v4\Release\sources.mk'.
+
+!ENTRY org.eclipse.jface 2 0 2024-11-15 15:57:48.955
+!MESSAGE Keybinding conflicts occurred.  They may interfere with normal accelerator operation.
+!SUBENTRY 1 org.eclipse.jface 2 0 2024-11-15 15:57:48.955
+!MESSAGE A conflict occurred for ALT+CTRL+I:
+Binding(ALT+CTRL+I,
+	ParameterizedCommand(Command(org.eclipse.cdt.ui.edit.open.include.browser,Open Include Browser,
+		Open an include browser on the selected element,
+		Category(org.eclipse.ui.category.navigate,Navigate,null,true),
+		org.eclipse.ui.internal.WorkbenchHandlerServiceHandler@1936382,
+		,,true),null),
+	org.eclipse.ui.defaultAcceleratorConfiguration,
+	org.eclipse.cdt.ui.cEditorScope,,,system)
+Binding(ALT+CTRL+I,
+	ParameterizedCommand(Command(org.eclipse.cdt.ui.edit.open.include.browser,Open Include Browser,
+		Open an include browser on the selected element,
+		Category(org.eclipse.ui.category.navigate,Navigate,null,true),
+		org.eclipse.ui.internal.WorkbenchHandlerServiceHandler@1936382,
+		,,true),null),
+	org.eclipse.ui.defaultAcceleratorConfiguration,
+	org.eclipse.cdt.ui.cViewScope,,,system)
+!SUBENTRY 1 org.eclipse.jface 2 0 2024-11-15 15:57:48.955
+!MESSAGE A conflict occurred for ALT+SHIFT+R:
+Binding(ALT+SHIFT+R,
+	ParameterizedCommand(Command(org.eclipse.cdt.ui.edit.text.rename.element,Rename - Refactoring ,
+		Rename the selected element,
+		Category(org.eclipse.cdt.ui.category.refactoring,Refactor - C++,C/C++ Refactorings,true),
+		org.eclipse.ui.internal.WorkbenchHandlerServiceHandler@169f8ec,
+		,,true),null),
+	org.eclipse.ui.defaultAcceleratorConfiguration,
+	org.eclipse.cdt.ui.cEditorScope,,,system)
+Binding(ALT+SHIFT+R,
+	ParameterizedCommand(Command(org.eclipse.cdt.ui.edit.text.rename.element,Rename - Refactoring ,
+		Rename the selected element,
+		Category(org.eclipse.cdt.ui.category.refactoring,Refactor - C++,C/C++ Refactorings,true),
+		org.eclipse.ui.internal.WorkbenchHandlerServiceHandler@169f8ec,
+		,,true),null),
+	org.eclipse.ui.defaultAcceleratorConfiguration,
+	org.eclipse.cdt.ui.cViewScope,,,system)
+!SUBENTRY 1 org.eclipse.jface 2 0 2024-11-15 15:57:48.955
+!MESSAGE A conflict occurred for F3:
+Binding(F3,
+	ParameterizedCommand(Command(org.eclipse.cdt.ui.edit.opendecl,Open Declaration,
+		Open an editor on the selected element's declaration(s),
+		Category(org.eclipse.cdt.ui.category.source,C/C++ Source,C/C++ Source Actions,true),
+		org.eclipse.ui.internal.WorkbenchHandlerServiceHandler@555c03,
+		,,true),null),
+	org.eclipse.ui.defaultAcceleratorConfiguration,
+	org.eclipse.cdt.ui.cEditorScope,,,system)
+Binding(F3,
+	ParameterizedCommand(Command(org.eclipse.cdt.ui.edit.opendecl,Open Declaration,
+		Open an editor on the selected element's declaration(s),
+		Category(org.eclipse.cdt.ui.category.source,C/C++ Source,C/C++ Source Actions,true),
+		org.eclipse.ui.internal.WorkbenchHandlerServiceHandler@555c03,
+		,,true),null),
+	org.eclipse.ui.defaultAcceleratorConfiguration,
+	org.eclipse.cdt.ui.cViewScope,,,system)
+!SUBENTRY 1 org.eclipse.jface 2 0 2024-11-15 15:57:48.955
+!MESSAGE A conflict occurred for CTRL+SHIFT+T:
+Binding(CTRL+SHIFT+T,
+	ParameterizedCommand(Command(org.eclipse.cdt.ui.navigate.opentype,Open Element,
+		Open an element in an Editor,
+		Category(org.eclipse.cdt.ui.category.source,C/C++ Source,C/C++ Source Actions,true),
+		org.eclipse.ui.internal.WorkbenchHandlerServiceHandler@bef15,
+		,,true),null),
+	org.eclipse.ui.defaultAcceleratorConfiguration,
+	org.eclipse.cdt.ui.cEditorScope,,,system)
+Binding(CTRL+SHIFT+T,
+	ParameterizedCommand(Command(org.eclipse.cdt.ui.navigate.opentype,Open Element,
+		Open an element in an Editor,
+		Category(org.eclipse.cdt.ui.category.source,C/C++ Source,C/C++ Source Actions,true),
+		org.eclipse.ui.internal.WorkbenchHandlerServiceHandler@bef15,
+		,,true),null),
+	org.eclipse.ui.defaultAcceleratorConfiguration,
+	org.eclipse.cdt.ui.cViewScope,,,system)
+!SUBENTRY 1 org.eclipse.jface 2 0 2024-11-15 15:57:48.955
+!MESSAGE A conflict occurred for F4:
+Binding(F4,
+	ParameterizedCommand(Command(org.eclipse.cdt.ui.edit.open.type.hierarchy,Open Type Hierarchy,
+		Open a type hierarchy on the selected element,
+		Category(org.eclipse.ui.category.navigate,Navigate,null,true),
+		org.eclipse.ui.internal.WorkbenchHandlerServiceHandler@17d6143,
+		,,true),null),
+	org.eclipse.ui.defaultAcceleratorConfiguration,
+	org.eclipse.cdt.ui.cEditorScope,,,system)
+Binding(F4,
+	ParameterizedCommand(Command(org.eclipse.cdt.ui.edit.open.type.hierarchy,Open Type Hierarchy,
+		Open a type hierarchy on the selected element,
+		Category(org.eclipse.ui.category.navigate,Navigate,null,true),
+		org.eclipse.ui.internal.WorkbenchHandlerServiceHandler@17d6143,
+		,,true),null),
+	org.eclipse.ui.defaultAcceleratorConfiguration,
+	org.eclipse.cdt.ui.cViewScope,,,system)
+!SUBENTRY 1 org.eclipse.jface 2 0 2024-11-15 15:57:48.955
+!MESSAGE A conflict occurred for CTRL+G:
+Binding(CTRL+G,
+	ParameterizedCommand(Command(org.eclipse.cdt.ui.search.finddecl,Declaration,
+		Search for declarations of the selected element in the workspace,
+		Category(org.eclipse.cdt.ui.category.source,C/C++ Source,C/C++ Source Actions,true),
+		org.eclipse.ui.internal.WorkbenchHandlerServiceHandler@7cb1f7,
+		,,true),null),
+	org.eclipse.ui.defaultAcceleratorConfiguration,
+	org.eclipse.cdt.ui.cEditorScope,,,system)
+Binding(CTRL+G,
+	ParameterizedCommand(Command(org.eclipse.cdt.ui.search.finddecl,Declaration,
+		Search for declarations of the selected element in the workspace,
+		Category(org.eclipse.cdt.ui.category.source,C/C++ Source,C/C++ Source Actions,true),
+		org.eclipse.ui.internal.WorkbenchHandlerServiceHandler@7cb1f7,
+		,,true),null),
+	org.eclipse.ui.defaultAcceleratorConfiguration,
+	org.eclipse.cdt.ui.cViewScope,,,system)
+!SUBENTRY 1 org.eclipse.jface 2 0 2024-11-15 15:57:48.955
+!MESSAGE A conflict occurred for CTRL+SHIFT+G:
+Binding(CTRL+SHIFT+G,
+	ParameterizedCommand(Command(org.eclipse.cdt.ui.search.findrefs,References,
+		Search for references to the selected element in the workspace,
+		Category(org.eclipse.cdt.ui.category.source,C/C++ Source,C/C++ Source Actions,true),
+		org.eclipse.ui.internal.WorkbenchHandlerServiceHandler@4c16a6,
+		,,true),null),
+	org.eclipse.ui.defaultAcceleratorConfiguration,
+	org.eclipse.cdt.ui.cEditorScope,,,system)
+Binding(CTRL+SHIFT+G,
+	ParameterizedCommand(Command(org.eclipse.cdt.ui.search.findrefs,References,
+		Search for references to the selected element in the workspace,
+		Category(org.eclipse.cdt.ui.category.source,C/C++ Source,C/C++ Source Actions,true),
+		org.eclipse.ui.internal.WorkbenchHandlerServiceHandler@4c16a6,
+		,,true),null),
+	org.eclipse.ui.defaultAcceleratorConfiguration,
+	org.eclipse.cdt.ui.cViewScope,,,system)
+!SUBENTRY 1 org.eclipse.jface 2 0 2024-11-15 15:57:48.955
+!MESSAGE A conflict occurred for ALT+CTRL+H:
+Binding(ALT+CTRL+H,
+	ParameterizedCommand(Command(org.eclipse.cdt.ui.edit.open.call.hierarchy,Open Call Hierarchy,
+		Open the call hierarchy for the selected element,
+		Category(org.eclipse.ui.category.navigate,Navigate,null,true),
+		org.eclipse.ui.internal.WorkbenchHandlerServiceHandler@1631786,
+		,,true),null),
+	org.eclipse.ui.defaultAcceleratorConfiguration,
+	org.eclipse.cdt.ui.cEditorScope,,,system)
+Binding(ALT+CTRL+H,
+	ParameterizedCommand(Command(org.eclipse.cdt.ui.edit.open.call.hierarchy,Open Call Hierarchy,
+		Open the call hierarchy for the selected element,
+		Category(org.eclipse.ui.category.navigate,Navigate,null,true),
+		org.eclipse.ui.internal.WorkbenchHandlerServiceHandler@1631786,
+		,,true),null),
+	org.eclipse.ui.defaultAcceleratorConfiguration,
+	org.eclipse.cdt.ui.cViewScope,,,system)
+!SUBENTRY 1 org.eclipse.jface 2 0 2024-11-15 15:57:48.955
+!MESSAGE A conflict occurred for CTRL+SHIFT+H:
+Binding(CTRL+SHIFT+H,
+	ParameterizedCommand(Command(org.eclipse.cdt.ui.navigate.open.type.in.hierarchy,Open Type in Hierarchy,
+		Open a type in the type hierarchy view,
+		Category(org.eclipse.ui.category.navigate,Navigate,null,true),
+		org.eclipse.ui.internal.WorkbenchHandlerServiceHandler@9d8721,
+		,,true),null),
+	org.eclipse.ui.defaultAcceleratorConfiguration,
+	org.eclipse.cdt.ui.cEditorScope,,,system)
+Binding(CTRL+SHIFT+H,
+	ParameterizedCommand(Command(org.eclipse.cdt.ui.navigate.open.type.in.hierarchy,Open Type in Hierarchy,
+		Open a type in the type hierarchy view,
+		Category(org.eclipse.ui.category.navigate,Navigate,null,true),
+		org.eclipse.ui.internal.WorkbenchHandlerServiceHandler@9d8721,
+		,,true),null),
+	org.eclipse.ui.defaultAcceleratorConfiguration,
+	org.eclipse.cdt.ui.cViewScope,,,system)
+!SESSION 2024-11-20 15:08:58.453 -----------------------------------------------
+eclipse.buildId=unknown
+java.version=1.7.0_05
+java.vendor=Oracle Corporation
+BootLoader constants: OS=win32, ARCH=x86, WS=win32, NL=ja_JP
+Command-line arguments:  -os win32 -ws win32 -arch x86 -data D:\share\PocketSDR\FE_8CH\FW\v4.0
+
+!ENTRY org.eclipse.egit.ui 2 0 2024-11-20 15:09:01.722
+!MESSAGE Warning: The environment variable HOME is not set. The following directory will be used to store the Git
+user global configuration and to define the default location to store repositories: 'C:\Users\ttaka'. If this is
+not correct please set the HOME environment variable and restart Eclipse. Otherwise Git for Windows and
+EGit might behave differently since they see different configuration options.
+This warning can be switched off on the Team > Git > Confirmations and Warnings preference page.
+
+!ENTRY org.eclipse.cdt.core 4 0 2024-11-20 15:15:00.890
+!MESSAGE no spawner in java.library.path
+!SESSION 2024-11-20 21:34:51.000 -----------------------------------------------
+eclipse.buildId=unknown
+java.version=1.7.0_05
+java.vendor=Oracle Corporation
+BootLoader constants: OS=win32, ARCH=x86, WS=win32, NL=ja_JP
+Command-line arguments:  -os win32 -ws win32 -arch x86
+
+!ENTRY org.eclipse.egit.ui 2 0 2024-11-20 21:34:56.973
+!MESSAGE Warning: The environment variable HOME is not set. The following directory will be used to store the Git
+user global configuration and to define the default location to store repositories: 'C:\Users\ttaka'. If this is
+not correct please set the HOME environment variable and restart Eclipse. Otherwise Git for Windows and
+EGit might behave differently since they see different configuration options.
+This warning can be switched off on the Team > Git > Confirmations and Warnings preference page.
+
+!ENTRY org.eclipse.cdt.core 4 0 2024-11-20 21:35:00.492
+!MESSAGE no spawner in java.library.path
+!SESSION 2024-11-21 16:08:54.827 -----------------------------------------------
+eclipse.buildId=unknown
+java.version=1.7.0_05
+java.vendor=Oracle Corporation
+BootLoader constants: OS=win32, ARCH=x86, WS=win32, NL=ja_JP
+Command-line arguments:  -os win32 -ws win32 -arch x86
+
+!ENTRY org.eclipse.egit.ui 2 0 2024-11-21 16:09:00.739
+!MESSAGE Warning: The environment variable HOME is not set. The following directory will be used to store the Git
+user global configuration and to define the default location to store repositories: 'C:\Users\ttaka'. If this is
+not correct please set the HOME environment variable and restart Eclipse. Otherwise Git for Windows and
+EGit might behave differently since they see different configuration options.
+This warning can be switched off on the Team > Git > Confirmations and Warnings preference page.
+
+!ENTRY org.eclipse.cdt.core 4 0 2024-11-21 16:10:58.075
+!MESSAGE no spawner in java.library.path
+!SESSION 2024-11-23 15:55:50.834 -----------------------------------------------
+eclipse.buildId=unknown
+java.version=1.7.0_05
+java.vendor=Oracle Corporation
+BootLoader constants: OS=win32, ARCH=x86, WS=win32, NL=ja_JP
+Command-line arguments:  -os win32 -ws win32 -arch x86
+
+!ENTRY org.eclipse.egit.ui 2 0 2024-11-23 15:55:57.246
+!MESSAGE Warning: The environment variable HOME is not set. The following directory will be used to store the Git
+user global configuration and to define the default location to store repositories: 'C:\Users\ttaka'. If this is
+not correct please set the HOME environment variable and restart Eclipse. Otherwise Git for Windows and
+EGit might behave differently since they see different configuration options.
+This warning can be switched off on the Team > Git > Confirmations and Warnings preference page.
+
+!ENTRY org.eclipse.cdt.core 4 0 2024-11-23 15:56:01.863
+!MESSAGE no spawner in java.library.path
+!SESSION 2024-11-24 15:54:45.729 -----------------------------------------------
+eclipse.buildId=unknown
+java.version=1.7.0_05
+java.vendor=Oracle Corporation
+BootLoader constants: OS=win32, ARCH=x86, WS=win32, NL=ja_JP
+Command-line arguments:  -os win32 -ws win32 -arch x86
+
+!ENTRY org.eclipse.cdt.core 4 0 2024-11-24 15:54:51.039
+!MESSAGE no spawner in java.library.path
+
+!ENTRY org.eclipse.egit.ui 2 0 2024-11-24 15:54:52.135
+!MESSAGE Warning: The environment variable HOME is not set. The following directory will be used to store the Git
+user global configuration and to define the default location to store repositories: 'C:\Users\ttaka'. If this is
+not correct please set the HOME environment variable and restart Eclipse. Otherwise Git for Windows and
+EGit might behave differently since they see different configuration options.
+This warning can be switched off on the Team > Git > Confirmations and Warnings preference page.
+!SESSION 2024-11-25 14:02:53.348 -----------------------------------------------
+eclipse.buildId=unknown
+java.version=1.7.0_05
+java.vendor=Oracle Corporation
+BootLoader constants: OS=win32, ARCH=x86, WS=win32, NL=ja_JP
+Command-line arguments:  -os win32 -ws win32 -arch x86
+
+!ENTRY org.eclipse.egit.ui 2 0 2024-11-25 14:03:00.746
+!MESSAGE Warning: The environment variable HOME is not set. The following directory will be used to store the Git
+user global configuration and to define the default location to store repositories: 'C:\Users\ttaka'. If this is
+not correct please set the HOME environment variable and restart Eclipse. Otherwise Git for Windows and
+EGit might behave differently since they see different configuration options.
+This warning can be switched off on the Team > Git > Confirmations and Warnings preference page.
+
+!ENTRY org.eclipse.cdt.core 4 0 2024-11-25 14:04:28.194
+!MESSAGE no spawner in java.library.path
+!SESSION 2024-11-27 12:44:41.687 -----------------------------------------------
+eclipse.buildId=unknown
+java.version=1.7.0_05
+java.vendor=Oracle Corporation
+BootLoader constants: OS=win32, ARCH=x86, WS=win32, NL=ja_JP
+Command-line arguments:  -os win32 -ws win32 -arch x86
+
+!ENTRY org.eclipse.egit.ui 2 0 2024-11-27 12:44:48.534
+!MESSAGE Warning: The environment variable HOME is not set. The following directory will be used to store the Git
+user global configuration and to define the default location to store repositories: 'C:\Users\ttaka'. If this is
+not correct please set the HOME environment variable and restart Eclipse. Otherwise Git for Windows and
+EGit might behave differently since they see different configuration options.
+This warning can be switched off on the Team > Git > Confirmations and Warnings preference page.
+
+!ENTRY org.eclipse.cdt.core 4 0 2024-11-27 12:44:53.803
+!MESSAGE no spawner in java.library.path
+!SESSION 2024-11-30 18:01:44.761 -----------------------------------------------
+eclipse.buildId=unknown
+java.version=1.7.0_05
+java.vendor=Oracle Corporation
+BootLoader constants: OS=win32, ARCH=x86, WS=win32, NL=ja_JP
+Command-line arguments:  -os win32 -ws win32 -arch x86
+
+!ENTRY org.eclipse.egit.ui 2 0 2024-11-30 18:01:52.159
+!MESSAGE Warning: The environment variable HOME is not set. The following directory will be used to store the Git
+user global configuration and to define the default location to store repositories: 'C:\Users\ttaka'. If this is
+not correct please set the HOME environment variable and restart Eclipse. Otherwise Git for Windows and
+EGit might behave differently since they see different configuration options.
+This warning can be switched off on the Team > Git > Confirmations and Warnings preference page.

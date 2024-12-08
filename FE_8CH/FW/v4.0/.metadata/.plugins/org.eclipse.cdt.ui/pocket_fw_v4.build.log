@@ -1,0 +1,7 @@
+15:40:27 **** Clean-only build of configuration Debug for project pocket_fw_v4 ****
+cs-make clean 
+cs-rm -rf  ./cyfx_gcc_startup.o ./cyfxtx.o ./pocket_fw_v3.o ./pocket_usb_dscr.o  ./cyfxtx.d ./pocket_fw_v3.d ./pocket_usb_dscr.d  ./cyfx_gcc_startup.d  pocket_fw_v4.elf
+' '
+
+15:40:27 Build Finished (took 114ms)
+

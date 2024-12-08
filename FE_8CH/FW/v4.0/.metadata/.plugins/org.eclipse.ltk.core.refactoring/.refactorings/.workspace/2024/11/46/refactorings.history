@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Rename resource &apos;pocket_fw_v3&apos; to &apos;pocket_fw_v4&apos;" description="Rename resource &apos;pocket_fw_v3&apos;" flags="7" id="org.eclipse.ltk.core.refactoring.rename.resource" input="/pocket_fw_v3" name="pocket_fw_v4" stamp="1731652789010" updateReferences="true"/>
+</session>
