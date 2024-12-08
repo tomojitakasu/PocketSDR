@@ -28,7 +28,7 @@ CFLAGS = -O3 $(INCLUDE) $(OPTIONS) $(WARNOPTS) -fPIC -g
 
 OBJ = rtkcmn.o tides.o rtkpos.o geoid.o solution.o lambda.o sbas.o \
       stream.o rcvraw.o rtcm.o rtcm2.o rtcm3.o rtcm3e.o preceph.o options.o \
-      pntpos.o ppp.o ppp_ar.o ephemeris.o rinex.o ionex.o \
+      pntpos.o ppp.o ppp_ar.o ephemeris.o rinex.o ionex.o convrnx.o \
       rtklib_wrap.o
 
 TARGET = librtk.so librtk.a
@@ -85,6 +85,8 @@ rinex.o    : $(SRC)/rinex.c
 	$(CC) -c $(CFLAGS) $(SRC)/rinex.c
 ionex.o    : $(SRC)/ionex.c
 	$(CC) -c $(CFLAGS) $(SRC)/ionex.c
+convrnx.o  : $(SRC)/convrnx.c
+	$(CC) -c $(CFLAGS) $(SRC)/convrnx.c
 
 rtkcmn.o   : $(SRC)/rtklib.h
 rtksvr.o   : $(SRC)/rtklib.h
@@ -108,6 +110,7 @@ tides.o    : $(SRC)/rtklib.h
 ephemeris.o: $(SRC)/rtklib.h
 rinex.o    : $(SRC)/rtklib.h
 ionex.o    : $(SRC)/rtklib.h
+convrnx.o  : $(SRC)/rtklib.h
 
 clean:
 	rm -f $(TARGET) *.o
