@@ -1072,7 +1072,7 @@ typedef struct {        /* RINEX options type */
     int navsys;         /* navigation system */
     int obstype;        /* observation type */
     int freqtype;       /* frequency type */
-    char mask[7][64];   /* code mask {GPS,GLO,GAL,QZS,SBS,CMP,IRN} */
+    char mask[7][MAXCODE]; /* code mask {GPS,GLO,GAL,QZS,SBS,CMP,IRN} */
     char staid [32];    /* station id for rinex file name */
     char prog  [32];    /* program */
     char runby [32];    /* run-by */
