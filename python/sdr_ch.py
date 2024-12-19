@@ -8,6 +8,7 @@
 #  2021-12-24  1.0  new
 #  2022-01-13  1.1  support tracking of L6D, L6E
 #  2022-02-15  1.2  update ch state by external trigger
+#  2022-12-19  1.3  fix domain error in C/N0 computation
 #
 from math import *
 import numpy as np
@@ -57,11 +58,11 @@ def ch_new(sig, prn, fs, fi, max_dop=MAX_DOP, sp_corr=SP_CORR, add_corr=0,
     ch.time = 0.0                   # receiver time
     ch.sig = sig.upper()            # signal type
     ch.prn = prn                    # PRN number
-    ch.sat = sdr_code.sat_id(ch.sig, ch.prn) # satelltie ID
+    ch.sat = sdr_code.sat_id(ch.sig, ch.prn) # satellite ID
     ch.code = sdr_code.gen_code(sig, prn) # primary code
     ch.sec_code = sdr_code.sec_code(sig, prn) # secondary code
     ch.fc = sdr_code.sig_freq(sig)  # carrier frequency (Hz)
-    ch.fs = fs                      # sampling freqency (Hz)
+    ch.fs = fs                      # sampling frequency (Hz)
     ch.fi = shift_freq(sig, prn, fi) # IF frequency (Hz)
     ch.T = sdr_code.code_cyc(sig)   # code cycle (period) (s)
     ch.N = int(fs * ch.T)           # number of samples in a code cycle
@@ -81,7 +82,7 @@ def ch_new(sig, prn, fs, fi, max_dop=MAX_DOP, sp_corr=SP_CORR, add_corr=0,
 #  Update a receiver channel. A receiver channel is a state machine which has
 #  the following internal states indicated as ch.state. By calling the function,
 #  the receiver channel search and track GNSS signals and decode navigation
-#  data in the signals. The results of the signal acquisition, trackingare and
+#  data in the signals. The results of the signal acquisition, tracking and
 #  navigation data decoding are output as log messages. The internal status are
 #  also accessed as object instance variables of the receiver channel after
 #  calling the function. The function should be called in the cycle of GNSS
@@ -209,7 +210,7 @@ def track_sig(ch, time, buff, ix):
         ch.trk.C = corr_std(buff, ix + i, ch.N, ch.fs, fc, phi, ch.trk.code[j],
             ch.trk.pos)
     
-    # add P correlator outputs to histroy
+    # add P correlator outputs to history
     add_buff(ch.trk.P, ch.trk.C[0])
     ch.lock += 1
     
@@ -293,7 +294,7 @@ def CN0(ch):
     ch.trk.sumP += np.abs(ch.trk.C[0]) ** 2
     ch.trk.sumN += np.abs(ch.trk.C[3]) ** 2
     if ch.lock % int(T_CN0 / ch.T) == 0:
-        if ch.trk.sumN > 0.0:
+        if ch.trk.sumP > 0.0 and ch.trk.sumN > 0.0:
             cn0 = 10.0 * log10(ch.trk.sumP / ch.trk.sumN / ch.T)
             ch.cn0 += 0.5 * (cn0 - ch.cn0)
         ch.trk.sumP = ch.trk.sumN = 0.0
