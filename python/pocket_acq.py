@@ -13,6 +13,7 @@
 #  2022-01-20  1.3  add signals: I5S
 #                   add option: -l, -s
 #  2022-02-17  1.4  add option: -h
+#  2024-12-19  1.5  add option: -IQ
 #
 import sys, time
 import numpy as np
@@ -32,7 +33,7 @@ ESC_RES = '\033[0m'  # ANSI escape reset
 # show usage -------------------------------------------------------------------
 def show_usage():
     print('Usage: pocket_acq.py [-sig sig] [-prn prn[,...]] [-tint tint]')
-    print('       [-toff toff] [-f freq] [-fi freq] [-d freq] [-nz] [-np]')
+    print('       [-toff toff] [-f freq] [-fi freq] [-IQ] [-d freq] [-nz] [-np]')
     print('       [-s] [-p] [-l] [-3d] file')
 
 # show signal type IDs ---------------------------------------------------------
@@ -174,7 +175,8 @@ def add_text(ax, x, y, text, color='k'):
 #   Synopsis
 # 
 #     pocket_aqc.py [-sig sig] [-prn prn[,...]] [-tint tint] [-toff toff]
-#         [-f freq] [-fi freq] [-d freq] [-nz] [-np] [-s] [-p] [-l] [-3d] file
+#         [-f freq] [-fi freq] [-IQ] [-d freq] [-nz] [-np] [-s] [-p] [-l] [-3d]
+#         file
 # 
 #   Description
 # 
@@ -204,8 +206,12 @@ def add_text(ax, x, y, text, color='k'):
 #         Sampling frequency of digital IF data in MHz. [12.0]
 #
 #     -fi freq
-#         IF frequency of digital IF data in MHz. The IF frequency equals 0, the
-#         IF data is treated as IQ-sampling (zero-IF). [0.0]
+#         IF frequency of digital IF data in MHz. The IF frequency is equal 0,
+#         the IF data is treated as IQ-sampling without -IQ option (zero-IF).
+#         [0.0]
+#
+#     -IQ
+#         IQ-sampling even if the IF frequency is not equal 0.
 #
 #     -d freq
 #         Max Doppler frequency to search the signal in Hz. [5000.0]
@@ -245,7 +251,7 @@ if __name__ == '__main__':
     window = 'PocketSDR - GNSS SIGNAL ACQUISITION'
     size = (9, 6)
     sig, prns = 'L1CA', [1]
-    fs, fi, T, toff = 12e6, 0.0, T_AQC, 0.0
+    fs, fi, IQ, T, toff = 12e6, 0.0, 2, T_AQC, 0.0
     max_dop = 5000.0
     opt = [0, False, True, False, False]
     fc, bc = 'darkblue', 'w'
@@ -276,6 +282,9 @@ if __name__ == '__main__':
         elif sys.argv[i] == '-fi':
             i += 1
             fi = float(sys.argv[i]) * 1e6
+            IQ = 2 if fi == 0 else 1
+        elif sys.argv[i] == '-IQ':
+            IQ = 2;
         elif sys.argv[i] == '-d':
             i += 1
             max_dop = float(sys.argv[i])
@@ -320,7 +329,7 @@ if __name__ == '__main__':
     
     try:
         # read IF data
-        data = sdr_func.read_data(file, fs, 1 if fi > 0 else 2, T + Tcode, toff)
+        data = sdr_func.read_data(file, fs, IQ, T + Tcode, toff)
         
         if not opt[3]:
             fig = plt.figure(window, figsize=size)
