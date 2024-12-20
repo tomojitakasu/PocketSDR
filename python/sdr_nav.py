@@ -52,6 +52,7 @@
 #  2024-01-06  1.6  support I1SD
 #  2024-01-12  1.7  support B1CD, B2AD, B2BI
 #  2024-01-19  1.8  support G1OCD
+#  2024-12-20  1.9  fix OverflowError in test_LNAV_parity() for python 3.11.9
 #
 from math import *
 import numpy as np
@@ -207,6 +208,7 @@ def test_LNAV_parity(syms):
     for i in range(10):
         for j in range(30):
             buff = (buff << 1) | syms[i*30+j]
+        buff = int(buff) # to fix OverflowError in python 3.11.9
         if buff & (1 << 30):
             buff ^= 0x3FFFFFC0
         for j in range(6):
