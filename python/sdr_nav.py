@@ -207,8 +207,7 @@ def test_LNAV_parity(syms):
     buff = 0
     for i in range(10):
         for j in range(30):
-            buff = (buff << 1) | syms[i*30+j]
-        buff = int(buff) # to fix OverflowError in python 3.11.9
+            buff = (buff << 1) | int(syms[i*30+j])
         if buff & (1 << 30):
             buff ^= 0x3FFFFFC0
         for j in range(6):
