@@ -6,6 +6,7 @@
 #
 #  History:
 #  2024-06-10  1.0  new
+#  2024-12-30  1.1  update input options, output options, system options
 #
 import os, re, webbrowser
 from tkinter import *
@@ -13,7 +14,7 @@ from tkinter import ttk
 from tkinter import filedialog
 
 # constants --------------------------------------------------------------------
-MAX_RFCH = 4           # max number of RF channels
+MAX_RFCH = 8           # max number of RF channels
 BG_COLOR = '#F8F8F8'   # background color
 DLG_MARGIN = (20, 15)  # dialog margin
 SIG_LINK = 'file://' + os.path.dirname(__file__) + '/../doc/signal_IDs.pdf'
@@ -54,8 +55,8 @@ def modal_dlg_new(root, width, height, title='', nocancel=0):
     btn1.bind('<Button-1>', lambda e: on_modal_dlg_ok(e, dlg))
     btn1.pack(side=TOP if nocancel else RIGHT, padx=1)
     dlg.win.update()
-    dlg.win.grab_set()
     dlg.win.focus_set()
+    dlg.win.grab_set()
     return dlg
 
 # modal dialog OK callback -----------------------------------------------------
@@ -98,7 +99,7 @@ def sel_panel_new(parent, label, sels=[], var=None, width=9):
     ttk.Label(panel, text=label).pack(side=LEFT, fill=X)
     ttk.Combobox(panel, width=width, values=sels, textvariable=var,
         justify=CENTER, font=FONT).pack(side=RIGHT)
-    panel.pack(fill=X, padx=(10, 4), pady=(4, 2))
+    panel.pack(fill=X, padx=(10, 4), pady=2)
     return panel
 
 # generate option input panel --------------------------------------------------
@@ -108,7 +109,7 @@ def inp_panel_new(parent, label, var=None, width=10, pwidth=300, justify=RIGHT):
     ttk.Label(panel, text=label).pack(side=LEFT, fill=X, padx=2)
     ttk.Entry(panel, width=width, justify=justify, textvariable=var,
         font=FONT).pack(side=RIGHT, padx=2)
-    panel.pack(fill=X, padx=(8, 4), pady=(2, 4))
+    panel.pack(fill=X, padx=(8, 4), pady=2)
     return panel
 
 # generate option path panel ---------------------------------------------------
@@ -151,10 +152,11 @@ def config_panel_state(p, state):
 
 # generate input option variables ---------------------------------------------
 def inp_opt_new(opt_p=None):
-    fo_def = ['1568.000', '1227.600', '1176.450', '1278.750']
+    fo_def = ['1568.000', '1227.600', '1176.450', '1278.750', '1602.000',
+        '1246.000', '1207.140', '1268.520']
     opt = Obj()
     opt.inps = ('RF Frontend', 'IF Data')
-    opt.fmts = ('INT8', 'INT8X2', 'RAW8', 'RAW16')
+    opt.fmts = ('INT8', 'INT8X2', 'RAW8', 'RAW16', 'RAW32')
     opt.IQs = ('IQ', 'I')
     opt.inp = IntVar()
     opt.dev = StringVar()
@@ -193,17 +195,27 @@ def inp_opt_new(opt_p=None):
 # generate output option variables ---------------------------------------------
 def out_opt_new(opt_p=None):
     opt = Obj()
+    opt.log = ('TIME', 'CH', 'NAV', 'OBS', 'POS', 'SAT', 'EPH', 'LOG')
     opt.path_ena = [IntVar() for i in range(4)]
     opt.path = [StringVar() for i in range(4)]
+    opt.log_sel = [IntVar() for s in opt.log]
+    opt.out_rnx = IntVar()
+    opt.rnx_intv = StringVar()
     if opt_p != None:
         for i in range(4):
             opt.path_ena[i].set(opt_p.path_ena[i].get())
             opt.path[i].set(opt_p.path[i].get())
+        for i in range(len(opt.log_sel)):
+            opt.log_sel[i].set(opt_p.log_sel[i].get())
+        opt.out_rnx.set(opt_p.out_rnx.get())
+        opt.rnx_intv.set(opt_p.rnx_intv.get())
+    else:
+        opt.rnx_intv.set('1')
     return opt
 
 # generate signal option variables ---------------------------------------------
 def sig_opt_new(opt_p=None):
-    satno_def = ('1-32', '-7-6/1-27', '1-36', '1-9', '1-62', '1-14', '120-158')
+    satno_def = ('1-32', '-7-6/1-27', '1-36', '1-9', '1-63', '1-14', '120-158')
     opt = Obj()
     opt.sys = ('GPS', 'GLONASS', 'Galileo', 'QZSS', 'BeiDou', 'NavIC', 'SBAS')
     opt.sig = (
@@ -217,12 +229,14 @@ def sig_opt_new(opt_p=None):
     opt.sys_sel = [IntVar() for s in opt.sys]
     opt.satno = [StringVar() for s in opt.sys]
     opt.sig_sel = [[IntVar() for s in opt.sig[i]] for i in range(len(opt.sig))]
+    opt.sig_rfch = StringVar()
     if opt_p != None:
         for i in range(len(opt.sys_sel)):
             opt.sys_sel[i].set(opt_p.sys_sel[i].get())
             opt.satno[i].set(opt_p.satno[i].get())
             for j in range(len(opt.sig_sel[i])):
                 opt.sig_sel[i][j].set(opt_p.sig_sel[i][j].get())
+        opt.sig_rfch.set(opt_p.sig_rfch.get())
     else:
         for i in range(len(opt.satno)):
             opt.satno[i].set(satno_def[i])
@@ -244,6 +258,7 @@ def sys_opt_new(opt_p=None):
     opt.max_dop = StringVar()
     opt.thres_cn0_l = StringVar()
     opt.thres_cn0_u = StringVar()
+    opt.bump_jump = StringVar()
     opt.fftw_wisdom_path = StringVar()
     if opt_p != None:
         opt.epoch.set(opt_p.epoch.get())
@@ -259,6 +274,7 @@ def sys_opt_new(opt_p=None):
         opt.max_dop.set(opt_p.max_dop.get())
         opt.thres_cn0_l.set(opt_p.thres_cn0_l.get())
         opt.thres_cn0_u.set(opt_p.thres_cn0_u.get())
+        opt.bump_jump.set(opt_p.bump_jump.get())
         opt.fftw_wisdom_path.set(opt_p.fftw_wisdom_path.get())
     else:
         opt.epoch.set('1.0')
@@ -274,6 +290,7 @@ def sys_opt_new(opt_p=None):
         opt.max_dop.set('5000')
         opt.thres_cn0_l.set('35.0')
         opt.thres_cn0_u.set('32.0')
+        opt.bump_jump.set('OFF')
     return opt
 
 # save options -----------------------------------------------------------------
@@ -348,7 +365,7 @@ def read_opt(val, opt):
 # show Input Options dialog ----------------------------------------------------
 def inp_opt_dlg(root, opt):
     opt_new = inp_opt_new(opt)
-    dlg = modal_dlg_new(root, 480, 520, 'Input Options')
+    dlg = modal_dlg_new(root, 480, 640, 'Input Options')
     panel = Frame(dlg.panel, width=450, bg=BG_COLOR)
     panel.pack(fill=X, pady=4)
     ttk.Label(panel, text='Input Source').pack(side=LEFT, padx=4)
@@ -363,8 +380,8 @@ def inp_opt_dlg(root, opt):
     p4.pack(fill=X)
     text = '* Automatically configured if <Path>.tag file exists.'
     ttk.Label(p4, text=text, anchor=N).pack(fill=X)
-    inp_opt_enable_update(opt_new.inp.get(), p1, p2, p3, p4)
     ch_opt_enable_update(opt_new.fmt.get(), p3)
+    inp_opt_enable_update(opt_new.inp.get(), p1, p2, p3, p4)
     btn1.bind('<Button-1>', lambda e: on_inp_select(e, 0, p1, p2, p3, p4))
     btn2.bind('<Button-1>', lambda e: on_inp_select(e, 1, p1, p2, p3, p4))
     root.wait_window(dlg.win)
@@ -380,6 +397,9 @@ def inp_opt_enable_update(sel, p1, p2, p3, p4):
     config_panel_state(p2, NORMAL if sel else DISABLED)
     config_panel_state(p3, NORMAL if sel else DISABLED)
     config_panel_state(p4, NORMAL if sel else DISABLED)
+    if sel:
+        fmt = p3.winfo_children()[0].winfo_children()[1].get()
+        ch_opt_enable_update(fmt, p3)
 
 # generate RF Frontend options panel -------------------------------------------
 def rf_opt_panel_new(parent, opt):
@@ -415,10 +435,11 @@ def ch_opt_panel_new(parent, opt):
     panel = Frame(parent, width=300, height=300, bg=BG_COLOR, relief=GROOVE,
         borderwidth=2)
     p1 = sel_panel_new(panel, 'IF Data Format*', opt.fmts, opt.fmt)
-    p1.pack(pady=(4,0))
+    #p1.pack(pady=(4,0))
+    p1.pack(pady=2)
     p2 = p1.winfo_children()[1]
     p2.bind('<<ComboboxSelected>>', lambda e: on_fmt_select(e, panel))
-    for ch in range(4):
+    for ch in range(MAX_RFCH):
         rfch_opt_panel_new(panel, ch, opt)
     inp_panel_new(panel, 'Sampling Rate (Msps)*', opt.fs)
     panel.pack(fill=X, pady=2)
@@ -431,40 +452,43 @@ def on_fmt_select(e, p3):
 # update channel options enable ------------------------------------------------
 def ch_opt_enable_update(fmt, p3):
     p = p3.winfo_children()
+    for i in range(MAX_RFCH):
+        ena = (fmt in ('INT8', 'INT8X2') and i < 1) or \
+            (fmt == 'RAW8' and i < 2) or (fmt == 'RAW16' and i < 4) or \
+            (fmt == 'RAW32' and i < 8)
+        config_panel_state(p[i+1], NORMAL if ena else DISABLED)
     p1 = p[1].winfo_children()[1]
-    p1.configure(stat=NORMAL if fmt in ('RAW8', 'RAW16') else DISABLED)
-    config_panel_state(p[2], NORMAL if fmt in ('RAW8', 'RAW16') else DISABLED)
-    config_panel_state(p[3], NORMAL if fmt == 'RAW16' else DISABLED)
-    config_panel_state(p[4], NORMAL if fmt == 'RAW16' else DISABLED)
+    p1.configure(stat=DISABLED if fmt in ('INT8', 'INT8X2') else NORMAL)
 
 # generate RF channel options panel --------------------------------------------
 def rfch_opt_panel_new(parent, ch, opt):
     panel = Frame(parent, bg=BG_COLOR)
-    panel.pack()
     ttk.Label(panel, text='RF CH%d' % (ch + 1)).pack(side=LEFT)
     ttk.Combobox(panel, width=4, justify=CENTER, values=opt.IQs,
-        textvariable=opt.IQ[ch], font=FONT).pack(side=RIGHT)
+        textvariable=opt.IQ[ch], font=FONT).pack(side=RIGHT, pady=2)
     ttk.Label(panel, text='Sampling*').pack(side=RIGHT, padx=2)
     ttk.Entry(panel, width=10, justify=RIGHT, textvariable=opt.fo[ch],
         font=FONT).pack(side=RIGHT, padx=2)
     ttk.Label(panel, text='LO Freq (MHz)*').pack(side=RIGHT, padx=2)
-    panel.pack(fill=X, padx=(10, 4), pady=(4, 0))
+    panel.pack(fill=X, padx=(10, 4))
     return panel
 
 # show Output Options dialog ---------------------------------------------------
 def out_opt_dlg(root, opt):
     texts = ('Output Paths (File: local path, TCP: [addr]:port)',
         'PVT Solutions (NMEA 0183)', 'OBS and NAV Data (RTCM3)',
-        'Receiver Log (CSV Text)', 'IF Data Log (RAW8 or RAW16)',
+        'Receiver Log (CSV Text)', 'IF Data Log (RAW8, RAW16 or RAW32)',
+        'Convert OBS and NAV Data to RINEX', 'Receiver Log Types',
         'Keywords Replacement in Path',
         '%Y=Year(yyyy) %y=year(yy) %m=month(mm) %d=day(dd)',
         '%h=hour(00-23) %M=minute(00-59) %S=second(00-59)')
+    rnx_intvs = ('0.1', '0.2', '0.5', '1', '2', '5', '10', '30')
     opt_new = out_opt_new(opt)
-    dlg = modal_dlg_new(root, 480, 450, 'Output Options')
+    dlg = modal_dlg_new(root, 480, 520, 'Output Options')
     panel1 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
-    panel1.pack(fill=X, pady=(4, 8))
-    ttk.Label(panel1, text=texts[0], justify=LEFT).pack(fill=X, padx=2,
-        pady=(4, 12))
+    panel1.pack(fill=X, pady=2)
+    ttk.Label(panel1, text=texts[0], justify=LEFT).pack(fill=X, padx=10,
+        pady=(4, 8))
     path_panel_new(panel1, texts[1], out=1, var_path=opt_new.path[0],
         var_ena=opt_new.path_ena[0], types=[('NMEA File', '*.nmea'), ('All', '*.*')])
     path_panel_new(panel1, texts[2], out=1, var_path=opt_new.path[1],
@@ -474,24 +498,44 @@ def out_opt_dlg(root, opt):
     path_panel_new(panel1, texts[4], out=1, var_path=opt_new.path[3],
        var_ena=opt_new.path_ena[3], types=[('Raw IF Log', '*.bin'), ('All', '*.*')])
     panel2 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
-    panel2.pack(fill=X, pady=(4, 8))
-    ttk.Label(panel2, text=texts[5], justify=LEFT).pack(fill=X, padx=4, pady=(2, 4))
-    ttk.Label(panel2, text=texts[6], justify=LEFT).pack(fill=X, padx=18, pady=2)
-    ttk.Label(panel2, text=texts[7], justify=LEFT).pack(fill=X, padx=18, pady=(2, 8))
+    panel2.pack(fill=X, pady=2)
+    panel3 = Frame(panel2, bg=BG_COLOR)
+    panel3.pack(fill=X, padx=10, pady=4)
+    ttk.Checkbutton(panel3, text=texts[5], variable=opt_new.out_rnx).pack(side=LEFT)
+    ttk.Combobox(panel3, values=rnx_intvs, textvariable= opt_new.rnx_intv, width=4,
+        justify=CENTER, font=FONT).pack(side=RIGHT)
+    ttk.Label(panel3, text='Interval (s)', justify=CENTER).pack(side=RIGHT, padx=2)
+    ttk.Label(panel2, text=texts[6], justify=LEFT).pack(fill=X, padx=10)
+    panel4 = Frame(panel2, bg=BG_COLOR)
+    panel4.pack(pady=4)
+    for i in range(len(opt.log_sel)):
+        ttk.Checkbutton(panel4, text=opt.log[i], variable=opt_new.log_sel[i]
+            ).pack(side=LEFT, padx=2)
+    panel5 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
+    panel5.pack(fill=X, pady=2)
+    ttk.Label(panel5, text=texts[7], justify=LEFT).pack(fill=X, padx=10, pady=(2, 4))
+    ttk.Label(panel5, text=texts[8], justify=LEFT).pack(fill=X, padx=26, pady=2)
+    ttk.Label(panel5, text=texts[9], justify=LEFT).pack(fill=X, padx=26, pady=(2, 8))
     root.wait_window(dlg.win)
     return opt_new if dlg.ok else opt
 
 # show Signal Options dialog ---------------------------------------------------
 def sig_opt_dlg(root, opt):
     opt_new = sig_opt_new(opt)
-    dlg = modal_dlg_new(root, 495, 500, 'Signal Options')
-    panel = Frame(dlg.panel, width=450, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
-    panel.pack(pady=2)
-    labels_panel(panel, ('SYSTEM', 'SATELLITE NO'), (20, 90)).pack(fill=X, pady=(4, 2))
-    link_label_new(panel, text='SIGNALS', link=SIG_LINK, font=FONT).place(x=290, y=4)
+    dlg = modal_dlg_new(root, 480, 560, 'Signal Options')
+    panel1 = Frame(dlg.panel, width=450, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
+    panel1.pack(pady=2)
+    labels_panel(panel1, ('System', 'Satellite No'), (20, 90)).pack(fill=X, pady=(4, 2))
+    link_label_new(panel1, text='GNSS Signals', link=SIG_LINK, font=FONT).place(x=265, y=4)
     for i in range(len(opt_new.sys)):
-        ttk.Separator(panel, orient=HORIZONTAL).pack(fill=X, pady=(0, 2))
-        sig_opt_panel(panel, opt_new, i).pack(padx=(10, 4), pady=(4, 2))
+        ttk.Separator(panel1, orient=HORIZONTAL).pack(fill=X, pady=(0, 2))
+        sig_opt_panel(panel1, opt_new, i).pack(padx=(10, 4), pady=(4, 2))
+    panel2 = Frame(dlg.panel, width=450, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
+    panel2.pack(fill=X, pady=2)
+    ttk.Label(panel2, text='RF CH Assignments (<sig>:<ch>[-<ch>][,...][ ...])').pack(
+        fill=X, padx=10, pady=4)
+    inp_panel_new(panel2, '', opt_new.sig_rfch, width=500, justify=LEFT).pack(
+        padx=(0, 4), pady=(2, 6))
     root.wait_window(dlg.win)
     return opt_new if dlg.ok else opt
 
@@ -504,10 +548,10 @@ def sig_opt_panel(root, opt, i):
     panel = Frame(root, width=445, height=h, bg=BG_COLOR)
     ttk.Checkbutton(panel, width=8, text=opt.sys[i], variable=var,
         command=lambda: on_sig_opt_change(panel, var)).place(x=0, y=0)
-    ttk.Entry(panel, width=11, justify=CENTER, textvariable=opt.satno[i],
-        state=state, font=FONT).place(x=85, y=0)
+    ttk.Entry(panel, width=9, justify=CENTER, textvariable=opt.satno[i],
+        state=state, font=FONT).place(x=80, y=0)
     for j in range(ns):
-        x, y = 180 + (j % 4) * 64, (j // 4) * 20
+        x, y = 165 + (j % 4) * 64, (j // 4) * 20
         ttk.Checkbutton(panel, width=8, text=opt.sig[i][j], state=state,
             variable=opt.sig_sel[i][j]).place(x=x, y=y)
     return panel
@@ -527,35 +571,41 @@ def sys_opt_dlg(root, opt):
         'FLL Loop Filter Bandwidth Narrow (Hz)',
         'Max Doppler Frequency to Search Signal (Hz)',
         'C/N0 Threshold for Signal Locked (dB-Hz)',
-        'C/N0 Threshold for Signal Lost (dB-Hz)')
+        'C/N0 Threshold for Signal Lost (dB-Hz)', 'Bump Jump for BOC Modulation')
     opt_new = sys_opt_new(opt)
-    dlg = modal_dlg_new(root, 420, 500, 'System Options')
-    sel_panel_new(dlg.panel, labels[0], sels=('0.1', '0.2', '0.5', '1.0',
+    dlg = modal_dlg_new(root, 420, 540, 'System Options')
+    panel1 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
+    panel1.pack(fill=X, pady=2, ipady=1)
+    sel_panel_new(panel1, labels[0], sels=('0.1', '0.2', '0.5', '1.0',
         '2.0', '5.0'), var=opt_new.epoch, width=8)
-    sel_panel_new(dlg.panel, labels[1], sels=('0.01', '0.02', '0.05', '0.1',
+    sel_panel_new(panel1, labels[1], sels=('0.01', '0.02', '0.05', '0.1',
         '0.2', '0.3', '0.4', '0.5'), var=opt_new.lag_epoch, width=8)
-    sel_panel_new(dlg.panel, labels[2], sels=('5', '10', '15', '20', '25',
+    sel_panel_new(panel1, labels[2], sels=('5', '10', '15', '20', '25',
         '30'), var=opt_new.el_mask, width=8)
-    sel_panel_new(dlg.panel, labels[3], sels=('0.05', '0.1', '0.15', '0.2',
-        '0.25', '0.3', '0.4', '0.5', '0.6'), var=opt_new.sp_corr, width=8)
-    sel_panel_new(dlg.panel, labels[4], sels=('0.005', '0.01', '0.02', '0.05',
+    panel2 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
+    panel2.pack(fill=X, pady=2, ipady=1)
+    sel_panel_new(panel2, labels[3], sels=('0.05', '0.1', '0.2', '0.25', '0.5',
+        '0.75', '1.0'), var=opt_new.sp_corr, width=8)
+    sel_panel_new(panel2, labels[4], sels=('0.005', '0.01', '0.02', '0.05',
         '0.1', '0.2'), var=opt_new.t_acq, width=8)
-    sel_panel_new(dlg.panel, labels[5], sels=('0.005', '0.01', '0.02', '0.05',
+    sel_panel_new(panel2, labels[5], sels=('0.005', '0.01', '0.02', '0.05',
         '0.1', '0.2'), var=opt_new.t_dll, width=8)
-    sel_panel_new(dlg.panel, labels[6], sels=('0.1', '0.15', '0.2', '0.25',
+    sel_panel_new(panel2, labels[6], sels=('0.1', '0.15', '0.2', '0.25',
         '0.3', '0.4', '0.5', '0.75', '1.0'), var=opt_new.b_dll, width=8)
-    sel_panel_new(dlg.panel, labels[7], sels=('1.0', '2.5', '5.0', '7.5', '10.0',
+    sel_panel_new(panel2, labels[7], sels=('1.0', '2.5', '5.0', '7.5', '10.0',
         '15.0', '20.0'), var=opt_new.b_pll, width=8)
-    sel_panel_new(dlg.panel, labels[8], sels=('1.0', '2.5', '5.0', '7.5', '10.0',
+    sel_panel_new(panel2, labels[8], sels=('1.0', '2.5', '5.0', '7.5', '10.0',
         '15.0', '20.0'), var=opt_new.b_fll_w, width=8)
-    sel_panel_new(dlg.panel, labels[9], sels=('0.5', '1.0', '2.0', '3.0', '4.0',
+    sel_panel_new(panel2, labels[9], sels=('0.5', '1.0', '2.0', '3.0', '4.0',
         '5.0', '6.0'), var=opt_new.b_fll_n, width=8)
-    sel_panel_new(dlg.panel, labels[10], sels=('3000', '5000', '7000', '10000',
+    sel_panel_new(panel2, labels[10], sels=('3000', '5000', '7000', '10000',
         '20000'), var=opt_new.max_dop, width=8)
-    sel_panel_new(dlg.panel, labels[11], sels=('31.0', '32.0', '33.0', '34.0',
+    sel_panel_new(panel2, labels[11], sels=('31.0', '32.0', '33.0', '34.0',
         '35.0', '36.0', '37.0'), var=opt_new.thres_cn0_l, width=8)
-    sel_panel_new(dlg.panel, labels[12], sels=('27.0', '28.0', '29.0', '30.0',
+    sel_panel_new(panel2, labels[12], sels=('27.0', '28.0', '29.0', '30.0',
         '31.0', '32.0', '33.0'), var=opt_new.thres_cn0_u, width=8)
+    sel_panel_new(panel2, labels[13], sels=('OFF', 'ON'), var=opt_new.bump_jump,
+        width=8)
     path_panel_new(dlg.panel, 'FFTW Wisdom Path', out=0,
         var_path=opt_new.fftw_wisdom_path)
     root.wait_window(dlg.win)
