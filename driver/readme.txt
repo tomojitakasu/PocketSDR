@@ -1,6 +1,7 @@
 How to install the driver for Pocket SDR FE.
 
 1. Windows
+
 (1) Get "EZ-USB FX3 Software Development Kit (SDK)" for Windows [1]. You need
     registration in the Infineon developer site to download the file.
 (2) Execute the SDK installer (ezusbfx3sdk_1.3.5_Windows_x32-x64.exe). The SDK
