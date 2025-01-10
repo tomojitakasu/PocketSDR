@@ -16,6 +16,7 @@
 //  2024-06-06  1.8  modify API sdr_ch_new()
 //  2024-06-10  1.9  add API sdr_ch_stat_req(), sdr_ch_stat_get()
 //  2024-08-26  1.10 support sdr_corr_std(), sdr_corr_fft() API changes
+//  2024-12-30  1.11 support Bump-jump for BOC modulation
 //
 #include <ctype.h>
 #include <math.h>
@@ -37,7 +38,7 @@
 #define THRES_CN0_U 32.0    // C/N0 threshold (dB-Hz) (lost)
 #define THRES_SYNC 0.02     // threshold for sec-code sync
 #define THRES_LOST 0.002    // threshold for sec-code lost
-#define N_CODE     10       // number of resampled code bank
+#define POS_CORR_N -120.0   // N-correlator position (samples)
 #define ADD_CORR   40       // number of additional correlators
 
 #define DPI        (2.0 * PI)
@@ -56,6 +57,7 @@ double sdr_b_fll_n = B_FLL_N;
 double sdr_max_dop = MAX_DOP;
 double sdr_thres_cn0_l = THRES_CN0_L;
 double sdr_thres_cn0_u = THRES_CN0_U;
+int sdr_bump_jump = 0;
 
 // upper cases of signal string ------------------------------------------------
 static void sig_upper(const char *sig, char *Sig)
@@ -98,33 +100,40 @@ static sdr_trk_t *trk_new(const char *sig, int prn, const int8_t *code,
     int len_code, double T, double fs)
 {
     sdr_trk_t *trk = (sdr_trk_t *)sdr_malloc(sizeof(sdr_trk_t));
-    int i = 0, npos = (SDR_N_CORR - 5) / 2;
-    
-    int pos = (int)(sdr_sp_corr * T / len_code * fs) + 1;
-    trk->pos[i++] = 0;    // P
-    trk->pos[i++] = -pos; // E
-    trk->pos[i++] = pos;  // L
-    trk->pos[i++] = -80;  // N
-    for (pos = -npos; pos <= npos; pos++) { // additional correlators
-        trk->pos[i++] = pos;
+    double sc = T / len_code * fs, sp = sdr_sp_corr * sc; // spacing (sample)
+    int npos = 0;
+    trk->pos[npos++] = 0.0;        // P
+    trk->pos[npos++] = -0.5 * sp;  // E
+    trk->pos[npos++] =  0.5 * sp;  // L
+    trk->pos[npos++] = POS_CORR_N; // N
+    if (sdr_bump_jump && sdr_sig_boc(sig)) {
+        trk->pos[npos++] = -sc; // VE
+        trk->pos[npos++] =  sc; // VL
     }
-    trk->npos = 4;
+    trk->npos = npos;
+    for (int j = 0; j < SDR_N_CORRX; j++) {
+        trk->pos[npos++] = (double)(j - (SDR_N_CORRX - 1) / 2) /
+            SDR_N_CORRX * SDR_W_CORRX * fs;
+    }
+    trk->nposx = 0;
     trk->sec_sync = trk->sec_pol = 0;
     trk->err_phas = 0.0;
     trk->sumP = trk->sumE = trk->sumL = trk->sumN = 0.0;
+    trk->sumVE = trk->sumVL = 0.0;
     int N = (int)(fs * T);
     if (!strcmp(sig, "L6D") || !strcmp(sig, "L6E")) {
-        trk->code_fft = sdr_cpx_malloc(N * N_CODE);
-        for (int i = 0; i < N_CODE; i++) {
-            double coff = -i / fs / N_CODE;
+        trk->code_fft = sdr_cpx_malloc(N * SDR_N_CODES);
+        for (int i = 0; i < SDR_N_CODES; i++) {
+            double coff = -i / fs / SDR_N_CODES;
             sdr_gen_code_fft(code, len_code, T, coff, fs, N, 0,
                 trk->code_fft + i * N);
         }
     }
     else {
-        trk->code = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N * N_CODE);
-        for (int i = 0; i < N_CODE; i++) {
-            double coff = -i / fs / N_CODE;
+        trk->code = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N *
+            SDR_N_CODES);
+        for (int i = 0; i < SDR_N_CODES; i++) {
+            double coff = -i / fs / SDR_N_CODES;
             sdr_res_code(code, len_code, T, coff, fs, N, 0, trk->code + i * N);
         }
     }
@@ -174,6 +183,7 @@ sdr_ch_t *sdr_ch_new(const char *sig, int prn, double fs, double fi)
     ch->fd = ch->coff = ch->adr = ch->cn0 = 0.0;
     ch->lock = ch->lost = 0;
     ch->costas = strcmp(ch->sig, "L6D") && strcmp(ch->sig, "L6E");
+    ch->obs_idx = -1;
     ch->acq = acq_new(ch->code, ch->len_code, ch->T, fs, ch->N);
     ch->trk = trk_new(ch->sig, ch->prn, ch->code, ch->len_code, ch->T, fs);
     ch->nav = sdr_nav_new();
@@ -208,10 +218,11 @@ void sdr_ch_free(sdr_ch_t *ch)
 // initialize signal tracking --------------------------------------------------
 static void trk_init(sdr_trk_t *trk)
 {
-    trk->err_phas = 0.0;
+    trk->err_phas = trk->err_code = 0.0;
     trk->sec_sync = trk->sec_pol = 0;
     trk->sumP = trk->sumE = trk->sumL = trk->sumN = 0.0;
-    memset(trk->C, 0, sizeof(sdr_cpx_t) * SDR_N_CORR);
+    trk->sumVE = trk->sumVL = 0.0;
+    memset(trk->C, 0, sizeof(sdr_cpx_t) * SDR_MAX_CORR);
     memset(trk->P, 0, sizeof(sdr_cpx_t) * SDR_N_HIST);
 }
 
@@ -228,8 +239,10 @@ static void start_track(sdr_ch_t *ch, double time, double fd, double coff,
     ch->cn0 = cn0;
     ch->week = 0;
     ch->tow = -1;
+    ch->tow_v = 0;
     trk_init(ch->trk);
     sdr_nav_init(ch->nav);
+    sdr_sat_id(ch->sig, ch->prn, ch->sat);
 }
 
 // search signal ---------------------------------------------------------------
@@ -263,7 +276,7 @@ static void search_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff,
             double fd = sdr_fine_dop(ch->acq->P_sum, 2 * ch->N, fds, n, ix);
             double coff = ix[1] / ch->fs;
             start_track(ch, time, fd, coff, cn0);
-            sdr_log(4, "$LOG,%.3f,%s,%d,SIGNAL FOUND (%.1f,%.1f,%.7f)", time,
+            sdr_log(3, "$LOG,%.3f,%s,%d,SIGNAL FOUND (%.1f,%.1f,%.7f)", ch->time,
                 ch->sig, ch->prn, cn0, fd, coff * 1e3);
         }
         else {
@@ -304,7 +317,7 @@ static void sync_sec_code(sdr_ch_t *ch, int N)
     if (ch->trk->sec_sync > 0) {
         int8_t C = ch->sec_code[(ch->lock - ch->trk->sec_sync - 1) % N] *
             ch->trk->sec_pol;
-        for (int i = 0; i < ch->trk->npos; i++) {
+        for (int i = 0; i < ch->trk->npos + ch->trk->nposx; i++) {
             ch->trk->C[i][0] *= C;
             ch->trk->C[i][1] *= C;
         }
@@ -363,15 +376,40 @@ static void DLL(sdr_ch_t *ch)
     }
 }
 
+// bump jump for BOC modulation ------------------------------------------------
+static void bump_jump(sdr_ch_t *ch)
+{
+    double coff = ch->coff;
+    if (ch->trk->sumVL > ch->trk->sumP && ch->trk->sumP > ch->trk->sumVE) {
+        ch->coff += ch->T / ch->len_code; // shift forward by sub-chip
+    }
+    else if (ch->trk->sumVE > ch->trk->sumP && ch->trk->sumP > ch->trk->sumVL) {
+        ch->coff -= ch->T / ch->len_code; // shift backward by sub-chip
+    }
+    if (ch->coff != coff) {
+        sdr_log(3, "$LOG,%.3f,%s,%d,FALSE LOCK (%.2f,%.2f,%.2f) COFF (%.7f->%.7f)",
+            ch->time, ch->sig, ch->prn, ch->trk->sumVE, ch->trk->sumP,
+            ch->trk->sumVL, coff * 1e3, ch->coff * 1e3);
+    }
+    ch->trk->sumVE = ch->trk->sumVL = 0.0;
+}
+
 // update C/N0 -----------------------------------------------------------------
 static void CN0(sdr_ch_t *ch)
 {
     ch->trk->sumP += SQR(ch->trk->C[0][0]) + SQR(ch->trk->C[0][1]);
     ch->trk->sumN += SQR(ch->trk->C[3][0]) + SQR(ch->trk->C[3][1]);
+    if (ch->trk->npos >= 6) {
+        ch->trk->sumVE += SQR(ch->trk->C[4][0]) + SQR(ch->trk->C[4][1]);
+        ch->trk->sumVL += SQR(ch->trk->C[5][0]) + SQR(ch->trk->C[5][1]);
+    }
     if (ch->lock % (int)(T_CN0 / ch->T) == 0) {
         if (ch->trk->sumN > 0.0) {
             double cn0 = 10.0 * log10(ch->trk->sumP / ch->trk->sumN / ch->T);
             ch->cn0 += 0.5 * (cn0 - ch->cn0);
+        }
+        if (ch->trk->npos >= 6) {
+            bump_jump(ch);
         }
         ch->trk->sumP = ch->trk->sumN = 0.0;
     }
@@ -411,7 +449,7 @@ static void CSK(sdr_ch_t *ch, const sdr_cpx_t *corr)
     sdr_add_buff(ch->nav->syms, SDR_MAX_NSYM, &sym, sizeof(sym));
     
     // generate correlator outputs
-    for (int i = 0; i < ch->trk->npos; i++) {
+    for (int i = 0; i < ch->trk->npos + ch->trk->nposx; i++) {
         interp_corr(C, n + ix * R + ch->trk->pos[i], ch->trk->C + i);
     }
     sdr_cpx_free(C);
@@ -424,16 +462,9 @@ static void update_tow(sdr_ch_t *ch, double sec)
     ch->tow = (ch->tow + (int)(sec / 1e-3)) % (86400 * 7 * 1000);
 }
 
-// track signal ----------------------------------------------------------------
-static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
+// adjust code offset (0 <= ch->coff < ch->T) ----------------------------------
+static void adj_coff(sdr_ch_t *ch)
 {
-    double tau = time - ch->time;   // time interval (s) 
-    double fc = ch->fi + ch->fd;    // IF carrier frequency with Doppler (Hz) 
-    ch->adr += ch->fd * tau;        // accumulated Doppler (cyc)
-    ch->coff -= ch->fd / ch->fc * tau; // carrier-aided code offset (s) 
-    ch->time = time;
-    
-    // adjust code offset within 1 cycle range (0 <= ch->coff < ch->T)
     if (ch->coff >= ch->T) {
         ch->coff -= ch->T;
         update_tow(ch, -ch->T);
@@ -448,15 +479,31 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
         memmove(ch->trk->P, ch->trk->P + 1, sizeof(sdr_cpx_t) *
             (SDR_N_HIST - 1));
     }
+}
+
+// track signal ----------------------------------------------------------------
+static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
+{
+    double tau = time - ch->time;   // time interval (s) 
+    double fc = ch->fi + ch->fd;    // IF carrier frequency with Doppler (Hz) 
+    ch->adr += ch->fd * tau;        // accumulated Doppler (cyc)
+    ch->coff -= ch->fd / ch->fc * tau; // carrier-aided code offset (s) 
+    ch->time = time;
+    
+    // adjust code offset
+    adj_coff(ch);
+    
     // code position (samples) and carrier phase (cyc) 
-    int i = (int)(ch->coff * ch->fs);
-    int j = (int)((ch->coff * ch->fs - i) * N_CODE); // code bank index
+    int i = (int)floor(ch->coff * ch->fs);
+    double sub_pos = ch->coff * ch->fs - i; // 0 <= sub_pos < 1.0
     double phi = ch->fi * tau + ch->adr + fc * i / ch->fs;
     
     // mix carrier
     sdr_mix_carr(buff, ix + i, ch->N, ch->fs, fc, phi, ch->data);
     
     if (!strcmp(ch->sig, "L6D") || !strcmp(ch->sig, "L6E")) {
+        int j = (int)(sub_pos * SDR_N_CODES); // code bank index
+        
         // FFT correlator 
         sdr_corr_fft(ch->data, ch->trk->code_fft + j * ch->N, ch->N, ch->corr);
         
@@ -464,9 +511,13 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
         CSK(ch, ch->corr);
     }
     else {
+        double pos[SDR_MAX_CORR];
+        for (int j = 0; j < ch->trk->npos + ch->trk->nposx; j++) {
+            pos[j] = ch->trk->pos[j] + sub_pos;
+        }
         // standard correlator
-        sdr_corr_std(ch->data, ch->trk->code + j * ch->N, ch->N, ch->trk->pos,
-            ch->trk->npos, ch->trk->C);
+        sdr_corr_std(ch->data, ch->trk->code, ch->N, pos,
+            ch->trk->npos + ch->trk->nposx, ch->trk->C);
     }
     // add P correlator outputs to history 
     sdr_add_buff(ch->trk->P, SDR_N_HIST, ch->trk->C[0], sizeof(sdr_cpx_t));
@@ -497,8 +548,8 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
         ch->trk->sec_sync = ch->trk->sec_pol = 0;
         ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
         ch->lost++;
-        sdr_log(4, "$LOG,%.3f,%s,%d,SIGNAL LOST (%s, %.1f)", ch->time, ch->sig,
-            ch->prn, ch->sig, ch->cn0);
+        sdr_log(3, "$LOG,%.3f,%s,%d,SIGNAL LOST (%.1f)", ch->time, ch->sig,
+            ch->prn, ch->cn0);
     }
 }
 
@@ -539,28 +590,29 @@ void sdr_ch_update(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
 }
 
 // set receiver channel correlator ---------------------------------------------
-void sdr_ch_set_corr(sdr_ch_t *ch, int npos)
+void sdr_ch_set_corr(sdr_ch_t *ch, int nposx)
 {
     pthread_mutex_lock(&ch->mtx);
-    ch->trk->npos = npos;
+    ch->trk->nposx = nposx;
     pthread_mutex_unlock(&ch->mtx);
 }
 
 // get receiver correlator status ----------------------------------------------
-int sdr_ch_corr_stat(sdr_ch_t *ch, double *stat, int *pos, sdr_cpx_t *C)
+int sdr_ch_corr_stat(sdr_ch_t *ch, double *stat, double *pos, sdr_cpx_t *C)
 {
     pthread_mutex_lock(&ch->mtx);
-    int n = SDR_N_CORR;
+    int npos = ch->trk->npos + ch->trk->nposx;
     stat[0] = ch->state;
     stat[1] = ch->fs;
     stat[2] = ch->lock * ch->T;
     stat[3] = ch->cn0;
     stat[4] = ch->coff * 1e3;
     stat[5] = ch->fd;
-    memcpy(pos, ch->trk->pos, sizeof(int) * n);
-    memcpy(C, ch->trk->C, sizeof(sdr_cpx_t) * n);
+    stat[6] = ch->trk->npos;
+    memcpy(pos, ch->trk->pos, sizeof(double) * npos);
+    memcpy(C, ch->trk->C, sizeof(sdr_cpx_t) * npos);
     pthread_mutex_unlock(&ch->mtx);
-    return n;
+    return npos;
 }
 
 // get receiver correlator history ---------------------------------------------
