@@ -48,12 +48,16 @@
 //  2024-01-12  1.3  support B1CD, B2AD, B2BI
 //  2024-01-19  1.4  support G1OCD
 //  2024-05-22  1.5  support tow update for pseudorange generation
+//  2024-12-30  1.6  Add log $NAV
+//                   Delete log $SBAS, $LNAV, $CNV2, $CNAV, $L6FRM, $GSTR,
+//                   $GSTR1, $GSTR3, $INAV, $FNAV, $BCNVD1, $BCNVD2, $BCNV1,
+//                   $BCNV2, $BCNV3, $IRNV1, $IRNV5
 //
 #include "pocket_sdr.h"
 
 // constants -------------------------------------------------------------------
-#define THRES_SYNC  0.02      // threshold for symbol sync
-#define THRES_LOST  0.002     // threshold for symbol lost
+#define THRES_SYNC  0.05      // threshold for symbol sync
+#define THRES_LOST  0.001     // threshold for symbol lost
 #define GPST_OFF_W  2048      // GPST offset (week) (2019-4-7 ~ 2038-11-20)
 #define GPST_GST_W  1024      // GPST - GST (week)
 #define GPST_BDT_W  1356      // GPST - BDT (week)
@@ -122,17 +126,18 @@ static float mean_IP(const sdr_ch_t *ch, int N)
 static int sync_symb(sdr_ch_t *ch, int N)
 {
     if (ch->nav->ssync == 0) {
-        float P = 0.0, R = 0.0;
-        int n = (N <= 2) ? 1 : N - 1;
-        for (int i = 0; i < 2 * n; i++) {
-            int8_t code = (i < n) ? -1 : 1;
-            P += ch->trk->P[SDR_N_HIST-2*n+i][0] * code / (2 * n);
-            R += fabsf(ch->trk->P[SDR_N_HIST-2*n+i][0]) / (2 * n);
+        float P = mean_IP(ch, N);
+        int n = 100 / N, R[50] = {0};
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < N; j++) {
+                R[i] += ch->trk->P[SDR_N_HIST-(i+1)*N+j][0] >= 0.0 ? 1 : -1;
+            }
+            if (R[i] != N && R[i] != -N) return 0;
         }
-        if (fabsf(P) >= R && R >= THRES_SYNC) {
-            ch->nav->ssync = ch->lock - n;
-            sdr_log(4, "$LOG,%.3f,%s,%d,SYMBOL SYNC (%.3f)", ch->time, ch->sig,
-                ch->prn, P);
+        if (R[0] * R[1] == -N * N && fabsf(P) >= THRES_SYNC) {
+            ch->nav->ssync = ch->lock - N;
+            sdr_log(4, "$LOG,%.3f,%s,%s,%d,SYMBOL SYNC (%.3f)", ch->time,
+                ch->sat, ch->sig, ch->prn, P);
         }
     }
     else if ((ch->lock - ch->nav->ssync) % N == 0) {
@@ -144,8 +149,8 @@ static int sync_symb(sdr_ch_t *ch, int N)
         }
         else {
             ch->nav->ssync = ch->nav->rev = 0;
-            sdr_log(4, "$LOG,%.3f,%s,%d,SYMBOL LOST (%.3f)", ch->time, ch->sig,
-                ch->prn, P);
+            sdr_log(4, "$LOG,%.3f,%s,%s,%d,SYMBOL LOST (%.3f)", ch->time,
+                ch->sat, ch->sig, ch->prn, P);
         }
     }
     return 0;
@@ -188,11 +193,13 @@ static int sync_frame(sdr_ch_t *ch, const uint8_t *preamb, int n, int m,
     const uint8_t *bits, int N)
 {
     if (bmatch_n(preamb, bits, n, m) && bmatch_n(preamb, bits + N, n, m)) {
-        sdr_log(4, "$LOG,%.3f,%s,%d,FRAME SYNC (N)", ch->time, ch->sig, ch->prn);
+        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (N)", ch->time, ch->sat,
+            ch->sig, ch->prn);
         return 0; // normal
     }
     if (bmatch_r(preamb, bits, n, m) && bmatch_r(preamb, bits + N, n, m)) {
-        sdr_log(4, "$LOG,%.3f,%s,%d,FRAME SYNC (R)", ch->time, ch->sig, ch->prn);
+        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (R)", ch->time, ch->sat,
+            ch->sig, ch->prn);
         return 1; // reversed
     }
     return -1;
@@ -243,6 +250,29 @@ static void update_tow(sdr_ch_t *ch, double tow)
     }
 }
 
+//------------------------------------------------------------------------------
+//  Output log $NAV (raw navigation subframe/message).
+//
+//  format:
+//      $NAV,time,sat,sig,nerr,size,data
+//      
+//          time  receiver time (s)
+//          sat   satellite ID
+//          sig   signal ID
+//          prn   PRN number
+//          nerr  number of error corrected
+//          size  size of raw navigation subframe/message (bits)
+//          data  hex dump of raw navigation subframe/message
+//
+static void out_log_nav(double time, const char *sat, const char *sig, int prn,
+    int nerr, int size, const uint8_t *data)
+{
+    char str[1024];
+    hex_str(data, size, str);
+    sdr_log(3, "$NAV,%.3f,%s,%s,%d,%d,%d,%s", time, sat, sig, prn, nerr, size,
+        str);
+}
+
 // unsync navigation message ---------------------------------------------------
 static void unsync_nav(sdr_ch_t *ch)
 {
@@ -273,6 +303,7 @@ void sdr_nav_init(sdr_nav_t *nav)
     nav->coff = 0.0;
     memset(nav->syms, 0, SDR_MAX_NSYM);
     memset(nav->data, 0, SDR_MAX_DATA);
+    memset(nav->lock_sf, 0, sizeof(nav->lock_sf));
 }
 
 // sync SBAS message -----------------------------------------------------------
@@ -312,18 +343,17 @@ static void decode_SBAS_msgs(sdr_ch_t *ch, const uint8_t *bits, int rev)
         ch->tow = (int)(toff / 1e-3);
         ch->tow_v = 2;
         int off = !strcmp(ch->sig, "L1CA") ? 8 : 6;
-        ch->nav->type = getbitu(ch->nav->data, off, 6); // SBAS message type
         sdr_pack_bits(buff, 250, 0, ch->nav->data); // SBAS message (250 bits)
+        ch->nav->type = getbitu(ch->nav->data, off, 6); // SBAS message type
         ch->nav->stat = 1;
         ch->nav->count[0]++;
-        char str[256];
-        hex_str(ch->nav->data, 250, str);
-        sdr_log(3, "$SBAS,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+        out_log_nav(time, ch->sat, ch->sig, ch->prn, 0, 250, ch->nav->data);
     }
     else {
         unsync_nav(ch);
         ch->nav->count[1]++;
-        sdr_log(4, "$LOG,%.3f,%s,%d,SBAS FRAME ERROR", time, ch->sig, ch->prn);
+        sdr_log(3, "$LOG,%.3f,%s,%s,%d,SBAS FRAME ERROR", time, ch->sat,
+            ch->sig, ch->prn);
     }
 }
 
@@ -406,20 +436,20 @@ static void decode_LNAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
             ch->week = getbitu(data, 48, 10) + GPST_OFF_W;
         }
         update_tow(ch, getbitu(data, 24, 17) * 6.0 + TOFF_L1CA);
+        ch->nav->type = sf; // SF ID
         if (sf >= 1 && sf <= 5) {
-            ch->nav->type = sf; // SF ID
             memcpy(ch->nav->data + 30 * (sf - 1), data, 30); // SF 24 x 10 bits
+            ch->nav->lock_sf[sf-1] = ch->lock;
         }
         ch->nav->stat = 1;
         ch->nav->count[0]++;
-        char str[256];
-        hex_str(data, 240, str);
-        sdr_log(3, "$LNAV,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+        out_log_nav(time, ch->sat, ch->sig, ch->prn, 0, 240, data);
     }
     else {
         unsync_nav(ch);
         ch->nav->count[1]++;
-        sdr_log(4, "$LOG,%.3f,%s,%d,LNAV PARITY ERROR", time, ch->sig, ch->prn);
+        sdr_log(3, "$LOG,%.3f,%s,%s,%d,GPS/QZS LNAV PARITY ERROR", time,
+            ch->sat, ch->sig, ch->prn);
     }
 }
 
@@ -489,13 +519,13 @@ static int sync_CNV2_frame(sdr_ch_t *ch, const uint8_t *syms, int toi)
     uint8_t *SFn = CNV2_SF1[(toi + 1) % 400];
     
     if (bmatch_n(syms, SF1, 52, 2) && bmatch_n(syms + 1800, SFn, 52, 2)) {
-        sdr_log(4, "$LOG,%.3f,%s,%d,FRAME SYNC (N) TOI=%d", ch->time, ch->sig,
-            ch->prn, toi);
+        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (N) TOI=%d", ch->time,
+            ch->sat, ch->sig, ch->prn, toi);
         return 1; // normal
     }
     if (bmatch_r(syms, SF1, 52, 2) && bmatch_r(syms + 1800, SFn, 52, 2)) {
-        sdr_log(4, "$LOG,%.3f,%s,%d,FRAME SYNC (R) TOI=%d", ch->time, ch->sig,
-            ch->prn, toi);
+        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (R) TOI=%d", ch->time,
+            ch->sat, ch->sig, ch->prn, toi);
         return 0; // reversed
     }
     return -1;
@@ -532,14 +562,13 @@ static void decode_CNV2(sdr_ch_t *ch, const uint8_t *syms, int rev, int toi)
         memcpy(ch->nav->data, data, 111); // CNAV-2 SF1+SF2+SF3 (9+600+274 bits)
         ch->nav->stat = 1;
         ch->nav->count[0]++;
-        char str[256];
-        hex_str(data, 883, str);
-        sdr_log(3, "$CNV2,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+        out_log_nav(time, ch->sat, ch->sig, ch->prn, nerr1 + nerr2, 883, data);
     }
     else {
         unsync_nav(ch);
         ch->nav->count[1]++;
-        sdr_log(4, "$LOG,%.3f,%s,%d,CNV2 FRAME ERROR", time, ch->sig, ch->prn);
+        sdr_log(4, "$LOG,%.3f,%s,%s,%d,GPS/QZS CNAV-2 FRAME ERROR", time,
+            ch->sat, ch->sig, ch->prn);
     }
 }
 
@@ -613,14 +642,13 @@ static void decode_CNAV(sdr_ch_t *ch, const uint8_t *bits, int rev)
         memcpy(ch->nav->data, data, 38); // CNAV message (300 bits)
         ch->nav->stat = 1;
         ch->nav->count[0]++;
-        char str[256];
-        hex_str(data, 300, str);
-        sdr_log(3, "$CNAV,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+        out_log_nav(time, ch->sat, ch->sig, ch->prn, 0, 300, data);
     }
     else {
         unsync_nav(ch);
         ch->nav->count[1]++;
-        sdr_log(4, "$LOG,%.3f,%s,%d,CNAV FRAME ERROR", time, ch->sig, ch->prn);
+        sdr_log(3, "$LOG,%.3f,%s,%s,%d,GPS/QZS CNAV FRAME ERROR", time, ch->sat,
+            ch->sig, ch->prn);
     }
 }
 
@@ -666,7 +694,7 @@ static void decode_L2CM(sdr_ch_t *ch)
 // sync L5 SBAS message --------------------------------------------------------
 static int sync_L5_SBAS_msgs(const uint8_t *bits, int N)
 {
-    static const uint8_t preamb[][8] = {
+    static const uint8_t preamb[][6] = {
         {0, 1, 0, 1}, {1, 1, 0, 0}, {0, 1, 1, 0}, {1, 0, 0, 1}, {0, 0, 1, 1},
         {1, 0, 1, 0}
     };
@@ -827,15 +855,13 @@ static void decode_L6_frame(sdr_ch_t *ch, const uint8_t *syms, int N)
         memcpy(ch->nav->data, data, 250); // L6 frame (2000 bits)
         ch->nav->stat = 1;
         ch->nav->count[0]++;
-        char str[512];
-        hex_str(data, 2000, str);
-        sdr_log(3, "$L6FRM,%.3f,%s,%d,%d,%s", time, ch->sig, ch->prn,
-            ch->nav->nerr, str);
+        out_log_nav(time, ch->sat, ch->sig, ch->prn, ch->nav->nerr, 2000, data);
     }
     else {
         unsync_nav(ch);
         ch->nav->count[1]++;
-        sdr_log(4, "$LOG,%.3f,%s,%d,L6FRM RS ERROR", time, ch->sig, ch->prn);
+        sdr_log(3, "$LOG,%.3f,%s,%s,%d,QZS L6 FRAME RS ERROR", time, ch->sat,
+            ch->sig, ch->prn);
     }
 }
 
@@ -888,20 +914,20 @@ static void decode_glo_str(sdr_ch_t *ch, const uint8_t *syms, int rev)
             update_tow(ch, tod + TOFF_G1CA + GPST_UTC);
             ch->tow_v = 2;
         }
+        ch->nav->type = sno; // GLO string number
         if (sno >= 1 && sno <= 5) { // GLO string w/o mark and hamming (77 bits)
-            ch->nav->type = sno; // GLO string number
             sdr_pack_bits(bits, 77, 0, ch->nav->data + 10 * (sno - 1));
+            ch->nav->lock_sf[sno-1] = ch->lock;
         }
         ch->nav->stat = 1;
         ch->nav->count[0]++;
-        char str[256];
-        hex_str(data, 85, str);
-        sdr_log(3, "$GSTR,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+        out_log_nav(time, ch->sat, ch->sig, ch->prn, 0, 85, data);
     }
     else {
         unsync_nav(ch);
         ch->nav->count[1]++;
-        sdr_log(4, "$LOG,%.3f,%s,%d,GSTR HAMMING ERROR", time, ch->sig, ch->prn);
+        sdr_log(3, "$LOG,%.3f,%s,%s,%d,GLO STR HAMMING ERROR", time, ch->sat,
+            ch->sig, ch->prn);
     }
 }
 
@@ -962,14 +988,13 @@ static void decode_glo_L1OCD_str(sdr_ch_t *ch, const uint8_t *bits, int rev)
         memcpy(ch->nav->data, data, 32); // L1OCD nav string (250 bits)
         ch->nav->stat = 1;
         ch->nav->count[0]++;
-        char str[256];
-        hex_str(data, 250, str);
-        sdr_log(3, "$GSTR1,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+        out_log_nav(time, ch->sat, ch->sig, ch->prn, 0, 250, data);
     }
     else {
         unsync_nav(ch);
         ch->nav->count[1]++;
-        sdr_log(4, "$LOG,%.3f,%s,%d,G1OCD STRING ERROR", time, ch->sig, ch->prn);
+        sdr_log(3, "$LOG,%.3f,%s,%s,%d,GLO L1OCD STR ERROR", time, ch->sat,
+            ch->sig, ch->prn);
     }
 }
 
@@ -1038,14 +1063,13 @@ static void decode_glo_L3OCD_str(sdr_ch_t *ch, const uint8_t *bits, int rev)
         memcpy(ch->nav->data, data, 38); // GLO L3OCD nav string (300 bits)
         ch->nav->stat = 1;
         ch->nav->count[0]++;
-        char str[256];
-        hex_str(data, 300, str);
-        sdr_log(3, "$GSTR3,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+        out_log_nav(time, ch->sat, ch->sig, ch->prn, 0, 300, data);
     }
     else {
         unsync_nav(ch);
         ch->nav->count[1]++;
-        sdr_log(4, "$LOG,%.3f,%s,%d,G3OCD STRING ERROR", time, ch->sig, ch->prn);
+        sdr_log(3, "$LOG,%.3f,%s,%s,%d,GLO L3OCD STR ERROR", time, ch->sat,
+            ch->sig, ch->prn);
     }
 }
 
@@ -1154,17 +1178,17 @@ static void decode_gal_INAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
         ch->nav->type = type; // I/NAV word type
         if (type >= 0 && type <= 6) {
             memcpy(ch->nav->data + 16 * type, data, 16);
+            ch->nav->lock_sf[type] = ch->lock;
         }
         ch->nav->stat = 1;
         ch->nav->count[0]++;
-        char str[256];
-        hex_str(data, 128, str);
-        sdr_log(3, "$INAV,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+        out_log_nav(time, ch->sat, ch->sig, ch->prn, 0, 128, data);
     }
     else {
         unsync_nav(ch);
         ch->nav->count[1]++;
-        sdr_log(4, "$LOG,%.3f,%s,%d,INAV FRAME ERROR", time, ch->sig, ch->prn);
+        sdr_log(3, "$LOG,%.3f,%s,%s,%d,GAL I/NAV FRAME ERROR", time, ch->sat,
+            ch->sig, ch->prn);
     }
 }
 
@@ -1239,17 +1263,17 @@ static void decode_gal_FNAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
         ch->nav->type = type; // F/NAV page type
         if (type >= 1 && type <= 6) {
             memcpy(ch->nav->data + 31 * (type - 1), data, 30);
+            ch->nav->lock_sf[type-1] = ch->lock;
         }
         ch->nav->stat = 1;
         ch->nav->count[0]++;
-        char str[256];
-        hex_str(data, 238, str);
-        sdr_log(3, "$FNAV,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+        out_log_nav(time, ch->sat, ch->sig, ch->prn, 0, 238, data);
     }
     else {
         unsync_nav(ch);
         ch->nav->count[1]++;
-        sdr_log(4, "$LOG,%.3f,%s,%d,FNAV FRAME ERROR", time, ch->sig, ch->prn);
+        sdr_log(3, "$LOG,%.3f,%s,%s,%d,GAL F/NAV FRAME ERROR", time, ch->sat,
+            ch->sig, ch->prn);
     }
 }
 
@@ -1361,14 +1385,13 @@ static void decode_gal_CNAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
         memcpy(ch->nav->data, data, 61); // C/NAV frame (486 bits)
         ch->nav->stat = 1;
         ch->nav->count[0]++;
-        char str[256];
-        hex_str(data, 486, str);
-        sdr_log(3, "$CNAV,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+        out_log_nav(time, ch->sat, ch->sig, ch->prn, 0, 486, data);
     }
     else {
         unsync_nav(ch);
         ch->nav->count[1]++;
-        sdr_log(4, "$LOG,%.3f,%s,%d,CNAV FRAME ERROR", time, ch->sig, ch->prn);
+        sdr_log(3, "$LOG,%.3f,%s,%s,%d,GAL C/NAV FRAME ERROR", time, ch->sat,
+            ch->sig, ch->prn);
     }
 }
 
@@ -1477,16 +1500,19 @@ static void decode_D1D2NAV(sdr_ch_t *ch, int type, const uint8_t *syms, int rev)
     if (type == 1 && sf >= 1 && sf <= 5) {
         ch->nav->type = sf; // D1 SF ID
         memcpy(ch->nav->data + 38 * (sf - 1), data, 38); // D1 SF (300 bits)
+        ch->nav->lock_sf[sf-1] = ch->lock;
     }
     else if (type == 2 && sf == 1 && pg >= 1 && pg <= 10) {
         ch->nav->type = pg; // D2 SF1 page
         memcpy(ch->nav->data + 38 * (pg - 1), data, 38); // D2 SF1 page (300 bits)
+        ch->nav->lock_sf[pg-1] = ch->lock;
+    }
+    else {
+        ch->nav->type = 0;
     }
     ch->nav->stat = 1;
     ch->nav->count[0]++;
-    char str[256];
-    hex_str(data, 300, str);
-    sdr_log(3, "$BCNVD%d,%.3f,%s,%d,%s", type, time, ch->sig, ch->prn, str);
+    out_log_nav(time, ch->sat, ch->sig, ch->prn, 0, 300, data);
 }
 
 // decode B1I D1 nav data ([7]) ------------------------------------------------
@@ -1589,13 +1615,13 @@ static int sync_BCNV1_frame(sdr_ch_t *ch, const uint8_t *syms, int soh)
     memcpy(SFn + 21, BCNV1_SF1B[(soh + 1) % 200], 51);
     
     if (bmatch_n(syms, SF1, 72, 3) && bmatch_n(syms + 1800, SFn, 72, 3)) {
-        sdr_log(4, "$LOG,%.3f,%s,%d,FRAME SYNC (N) SOH=%d", ch->time, ch->sig,
-            ch->prn, soh);
+        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (N) SOH=%d", ch->time,
+            ch->sat, ch->sig, ch->prn, soh);
         return 1; // normal
     }
     if (bmatch_r(syms, SF1, 72, 3) && bmatch_r(syms + 1800, SFn, 72, 3)) {
-        sdr_log(4, "$LOG,%.3f,%s,%d,FRAME SYNC (R) SOH=%d", ch->time, ch->sig,
-            ch->prn, soh);
+        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (R) SOH=%d", ch->time,
+            ch->sat, ch->sig, ch->prn, soh);
         return 0; // reversed
     }
     return -1;
@@ -1641,14 +1667,13 @@ static void decode_BCNV1(sdr_ch_t *ch, const uint8_t *syms, int rev, int soh)
         memcpy(ch->nav->data, data, 110); // CNAV-2 SF1+SF2+SF3 (14+600+264 bits)
         ch->nav->stat = 1;
         ch->nav->count[0]++;
-        char str[256];
-        hex_str(data, 878, str);
-        sdr_log(3, "$BCNV1,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+        out_log_nav(time, ch->sat, ch->sig, ch->prn, nerr1 + nerr2, 878, data);
     }
     else {
         unsync_nav(ch);
         ch->nav->count[1]++;
-        sdr_log(3, "$LOG,%.3f,%s,%d,BCNV1 FRAME ERROR", time, ch->sig, ch->prn);
+        sdr_log(3, "$LOG,%.3f,%s,%s,%d,BDS B-CNAV1 FRAME ERROR", time, ch->sat,
+            ch->sig, ch->prn);
     }
 }
 
@@ -1729,14 +1754,13 @@ static void decode_BCNV2(sdr_ch_t *ch, const uint8_t *syms, int rev)
         memcpy(ch->nav->data, data, 36); // B-CNAV2 message (288 bits)
         ch->nav->stat = 1;
         ch->nav->count[0]++;
-        char str[256];
-        hex_str(data, 288, str);
-        sdr_log(3, "$BCNV2,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+        out_log_nav(time, ch->sat, ch->sig, ch->prn, nerr, 288, data);
     }
     else {
         unsync_nav(ch);
         ch->nav->count[1]++;
-        sdr_log(3, "$LOG,%.3f,%s,%d,BCNV2 FRAME ERROR", time, ch->sig, ch->prn);
+        sdr_log(3, "$LOG,%.3f,%s,%s,%d,BDS B-CNAV2 FRAME ERROR", time, ch->sat,
+            ch->sig, ch->prn);
     }
 }
 
@@ -1817,14 +1841,13 @@ static void decode_BCNV3(sdr_ch_t *ch, const uint8_t *syms, int rev)
         memcpy(ch->nav->data, data, 61); // B-CNAV3 message (486 bits)
         ch->nav->stat = 1;
         ch->nav->count[0]++;
-        char str[256];
-        hex_str(data, 486, str);
-        sdr_log(3, "$BCNV3,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+        out_log_nav(time, ch->sat, ch->sig, ch->prn, nerr, 486, data);
     }
     else {
         unsync_nav(ch);
         ch->nav->count[1]++;
-        sdr_log(3, "$LOG,%.3f,%s,%d,BCNV3 FRAME ERROR", time, ch->sig, ch->prn);
+        sdr_log(3, "$LOG,%.3f,%s,%s,%d,BDS B-CNAV3 FRAME ERROR", time, ch->sat,
+            ch->sig, ch->prn);
     }
 }
 
@@ -1882,13 +1905,13 @@ static int sync_IRNV1_frame(sdr_ch_t *ch, const uint8_t *syms, int toi)
     uint8_t *SFn = IRNV1_SF1[(toi + 1) % 400];
     
     if (bmatch_n(syms, SF1, 52, 2) && bmatch_n(syms + 1800, SFn, 52, 2)) {
-        sdr_log(4, "$LOG,%.3f,%s,%d,FRAME SYNC (N) TOI=%d", ch->time, ch->sig,
-            ch->prn, toi+1);
+        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (N) TOI=%d", ch->time,
+            ch->sat, ch->sig, ch->prn, toi+1);
         return 1; // normal
     }
     if (bmatch_r(syms, SF1, 52, 2) && bmatch_r(syms + 1800, SFn, 52, 2)) {
-        sdr_log(4, "$LOG,%.3f,%s,%d,FRAME SYNC (R) TOI=%d", ch->time, ch->sig,
-            ch->prn, toi+1);
+        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (R) TOI=%d", ch->time,
+            ch->sat, ch->sig, ch->prn, toi+1);
         return 0; // reversed
     }
     return -1;
@@ -1924,14 +1947,13 @@ static void decode_IRNV1(sdr_ch_t *ch, const uint8_t *syms, int rev, int toi)
         memcpy(ch->nav->data, data, 111); // L1-SPS SF1+SF2+SF3 (9+600+274 bits)
         ch->nav->stat = 1;
         ch->nav->count[0]++;
-        char str[256];
-        hex_str(data, 883, str);
-        sdr_log(3, "$IRNV1,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+        out_log_nav(time, ch->sat, ch->sig, ch->prn, nerr1 + nerr2, 883, data);
     }
     else {
         unsync_nav(ch);
         ch->nav->count[1]++;
-        sdr_log(3, "$LOG,%.3f,%s,%d,IRNV1 FRAME ERROR", time, ch->sig, ch->prn);
+        sdr_log(3, "$LOG,%.3f,%s,%s,%d,NAVIC L1-SPS NAV FRAME ERROR", time,
+            ch->sat, ch->sig, ch->prn);
     }
 }
 
@@ -1996,20 +2018,20 @@ static void decode_IRN_NAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
             ch->week = getbitu(data, 30, 10) + 1024 + GPST_IRT_W;
         }
         update_tow(ch, getbitu(data, 8, 17) * 12.0 + TOFF_I5S);
+        ch->nav->type = sf; // L5-SPS SF NO
         if (sf >= 1 && sf <= 4) {
-            ch->nav->type = sf; // L5-SPS SF NO
             memcpy(ch->nav->data + 37 * (sf - 1), data, 36); // L5-SPS SF (286 bits)
+            ch->nav->lock_sf[sf-1] = ch->lock;
         }
         ch->nav->stat = 1;
         ch->nav->count[0]++;
-        char str[256];
-        hex_str(data, 286, str);
-        sdr_log(3, "$IRNV5,%.3f,%s,%d,%s", time, ch->sig, ch->prn, str);
+        out_log_nav(time, ch->sat, ch->sig, ch->prn, 0, 286, data);
     }
     else {
         unsync_nav(ch);
         ch->nav->count[1]++;
-        sdr_log(3, "$LOG,%.3f,%s,%d,IRNAV FRAME ERROR", time, ch->sig, ch->prn);
+        sdr_log(3, "$LOG,%.3f,%s,%s,%d,NAVIC SPS NAV FRAME ERROR", time,
+            ch->sat, ch->sig, ch->prn);
     }
 }
 
