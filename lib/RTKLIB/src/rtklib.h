@@ -61,7 +61,7 @@ extern "C" {
 #define ENACMP
 #define ENAIRN
 #define NFREQ  5
-#define NEXOBS 6
+#define NEXOBS 8
 
 /* constants -----------------------------------------------------------------*/
 
