@@ -26,6 +26,9 @@
 //  2024-05-13  1.13 add API sdr_str_open(), sdr_str_close()
 //  2024-06-29  1.14 add API sdr_psd_cpx()
 //  2024-08-26  1.15 modify API sdr_corr_std(), sdr_corr_fft()
+//  2024-11-21  1.16 add API sdr_tag_read(), sdr_tag_write(), sdr_log_mask(),
+//                   sdr_log_stat()
+//                   modify API sdr_corr_std(), sdr_corr_std_cpx()
 //
 #include <math.h>
 #include <stdarg.h>
@@ -44,7 +47,7 @@
 #define NTBL          256   // carrier-mixed-data LUT size
 #define DOP_STEP      0.5   // Doppler frequency search step (* 1 / code cycle)
 #define MAX_FFTW_PLAN 32    // max number of FFTW plans
-#define MAX_LOG_BUFF  32768 // max sizeof log buffer
+#define MAX_LOG_BUFF  131072 // max sizeof log buffer
 #define FFTW_FLAG     FFTW_ESTIMATE // FFTW flag
 
 #define SQR(x)        ((x) * (x))
@@ -55,11 +58,20 @@
 static sdr_cpx16_t mix_tbl[NTBL*256] = {{0,0}}; // carrier-mixed-data LUT
 static fftwf_plan fftw_plans[MAX_FFTW_PLAN][2] = {{0}}; // FFTW plan buffer
 static int fftw_size[MAX_FFTW_PLAN] = {0}; // FFTW plan sizes
-static int log_lvl = 3;           // log level
+static int log_lvl = 3;            // log level
+static const char *log_types[] = { // log types
+    "$TIME,", "$CH,", "$NAV,", "$OBS,", "$POS,", "$SAT,", "$EPH,", "$LOG,",
+    NULL
+};
+static int log_mask[16] = {0};    // log mask
 static stream_t *log_str = NULL;  // log stream
 static char log_buff[MAX_LOG_BUFF]; // log buffer
 static int log_buff_p = 0;        // log buffer pointer
 static pthread_mutex_t log_buff_mtx = PTHREAD_MUTEX_INITIALIZER;
+static const char *fmt_str[] = { // IF data format string
+    "-", "INT8", "INT8X2", "RAW8", "RAW16", "RAW16I", "RAW32", NULL
+};
+static const int fmt_nch[] = {0, 1, 1, 2, 4, 8, 8}; // IF data format # of CH
 
 // enable escape sequence for Windows console ----------------------------------
 static void enable_console_esc(void)
@@ -224,11 +236,11 @@ void sdr_buff_free(sdr_buff_t *buff)
 //  byte for IQ-sampling (complex-sampling).
 //
 //  args:
-//      file     (I) Digitalized IF data file path
-//      fs       (I) Sampling frequency (Hz)
-//      IQ       (I) Sampling type (1: I-sampling, 2: IQ-sampling)
-//      T        (I) Sample period (s) (0: all samples)
-//      toff     (I) Time offset from the beginning (s)
+//      file     (I)  Digitalized IF data file path
+//      fs       (I)  Sampling frequency (Hz)
+//      IQ       (I)  Sampling type (1: I-sampling, 2: IQ-sampling)
+//      T        (I)  Sample period (s) (0: all samples)
+//      toff     (I)  Time offset from the beginning (s)
 //
 //  return:
 //      IF data buffer (NULL: read error)
@@ -296,18 +308,137 @@ sdr_buff_t *sdr_read_data(const char *file, double fs, int IQ, double T,
 }
 
 //------------------------------------------------------------------------------
+//  Write the tag file for the IF data file. The tag file path will be
+//  <file>.tag.
+//
+//  args:
+//      file     (I)  IF data file path
+//      prog     (I)  Program name
+//      time     (I)  IF data file recoding start time
+//      fmt      (I)  IF data file format (SDR_FMT_???)
+//      fs       (I)  Sampling frequency (Hz)
+//      fo       (I)  LO frequencies (Hz)
+//      IQ       (I)  Sampling types (1: I-sampling, 2: IQ-sampling)
+//
+//  return:
+//      Status (1: OK, 0: error)
+//
+int sdr_tag_write(const char *file, const char *prog, gtime_t time, int fmt,
+    double fs, const double *fo, const int *IQ)
+{
+    FILE *fp;
+    char path[1024+4], tstr[32];
+    int n = fmt_nch[fmt];
+    
+    snprintf(path, sizeof(path), "%s.tag", file);
+    time2str(time, tstr, 3);
+    
+    if (!(fp = fopen(path, "w"))) {
+        fprintf(stderr, "tag file open error %s\n", path);
+        return 0;
+    }
+    fprintf(fp, "PROG = %s\n", prog);
+    fprintf(fp, "TIME = %s\n", tstr);
+    fprintf(fp, "FMT  = %s\n", fmt_str[fmt]);
+    fprintf(fp, "F_S  = %.6g\n", fs * 1e-6);
+    fprintf(fp, "F_LO = ");
+    for (int i = 0; i < n; i++) {
+        fprintf(fp, "%.6g%s", fo[i] * 1e-6, i < n - 1 ? "," : "");
+    }
+    fprintf(fp, "\n");
+    fprintf(fp, "IQ   = ");
+    for (int i = 0; i < n; i++) {
+        fprintf(fp, "%d%s", IQ[i], i < n - 1 ? "," : "");
+    }
+    fprintf(fp, "\n");
+    fclose(fp);
+    return 1;
+}
+
+//------------------------------------------------------------------------------
+//  Read the tag file for the IF data file. The tag file path will be
+//  <file>.tag.
+//
+//  args:
+//      file     (I)  IF data file path
+//      prog     (O)  Program name
+//      time     (O)  IF data file recoding start time 
+//      fmt      (O)  IF data file format (SDR_FMT_???)
+//      fs       (O)  Sampling frequency (Hz)
+//      fo       (O)  LO frequencies (Hz)
+//      IQ       (O)  Sampling types (1: I-sampling, 2: IQ-sampling)
+//
+//  return:
+//      Status (1: OK, 0: error)
+//
+int sdr_tag_read(const char *file, char *prog, gtime_t *time, int *fmt,
+    double *fs, double *fo, int *IQ)
+{
+
+    FILE *fp;
+    char path[1024+4], buff[256], *p;
+    
+    snprintf(path, sizeof(path), "%s.tag", file);
+    
+    if (!(fp = fopen(path, "r"))) {
+        fprintf(stderr, "tag file open error %s\n", path);
+        return 0;
+    }
+    *fmt = 0;
+    
+    while (fgets(buff, sizeof(buff), fp)) {
+        if (!(p = strchr(buff, '='))) continue;
+        
+        if (strstr(buff, "PROG") == buff && prog) {
+            sscanf(p + 2, "%[^\n]", prog);
+        }
+        else if (strstr(buff, "TIME") == buff && time) {
+            double ep[6] = {0};
+            sscanf(p + 2, "%lf/%lf/%lf %lf:%lf:%lf", ep, ep + 1, ep + 2, ep + 3,
+                ep + 4, ep + 5);
+            *time = epoch2time(ep);
+        }
+        else if (strstr(buff, "FMT") == buff) {
+            for (int i = 0; fmt_str[i]; i++) {
+                if (strncmp(p + 2, fmt_str[i], strlen(fmt_str[i]))) continue;
+                *fmt = i;
+                break;
+            }
+        }
+        else if (strstr(buff, "F_S") == buff) {
+            if (sscanf(p + 2, "%lf", fs)) *fs *= 1e6;
+        }
+        else if (strstr(buff, "F_LO") == buff) {
+            int n = sscanf(p + 2, "%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf", fo, fo + 1,
+                fo + 2, fo + 3, fo + 4, fo + 5, fo + 6, fo + 7);
+            for (int i = 0; i < n; i++) fo[i] *= 1e6;
+        }
+        else if (strstr(buff, "IQ") == buff) {
+            sscanf(p + 2, "%d,%d,%d,%d,%d,%d,%d,%d", IQ, IQ + 1, IQ + 2, IQ + 3,
+                IQ + 4, IQ + 5, IQ + 6, IQ + 7);
+        }
+    }
+    for (int i = fmt_nch[*fmt]; i < SDR_MAX_RFCH; i++) {
+        fo[i] = 0.0;
+        IQ[i] = 0;
+    }
+    fclose(fp);
+    return 1;
+}
+
+//------------------------------------------------------------------------------
 //  Parallel code search in digitized IF data.
 //
 //  args:
-//      code_fft (I) Code DFT (with or w/o zero-padding) as complex array
-//      T        (I) Code cycle (period) (s)
-//      buff     (I) IF data buffer
-//      ix       (I) Index of sample data
-//      N        (I) length of sample data
-//      fs       (I) Sampling frequency (Hz)
-//      fi       (I) IF frequency (Hz)
-//      fds      (I) Doppler frequency bins as ndarray (Hz)
-//      len_fds  (I) length of Doppler frequency bins
+//      code_fft (I)  Code DFT (with or w/o zero-padding) as complex array
+//      T        (I)  Code cycle (period) (s)
+//      buff     (I)  IF data buffer
+//      ix       (I)  Index of sample data
+//      N        (I)  length of sample data
+//      fs       (I)  Sampling frequency (Hz)
+//      fi       (I)  IF frequency (Hz)
+//      fds      (I)  Doppler frequency bins as ndarray (Hz)
+//      len_fds  (I)  length of Doppler frequency bins
 //      P        (IO) Correlation powers in the Doppler frequencies - Code offset
 //                   space as float 2D-array (N x len_fs, N = (int)(fs * T))
 //
@@ -435,22 +566,23 @@ static void mix_carr(const sdr_buff_t *buff, int ix, int N, double phi,
     __m256i yp = _mm256_set_epi32(p+s*7, p+s*6, p+s*5, p+s*4, p+s*3, p+s*2, p+s, p);
     __m256i ys = _mm256_set1_epi32(s*8);
     
-    for ( ; i < N - 16; i += 8) {
-        int idx[8];
+    for ( ; i < N - 15; i += 16) {
+        int idx[16];
         __m128i xdas = _mm_loadu_si128((__m128i *)(data + i));
         __m256i ydat = _mm256_cvtepu8_epi32(xdas);
         __m256i yidx = _mm256_add_epi32(_mm256_slli_epi32(ydat, 8),
             _mm256_srli_epi32(yp, 24));
-        _mm256_storeu_si256((__m256i *)idx, yidx);
-        IQ[i  ] = mix_tbl[idx[0]];
-        IQ[i+1] = mix_tbl[idx[1]];
-        IQ[i+2] = mix_tbl[idx[2]];
-        IQ[i+3] = mix_tbl[idx[3]];
-        IQ[i+4] = mix_tbl[idx[4]];
-        IQ[i+5] = mix_tbl[idx[5]];
-        IQ[i+6] = mix_tbl[idx[6]];
-        IQ[i+7] = mix_tbl[idx[7]];
         yp = _mm256_add_epi32(yp, ys);
+        _mm256_storeu_si256((__m256i *)idx, yidx);
+        xdas = _mm_srli_si128(xdas, 8);
+        ydat = _mm256_cvtepu8_epi32(xdas);
+        yidx = _mm256_add_epi32(_mm256_slli_epi32(ydat, 8),
+            _mm256_srli_epi32(yp, 24));
+        yp = _mm256_add_epi32(yp, ys);
+        _mm256_storeu_si256((__m256i *)(idx + 8), yidx);
+        for (int j = 0; j < 16; j++) {
+            IQ[i+j] = mix_tbl[idx[j]];
+        }
     }
 #endif
     for (p += s * i; i < N; i++, p += s) {
@@ -459,6 +591,21 @@ static void mix_carr(const sdr_buff_t *buff, int ix, int N, double phi,
     }
 }
 
+//------------------------------------------------------------------------------
+//  Mix IF carrier to IF data.
+//
+//  args:
+//      buff     (I)  IF data buffer
+//      ix       (I)  Start index of IF data in IF data buffer
+//      N        (I)  length of IF data
+//      fs       (I)  IF data sampling frequency (Hz)
+//      fc       (I)  IF carrier frequency (Hz)
+//      phi      (I)  IF carrier phase offset (cyc)
+//      IQ       (O)  IF-carrier-mixed IF data (N x 1)
+//
+//  return:
+//      none
+//
 void sdr_mix_carr(const sdr_buff_t *buff, int ix, int N, double fs, double fc,
     double phi, sdr_cpx16_t *IQ)
 {
@@ -474,7 +621,7 @@ void sdr_mix_carr(const sdr_buff_t *buff, int ix, int N, double fs, double fc,
     }
 }
 
-// mix carrier for complex buffer ----------------------------------------------
+// mix carrier for complex buffer (for python) ---------------------------------
 static void mix_carr_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N,
     double fs, double fc, double phi, sdr_cpx16_t *IQ)
 {
@@ -556,29 +703,50 @@ static void dot_IQ_code(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
     (*c)[1] *= s * SDR_CSCALE;
 }
 
-// standard correlator ---------------------------------------------------------
+//------------------------------------------------------------------------------
+//  Standard correlator. Make multiple correlations between IF-carrier-mixed IF
+//  data and resampled spreading codes. The shifts of the spreading codes are
+//  specified as pos in unit of samples. 
+//
+//  args:
+//      IQ       (I) IF-carrier-mixed IF data as sdr_cpx_16_t array (N x 1)
+//      code     (I) resampled code bank (N x SDR_N_CODES)
+//      N        (I) size of IQ and code
+//      pos      (I) correlator shift positions (n x 1) (samples)
+//      n        (I) size of pos (number of correlators)
+//      corr     (O) correlations as sdr_cpx_t array (n x 1)
+//
+//  return:
+//      none
+//
+//  notes:
+//      The value of spreading codes shall be -1, 0 or 1.
+//      A imaginary part of spreading codes shall be the same as the real part
+//      to optimize computation efficiency.
+//
 void sdr_corr_std(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
-    const int *pos, int n, sdr_cpx_t *corr)
+    const double *pos, int n, sdr_cpx_t *corr)
 {
     for (int i = 0; i < n; i++) {
-        if (pos[i] > 0) {
-            int M = N - pos[i];
-            dot_IQ_code(IQ + pos[i], code, M, 1.0f / M, corr + i);
+        int j = (int)floor(pos[i]), k = (int)((pos[i] - j) * SDR_N_CODES);
+        if (j > 0) {
+            int M = N - j;
+            dot_IQ_code(IQ + j, code + k * N, M, 1.0f / M, corr + i);
         }
-        else if (pos[i] < 0) {
-            int M = N + pos[i];
-            dot_IQ_code(IQ, code - pos[i], M, 1.0f / M, corr + i);
+        else if (j < 0) {
+            int M = N + j;
+            dot_IQ_code(IQ, code + k * N - j, M, 1.0f / M, corr + i);
         }
         else {
-            dot_IQ_code(IQ, code, N, 1.0f / N, corr + i);
+            dot_IQ_code(IQ, code + k * N, N, 1.0f / N, corr + i);
         }
     }
 }
 
-// mix carrier and standard correlator for complex buffer ----------------------
+// mix carrier and standard correlator for complex buffer (for python) ---------
 void sdr_corr_std_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N,
-    double fs, double fc, double phi, const float *code, const int *pos, int n,
-    sdr_cpx_t *corr)
+    double fs, double fc, double phi, const float *code, const double *pos,
+    int n, sdr_cpx_t *corr)
 {
     sdr_cpx16_t *IQ = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N * 2);
     mix_carr_cpx(buff, len_buff, ix, N, fs, fc, phi, IQ);
@@ -618,7 +786,20 @@ static int get_fftw_plan(int N, fftwf_plan *plan)
     return 0;
 }
 
-// FFT correlator --------------------------------------------------------------
+//------------------------------------------------------------------------------
+//  FFT correlator. Make parallel correlations between IF-carrier-mixed IF
+//  data and resampled spreading codes FFT.
+//
+//  args:
+//      IQ       (I) IF-carrier-mixed IF data as sdr_cpx_16_t array (N x 1)
+//      code_fft (I) resampled spreading codes FFT with conjugate as
+//                   sdr_cpx_t array (N x 1)
+//      N        (I) size of IQ and code_fft
+//      corr     (O) correlations as sdr_cpx_t array (N x 1)
+//
+//  return:
+//      none
+//
 void sdr_corr_fft(const sdr_cpx16_t *IQ, const sdr_cpx_t *code_fft, int N,
     sdr_cpx_t *corr)
 {
@@ -638,7 +819,7 @@ void sdr_corr_fft(const sdr_cpx16_t *IQ, const sdr_cpx_t *code_fft, int N,
     sdr_cpx_free(cpx);
 }
 
-// mix carrier and FFT correlator for complex input ----------------------------
+// mix carrier and FFT correlator for complex buffer (for python) --------------
 void sdr_corr_fft_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N,
     double fs, double fc, double phi, const sdr_cpx_t *code_fft,
     sdr_cpx_t *corr)
@@ -649,7 +830,7 @@ void sdr_corr_fft_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N,
     sdr_free(IQ);
 }
 
-// hanning window function -----------------------------------------------------
+// Hanning window function -----------------------------------------------------
 static float hann_window(int N, float *w)
 {
     float w_ave = 0.0;
@@ -665,10 +846,10 @@ static float hann_window(int N, float *w)
 //  Power spectral density of digitalized IF (inter-frequency) data.
 //
 //  args:
-//      buff     (I) digitalized IF data buffer
-//      len_buff (I) length of buffer
+//      buff     (I) IF data buffer as sdr_cpx_t array
+//      len_buff (I) length of buff
 //      N        (I) FFT size
-//      fs       (I) sampling frequency (Hz)
+//      fs       (I) IF data sampling frequency (Hz)
 //      IQ       (I) sampling type (1: I-sampling, 2: IQ-sampling)
 //      psd      (O) PSD (dB/Hz) size: N/2 (IQ=1), N (IQ=2)
 //
@@ -737,7 +918,7 @@ stream_t *sdr_str_open(const char *path)
     if (p == path) { // TCP server (path = :port)
         stat = stropen(str, STR_TCPSVR, STR_MODE_W, path);
     }
-    else if (sscanf(p, ":%d", &port) == 1) { // TCP client (path = addr:port)
+    else if (p && sscanf(p, ":%d", &port) == 1) { // TCP client (path = addr:port)
         stat = stropen(str, STR_TCPCLI, STR_MODE_W, path);
     }
     else { // file (path = file[::opt...])
@@ -795,10 +976,26 @@ void sdr_log_level(int level)
     log_lvl = level;
 }
 
+// set log mask ----------------------------------------------------------------
+void sdr_log_mask(const int *mask, int n)
+{
+    for (int i = 0; i < n && log_types[i]; i++) {
+        log_mask[i] = mask[i];
+    }
+}
+
 // output log ------------------------------------------------------------------
 void sdr_log(int level, const char *msg, ...)
 {
     va_list ap;
+    int i;
+    
+    for (i = 0; log_types[i]; i++) {
+        if (log_mask[i] && !strncmp(msg, log_types[i], strlen(log_types[i]))) {
+            break;
+        }
+    }
+    if (!log_types[i]) return;
     
     va_start(ap, msg);
     
@@ -831,6 +1028,13 @@ int sdr_get_log(char *buff, int size)
     log_buff_p = 0;
     pthread_mutex_unlock(&log_buff_mtx);
     return out_size <= size ? out_size : size;
+}
+
+// get log status --------------------------------------------------------------
+int sdr_log_stat(void)
+{
+    char msg[1024];
+    return log_str ? strstat(log_str, msg) : 0;
 }
 
 // parse numbers list and range ------------------------------------------------
