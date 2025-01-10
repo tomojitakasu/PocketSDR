@@ -12,6 +12,7 @@
 //  2024-04-20  1.3  support Pocket SDR FE 4CH
 //  2024-06-29  1.4  delete API sdr_read_settings(), sdr_write_settings()
 //                   add API sdr_conf_read(), sdr_conf_write()
+//  2024-11-25  1.5  support Pocket SDR FE 8CH
 //
 #include "pocket_sdr.h"
 
@@ -21,6 +22,7 @@
 #define TYPE_POCKET_2CH 0      // device type: Pocket SDR FE 2CH
 #define TYPE_POCKET_4CH 1      // device type: Pocket SDR FE 4CH
 #define TYPE_SPIDER     2      // device type: Spider SDR
+#define TYPE_POCKET_8CH 3      // device type: Pocket SDR FE 8CH
 #define MAX_REG_MAX2771 11     // number of registers of MAX2771
 #define MAX_REG_MAX2769 10     // number of registers of MAX2769
 
@@ -32,7 +34,7 @@ typedef struct {       // register field definition type
     uint8_t pos;       // bit position (0:LSB,31:MSB)
     uint8_t fix[SDR_MAX_RFCH];  // fixed setting (0:free,1:fixed)
     uint32_t val[SDR_MAX_RFCH]; // value for fixed setting
-    const char *desc;  // description */
+    const char *desc;  // description
 } reg_t;
 
 // device register definitions -------------------------------------------------
@@ -66,13 +68,13 @@ static const reg_t MAX2771_field[] = { // MAX2771 register field definitions
     {"STRMSTART"      , 0x2,  1, 10, {1, 1}, {0, 0}, "Enable data streaming (rising edge)"},
     {"STRMSTOP"       , 0x2,  1,  9, {1, 1}, {0, 0}, "Disable data streaming (rising edge)"},
     {"STRMBITS"       , 0x2,  2,  4, {1, 1}, {1, 1}, "Number of bits streamed (1:IMSB/ILSB,3:IMSB/ILSB/QMSB/QLSB)"},
-    {"STAMPEN"        , 0x2,  1,  3, {1, 1}, {0, 0}, "Enable insersion of frame numbers (0:disable,1:enable)"},
+    {"STAMPEN"        , 0x2,  1,  3, {1, 1}, {0, 0}, "Enable insertion of frame numbers (0:disable,1:enable)"},
     {"TIMESYNCEN"     , 0x2,  1,  2, {1, 1}, {0, 0}, "Enable output of time sync pulse when streaming enabled by STRMEN"},
     {"DATASYNCEN"     , 0x2,  1,  1, {1, 1}, {0, 0}, "Enable sync pulse at DATASYNC"},
     {"STRMRST"        , 0x2,  1,  0, {1, 1}, {0, 0}, "Reset all counters"},
     {"LOBAND"         , 0x3,  1, 28, {0, 0}, {0, 1}, "Local oscillator band selection (0:L1,1:L2/L5)"},
     {"REFOUTEN"       , 0x3,  1, 24, {1, 1}, {1, 1}, "Output clock buffer enable (0:disable,1:enable)"},
-    {"IXTAL"          , 0x3,  2, 19, {1, 1}, {1, 1}, "Current programing for XTAL (1:normal,3:high-current)"},
+    {"IXTAL"          , 0x3,  2, 19, {1, 1}, {1, 1}, "Current programming for XTAL (1:normal,3:high-current)"},
     {"ICP"            , 0x3,  1,  9, {1, 1}, {0, 0}, "Charge pump current selection (0:0.5mA,1:1mA)"},
     {"INT_PLL"        , 0x3,  1,  3, {0, 0}, {0, 0}, "PLL mode control (0:fractional-N,1:integer-N)"},
     {"PWRSAV"         , 0x3,  1,  2, {1, 1}, {0, 0}, "Enable PLL power-save mode (0:disable,1:enable)"},
@@ -113,7 +115,7 @@ static const reg_t MAX2769B_field[] = { // MAX2769B register field definitions
     {"BITS"           , 0x1,  3,  6, {1, 1}, {2, 2}, "Number of bits in ADC (0:1bit,2:2bit,4:3bit)"},
     {"DRVCFG"         , 0x1,  2,  4, {1, 1}, {0, 0}, "Output driver config (0:CMOS-logic,2:analog)"},
     {"DIEID"          , 0x1,  2,  0, {1, 1}, {0, 0}, "Identifiers version of IC"},
-    {"GAININ"         , 0x2,  6, 22, {0, 0}, {0, 0}, "PGA gain value programing ((GAININ-1)dB) (0-63)"},
+    {"GAININ"         , 0x2,  6, 22, {0, 0}, {0, 0}, "PGA gain value programming ((GAININ-1)dB) (0-63)"},
     {"HILOADEN"       , 0x2,  1, 20, {1, 1}, {0, 0}, "Enable output driver to drive high loads (0:disable,1:enable)"},
     {"FHIPEN"         , 0x2,  1, 15, {0, 0}, {1, 1}, "Enable highpass coupling between filter and PGA (0:disable,1:enable)"},
     {"STRMEN"         , 0x2,  1, 11, {1, 1}, {0, 0}, "Enable DSP interface (0:disable,1:enable)"},
@@ -151,6 +153,7 @@ static int max_ch(int type)
         case TYPE_POCKET_2CH: return 2;
         case TYPE_POCKET_4CH: return 4;
         case TYPE_SPIDER    : return 8;
+        case TYPE_POCKET_8CH: return 8;
     }
     return 0;
 }
@@ -160,7 +163,8 @@ static int max_reg(int type)
 {
     switch (type) {
         case TYPE_POCKET_2CH:
-        case TYPE_POCKET_4CH: return MAX_REG_MAX2771;
+        case TYPE_POCKET_4CH:
+        case TYPE_POCKET_8CH: return MAX_REG_MAX2771;
         case TYPE_SPIDER    : return MAX_REG_MAX2769;
     }
     return 0;
@@ -189,8 +193,9 @@ static int read_dev_type(sdr_usb_t *usb, double *fx)
     }
     *fx = (((uint16_t)data[1] << 8) + data[2]) * 1e3;
     if ((data[3] >> 4) &  1) return TYPE_SPIDER;
-    if ((data[0] >> 4) == 1) return TYPE_POCKET_2CH; // F/W ver.1 (FE 2CH)
+    if ((data[0] >> 4) <= 2) return TYPE_POCKET_2CH; // F/W ver.1 (FE 2CH)
     if ((data[0] >> 4) == 3) return TYPE_POCKET_4CH; // F/W ver.3 (FE 4CH)
+    if ((data[0] >> 4) == 4) return TYPE_POCKET_8CH; // F/W ver.4 (FE 8CH)
     return -1;
 }
 
