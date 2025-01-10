@@ -285,8 +285,9 @@ def DLL(ch):
     if ch.lock % N == 0:
         E = ch.trk.sumE
         L = ch.trk.sumL
-        err_code = (E - L) / (E + L) / 2.0 * ch.T / len(ch.code) # (s)
-        ch.coff -= B_DLL / 0.25 * err_code * ch.T * N
+        if E + L > 0.0:
+            err_code = (E - L) / (E + L) / 2.0 * ch.T / len(ch.code) # (s)
+            ch.coff -= B_DLL / 0.25 * err_code * ch.T * N
         ch.trk.sumE = ch.trk.sumL = 0.0
 
 # update C/N0 ------------------------------------------------------------------
