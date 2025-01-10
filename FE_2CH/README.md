@@ -52,7 +52,7 @@ FE_2CH --+-- FW     Pocket SDR FE 2CH F/W and build environment
                  +-- pocket_sdr_v2.3.kicad.*  KiCAD PCB and circuit design data
                  +-- pocket_sdr_v2.3.kicad_sim  KiCAD simbol data
                  +-- pocket_sdr_v2.3.pretty  KiCAD module data
-                 +-- pocket_sdr_*.f3d,2mf  Case panel Fusion360 3D-CAD data
+                 +-- pocket_sdr_*.f3d      Case panel Fusion360 3D-CAD data
                  +-- pocket_sdr_v2.3_parts.xlsx  BOM (parts list) Excel data
                  +-- ...
 ```
