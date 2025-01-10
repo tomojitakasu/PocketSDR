@@ -2986,7 +2986,7 @@ extern int savenav(const char *file, const nav_t *nav)
                 nav->geph[i].taun,nav->geph[i].gamn,nav->geph[i].dtaun);
     }
     fprintf(fp,"IONUTC,%.14E,%.14E,%.14E,%.14E,%.14E,%.14E,%.14E,%.14E,%.14E,"
-               "%.14E,%.14E,%.14E,%.0f",
+               "%.14E,%.14E,%.14E,%.0f\n",
             nav->ion_gps[0],nav->ion_gps[1],nav->ion_gps[2],nav->ion_gps[3],
             nav->ion_gps[4],nav->ion_gps[5],nav->ion_gps[6],nav->ion_gps[7],
             nav->utc_gps[0],nav->utc_gps[1],nav->utc_gps[2],nav->utc_gps[3],
