@@ -16,6 +16,7 @@
 #                   support np.fromfile() without offset option
 #  2023-12-27  1.6  support API changes of sdr_func.c
 #  2024-04-04  1.7  support API changes of sdr_func.c
+#  2024-12-20  1.8  support API changes of sdr_func.c
 #
 from math import *
 from ctypes import *
@@ -140,11 +141,11 @@ def corr_std(buff, ix, N, fs, fc, phi, code, pos):
     if libsdr and LIBSDR_ENA:
         corr = np.empty(len(pos), dtype='complex64')
         code_real = np.array(code.real, dtype='float32')
-        pos = np.array(pos, dtype='int32')
+        pos = np.array(pos, dtype='double')
         libsdr.sdr_corr_std_cpx.argtypes = [
             ctypeslib.ndpointer('complex64'), c_int32, c_int32, c_int32,
             c_double, c_double, c_double, ctypeslib.ndpointer('float32'),
-            ctypeslib.ndpointer('int32'), c_int32,
+            ctypeslib.ndpointer('double'), c_int32,
             ctypeslib.ndpointer('complex64')]
         libsdr.sdr_corr_std_cpx(buff, len(buff), ix, N, fs, fc, phi, code_real,
             pos, len(pos), corr)
