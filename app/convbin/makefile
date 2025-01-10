@@ -25,7 +25,7 @@ WARNOPT = -ansi -pedantic -Wall -Wno-unused-but-set-variable
 
 CFLAGS = -O3 $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
 
-TARGET : convbin
+TARGET = convbin
 
 all  : $(TARGET)
 
@@ -34,7 +34,8 @@ convbin    : convbin.o
 convbin.o  : $(LIB)/RTKLIB/src/rtklib.h
 
 install:
-	cp convbin $(BIN)
+	cp $(TARGET) $(BIN)
 
 clean:
 	rm -f $(TARGET) *.exe *.o *.stackdump
+
