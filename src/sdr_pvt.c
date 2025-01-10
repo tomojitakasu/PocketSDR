@@ -106,6 +106,7 @@ static uint8_t sig2code(const char *sig)
 //          nerr  error subframe/message count
 //          nlol  loss-of-lock count
 //          nfec  number of error corrected (bits)
+//
 static void out_log_ch(sdr_ch_t *ch)
 {
     sdr_log(3, "$CH,%.3f,%d,%d,%s,%s,%d,%.3f,%.1f,%.9f,%.3f,%.3f,%d,%d,%d,%d,"
