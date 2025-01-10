@@ -65,6 +65,8 @@
 //  2024-01-07  1.12 add signal G1OCD, G1OCP, G2OCP
 //  2024-01-15  1.13 add API sdr_sat_id()
 //  2024-03-20  1.14 modify API sdr_res_code()
+//  2024-12-30  1.15 add API sdr_sig_boc()
+//                   flip polarity of NH20 and BC secondary codes
 //
 #include <ctype.h>
 #include "pocket_sdr.h"
@@ -609,50 +611,50 @@ static const uint16_t ISS_G2_init[] = { // PRN 1 - 14
     0x030E, 0x02BE, 0x0391, 0x0369, 0x0145, 0x010D
 };
 
-static const uint64_t I1SD_R0_init[] = { // PRN 1 -14
+static const uint64_t I1SD_R0_init[] = { // PRN 1 - 14
     0x063D70B50D5B64, 0x76058F5475E4B0, 0x37D2F074FED295, 0x7E737E2ADF0BC1,
     0x718B5157F80E9E, 0x64C4B97DAE6753, 0x66F0F9CCE0A97C, 0x0254B975B60383,
     0x0091026C0910F5, 0x074BE51B3AF948, 0x734EEE6F471DE8, 0x77074F6C4181F3,
     0x7D457AA2ADE0AD, 0x1649006091465D
 };
 
-static const uint64_t I1SD_R1_init[] = { // PRN 1 -14
+static const uint64_t I1SD_R1_init[] = { // PRN 1 - 14
     0x1FF9721B874F80, 0x04F6D6D674B7C3, 0x2F17C1C778846A, 0x2920BBF796518D,
     0x51CA3936524FFD, 0x0FD2A5D6F6922C, 0x0D22D7133CBFC6, 0x4AFD02709873B4,
     0x299078F1B6FB54, 0x15638997825762, 0x2F6F9633538CDE, 0x59A5D67F687EC6,
     0x4F0C30BF5B3A0A, 0x73E795C57E19BB
 };
 
-static const uint16_t I1SD_C_init[] = { // PRN 1 -14
+static const uint16_t I1SD_C_init[] = { // PRN 1 - 14
     0x0014, 0x0014, 0x0006, 0x0014, 0x0014, 0x0006, 0x0014, 0x0006,
     0x0006, 0x0006, 0x0014, 0x0006, 0x0014, 0x0006
 };
 
-static const uint64_t I1SP_R0_init[] = { // PRN 1 -14
+static const uint64_t I1SP_R0_init[] = { // PRN 1 - 14
     0x12FE3D0AE884C3, 0x30638515D33FCF, 0x3CCD53247E1C50, 0x027F3E65ED0C24,
     0x0DB7DD9BEC8DD3, 0x024BFAF5ABC21B, 0x0BFEFCB8EA13D8, 0x2161C00EE3808E,
     0x28253DEB538E14, 0x017D7A7CD16977, 0x366E99436BE257, 0x651C81DC3890EE,
     0x79D6273901EC48, 0x3C7815D839828A
 };
 
-static const uint64_t I1SP_R1_init[] = { // PRN 1 -14
+static const uint64_t I1SP_R1_init[] = { // PRN 1 - 14
     0x76E8F724A15EA5, 0x181A2F303D23DF, 0x278066D207D7A5, 0x31786E14C2045F,
     0x66B59E5C1069CB, 0x467A6895BCB117, 0x46C309A8B40404, 0x12B7C8761471AA,
     0x7B770DE0ED3105, 0x49CBF339896131, 0x0D584F5D59CAF8, 0x490C0AEC2962C5,
     0x44C454BDE6DEA3, 0x420E6B88D26357
 };
 
-static const uint16_t I1SP_C_init[] = { // PRN 1 -14
+static const uint16_t I1SP_C_init[] = { // PRN 1 - 14
     0x0008, 0x0000, 0x0008, 0x0000, 0x0008, 0x0008, 0x0000, 0x0008,
     0x0000, 0x0000, 0x0000, 0x0008, 0x0008, 0x0000
 };
 
-static const uint16_t I1SPO_R0_init[] = { // PRN 1 -14
+static const uint16_t I1SPO_R0_init[] = { // PRN 1 - 14
     0x01BB, 0x01E8, 0x0301, 0x01B6, 0x0118, 0x00FC, 0x0065, 0x03C5,
     0x00CC, 0x021A, 0x0049, 0x01AB, 0x0170, 0x00B3
 };
 
-static const uint16_t I1SPO_R1_init[] = { // PRN 1 -14
+static const uint16_t I1SPO_R1_init[] = { // PRN 1 - 14
     0x0130, 0x0182, 0x0391, 0x0173, 0x02C6, 0x02AF, 0x0388, 0x0050,
     0x02FC, 0x0115, 0x0304, 0x01DE, 0x0273, 0x026A
 };
@@ -660,13 +662,17 @@ static const uint16_t I1SPO_R1_init[] = { // PRN 1 -14
 static int8_t NH10[] = { // 10 bits Neuman-Hoffman code
     -1, -1, -1, -1, 1, 1, -1, 1, -1, 1
 };
- 
+
+static int8_t NH10R[] = { // 10 bits Neuman-Hoffman code (reversed)
+    1, 1, 1, 1, -1, -1, 1, -1, 1, -1
+};
+
 static int8_t NH20[] = { // 20 bits Neuman-Hoffman code
-   -1, -1, -1, -1, -1, 1, -1, -1, 1, 1, -1, 1, -1, 1, -1, -1, 1, 1, 1, -1
+   1, 1, 1, 1, 1, -1, 1, 1, -1, -1, 1, -1, 1, -1, 1, 1, -1, -1, -1, 1
 };
 
 static int8_t BC[] = { // Baker code
-   -1, -1, -1, 1, -1
+   1, 1, 1, -1, 1
 };
 
 static int8_t MC[] = { // Manchester code
@@ -1086,7 +1092,7 @@ static int8_t *sec_code_L5SIV(int prn, int *N)
     if ((prn < 184 || prn > 189) && (prn < 205 || prn > 206)) {
         return NULL;
     }
-    return sec_code_L5I_SBAS(prn, N); // L5S verification mode
+    return sec_code_L5I_SBAS(prn, N); // L5SI verification mode
 }
 
 // generate L5SQ secondary code ([15]) -----------------------------------------
@@ -1095,7 +1101,7 @@ static int8_t *sec_code_L5SQ(int prn, int *N)
     if ((prn < 184 || prn > 189) && (prn < 205 || prn > 206)) {
         return NULL;
     }
-    return sec_code_L5Q(prn, N);
+    return sec_code_L5Q(prn, N); // L5SQ normal mode
 }
 
 // generate L5SQV secondary code ([15]) ----------------------------------------
@@ -1104,7 +1110,7 @@ static int8_t *sec_code_L5SQV(int prn, int *N)
     if ((prn < 184 || prn > 189) && (prn < 205 || prn > 206)) {
         return NULL;
     }
-    return sec_code_L5Q_SBAS(prn, N); // L5S verification mode
+    return sec_code_L5Q_SBAS(prn, N); // L5SQ verification mode
 }
 
 // generate L6 code ------------------------------------------------------------
@@ -1347,8 +1353,8 @@ static int8_t *sec_code_G3OCP(int prn, int *N)
     if (prn < 0 || prn > 63) {
         return NULL;
     }
-    *N = (int)sizeof(NH10);
-    return NH10;
+    *N = (int)sizeof(NH10R);
+    return NH10R;
 }
 
 // generate E1B code ([5]) -----------------------------------------------------
@@ -2507,7 +2513,11 @@ static void sat_id_qzss(const char *sig, int prn, char *sat)
 //
 void sdr_sat_id(const char *sig, int prn, char *sat)
 {
-    if (sig[0] == 'L') {
+    char Sig[16];
+    
+    sig_upper(sig, Sig);
+    
+    if (Sig[0] == 'L') {
         if (prn >= 1 && prn <= 63) { // GPS
             sprintf(sat, "G%02d", prn);
         }
@@ -2515,27 +2525,48 @@ void sdr_sat_id(const char *sig, int prn, char *sat)
             sprintf(sat, "S%02d", prn - 100);
         }
         else { // QZSS
-            sat_id_qzss(sig, prn ,sat);
+            sat_id_qzss(Sig, prn ,sat);
         }
     }
-    else if (!strcmp(sig, "G1CA") || !strcmp(sig, "G2CA")) { // GLONASS (FDMA)
+    else if (!strcmp(Sig, "G1CA") || !strcmp(Sig, "G2CA")) { // GLONASS (FDMA)
         sprintf(sat, "R%c%d", prn < 0 ? '-' : '+', prn < 0 ? -prn : prn);
     }
-    else if (sig[0] == 'G') { // GLONASS (CDMA)
+    else if (Sig[0] == 'G') { // GLONASS (CDMA)
         sprintf(sat, "R%02d", prn);
     }
-    else if (sig[0] == 'E') { // Galileo
+    else if (Sig[0] == 'E') { // Galileo
         sprintf(sat, "E%02d", prn);
     }
-    else if (sig[0] == 'B') { // BDS
+    else if (Sig[0] == 'B') { // BDS
         sprintf(sat, "C%02d", prn);
     }
-    else if (sig[0] == 'I') { // NavIC
+    else if (Sig[0] == 'I') { // NavIC
         sprintf(sat, "I%02d", prn);
     }
     else {
         sprintf(sat, "???");
     }
+}
+
+//------------------------------------------------------------------------------
+//  Get signal modulation (BPSK or BOC/MBOC).
+//
+//  args:
+//      sig      (I) Signal type as string ('L1CA', 'L1CB', 'L1CP', ....)
+//
+//  return:
+//      Signal modulation (0:BPSK, 1:BOC/MBOC)
+//
+int sdr_sig_boc(const char *sig)
+{
+    char Sig[16];
+    
+    sig_upper(sig, Sig);
+    
+    return !strcmp(Sig, "L1CD") || !strcmp(Sig, "L1CP") ||
+        !strcmp(Sig, "G1OCP") || !strcmp(Sig, "G2OCP") || !strcmp(Sig, "E1B") ||
+        !strcmp(Sig, "E1C") || !strcmp(Sig, "L1CB") || !strcmp(Sig, "B1CD") ||
+        !strcmp(Sig, "B1CP") || !strcmp(Sig, "I1SP") || !strcmp(Sig, "I1SD");
 }
 
 //------------------------------------------------------------------------------
