@@ -18,6 +18,7 @@
 //  2024-05-28  1.10 update constants, types and APIs
 //  2024-07-01  1.11 import pocket_dev.h
 //  2024-08-26  1.12 update types and APIs
+//  2024-12-30  1.13 update constants, types and APIs
 //
 #ifndef POCKET_SDR_H
 #define POCKET_SDR_H
@@ -44,16 +45,18 @@ extern "C" {
 // constants and macros ------------------------------------------------------
 #define SDR_MAX_RFCH   8        // max number of RF channels in a SDR device
 #define SDR_MAX_REG    11       // max number of registers in a SDR device
-#define SDR_MAX_BUFF   96       // number of IF data buffer
-#define SDR_SIZE_BUFF  (1<<16)  // size of IF data buffer (bytes)
-
+#define SDR_MAX_BUFF   6        // number of raw data buffer
+#define SDR_SIZE_BUFF  (1<<20)  // size of raw data buffer (bytes)
 #define SDR_MAX_NPRN   256      // max number of PRNs
-#define SDR_MAX_NCH    999      // max number of receiver channels
+#define SDR_MAX_NCH    1500     // max number of receiver channels
 #define SDR_MAX_NSYM   2000     // max number of symbols
 #define SDR_MAX_DATA   4096     // max length of navigation data
-#define SDR_N_CORR     (4+81)   // number of correlators
+#define SDR_N_CORRX    81       // number of additional correlators
+#define SDR_W_CORRX    4.0e-6   // width of additional correlators (s)
+#define SDR_MAX_CORR   (6+SDR_N_CORRX) // max number of correlators
 #define SDR_N_HIST     5000     // number of P correlator history 
-#define SDR_CSCALE    (1/24.0f) // carrier scale (max(IQ)*sqrt(2)/scale<127)
+#define SDR_N_CODES    10       // number of resampled code bank
+#define SDR_CSCALE    (1/11.2f) // carrier scale (max(IQ)*sqrt(2)/scale<=127)
 #define SDR_CYC        1e-3     // IF data processing cycle (s)
 #define PI 3.1415926535897932   // pi 
 
@@ -80,6 +83,7 @@ extern "C" {
 #define SDR_FMT_RAW8   3        // SDR IF data format: packed 8 bits raw  (2CH)
 #define SDR_FMT_RAW16  4        // SDR IF data format: packed 16 bits raw (4CH)
 #define SDR_FMT_RAW16I 5        // SDR IF data format: packed 16 bits raw (8CH)
+#define SDR_FMT_RAW32  6        // SDR IF data format: packed 32 bits raw (8CH)
 
 #define SDR_STATE_IDLE 1        // SDR channel state: idle
 #define SDR_STATE_SRCH 2        // SDR channel state: search
@@ -125,15 +129,15 @@ typedef struct {                // signal acquisition type
 } sdr_acq_t;
 
 typedef struct {                // signal tracking type 
-    int npos;                   // number of correlator position
-    int pos[SDR_N_CORR];        // correlator positions 
-    sdr_cpx_t C[SDR_N_CORR];    // correlations 
+    int npos, nposx;            // number of correlator positions
+    double pos[SDR_MAX_CORR];   // correlator positions 
+    sdr_cpx_t C[SDR_MAX_CORR];  // correlations 
     sdr_cpx_t P[SDR_N_HIST];    // history of P correlations 
     int sec_sync;               // secondary code sync status 
     int sec_pol;                // secondary code polarity 
     double err_phas;            // phase error (cyc) 
     double err_code;            // code error (chip) 
-    double sumP, sumE, sumL, sumN; // sum of correlations 
+    double sumP, sumE, sumL, sumN, sumVE, sumVL; // sum of correlations 
     sdr_cpx16_t *code;          // resampled code 
     sdr_cpx_t *code_fft;        // code FFT
 } sdr_trk_t;
@@ -147,6 +151,7 @@ typedef struct {                // SDR receiver navigation data type
     double coff;                // code offset for L6D/E CSK
     uint8_t syms[SDR_MAX_NSYM]; // nav symbols buffer
     uint8_t data[SDR_MAX_DATA]; // navigation data buffer
+    int lock_sf[16];            // lock time of subframes
     int count[2];               // navigation data count (OK, error)
 } sdr_nav_t;
 
@@ -174,6 +179,7 @@ typedef struct {                // SDR receiver channel type
     int tow_v;                  // TOW flag (0:invalid,1:valid,2:amb-unresolved)
     int lock, lost;             // lock and lost counts 
     int costas;                 // Costas PLL flag 
+    int obs_idx;                // observation data index
     sdr_acq_t *acq;             // signal acquisition 
     sdr_trk_t *trk;             // signal tracking 
     sdr_nav_t *nav;             // navigation decoder
@@ -206,6 +212,7 @@ typedef struct {                // SDR PVT type
     sol_t *sol;                 // PVT solution
     ssat_t *ssat;               // satellite status
     rtcm_t *rtcm;               // RTCM control
+    double latency;             // solution latency (s)
     int count[3];               // solution, OBS and NAV count
     struct sdr_rcv_tag *rcv;    // pointer to SDR receiver
     pthread_mutex_t mtx;        // lock flag
@@ -230,6 +237,8 @@ typedef struct sdr_rcv_tag {    // SDR receiver type
     double buff_use;            // buffer usage (%)
     sdr_pvt_t *pvt;             // SDR PVT
     stream_t *strs[4];          // NMEA, RTCM3 and IF data log streams
+    gtime_t start_time;         // receiver start time (UTC)
+    char opt[1024];             // receiver options
     pthread_t thread;           // SDR receiver thread
     pthread_mutex_t mtx;        // lock flag
 } sdr_rcv_t;
@@ -259,6 +268,9 @@ int sdr_dev_read(sdr_dev_t *dev, uint8_t *buff, int size);
 int sdr_dev_get_info(sdr_dev_t *dev, int *fmt, double *fs, double *fo, int *IQ);
 int sdr_dev_get_gain(sdr_dev_t *dev, int ch);
 int sdr_dev_set_gain(sdr_dev_t *dev, int ch, int gain);
+int sdr_dev_get_filt(sdr_dev_t *dev, int ch, double *bw, double *freq,
+    int *order);
+int sdr_dev_set_filt(sdr_dev_t *dev, int ch, double bw, double freq, int order);
 
 // sdr_conf.c
 int sdr_conf_read(sdr_dev_t *dev, const char *file, int opt);
@@ -275,6 +287,10 @@ sdr_buff_t *sdr_buff_new(int N, int IQ);
 void sdr_buff_free(sdr_buff_t *buff);
 sdr_buff_t *sdr_read_data(const char *file, double fs, int IQ, double T,
     double toff);
+int sdr_tag_write(const char *file, const char *prog, gtime_t time, int fmt,
+    double fs, const double *fo, const int *IQ);
+int sdr_tag_read(const char *file, char *prog, gtime_t *time, int *fmt,
+    double *fs, double *fo, int *IQ);
 void sdr_search_code(const sdr_cpx_t *code_fft, double T,
     const sdr_buff_t *buff, int ix, int N, double fs, double fi,
     const float *fds, int len_fds, float *P);
@@ -284,10 +300,10 @@ double sdr_fine_dop(const float *P, int N, const float *fds, int len_fds,
 double sdr_shift_freq(const char *sig, int fcn, double fi);
 float *sdr_dop_bins(double T, float dop, float max_dop, int *len_fds);
 void sdr_corr_std(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
-    const int *pos, int n, sdr_cpx_t *corr);
+    const double *pos, int n, sdr_cpx_t *corr);
 void sdr_corr_std_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N,
-    double fs, double fc, double phi, const float *code, const int *pos, int n,
-    sdr_cpx_t *corr);
+    double fs, double fc, double phi, const float *code, const double *pos,
+    int n, sdr_cpx_t *corr);
 void sdr_corr_fft(const sdr_cpx16_t *IQ, const sdr_cpx_t *code_fft, int N,
     sdr_cpx_t *corr);
 void sdr_corr_fft_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N,
@@ -303,7 +319,9 @@ int sdr_str_write(stream_t *str, uint8_t *data, int size);
 int sdr_log_open(const char *path);
 void sdr_log_close(void);
 void sdr_log_level(int level);
+void sdr_log_mask(const int *mask, int n);
 void sdr_log(int level, const char *msg, ...);
+int sdr_log_stat(void);
 int sdr_get_log(char *buff, int size);
 int sdr_parse_nums(const char *str, int *prns);
 void sdr_add_buff(void *buff, int len_buff, void *item, size_t size_item);
@@ -320,7 +338,7 @@ double sdr_code_cyc(const char *sig);
 int sdr_code_len(const char *sig);
 double sdr_sig_freq(const char *sig);
 void sdr_sat_id(const char *sig, int prn, char *sat);
-uint8_t sdr_sig_code(const char *sig);
+int sdr_sig_boc(const char *sig);
 void sdr_res_code(const int8_t *code, int len_code, double T, double coff,
     double fs, int N, int Nz, sdr_cpx16_t *code_res);
 void sdr_gen_code_fft(const int8_t *code, int len_code, double T, double coff,
@@ -330,8 +348,8 @@ void sdr_gen_code_fft(const int8_t *code, int len_code, double T, double coff,
 sdr_ch_t *sdr_ch_new(const char *sig, int prn, double fs, double fi);
 void sdr_ch_free(sdr_ch_t *ch);
 void sdr_ch_update(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix);
-void sdr_ch_set_corr(sdr_ch_t *ch, int npos);
-int sdr_ch_corr_stat(sdr_ch_t *ch, double *stat, int *pos, sdr_cpx_t *C);
+void sdr_ch_set_corr(sdr_ch_t *ch, int nposx);
+int sdr_ch_corr_stat(sdr_ch_t *ch, double *stat, double *pos, sdr_cpx_t *C);
 int sdr_ch_corr_hist(sdr_ch_t *ch, double tspan, double *stat, sdr_cpx_t *P);
 
 // sdr_nav.c
@@ -362,22 +380,24 @@ void sdr_pvt_solstr(sdr_pvt_t *pvt, char *buff);
 
 // sdr_rcv.c
 sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
-    double fs, const double *fo, const int *IQ);
+    double fs, const double *fo, const int *IQ, const char *opt);
 void sdr_rcv_free(sdr_rcv_t *rcv);
 int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, const char **paths);
 void sdr_rcv_stop(sdr_rcv_t *rcv);
 sdr_rcv_t *sdr_rcv_open_dev(const char **sigs, int *prns, int n, int bus,
-    int port, const char *conf_file, const char **paths);
+    int port, const char *conf_file, const char **paths, const char *opt);
 sdr_rcv_t *sdr_rcv_open_file(const char **sigs, int *prns, int n, int fmt,
     double fs, const double *fo, const int *IQ, double toff, double tscale,
-    const char *file, const char **paths);
+    const char *file, const char **paths, const char *opt);
 void sdr_rcv_close(sdr_rcv_t *rcv);
 void sdr_rcv_setopt(const char *opt, double value);
 char *sdr_rcv_rcv_stat(sdr_rcv_t *rcv);
-char *sdr_rcv_sat_stat(sdr_rcv_t *rcv, const char *sys);
-char *sdr_rcv_ch_stat(sdr_rcv_t *rcv, const char *sys, int all);
+void sdr_rcv_str_stat(sdr_rcv_t *rcv, int *stat);
+char *sdr_rcv_sat_stat(sdr_rcv_t *rcv, const char *sat);
+char *sdr_rcv_ch_stat(sdr_rcv_t *rcv, const char *sys, int all,
+    double min_lock);
 void sdr_rcv_sel_ch(sdr_rcv_t *rcv, int ch);
-int sdr_rcv_corr_stat(sdr_rcv_t *rcv, int ch, double *stat, int *pos,
+int sdr_rcv_corr_stat(sdr_rcv_t *rcv, int ch, double *stat, double *pos,
     sdr_cpx_t *C);
 int sdr_rcv_corr_hist(sdr_rcv_t *rcv, int ch, double tspan, double *stat,
     sdr_cpx_t *P);
@@ -387,6 +407,9 @@ int sdr_rcv_rfch_hist(sdr_rcv_t *rcv, int ch, double tave, int *val,
     double *hist1, double *hist2);
 int sdr_rcv_get_gain(sdr_rcv_t *rcv, int ch);
 int sdr_rcv_set_gain(sdr_rcv_t *rcv, int ch, int gain);
+int sdr_rcv_get_filt(sdr_rcv_t *rcv, int ch, double *bw, double *freq,
+    int *order);
+int sdr_rcv_set_filt(sdr_rcv_t *rcv, int ch, double bw, double freq, int order);
 
 #ifdef __cplusplus
 }
