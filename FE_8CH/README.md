@@ -14,7 +14,8 @@ sampling rate can be configured up to 48 Msps.
 
 ## **Specifications**
 
-* Number of RF channels: 8 CH (separated)
+* Number of RF inputs  : 8 CH or 2CH
+* Number of RF channels: 8 CH
 * LO (PLL) Frequency: 1525 ~ 1610 MHz (GNSS L1 band) or
                       1160 ~ 1290 MHz (GNSS L2/L5/L6 band)
 * IF Bandwidth: 2 ~ 36 MHz
@@ -40,8 +41,11 @@ FE_8CH  -+-- HW     Pocket SDR FE 8CH hardware design data
          |   |   +-- v4.0_case_panel_f.f3d frontpanel Autodesk Fusion data
          |   |   +-- v4.0_case_panel_b.f3d backpanel Autodesk Fusion data
          |   |   +-- ...
+         |   +-- v4.1     Pocket SDR FE 8CH-2ANT PCB H/W data
+         |   |   +-- ...
          |   +-- div_4px2 4PX2 RF Divider H/W data
-         +-- FW
+         |       +-- ...
+         +-- FW     Pocket SDR FE 8CH firmware
              +-- Packages  Cypress EZ USB Suite files
              +-- v4.0
                  +-- .metadata  Cypress EZ USB Suite files
