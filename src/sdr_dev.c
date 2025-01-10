@@ -13,10 +13,11 @@
 //  2022-08-08  1.3  support Spider SDR
 //  2023-12-25  1.3  modify taskname for AvSetMmThreadCharacteristicsA()
 //  2024-04-04  1.4  refactored
-//  2024-04-13  1.5  suppport Pocket SDR FE 4CH
+//  2024-04-13  1.5  support Pocket SDR FE 4CH
 //  2024-05-28  1.6  delete API sdr_dev_info()
 //  2024-06-29  1.7  add API sdr_dev_get_info(), sdr_dev_set_gain(),
 //                   sdr_dev_get_gain()
+//  2025-12-30  1.8  add API sdr_dev_get_filt(), sdr_dev_set_filt()
 //
 #include "pocket_sdr.h"
 #ifdef WIN32
@@ -325,9 +326,10 @@ int sdr_dev_stop(sdr_dev_t *dev)
 {
     if (!dev->state) return 0;
     
+    sdr_usb_req(dev->usb, 0, SDR_VR_STOP, 0, NULL, 0);
+    
     dev->state = 0;
     pthread_join(dev->thread, NULL);
-    sdr_usb_req(dev->usb, 0, SDR_VR_STOP, 0, NULL, 0);
 #ifndef WIN32
     for (int i = 0; i < SDR_MAX_BUFF; i++) {
         libusb_cancel_transfer(dev->transfer[i]);
@@ -405,9 +407,9 @@ int sdr_dev_get_info(sdr_dev_t *dev, int *fmt, double *fs, double *fo, int *IQ)
         }
     }
     else { // Pocket SDR FE
-        int ver = data[0] >> 4;
-        *fmt = (ver <= 2) ? SDR_FMT_RAW8 : SDR_FMT_RAW16; // 2CH : 4CH
-        nch = (ver <= 2) ? 2 : 4;
+        int ver = data[0] >> 4; // 1-2: FE 2CH, 3: FE 4CH, 4: FE 8CH
+        *fmt = (ver <= 2) ? SDR_FMT_RAW8 : ((ver <= 3) ? SDR_FMT_RAW16 : SDR_FMT_RAW32);
+        nch = (ver <= 2) ? 2 : ((ver <= 3) ? 4 : 8);
         for (int i = 0; i < nch; i++) {
             if (!read_MAX2771_stat(dev, i, fx, &fss, fo + i, IQ + i)) return 0;
             if (i == 0) *fs = fss;
@@ -416,32 +418,25 @@ int sdr_dev_get_info(sdr_dev_t *dev, int *fmt, double *fs, double *fo, int *IQ)
     return nch;
 }
 
-//------------------------------------------------------------------------------
-//  Set LNA gain of SDR device.
-//
-//  args:
-//      dev         (I)   SDR device
-//      ch          (I)   RF channel (0:CH1, 1:CH2, ...)
-//      gain        (I)   LNA gain (0: AGC, 1-64: gain dB)
-//
-//  return
-//      status (1: OK, 0: error)
-//
+// test device -----------------------------------------------------------------
+static int test_dev(sdr_dev_t *dev, int ch)
+{
+    uint8_t data[6];
+    
+    if (!dev->state || !sdr_usb_req(dev->usb, 0, SDR_VR_STAT, 0, data, 6)) {
+        return 0;
+    }
+    int ver = data[0] >> 4, nch = (ver <= 2) ? 2 : ((ver <= 3) ? 4 : 8);
+    return ch >= 0 && ch < nch;
+}
+
+// set LNA gain of SDR device --------------------------------------------------
 int sdr_dev_set_gain(sdr_dev_t *dev, int ch, int gain)
 {
-    uint8_t data[6], reg1[4], reg2[4];
+    uint8_t reg1[4], reg2[4];
     
-    if (!dev->state) return 0;
+    if (!test_dev(dev, ch)) return 0;
     
-    // read device info
-    if (!sdr_usb_req(dev->usb, 0, SDR_VR_STAT, 0, data, 6)) {
-        return 0;
-    }
-    int ver = data[0] >> 4, nch = (ver <= 2) ? 2 : 4;
-    
-    if (ch < 0 || ch >= nch) {
-        return 0;
-    }
     // read MAX2771 registers
     if (!sdr_usb_req(dev->usb, 0, SDR_VR_REG_READ, (ch << 8) + 1, reg1, 4) ||
         !sdr_usb_req(dev->usb, 0, SDR_VR_REG_READ, (ch << 8) + 2, reg2, 4)) {
@@ -460,31 +455,13 @@ int sdr_dev_set_gain(sdr_dev_t *dev, int ch, int gain)
            sdr_usb_req(dev->usb, 1, SDR_VR_REG_WRITE, (ch << 8) + 2, reg2, 4);
 }
 
-//------------------------------------------------------------------------------
-//  Get LNA gain of SDR device.
-//
-//  args:
-//      dev         (I)   SDR device
-//      ch          (I)   RF channel (0:CH1, 1:CH2, ...)
-//
-//  return
-//      LNA gain (0: AGC, 1-64: LNA gain dB, -1: error)
-//
+// get LNA gain of SDR device --------------------------------------------------
 int sdr_dev_get_gain(sdr_dev_t *dev, int ch)
 {
-    uint8_t data[6], reg1[4], reg2[4];
+    uint8_t reg1[4], reg2[4];
     
-    if (!dev->state) return 0;
+    if (!test_dev(dev, ch)) return -1;
     
-    // read device info
-    if (!sdr_usb_req(dev->usb, 0, SDR_VR_STAT, 0, data, 6)) {
-        return -1;
-    }
-    int ver = data[0] >> 4, nch = (ver <= 2) ? 2 : 4;
-    
-    if (ch < 0 || ch >= nch) {
-        return -1;
-    }
     // read MAX2771 registers
     if (!sdr_usb_req(dev->usb, 0, SDR_VR_REG_READ, (ch << 8) + 1, reg1, 4) ||
         !sdr_usb_req(dev->usb, 0, SDR_VR_REG_READ, (ch << 8) + 2, reg2, 4)) {
@@ -496,4 +473,58 @@ int sdr_dev_get_gain(sdr_dev_t *dev, int ch)
     else { // AGC
         return 0;
     }
+}
+
+// set IF filter of SDR device -------------------------------------------------
+int sdr_dev_set_filt(sdr_dev_t *dev, int ch, double bw, double freq, int order)
+{
+    static const double freqs[] = {2.5, 8.7, 4.2, 23.4, 36.0, 0, 0, 16.4, -1};
+    static const double fstep[] = {0.195, 0.66, 0.355};
+    uint8_t reg[4], FBW, FCEN = 0, FCENX = 0, F3OR5 = (uint8_t)order;
+    
+    if (!test_dev(dev, ch)) return 0;
+    
+    for (FBW = 0; freqs[FBW] >= 0.0; FBW++) {
+        if (fabs(freqs[FBW] - bw) < 0.1) break;
+    }
+    if (freqs[FBW] < 0.0) return 0;
+    
+    // read MAX2771 registers
+    if (!sdr_usb_req(dev->usb, 0, SDR_VR_REG_READ, (ch << 8) + 0, reg, 4)) {
+        return 0;
+    }
+    if (FBW < 3 && freq > 0.0) {
+       FCENX = 1; // bandpass
+       FCEN = (uint8_t)(128.0 - freq / fstep[FBW] * 2.0 + 0.5) & 0x7F;
+    }
+    reg[2] = (reg[2] & ~0x1F) + (FCEN >> 2);
+    reg[3] = (reg[3] & ~0xC0) + (FCEN << 6);
+    reg[3] = (reg[3] & ~0x38) + (FBW << 3);
+    reg[3] = (reg[3] & ~0x04) + (F3OR5 << 2);
+    reg[3] = (reg[3] & ~0x02) + (FCENX << 1);
+    
+    // write MAX2771 registers
+    return sdr_usb_req(dev->usb, 1, SDR_VR_REG_WRITE, (ch << 8) + 0, reg, 4);
+}
+
+// get IF filter of SDR device -------------------------------------------------
+int sdr_dev_get_filt(sdr_dev_t *dev, int ch, double *bw, double *freq,
+    int *order)
+{
+    static const double freqs[] = {2.5, 8.7, 4.2, 23.4, 36.0, 0, 0, 16.4};
+    static const double fstep[] = {0.195, 0.66, 0.355};
+    uint8_t reg[4];
+    
+    if (!test_dev(dev, ch)) return 0;
+    
+    // read MAX2771 registers
+    if (!sdr_usb_req(dev->usb, 0, SDR_VR_REG_READ, (ch << 8) + 0, reg, 4)) {
+        return 0;
+    }
+    int FCEN = ((reg[2] & 0x1F) << 2) + (reg[3] >> 6), FBW = (reg[3] >> 3) & 7;
+    int F3OR5 = (reg[3] >> 2) & 1, FCENX = (reg[3] >> 1) & 1;
+    *bw = freqs[FBW];
+    *freq = FCENX == 0 || FBW >= 3 ? 0.0 : (128 - FCEN) / 2.0 * fstep[FBW];
+    *order = F3OR5; // 0:5th-order,1:3rd-order
+    return 1;
 }
