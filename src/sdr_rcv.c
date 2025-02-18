@@ -16,6 +16,7 @@
 //  2024-08-26  1.7  support tag-file output for raw IF data log
 //  2024-12-30  1.8  support Pocket SDR FE 8CH
 //                   modify API sdr_rcv_open_dev(), sdr_rcv_open_file()
+//  2025-01-17  1.9  delete RINEX output by -OUTRNX option
 //
 #include "pocket_sdr.h"
 
@@ -35,7 +36,7 @@
 
 // global variables ------------------------------------------------------------
 static char rcv_rcv_stat_buff[2048];
-static char rcv_ch_stat_buff[120 * (SDR_MAX_NCH + 2)];
+static char rcv_ch_stat_buff[128 * (SDR_MAX_NCH + 2)];
 static char rcv_sat_stat_buff[1024];
 
 // get IF data buffer pointer --------------------------------------------------
@@ -829,36 +830,6 @@ static int get_file_path(stream_t *str, char *file)
     return 1;
 }
 
-// write RINEX file ------------------------------------------------------------
-static int write_rinex(const char *file, double tint)
-{
-    static const char *ext[] = {".obs", ".nav"};
-    char *ofiles[9], paths[2][1024], no_file[] = "", *p;
-    
-    for (int i = 0; i < 2; i++) {
-        snprintf(paths[i], 1020, "%s", file);
-        if ((p = strrchr(paths[i], '.'))) strcpy(p, ext[i]);
-        else strcat(paths[i], ext[i]);
-        ofiles[i] = paths[i];
-    }
-    for (int i = 2; i < 9; i++) {
-        ofiles[i] = no_file;
-    }
-    rnxopt_t opt = {{0}};
-    opt.rnxver = RNX_VER;
-    opt.navsys = SYS_ALL;
-    opt.obstype = OBSTYPE_ALL;
-    opt.freqtype = FREQTYPE_ALL;
-    opt.tint = tint;
-    snprintf(opt.prog, sizeof(opt.prog), "%s", SDR_DEV_NAME);
-    for (int i = 0; i < 7; i++) {
-        for (int j = 0; j < MAXCODE; j++) {
-            opt.mask[i][j] = '1';
-        }
-    }
-    return convrnx(STRFMT_RTCM3, &opt, file, ofiles);
-}
-
 //------------------------------------------------------------------------------
 //  Stop a SDR receiver.
 //
@@ -870,7 +841,6 @@ static int write_rinex(const char *file, double tint)
 //
 void sdr_rcv_stop(sdr_rcv_t *rcv)
 {
-    const char *p;
     char file[1024];
     
     for (int i = 0; i < rcv->nch; i++) {
@@ -882,13 +852,6 @@ void sdr_rcv_stop(sdr_rcv_t *rcv)
     rcv->state = 0;
     pthread_join(rcv->thread, NULL);
     
-    // write RINEX file
-    if ((p = strstr(rcv->opt, "-OUTRNX")) && rcv->strs[1] &&
-        rcv->strs[1]->type == STR_FILE && get_file_path(rcv->strs[1], file)) {
-        double tint = 1.0;
-        sscanf(p + 7, "%lf", &tint);
-        write_rinex(file, tint);
-    }
     // write tag file for raw IF data
     if (rcv->dev == SDR_DEV_USB && rcv->strs[3] &&
         rcv->strs[3]->type == STR_FILE && get_file_path(rcv->strs[3], file)) {
@@ -943,8 +906,6 @@ int sdr_rcv_set_filt(sdr_rcv_t *rcv, int ch, double bw, double freq, int order)
 //      opt       (I)  receiver options (string sparated by spaces)
 //                     -RFCH <sig>:<ch>[{,|-}<ch>...]
 //                        assign signal to specific RF CH(s)
-//                     -OUTRNX [tint]
-//                        convert RTCM3 file to RINEX, tint: obs interval (s)
 //
 //  returns:
 //      SDR receiver (NULL: error)
