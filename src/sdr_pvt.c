@@ -4,6 +4,10 @@
 //  Author:
 //  T.TAKASU
 //
+//  References:
+//  [1] RINEX: The Receiver Independent Exchange Format version 3.05,
+//      December 1, 2020
+//
 //  History:
 //  2024-04-28  1.0  new
 //  2024-12-30  1.1  add and update log contents
@@ -20,7 +24,7 @@
 
 #define ROUND(x)   (int)floor((x) + 0.5)
 #define SQRT(x)    ((x) > 0.0 ? sqrt(x) : 0.0)
-#define EQ(x, y)   (fabs((x) - (y)) < 1e-12)
+#define EQ(x, y)   (fabs((double)((x) - (y))) < 1e-12)
 
 // global variable -------------------------------------------------------------
 double sdr_epoch     = SDR_EPOCH;
@@ -465,15 +469,42 @@ static double gen_prng(gtime_t time, const sdr_ch_t *ch)
     return CLIGHT * tau;
 }
 
+// generate carrier-phase ------------------------------------------------------
+static double gen_cphas(const sdr_ch_t *ch)
+{
+    //double L = -ch->adr + ch->fd * ch->coff;
+    double L = -ch->adr;
+    
+    L += (ch->nav->rev ? 0.5 : 0.0) + (ch->trk->sec_pol == 1 ? 0.5 : 0.0);
+    
+    // phase alignment ([1] Table A23)
+    if (!strcmp(ch->sig, "L1CD") || !strcmp(ch->sig, "L1CP")) {
+        L += 0.25; // + 1/4 cyc
+    }
+    else if (!strcmp(ch->sig, "L5Q") || !strcmp(ch->sig, "G3OCP") ||
+        !strcmp(ch->sig, "E5AQ") || !strcmp(ch->sig, "E5BQ") ||
+        !strcmp(ch->sig, "L5SQ") || !strcmp(ch->sig, "L5SQV") ||
+        !strcmp(ch->sig, "B1CP") || !strcmp(ch->sig, "B2AP")) {
+        L -= 0.25; // - 1/4 cyc
+    }
+    else if (!strcmp(ch->sig, "E1C") || !strcmp(ch->sig, "E6C")) {
+        L += 0.5; // + 1/2 cyc
+    }
+    else if (!strcmp(ch->sig, "L2CM")) {
+        L += (ch->sat[0] == 'J') ? 0.0 : -0.25; // 0 cyc (QZSS), -1/4 cyc (GPS)
+    }
+    return L;
+}
+
 // update observation data -----------------------------------------------------
 static void update_obs(gtime_t time, obs_t *obs, sdr_ch_t *ch)
 {
     uint8_t code = sig2code(ch->sig);
     double P = gen_prng(time, ch);
-    int i, sat;
+    int i, j = ch->obs_idx, sat;
     
     if (strstr(ch->sat, "R-") || strstr(ch->sat, "R+")) return;
-    if (P <= 0.0 || ch->obs_idx < 0 || !(sat = satid2no(ch->sat))) return;
+    if (P <= 0.0 || j < 0 || !(sat = satid2no(ch->sat))) return;
     
     for (i = 0; i < obs->n; i++) {
         if (sat == obs->data[i].sat) break;
@@ -486,16 +517,16 @@ static void update_obs(gtime_t time, obs_t *obs, sdr_ch_t *ch)
         obs->data[i].rcv = 1;
         obs->n++;
     }
-    obs->data[i].code[ch->obs_idx] = code;
-    obs->data[i].P[ch->obs_idx] = P;
-    obs->data[i].L[ch->obs_idx] = -ch->adr + (ch->nav->rev ? 0.5 : 0.0);
-    obs->data[i].D[ch->obs_idx] = ch->fd;
-    obs->data[i].SNR[ch->obs_idx] = (uint16_t)(ch->cn0 / SNR_UNIT + 0.5);
+    obs->data[i].code[j] = code;
+    obs->data[i].P[j] = P;
+    obs->data[i].L[j] = gen_cphas(ch);
+    obs->data[i].D[j] = ch->fd;
+    obs->data[i].SNR[j] = (uint16_t)(ch->cn0 / SNR_UNIT + 0.5);
     if (ch->lock * ch->T <= 2.0 || fabs(ch->trk->err_phas) > 0.2) {
-        obs->data[i].LLI[ch->obs_idx] |= 1; // PLL unlock
+        obs->data[i].LLI[j] |= 1; // PLL unlock
     }
     if (ch->nav->fsync <= 0 && ch->trk->sec_sync <= 0) {
-        obs->data[i].LLI[ch->obs_idx] |= 2; // half-cyc-amb unresolved
+        obs->data[i].LLI[j] |= 2; // half-cyc-amb unknown
     }
 }
 
@@ -557,7 +588,7 @@ static int match_eph(const eph_t *e1, const eph_t *e2)
 }
 
 // test nav data consistency for BeiDou D1/D2 ----------------------------------
-static int test_nav_bds(eph_t *eph1, const eph_t *eph2)
+static int test_match_eph(eph_t *eph1, const eph_t *eph2)
 {
     if (match_eph(eph1 + MAXSAT, eph2)) { // match previous ephemeris
         *(eph1 + MAXSAT) = *eph2;
@@ -647,21 +678,31 @@ void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch)
         eph_t eph = {0};
         if (ch->prn >= 6 && ch->prn <= 58) { // BDS D1 NAV
             if (ch->nav->type == 3 && decode_bds_d1(data, &eph, NULL, NULL)) {
-                if (test_nav_bds(pvt->nav->eph + sat - 1, &eph)) {
+                if (test_match_eph(pvt->nav->eph + sat - 1, &eph)) {
                     pvt->nav->eph[sat-1].sat = sat;
                     out_log_eph(ch->time, ch->sat, ch->sig, pvt->nav->eph + sat - 1);
                     out_rtcm3_nav(pvt->rtcm, sat, 0, pvt->nav, pvt->rcv->strs[1]);
                     pvt->count[2]++;
                 }
+                else {
+                    out_log_eph(ch->time, ch->sat, ch->sig, &eph);
+                    sdr_log(3, "$LOG,%.3f,%s,%s,EPHEMERIS UNMATCH", ch->time,
+                        ch->sat, ch->sig);
+                }
             }
         }
         else { // BDS D2 NAV
             if (ch->nav->type == 10 && decode_bds_d2(data, &eph, NULL)) {
-                if (test_nav_bds(pvt->nav->eph + sat - 1, &eph)) {
+                if (test_match_eph(pvt->nav->eph + sat - 1, &eph)) {
                     pvt->nav->eph[sat-1].sat = sat;
                     out_log_eph(ch->time, ch->sat, ch->sig, pvt->nav->eph + sat - 1);
                     out_rtcm3_nav(pvt->rtcm, sat, 0, pvt->nav, pvt->rcv->strs[1]);
                     pvt->count[2]++;
+                }
+                else {
+                    out_log_eph(ch->time, ch->sat, ch->sig, &eph);
+                    sdr_log(3, "$LOG,%.3f,%s,%s,EPHEMERIS UNMATCH", ch->time,
+                        ch->sat, ch->sig);
                 }
             }
         }
@@ -716,7 +757,7 @@ static void update_sol(sdr_pvt_t *pvt)
     opt.ionoopt = IONOOPT_BRDC;
     opt.tropopt = TROPOPT_SAAS;
     opt.elmin = sdr_el_mask * D2R;
-#if 0 // RAIM-FDE on
+#if 1 // RAIM-FDE on
     opt.posopt[4] = 1;
 #endif
     double time = pvt->ix * SDR_CYC;
@@ -749,7 +790,7 @@ static void update_sol(sdr_pvt_t *pvt)
     }
     pvt->nsat = pvt->obs->n;
     
-#if 1 // for debug
+#if 0 // for debug
     double pos[3];
     ecef2pos(pvt->sol->rr, pos);
     trace(2, "%s %12.8f %13.8f %8.2f %d %2d/%2d DTR=%.1f %.1f %.1f (%s)\n",
@@ -819,6 +860,9 @@ void sdr_pvt_udsol(sdr_pvt_t *pvt, int64_t ix)
         res_obs_amb(pvt->obs, SYS_QZS, CODE_L5P, 20e-3); // L5SQ, L5SQV
         res_obs_amb(pvt->obs, SYS_GLO, CODE_L3Q, 10e-3); // G3OCP
         res_obs_amb(pvt->obs, SYS_SBS, CODE_L5Q, 2e-3);  // L5Q SBAS
+        
+        // sort obs data
+        sortobs(pvt->obs);
         
         // output log $OBS and RTCM3 observation data
         out_log_obs(pvt->ix * SDR_CYC, pvt->obs);
