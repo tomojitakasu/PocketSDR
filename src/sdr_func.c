@@ -47,7 +47,7 @@
 #define NTBL          256   // carrier-mixed-data LUT size
 #define DOP_STEP      0.5   // Doppler frequency search step (* 1 / code cycle)
 #define MAX_FFTW_PLAN 32    // max number of FFTW plans
-#define MAX_LOG_BUFF  131072 // max sizeof log buffer
+#define MAX_LOG_BUFF  (2<<18) // max sizeof log buffer
 #define FFTW_FLAG     FFTW_ESTIMATE // FFTW flag
 
 #define SQR(x)        ((x) * (x))
