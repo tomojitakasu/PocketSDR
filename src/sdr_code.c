@@ -6,10 +6,10 @@
 //      Interfaces, May 19, 2019
 //  [2] IS-GPS-705A, Navstar GPS Space Segment / User Segment L5 Interfaces,
 //      June 8, 2010
-//  [3] IS-QZSS-PNT-004, Quasi-Zenith Satellite System Interface Specification
-//      Satellite Positioning, Navigation and Timing Service, November 5, 2018
-//  [4] IS-QZSS-L6-005, Quasi-Zenith Satellite System Interface Specification
-//      Centimeter Level Augmentation Service, September 21, 2022
+//  [3] IS-QZSS-PNT-006, Quasi-Zenith Satellite System Interface Specification
+//      Satellite Positioning, Navigation and Timing Service, July 11, 2024
+//  [4] IS-QZSS-L6-006, Quasi-Zenith Satellite System Interface Specification
+//      Centimeter Level Augmentation Service, January 21, 2025
 //  [5] Galileo Open Service Signal In Space Interface Control Document -
 //      Issue 1, February 2010
 //  [6] Galileo E6-B/C Codes Technical Note - Issue 1, January 2019
@@ -42,6 +42,8 @@
 //      Service Navigation Signal in L1 frequency band Edition 1.0, 2016
 //  [20] GLONASS Interface Control Document Code Division Multiple Access Open
 //      Service Navigation Signal in L2 frequency band Edition 1.0, 2016
+//  [21] IS-QZSS-L1S-007, Quasi-Zenith Satellite System Interface Specification
+//      Sub-meter Level Augmentation Service, April 18, 2024
 //
 //  Author:
 //  T.TAKASU
@@ -67,6 +69,8 @@
 //  2024-03-20  1.14 modify API sdr_res_code()
 //  2024-12-30  1.15 add API sdr_sig_boc()
 //                   flip polarity of NH20 and BC secondary codes
+//  2025-01-12  1.16 filp code polarity
+//                   L1CP modulation: BOC(1,1) -> TMBOC(6,1,4/33)
 //
 #include <ctype.h>
 #include "pocket_sdr.h"
@@ -82,7 +86,7 @@ extern const char *code_gal_CS25;
 extern const char *code_gal_CS100[];
 
 // constants ------------------------------------------------------------------
-static const int8_t CHIP[] = {-1, 1};
+static const int8_t CHIP[] = {1, -1}; // {0,1} <-> {+1,-1}
 
 // code caches ----------------------------------------------------------------
 static int8_t *L1CA [210] = {0};
@@ -659,33 +663,29 @@ static const uint16_t I1SPO_R1_init[] = { // PRN 1 - 14
     0x02FC, 0x0115, 0x0304, 0x01DE, 0x0273, 0x026A
 };
 
-static int8_t NH10[] = { // 10 bits Neuman-Hoffman code
-    -1, -1, -1, -1, 1, 1, -1, 1, -1, 1
-};
-
-static int8_t NH10R[] = { // 10 bits Neuman-Hoffman code (reversed)
+static int8_t NH10[] = { // 10 bits Neuman-Hoffman code (0000110101)
     1, 1, 1, 1, -1, -1, 1, -1, 1, -1
 };
 
-static int8_t NH20[] = { // 20 bits Neuman-Hoffman code
-   1, 1, 1, 1, 1, -1, 1, 1, -1, -1, 1, -1, 1, -1, 1, 1, -1, -1, -1, 1
+static int8_t NH20[] = { // 20 bits Neuman-Hoffman code (00000100110101001110)
+    1, 1, 1, 1, 1, -1, 1, 1, -1, -1, 1, -1, 1, -1, 1, 1, -1, -1, -1, 1
 };
 
-static int8_t BC[] = { // Baker code
-   1, 1, 1, -1, 1
+static int8_t BC[] = { // Baker code (00010)
+    1, 1, 1, -1, 1
 };
 
-static int8_t MC[] = { // Manchester code
-   -1, 1
+static int8_t MC[] = { // Manchester code (01)
+    1, -1
 };
 
 static int8_t G2OCP_OC2[] = { // GLONASS L2OCP OC2
-   -1, -1, 1, -1, 1, 1, -1, 1, -1, 1, 1, 1, 1, 1, -1, -1, -1, 1, 1, -1, -1, -1,
-   -1, 1, -1, -1, -1, 1, 1, -1, 1, -1, -1, -1, -1, -1, -1, 1, -1, 1, 1, -1, -1,
-   -1, 1, -1, -1, -1, 1, -1
+    1, 1, -1, 1, -1, -1, 1, -1, 1, -1, -1, -1, -1, -1, 1, 1, 1, -1, -1, 1, 1, 1,
+    1, -1, 1, 1, 1, -1, -1, 1, -1, 1, 1, 1, 1, 1, 1, -1, 1, -1, -1, 1, 1, 1, -1,
+    1, 1, 1, -1, 1
 };
 
-static int8_t BOC[] = {-1, 1}; // BOC(k,k) sub-carrier
+static int8_t BOC[] = {1, -1}; // BOC(k,k) sub-carrier
 
 // upper cases of signal string ------------------------------------------------
 static void sig_upper(const char *sig, char *Sig)
@@ -706,7 +706,7 @@ static int8_t *mod_code(const int8_t *code, int N, const int8_t *sub_carr,
     
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < n; j++) {
-            code_mod[i*n+j] = -code[i] * sub_carr[j];
+            code_mod[i*n+j] = code[i] * sub_carr[j];
         }
     }
     return code_mod;
@@ -756,7 +756,7 @@ int8_t *xor_code(const int8_t *code1, const int8_t *code2, int N)
     int8_t *code = (int8_t *)sdr_malloc(N);
     
     for (int i = 0; i < N; i++) {
-        code[i] = -code1[i] * code2[i];
+        code[i] = code1[i] * code2[i];
     }
     return code;
 }
@@ -788,16 +788,16 @@ static int8_t *gen_code_L1CA(int prn, int *N)
         L1CA[prn-1] = (int8_t *)sdr_malloc(*N);
         for (int i = 0; i < *N; i++) {
             int j = (i + (*N) - L1CA_G2_delay[prn-1]) % (*N);
-            L1CA[prn-1][i] = -L1CA_G1[i] * L1CA_G2[j];
+            L1CA[prn-1][i] = L1CA_G1[i] * L1CA_G2[j];
         }
     }
     return L1CA[prn-1];
 }
 
-// generate L1S code ([2]) -----------------------------------------------------
+// generate L1S code ([21]) ----------------------------------------------------
 static int8_t *gen_code_L1S(int prn, int *N)
 {
-    if (prn < 183 || prn > 191) {
+    if (prn < 183 || prn > 189) {
         return NULL;
     }
     return gen_code_L1CA(prn, N);
@@ -832,7 +832,7 @@ static int8_t *gen_legendre_seq(int N)
 // generate L1CP/D code ([7]) --------------------------------------------------
 static int8_t *gen_code_L1CPD(int N, int w, int p)
 {
-    static const int8_t ins_code[] = {-1, 1, 1, -1, 1, -1, -1};
+    static const int8_t ins_code[] = {1, -1, -1, 1, -1, 1, 1}; // 0110100
     
     if (!L1C_L_SEQ) {
         L1C_L_SEQ = gen_legendre_seq(10223);
@@ -840,15 +840,30 @@ static int8_t *gen_code_L1CPD(int N, int w, int p)
     int8_t *code = (int8_t *)sdr_malloc(N);
     
     for (int t = 0; t < p - 1; t++) {
-        code[t] = -L1C_L_SEQ[t] * L1C_L_SEQ[(t + w) % 10223];
+        code[t] = L1C_L_SEQ[t] * L1C_L_SEQ[(t + w) % 10223];
     }
     for (int t = p - 1; t < p + 6; t++) {
         code[t] = ins_code[t - p + 1];
     }
     for (int t = p + 6; t < N; t++) {
-        code[t] = -L1C_L_SEQ[t - 7] * L1C_L_SEQ[(t - 7 + w) % 10223];
+        code[t] = L1C_L_SEQ[t - 7] * L1C_L_SEQ[(t - 7 + w) % 10223];
     }
     return code;
+}
+
+// modulation of code by TMBOC(6,1,4/33) ---------------------------------------
+static int8_t *mod_code_TMBOC(const int8_t *code, int n)
+{
+    int8_t *code_mod = (int8_t *)sdr_malloc(n * 12);
+    
+    for (int i = 0; i < n; i++) {
+        int b6 = i % 33 == 0 || i % 33 == 4 || i % 33 == 6 || i % 33 == 29;
+        for (int j = 0; j < 12; j++) {
+            int8_t sub_carr = b6 ? (j % 2 ? 1 : -1) : (j >= 6 ? 1 : -1);
+            code_mod[i*12+j] = code[i] * sub_carr;
+        }
+    }
+    return code_mod;
 }
 
 // generate L1CP code ----------------------------------------------------------
@@ -858,11 +873,11 @@ static int8_t *gen_code_L1CP(int prn, int *N)
         return NULL;
     }
     int n = 10230;
-    *N = n * 2;
+    *N = n * 12;
     if (!L1CP[prn-1]) {
         int8_t *code = gen_code_L1CPD(n, L1CP_weil_idx[prn-1],
             L1CP_ins_idx[prn-1]);
-        L1CP[prn-1] = mod_code(code, n, BOC, 2); // BOC(1,1)
+        L1CP[prn-1] = mod_code_TMBOC(code, n); // TMBOC(6,1,4/33)
         sdr_free(code);
     }
     return L1CP[prn-1];
@@ -900,7 +915,7 @@ static int8_t *sec_code_L1CP(int prn, int *N)
             uint32_t tap2 = 0x005;
             int8_t *code2 = LFSR(*N, rev_reg(L1CO_S2_init[prn-64], 11), tap2, 11);
             for (int i = 0; i < *N; i++) {
-                code1[i] *= -code2[i];
+                code1[i] *= code2[i];
             }
             sdr_free(code2);
         }
@@ -924,7 +939,7 @@ static int8_t *gen_code_L2C(int N, uint32_t R)
 // generate L2CM code ([1]) ----------------------------------------------------
 static int8_t *gen_code_L2CM(int prn, int *N)
 {
-    static const int8_t sub_carr[] = {-1, 0}; // TDM
+    static const int8_t sub_carr[] = {1, 0}; // TDM
     
     if ((prn < 1 || prn > 63) && (prn < 159 || prn > 210)) {
         return NULL;
@@ -990,7 +1005,7 @@ static int8_t *gen_code_L5I(int prn, int *N)
         }
         L5I[prn-1] = (int8_t *)sdr_malloc(*N);
         for (int i = 0; i < *N; i++) {
-            L5I[prn-1][i] = -L5_XA[i] * L5_XB[(i + L5I_XB_adv[prn-1]) % (*N)];
+            L5I[prn-1][i] = L5_XA[i] * L5_XB[(i + L5I_XB_adv[prn-1]) % (*N)];
         }
     }
     return L5I[prn-1];
@@ -1010,7 +1025,7 @@ static int8_t *gen_code_L5Q(int prn, int *N)
         }
         L5Q[prn-1] = (int8_t *)sdr_malloc(*N);
         for (int i = 0; i < *N; i++) {
-            L5Q[prn-1][i] = -L5_XA[i] * L5_XB[(i + L5Q_XB_adv[prn-1]) % (*N)];
+            L5Q[prn-1][i] = L5_XA[i] * L5_XB[(i + L5Q_XB_adv[prn-1]) % (*N)];
         }
     }
     return L5Q[prn-1];
@@ -1127,7 +1142,7 @@ static int8_t *gen_code_L6(int N, uint32_t R)
 // generate L6D code ([4]) -----------------------------------------------------
 static int8_t *gen_code_L6D(int prn, int *N)
 {
-    static const int8_t sub_carr[] = {-1, 0}; // TDM
+    static const int8_t sub_carr[] = {1, 0}; // TDM
     
     if (prn < 193 || prn > 202) {
         return NULL;
@@ -1145,7 +1160,7 @@ static int8_t *gen_code_L6D(int prn, int *N)
 // generate L6E code ([4]) -----------------------------------------------------
 static int8_t *gen_code_L6E(int prn, int *N)
 {
-    static const int8_t sub_carr[] = {0, -1}; // TDM
+    static const int8_t sub_carr[] = {0, 1}; // TDM
     
     if (prn < 203 || prn > 212) {
         return NULL;
@@ -1195,7 +1210,7 @@ static int8_t *gen_code_G2CA(int prn, int *N)
 // generate G1OCD code ([19]) --------------------------------------------------
 static int8_t *gen_code_G1OCD(int prn, int *N)
 {
-   static const int8_t sub_carr[] = {-1, 0}; // TDM
+   static const int8_t sub_carr[] = {1, 0}; // TDM
    
    if (prn < 0 || prn > 63) {
        return NULL;
@@ -1217,7 +1232,7 @@ static int8_t *gen_code_G1OCD(int prn, int *N)
 // generate G1OCP code ([19]) -------------------------------------------------
 static int8_t *gen_code_G1OCP(int prn, int *N)
 {
-   static const int8_t sub_carr[] = {0, 0, -1, 1}; // BOC(1,1) + TDM
+   static const int8_t sub_carr[] = {0, 0, 1, -1}; // BOC(1,1) + TDM
    
    if (prn < 0 || prn > 63) {
        return NULL;
@@ -1239,7 +1254,7 @@ static int8_t *gen_code_G1OCP(int prn, int *N)
 // generate G2OCP code ([20]) --------------------------------------------------
 static int8_t *gen_code_G2OCP(int prn, int *N)
 {
-   static const int8_t sub_carr[] = {0, 0, -1, 1}; // BOC(1,1) + TDM
+   static const int8_t sub_carr[] = {0, 0, 1, -1}; // BOC(1,1) + TDM
    
    if (prn < 0 || prn > 63) {
        return NULL;
@@ -1353,8 +1368,8 @@ static int8_t *sec_code_G3OCP(int prn, int *N)
     if (prn < 0 || prn > 63) {
         return NULL;
     }
-    *N = (int)sizeof(NH10R);
-    return NH10R;
+    *N = (int)sizeof(NH10);
+    return NH10;
 }
 
 // generate E1B code ([5]) -----------------------------------------------------
@@ -1744,7 +1759,7 @@ static int8_t *gen_code_B2AD(int prn, int *N)
 // generate B2AD secondary code ------------------------------------------------
 static int8_t *sec_code_B2AD(int prn, int *N)
 {
-    static int8_t code[] = {-1, -1, -1, 1, -1};
+    static int8_t code[] = {1, 1, 1, -1, 1}; // 00010
     
     *N = 5;
     return code;
@@ -2485,7 +2500,7 @@ static void sat_id_qzss(const char *sig, int prn, char *sat)
         prn >= 193 && prn <= 202) {
         sprintf(sat, "J%02d", prn - 192);
     }
-    else if (!strcmp(sig, "L1S") && prn >= 183 && prn <= 191) {
+    else if (!strcmp(sig, "L1S") && prn >= 183 && prn <= 189) {
         sprintf(sat, "J%02d", prn - 182);
     }
     else if (!strncmp(sig, "L5S", 3) && prn >= 184 && prn <= 206 &&
