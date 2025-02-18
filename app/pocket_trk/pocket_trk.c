@@ -21,16 +21,19 @@
 //                   delete input from stdin
 //  2024-07-02  1.8  add -fo, -raw option, delete -fi option
 //                   support tag file input for auto-configuration
+//  2025-02-18  1.9  fix bug on output files
+//                   add -rfch option
 //
 #include <math.h>
 #include <signal.h>
 #include "pocket_sdr.h"
 
 // constants and macros ---------------------------------------------------------
-#define TRACE_LEVEL 2           // debug trace level
+#define TRACE_LEVEL 3           // debug trace level
 #define FFTW_WISDOM "../python/fftw_wisdom.txt"
 #define NUM_COL    110          // number of channel status columns
-#define MAX_ROW    108          // max number of channel status rows
+#define MAX_ROW    64           // max number of channel status rows
+#define MIN_LOCK   2.0          // min lock time for channel status (s)
 #define ESC_COL    "\033[34m"   // ANSI escape color blue
 #define ESC_RES    "\033[0m"    // ANSI escape reset
 #define ESC_UCUR   "\033[A"     // ANSI escape cursor up
@@ -39,10 +42,11 @@
 
 // usage text ------------------------------------------------------------------
 static const char *usage_text[] = {
-    "Usage: pocket_trk [-sig sig -prn prn[,...] ...] [-fmt {INT8|INT8X2|RAW8|RAW16}]",
-    "       [-f freq] [-fo freq[,...]] [-IQ {1|2}[,...]] [-toff toff] [-ti tint]",
-    "       [-p bus,[,port] [-c conf_file] [-log path] [-nmea path] [-rtcm path]",
-    "       [-raw path] [-w file] [file]", NULL
+    "Usage: pocket_trk [-sig sig -prn prn[,...] [-rfch ch[,...]] ...]",
+    "       [-fmt {INT8|INT8X2|RAW8|RAW16|RAW32}] [-f freq] [-fo freq[,...]]",
+    "       [-IQ {1|2}[,...]] [-toff toff] [-ti tint] [-p bus,[,port]",
+    "       [-c conf_file] [-log path] [-nmea path] [-rtcm path] [-raw path]",
+    "       [-w file] [file]", NULL
 };
 
 // interrupt flag --------------------------------------------------------------
@@ -65,7 +69,7 @@ static void show_usage(void)
 }
 
 // print receiver status -------------------------------------------------------
-static int print_rcv_stat(sdr_rcv_t *rcv, int nrow)
+static int print_rcv_stat(sdr_rcv_t *rcv, int nrow, int max_row)
 {
     char *stat, *p, *q;
     int n = 0;
@@ -74,15 +78,15 @@ static int print_rcv_stat(sdr_rcv_t *rcv, int nrow)
         printf("%s", ESC_UCUR);
     }
     // get SDR receiver channel status
-    stat = sdr_rcv_ch_stat(rcv, "ALL", 0);
+    stat = sdr_rcv_ch_stat(rcv, "ALL", 0, MIN_LOCK);
     
     for (p = q = stat; (q = strchr(p, '\n')); p = q + 1) {
-        if (n < MAX_ROW) {
+        if (n < max_row) {
             printf("%s%.*s%s", n < 2 ? "" : ESC_COL, (int)(q - p) + 1, p,
                 ESC_RES);
             n++;
         }
-        else if (n == MAX_ROW) {
+        else if (n == max_row) {
             printf("... ..\n");
             n++;
         }
@@ -98,10 +102,11 @@ static int print_rcv_stat(sdr_rcv_t *rcv, int nrow)
 //
 //   Synopsis
 //
-//     pocket_trk [-sig sig -prn prn[,...] ...] [-fmt {INT8|INT8X2|RAW8|RAW16}]
-//         [-f freq] [-fo freq[,...]] [-IQ {1|2}[,...]] [-toff toff] [-ti tint]
-//         [-p bus,[,port] [-c conf_file] [-log path] [-nmea path] [-rtcm path]
-//         [-raw path] [-w file] [file]
+//     pocket_trk [-sig sig -prn prn[,...] [-rfch ch[,...]] ...]
+//         [-fmt {INT8|INT8X2|RAW8|RAW16|RAW32}] [-f freq] [-fo freq[,...]]
+//         [-IQ {1|2}[,...]] [-toff toff] [-ti tint] [-p bus,[,port]
+//         [-c conf_file] [-log path] [-nmea path] [-rtcm path] [-raw path]
+//         [-w file] [file]
 //
 //   Description
 //
@@ -113,34 +118,36 @@ static int print_rcv_stat(sdr_rcv_t *rcv, int nrow)
 //
 //   Options ([]: default)
 //
-//     -sig sig [-fi freq] -prn prn[,...] ...
+//     -sig sig -prn prn[,...] [-rfch ch[,...]] ...
 //         A GNSS signal type ID (L1CA, L2CM, ...) and a PRN number list of the
 //         signal. For signal type IDs, refer pocket_acq.py manual. The PRN
 //         number list shall be PRN numbers or PRN number ranges like 1-32 with
 //         the start and the end numbers. They are separated by ",". For
 //         GLONASS FDMA signals (G1CA, G2CA), the PRN number is treated as the
-//         FCN (frequency channel number). The pair of a signal type ID and a PRN
-//         number list can be repeated for multiple GNSS signals to be tracked.
+//         FCN (frequency channel number). To assign the signal to specific RF
+//         channel(s), -rfch option can be followed. Specify the assigned RF
+//         channel list with "," or "-". Without the -rfch option, RF channel
+//         for the signal is automatically assigned. The signal option can be
+//         repeated for multiple GNSS signals to be tracked.
 //
-//     -fmt {INT8|INT8X2|RAW8|RAW16}
+//     -fmt {INT8|INT8X2|RAW8|RAW16|RAW32}
 //         Specify IF data format as follows: INT8 = int8 (I-sampling), INT8X2 =
 //         interleaved int8 (IQ-sampling), RAW8 = Pocket SDR FE 2CH raw (packed
-//         8 bits), RAW16 = Pocket SDR FE 4CH raw (packed 16 bits) [INT8X2]
+//         8 bits), RAW16 = Pocket SDR FE 4CH raw (packed 16 bits), RAW32 =
+//         Pocket SDR FE 8CH raw (packed 32 bits) [INT8X2]
 //
 //     -f freq
 //         Specify the sampling frequency of the IF data in MHz. [12.0]
 //
 //     -fo freq[,...]
 //         Specify LO frequency for each RF channel in MHz. In case of the
-//         IF data format as RAW8 or RAW16, multiple (2 or 4) frequencies have
-//         to be specified separated by ",". If the LO frequency is specified
-//         as 0, the IF frequency is assumed as 0 for IQ-sampling and 1/2 of
-//         the sampling frequency for I-sampling. [0,0,0,0]
+//         IF data format as RAW8, RAW16 or RAW32, multiple (2, 4 or 8)
+//         frequencies have to be specified separated by ",".
 //
 //     -IQ {1|2}[,...]
 //         Specify the sampling type (1 = I-sampline, 2 = IQ-sampling) for each
-//         RF channel separated by "," in case of the IF data foramt as RAW8 or
-//         RAW16. [2,2,2,2]
+//         RF channel separated by "," in case of the IF data foramt as RAW8,
+//         RAW16 or RAW32. [2,2,2,2,2,2,2,2]
 //
 //     -toff toff
 //         Time offset from the start of the IF data in s. [0.0]
@@ -182,6 +189,9 @@ static int print_rcv_stat(sdr_rcv_t *rcv, int nrow)
 //         A stream path to write raw IF data. The stream path is as same as the
 //         -log option.
 //
+//     -h height
+//         Specify the console height (rows). [64]
+//
 //     -w file
 //         Specify the FFTW wisdowm file. [../python/fftw_wisdom.txt]
 //
@@ -189,16 +199,15 @@ static int print_rcv_stat(sdr_rcv_t *rcv, int nrow)
 //         A file path of the input IF data. The Pocket SDR FE deveice and
 //         pocket_dump can be used to capture such digitized IF data.
 //
-//         If the tag file <file>.tag of the input IF data exists, the format,
+//         If the tag file <file>.tag for the input IF data exists, the format,
 //         the sampling frequency, the LO frequencies and the sampling types
-//         are automatically recognized by the tag file and the options -fmt,
-//         -f, -fo, and -IQ are ignored.
+//         are automatically recognized by the tag file. In this case, the
+//         options -fmt, -f, -fo, and -IQ are ignored.
 //
 //         If the file path omitted, the input is taken from a Pocket SDR FE
-//         device directly. In this case, the sampling frequency, the sampling
-//         types of IF data, the RF channel assignments and the IF freqencies
-//         for each signals are automatically configured according to the
-//         device information.
+//         device directly. In this case, the format, the sampling frequency,
+//         the LO frequencies and the sampling types are automatically
+//         configured according to the device information.
 //
 int main(int argc, char **argv)
 {
@@ -206,11 +215,13 @@ int main(int argc, char **argv)
     int prns[SDR_MAX_NCH], nch = 0, fmt = SDR_FMT_INT8X2;
     int IQ[SDR_MAX_RFCH] = {2, 2, 2, 2, 2, 2, 2, 2};
     int dev_type = SDR_DEV_FILE, bus = -1, port = -1, nrow = 0;
-    double fs = 12.0, fo[SDR_MAX_RFCH] = {0}, toff = 0.0, tscale = 1.0;
+    int max_row = MAX_ROW;
+    double fs = 12e6, fo[SDR_MAX_RFCH] = {0}, toff = 0.0, tscale = 1.0;
     double tint = 0.1;
     const char *sig = "L1CA", *sigs[SDR_MAX_NCH];
     const char *file = "", *fftw_wisdom = FFTW_WISDOM, *conf_file = "";
     const char *paths[4] = {"", "", "", ""}, *debug_file = "";
+    char rfch_opt[1024] = "-RFCH";
     
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-sig") && i + 1 < argc) {
@@ -224,6 +235,9 @@ int main(int argc, char **argv)
                 prns[nch++] = nums[j];
             }
         }
+        else if (!strcmp(argv[i], "-rfch") && i + 1 < argc) {
+            sprintf(rfch_opt + strlen(rfch_opt), " %s:%s", sig, argv[++i]);
+        }
         else if (!strcmp(argv[i], "-toff") && i + 1 < argc) {
             toff = atof(argv[++i]);
         }
@@ -231,14 +245,15 @@ int main(int argc, char **argv)
             tscale = atof(argv[++i]);
         }
         else if (!strcmp(argv[i], "-fmt") && i + 1 < argc) {
-            const char *format = argv[++i];
-            if      (!strcmp(format, "INT8"  )) fmt = SDR_FMT_INT8;
-            else if (!strcmp(format, "INT8X2")) fmt = SDR_FMT_INT8X2;
-            else if (!strcmp(format, "RAW8"  )) fmt = SDR_FMT_RAW8;
-            else if (!strcmp(format, "RAW16" )) fmt = SDR_FMT_RAW16;
-            else if (!strcmp(format, "RAW16I")) fmt = SDR_FMT_RAW16I;
+            const char *str = argv[++i];
+            if      (!strcmp(str, "INT8"  )) fmt = SDR_FMT_INT8;
+            else if (!strcmp(str, "INT8X2")) fmt = SDR_FMT_INT8X2;
+            else if (!strcmp(str, "RAW8"  )) fmt = SDR_FMT_RAW8;
+            else if (!strcmp(str, "RAW16" )) fmt = SDR_FMT_RAW16;
+            else if (!strcmp(str, "RAW16I")) fmt = SDR_FMT_RAW16I;
+            else if (!strcmp(str, "RAW32" )) fmt = SDR_FMT_RAW32;
             else {
-                fprintf(stderr, "unrecognized format: %s\n", format);
+                fprintf(stderr, "unrecognized format: %s\n", str);
                 exit(-1);
             }
         }
@@ -246,9 +261,9 @@ int main(int argc, char **argv)
             fs = atof(argv[++i]) * 1e6;
         }
         else if (!strcmp(argv[i], "-fo") && i + 1 < argc) {
-            int n = sscanf(argv[++i], "%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf", fo,
-                fo + 1, fo + 2, fo + 3, fo + 4, fo + 5, fo + 6, fo + 7);
-            for (int j = 0; j < n; j++) fo[j] *= 1e6;
+            sscanf(argv[++i], "%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf", fo, fo + 1,
+                fo + 2, fo + 3, fo + 4, fo + 5, fo + 6, fo + 7);
+            for (int j = 0; j < 8; j++) fo[j] *= 1e6;
         }
         else if (!strcmp(argv[i], "-IQ") && i + 1 < argc) {
             sscanf(argv[++i], "%d,%d,%d,%d,%d,%d,%d,%d", IQ, IQ + 1, IQ + 2,
@@ -266,17 +281,20 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "-w") && i + 1 < argc) {
             fftw_wisdom = argv[++i];
         }
-        else if (!strcmp(argv[i], "-log") && i + 1 < argc) {
+        else if (!strcmp(argv[i], "-nmea") && i + 1 < argc) {
             paths[0] = argv[++i];
         }
-        else if (!strcmp(argv[i], "-nmea") && i + 1 < argc) {
+        else if (!strcmp(argv[i], "-rtcm") && i + 1 < argc) {
             paths[1] = argv[++i];
         }
-        else if (!strcmp(argv[i], "-rtcm") && i + 1 < argc) {
+        else if (!strcmp(argv[i], "-log") && i + 1 < argc) {
             paths[2] = argv[++i];
         }
         else if (!strcmp(argv[i], "-raw") && i + 1 < argc) {
             paths[3] = argv[++i];
+        }
+        else if (!strcmp(argv[i], "-h") && i + 1 < argc) {
+            max_row = atoi(argv[++i]);
         }
         else if (!strcmp(argv[i], "-debug") && i + 1 < argc) {
             debug_file = argv[++i];
@@ -300,13 +318,14 @@ int main(int argc, char **argv)
     signal(SIGPIPE, SIG_IGN);
 #endif
     uint32_t tt = sdr_get_tick();
-    
+
     if (*file) {
         rcv = sdr_rcv_open_file(sigs, prns, nch, fmt, fs, fo, IQ, toff,
-            tscale, file, paths);
+            tscale, file, paths, rfch_opt);
     }
     else {
-        rcv = sdr_rcv_open_dev(sigs, prns, nch, bus, port, conf_file, paths);
+        rcv = sdr_rcv_open_dev(sigs, prns, nch, bus, port, conf_file, paths,
+            rfch_opt);
     }
     if (!rcv) {
         return -1;
@@ -316,12 +335,12 @@ int main(int argc, char **argv)
     }
     while (!intr && rcv->state) { // wait for interrupt or file end
         if (tint > 0.0) {
-            nrow = print_rcv_stat(rcv, nrow);
+            nrow = print_rcv_stat(rcv, nrow, max_row);
         }
         sdr_sleep_msec(tint > 0.0 ? (int)(tint * 1000) : 100);
     }
     if (tint > 0.0) {
-        print_rcv_stat(rcv, nrow);
+        print_rcv_stat(rcv, nrow, max_row);
         printf("  TIME(s) = %.3f\n", (sdr_get_tick() - tt) * 1e-3);
         printf("%s", ESC_VCUR);
     }
