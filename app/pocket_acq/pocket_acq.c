@@ -7,6 +7,7 @@
 //  History:
 //  2022-07-05  1.0  port pocket_acq.py to C
 //  2022-08-08  1.1  add option -w, modify option -d
+//  2024-07-02  1.2  support tag file input for auto-configuration
 //
 #include "pocket_sdr.h"
 
@@ -72,7 +73,7 @@ int search_sig(const char *sig, int prn, const sdr_buff_t *buff, double fs,
 //
 //   Synopsis
 //
-//     pocket_aqc [-sig sig] [-prn prn[,...]] [-tint tint] [-toff toff]
+//     pocket_acq [-sig sig] [-prn prn[,...]] [-tint tint] [-toff toff]
 //         [-f freq] [-fi freq] [-d freq] [-nz] file
 //
 //   Description
@@ -122,13 +123,17 @@ int search_sig(const char *sig, int prn, const sdr_buff_t *buff, double fs,
 //         int8_t (signed byte) for real-sampling (I-sampling) or interleaved int8_t
 //         for complex-sampling (IQ-sampling). PocketSDR and AP pocket_dump can be
 //         used to capture such digital IF data.
+//         If the tag file <file>.tag of the input IF data exists, the format,
+//         the sampling frequency, the LO frequencies and the sampling types
+//         are automatically recognized by the tag file and the options -fmt,
+//         -f, -fi, and -IQ are ignored.
 //
 int main(int argc, char **argv)
 {
     const char *sig = "L1CA", *file = "", *fftw_wisdom = FFTW_WISDOM;
     double fs = 12e6, fi = 0.0, T = T_AQC, toff = 0.0, ref_dop = 0.0;
     double max_dop = 5000.0;
-    int prns[SDR_MAX_NPRN], nprn = 0, opt[5] = {0};
+    int prns[SDR_MAX_NPRN], nprn = 0, opt[5] = {0}, fmt = SDR_FMT_INT8X2, IQ = 2;
     
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-sig") && i + 1 < argc) {
@@ -143,11 +148,25 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "-toff") && i + 1 < argc) {
             toff = atof(argv[++i]) * 1e-3;
         }
+        else if (!strcmp(argv[i], "-fmt") && i + 1 < argc) {
+            const char *format = argv[++i];
+            if      (!strcmp(format, "INT8"  )) fmt = SDR_FMT_INT8;
+            else if (!strcmp(format, "INT8X2")) fmt = SDR_FMT_INT8X2;
+            else if (!strcmp(format, "RAW8"  )) fmt = SDR_FMT_RAW8;
+            else if (!strcmp(format, "RAW16" )) fmt = SDR_FMT_RAW16;
+            else if (!strcmp(format, "RAW16I")) fmt = SDR_FMT_RAW16I;
+            else if (!strcmp(format, "RAW32" )) fmt = SDR_FMT_RAW32;
+            else {
+                fprintf(stderr, "unrecognized format: %s\n", format);
+                exit(-1);
+            }
+        }
         else if (!strcmp(argv[i], "-f") && i + 1 < argc) {
             fs = atof(argv[++i]) * 1e6;
         }
         else if (!strcmp(argv[i], "-fi") && i + 1 < argc) {
             fi = atof(argv[++i]) * 1e6;
+            if (fi != 0.0) IQ = 1;
         }
         else if (!strcmp(argv[i], "-w") && i + 1 < argc) {
             fftw_wisdom = argv[++i];
@@ -181,9 +200,16 @@ int main(int argc, char **argv)
     }
     sdr_func_init(fftw_wisdom);
     
+    // read tag file
+    double fo[SDR_MAX_RFCH];
+    int IQ_t[SDR_MAX_RFCH];
+    if (sdr_tag_read(file, NULL, NULL, &fmt, &fs, fo, IQ_t)) {
+        fi = sdr_sig_freq(sig) - fo[0];
+        IQ = IQ_t[0];
+    }
     // read IF data
     sdr_buff_t *buff;
-    if (!(buff = sdr_read_data(file, fs, (fi > 0) ? 1 : 2, T + Tcode, toff))) {
+    if (!(buff = sdr_read_data(file, fs, IQ, T + Tcode, toff))) {
         exit(-1);
     }
     uint32_t tick = sdr_get_tick();
