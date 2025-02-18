@@ -199,18 +199,12 @@ def out_opt_new(opt_p=None):
     opt.path_ena = [IntVar() for i in range(4)]
     opt.path = [StringVar() for i in range(4)]
     opt.log_sel = [IntVar() for s in opt.log]
-    opt.out_rnx = IntVar()
-    opt.rnx_intv = StringVar()
     if opt_p != None:
         for i in range(4):
             opt.path_ena[i].set(opt_p.path_ena[i].get())
             opt.path[i].set(opt_p.path[i].get())
         for i in range(len(opt.log_sel)):
             opt.log_sel[i].set(opt_p.log_sel[i].get())
-        opt.out_rnx.set(opt_p.out_rnx.get())
-        opt.rnx_intv.set(opt_p.rnx_intv.get())
-    else:
-        opt.rnx_intv.set('1')
     return opt
 
 # generate signal option variables ---------------------------------------------
@@ -278,18 +272,18 @@ def sys_opt_new(opt_p=None):
         opt.fftw_wisdom_path.set(opt_p.fftw_wisdom_path.get())
     else:
         opt.epoch.set('1.0')
-        opt.lag_epoch.set('0.05')
+        opt.lag_epoch.set('0.5')
         opt.el_mask.set('15')
         opt.sp_corr.set('0.25')
-        opt.t_acq.set('0.01')
-        opt.t_dll.set('0.01')
+        opt.t_acq.set('0.02')
+        opt.t_dll.set('0.02')
         opt.b_dll.set('0.25')
         opt.b_pll.set('5.0')
         opt.b_fll_w.set('5.0')
         opt.b_fll_n.set('2.0')
         opt.max_dop.set('5000')
-        opt.thres_cn0_l.set('35.0')
-        opt.thres_cn0_u.set('32.0')
+        opt.thres_cn0_l.set('34.0')
+        opt.thres_cn0_u.set('30.0')
         opt.bump_jump.set('OFF')
     return opt
 
@@ -344,15 +338,16 @@ def load_opt(opt_name, opt, txt):
             continue
         if not flag:
             continue
-        ss = re.split('[@=]', s[:-1])
+        ss = s[:-1].split('=', 1)
+        sss = ss[0].split('@')
         for key, val in vars(opt).items():
-            if key == ss[0]:
-                if len(ss) == 2:
+            if key == sss[0]:
+                if len(sss) == 1:
                     read_opt(val, ss[1])
-                elif len(ss) == 3:
-                    read_opt(val[int(ss[1])], ss[2])
-                elif len(ss) == 4:
-                    read_opt(val[int(ss[1])][int(ss[2])], ss[3])
+                elif len(sss) == 2:
+                    read_opt(val[int(sss[1])], ss[1])
+                elif len(sss) == 3:
+                    read_opt(val[int(sss[1])][int(sss[2])], ss[1])
 
 # read option ------------------------------------------------------------------
 def read_opt(val, opt):
@@ -420,7 +415,7 @@ def if_opt_panel_new(parent, opt):
     panel = Frame(parent, width=300, height=300, bg=BG_COLOR, relief=GROOVE,
         borderwidth=2)
     ttk.Label(panel, text=opt.inps[1]).pack(fill=X, padx=2, pady=2)
-    path_panel_new(panel, 'Path (File: local path)',
+    path_panel_new(panel, 'Path (File: local_path)',
         var_path=opt.str_path, types=[('Raw IF Data', '*.bin'), ('All', '*.*')])
     p1 = Frame(panel, bg=BG_COLOR)
     p1.pack(fill=X)
@@ -475,11 +470,10 @@ def rfch_opt_panel_new(parent, ch, opt):
 
 # show Output Options dialog ---------------------------------------------------
 def out_opt_dlg(root, opt):
-    texts = ('Output Paths (File: local path, TCP: [addr]:port)',
+    texts = ('Output Paths (File: local_path[::S=tint], TCP: [addr]:port)',
         'PVT Solutions (NMEA 0183)', 'OBS and NAV Data (RTCM3)',
         'Receiver Log (CSV Text)', 'IF Data Log (RAW8, RAW16 or RAW32)',
-        'Convert OBS and NAV Data to RINEX', 'Receiver Log Types',
-        'Keywords Replacement in Path',
+        'Output Receiver Log Types', 'Keywords Replacement in Path',
         '%Y=Year(yyyy) %y=year(yy) %m=month(mm) %d=day(dd)',
         '%h=hour(00-23) %M=minute(00-59) %S=second(00-59)')
     rnx_intvs = ('0.1', '0.2', '0.5', '1', '2', '5', '10', '30')
@@ -499,23 +493,17 @@ def out_opt_dlg(root, opt):
        var_ena=opt_new.path_ena[3], types=[('Raw IF Log', '*.bin'), ('All', '*.*')])
     panel2 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     panel2.pack(fill=X, pady=2)
+    ttk.Label(panel2, text=texts[5], justify=LEFT).pack(fill=X, padx=10, pady=2)
     panel3 = Frame(panel2, bg=BG_COLOR)
-    panel3.pack(fill=X, padx=10, pady=4)
-    ttk.Checkbutton(panel3, text=texts[5], variable=opt_new.out_rnx).pack(side=LEFT)
-    ttk.Combobox(panel3, values=rnx_intvs, textvariable= opt_new.rnx_intv, width=4,
-        justify=CENTER, font=FONT).pack(side=RIGHT)
-    ttk.Label(panel3, text='Interval (s)', justify=CENTER).pack(side=RIGHT, padx=2)
-    ttk.Label(panel2, text=texts[6], justify=LEFT).pack(fill=X, padx=10)
-    panel4 = Frame(panel2, bg=BG_COLOR)
-    panel4.pack(pady=4)
+    panel3.pack(pady=4)
     for i in range(len(opt.log_sel)):
-        ttk.Checkbutton(panel4, text=opt.log[i], variable=opt_new.log_sel[i]
+        ttk.Checkbutton(panel3, text=opt.log[i], variable=opt_new.log_sel[i]
             ).pack(side=LEFT, padx=2)
-    panel5 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
-    panel5.pack(fill=X, pady=2)
-    ttk.Label(panel5, text=texts[7], justify=LEFT).pack(fill=X, padx=10, pady=(2, 4))
-    ttk.Label(panel5, text=texts[8], justify=LEFT).pack(fill=X, padx=26, pady=2)
-    ttk.Label(panel5, text=texts[9], justify=LEFT).pack(fill=X, padx=26, pady=(2, 8))
+    panel4 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
+    panel4.pack(fill=X, pady=2)
+    ttk.Label(panel4, text=texts[6], justify=LEFT).pack(fill=X, padx=10, pady=2)
+    ttk.Label(panel4, text=texts[7], justify=LEFT).pack(fill=X, padx=26, pady=2)
+    ttk.Label(panel4, text=texts[8], justify=LEFT).pack(fill=X, padx=26, pady=(2, 8))
     root.wait_window(dlg.win)
     return opt_new if dlg.ok else opt
 
@@ -578,8 +566,8 @@ def sys_opt_dlg(root, opt):
     panel1.pack(fill=X, pady=2, ipady=1)
     sel_panel_new(panel1, labels[0], sels=('0.1', '0.2', '0.5', '1.0',
         '2.0', '5.0'), var=opt_new.epoch, width=8)
-    sel_panel_new(panel1, labels[1], sels=('0.01', '0.02', '0.05', '0.1',
-        '0.2', '0.3', '0.4', '0.5'), var=opt_new.lag_epoch, width=8)
+    sel_panel_new(panel1, labels[1], sels=('0.1', '0.2', '0.3', '0.5', '0.75',
+        '1.0'), var=opt_new.lag_epoch, width=8)
     sel_panel_new(panel1, labels[2], sels=('5', '10', '15', '20', '25',
         '30'), var=opt_new.el_mask, width=8)
     panel2 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
