@@ -52,6 +52,7 @@
 //                   Delete log $SBAS, $LNAV, $CNV2, $CNAV, $L6FRM, $GSTR,
 //                   $GSTR1, $GSTR3, $INAV, $FNAV, $BCNVD1, $BCNVD2, $BCNV1,
 //                   $BCNV2, $BCNV3, $IRNV1, $IRNV5
+//  2025-02-18  1.7  flip symbol polarity
 //
 #include "pocket_sdr.h"
 
@@ -111,6 +112,12 @@ static uint8_t *BCNV1_SF1A[ 63] = {NULL};
 static uint8_t *BCNV1_SF1B[200] = {NULL};
 static uint8_t *IRNV1_SF1 [400] = {NULL};
 
+// convert IP correlation to symbol --------------------------------------------
+static uint8_t IP2sym(const sdr_ch_t *ch)
+{
+    return (ch->trk->P[SDR_N_HIST-1][0] > 0.0) ? 0 : 1; // {+, -} <-> {0, 1}
+}
+
 // average of IP correlation ---------------------------------------------------
 static float mean_IP(const sdr_ch_t *ch, int N)
 {
@@ -127,7 +134,7 @@ static int sync_symb(sdr_ch_t *ch, int N)
 {
     if (ch->nav->ssync == 0) {
         float P = mean_IP(ch, N);
-        int n = 100 / N, R[50] = {0};
+        int n = 200 / N, R[100] = {0};
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < N; j++) {
                 R[i] += ch->trk->P[SDR_N_HIST-(i+1)*N+j][0] >= 0.0 ? 1 : -1;
@@ -143,7 +150,7 @@ static int sync_symb(sdr_ch_t *ch, int N)
     else if ((ch->lock - ch->nav->ssync) % N == 0) {
         float P = mean_IP(ch, N);
         if (fabsf(P) >= THRES_LOST) {
-            uint8_t sym = (P >= 0.0) ? 1 : 0;
+            uint8_t sym = (P > 0.0) ? 0 : 1;
             sdr_add_buff(ch->nav->syms, SDR_MAX_NSYM, &sym, sizeof(sym));
             return 1;
         }
@@ -165,7 +172,7 @@ static int sync_sec_code(sdr_ch_t *ch)
        (ch->lock - ch->trk->sec_sync) % N != 0) {
         return 0;
     }
-    uint8_t sym = (mean_IP(ch, N) >= 0.0) ? 1 : 0;
+    uint8_t sym = (mean_IP(ch, N) > 0.0) ? 0 : 1;
     sdr_add_buff(ch->nav->syms, SDR_MAX_NSYM, &sym, sizeof(sym));
     return 1;
 }
@@ -510,7 +517,7 @@ static int sync_CNV2_frame(sdr_ch_t *ch, const uint8_t *syms, int toi)
             uint8_t bit9 = (uint8_t)((t >> 8) & 1);
             CNV2_SF1[t][0] = bit9;
             for (int i = 1; i < 52; i++) {
-                CNV2_SF1[t][i] = (uint8_t)((code[i-1] + 1) / 2) ^ bit9;
+                CNV2_SF1[t][i] = (uint8_t)((code[i-1] > 0) ? 0 : 1) ^ bit9;
             }
             sdr_free(code);
         }
@@ -576,7 +583,7 @@ static void decode_CNV2(sdr_ch_t *ch, const uint8_t *syms, int rev, int toi)
 static void decode_L1CD(sdr_ch_t *ch)
 {
     // add symbol buffer
-    uint8_t sym = ch->trk->P[SDR_N_HIST-1][0] >= 0.0 ? 1 : 0;
+    uint8_t sym = IP2sym(ch);
     sdr_add_buff(ch->nav->syms, SDR_MAX_NSYM, &sym, sizeof(sym));
     uint8_t *syms = ch->nav->syms + SDR_MAX_NSYM - 1852;
     
@@ -675,7 +682,7 @@ static void search_CNAV_frame(sdr_ch_t *ch)
 static void decode_L2CM(sdr_ch_t *ch)
 {
     // add symbol buffer
-    uint8_t sym = (ch->trk->P[SDR_N_HIST-1][0] >= 0.0) ? 1 : 0;
+    uint8_t sym = IP2sym(ch);
     sdr_add_buff(ch->nav->syms, SDR_MAX_NSYM, &sym, sizeof(sym));
     
     if (ch->nav->fsync > 0) { // sync CNAV subframe
@@ -756,6 +763,10 @@ static void decode_L5_SBAS(sdr_ch_t *ch)
 // decode L5I nav data ([13]) --------------------------------------------------
 static void decode_L5I(sdr_ch_t *ch)
 {
+    if (ch->prn == 128 || ch->prn == 132 || ch->prn == 134) { // GAGAN, KASS
+        decode_SBAS(ch);
+        return;
+    }
     if (ch->prn >= 120 && ch->prn <= 158) { // L5 SBAS
         decode_L5_SBAS(ch);
         return;
@@ -1198,7 +1209,7 @@ static void decode_E1B(sdr_ch_t *ch)
     static const uint8_t preamb[] = {0, 1, 0, 1, 1, 0, 0, 0, 0, 0};
     
     // add symbol buffer
-    uint8_t sym = (ch->trk->P[SDR_N_HIST-1][0] >= 0.0) ? 1 : 0;
+    uint8_t sym = IP2sym(ch);
     sdr_add_buff(ch->nav->syms, SDR_MAX_NSYM, &sym, sizeof(sym));
     uint8_t *syms = ch->nav->syms + SDR_MAX_NSYM - 510;
     
@@ -1402,7 +1413,7 @@ static void decode_E6B(sdr_ch_t *ch)
         1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0
     };
     // add symbol buffer
-    uint8_t sym = (ch->trk->P[SDR_N_HIST-1][0] >= 0.0) ? 1 : 0;
+    uint8_t sym = IP2sym(ch);
     sdr_add_buff(ch->nav->syms, SDR_MAX_NSYM, &sym, sizeof(sym));
     uint8_t *syms = ch->nav->syms + SDR_MAX_NSYM - 1016;
     
@@ -1594,7 +1605,7 @@ static int sync_BCNV1_frame(sdr_ch_t *ch, const uint8_t *syms, int soh)
         BCNV1_SF1A[ch->prn-1] = (uint8_t *)sdr_malloc(21);
         int8_t *code = LFSR(21, rev_reg(ch->prn, 6), 0x17, 6);
         for (int i = 0; i < 21; i++) {
-            BCNV1_SF1A[ch->prn-1][i] = (code[i] + 1) / 2;
+            BCNV1_SF1A[ch->prn-1][i] = (code[i] > 0) ? 0 : 1;
         }
         sdr_free(code);
     }
@@ -1603,7 +1614,7 @@ static int sync_BCNV1_frame(sdr_ch_t *ch, const uint8_t *syms, int soh)
             BCNV1_SF1B[soh] = (uint8_t *)sdr_malloc(51);
             int8_t *code = LFSR(51, rev_reg(soh, 8), 0x9F, 8);
             for (int i = 0; i < 51; i++) {
-                BCNV1_SF1B[soh][i] = (code[i] + 1) / 2;
+                BCNV1_SF1B[soh][i] = (code[i] > 0) ? 0 : 1;
             }
             sdr_free(code);
         }
@@ -1681,7 +1692,7 @@ static void decode_BCNV1(sdr_ch_t *ch, const uint8_t *syms, int rev, int soh)
 static void decode_B1CD(sdr_ch_t *ch)
 {
     // add symbol buffer
-    uint8_t sym = (ch->trk->P[SDR_N_HIST-1][0] >= 0.0) ? 1 : 0;
+    uint8_t sym = IP2sym(ch);
     sdr_add_buff(ch->nav->syms, SDR_MAX_NSYM, &sym, sizeof(sym));
     uint8_t *syms = ch->nav->syms + SDR_MAX_NSYM - 1872;
     
@@ -1857,7 +1868,7 @@ static void decode_B2BI(sdr_ch_t *ch)
     uint8_t preamb[] = {1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0};
     
     // add symbol buffer
-    uint8_t sym = (ch->trk->P[SDR_N_HIST-1][0] >= 0.0) ? 1 : 0;
+    uint8_t sym = IP2sym(ch);
     sdr_add_buff(ch->nav->syms, SDR_MAX_NSYM, &sym, sizeof(sym));
     uint8_t *syms = ch->nav->syms + SDR_MAX_NSYM - 1016;
     
@@ -1896,7 +1907,7 @@ static int sync_IRNV1_frame(sdr_ch_t *ch, const uint8_t *syms, int toi)
             IRNV1_SF1[t] = (uint8_t *)sdr_malloc(52);
             int8_t *code = LFSR(52, rev_reg(t+1, 9), 0x1BF, 9);
             for (int i = 0; i < 52; i++) {
-                IRNV1_SF1[t][i] = (uint8_t)((code[i] + 1) / 2);
+                IRNV1_SF1[t][i] = (uint8_t)((code[i] > 0) ? 0 : 1);
             }
             sdr_free(code);
         }
@@ -1961,7 +1972,7 @@ static void decode_IRNV1(sdr_ch_t *ch, const uint8_t *syms, int rev, int toi)
 static void decode_I1SD(sdr_ch_t *ch)
 {
     // add symbol buffer
-    uint8_t sym = ch->trk->P[SDR_N_HIST-1][0] >= 0.0 ? 1 : 0;
+    uint8_t sym = IP2sym(ch);
     sdr_add_buff(ch->nav->syms, SDR_MAX_NSYM, &sym, sizeof(sym));
     uint8_t *syms = ch->nav->syms + SDR_MAX_NSYM - 1852;
     
