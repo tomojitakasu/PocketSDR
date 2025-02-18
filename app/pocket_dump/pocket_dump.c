@@ -17,6 +17,7 @@
 //  2024-04-28  1.6  support Pocket SDR FE 4CH
 //  2024-06-29  1.7  support API change in sdr_dev.c
 //  2024-07-02  1.8  support tag file output
+//  2024-11-23  1.9  support Pocket SDR FE 8CH
 //
 #include <signal.h>
 #ifdef WIN32
@@ -29,7 +30,6 @@
 #define DATA_CYC        10      // data capture cycle (ms)
 #define STAT_CYC        50      // status update cycle (ms)
 #define RATE_CYC        1000    // data rate update cycle (ms)
-#define F2BIT(buff,ch,IQ) (((buff)>>(4*(ch)+2*(IQ)))&3)
 
 // interrupt flag --------------------------------------------------------------
 static volatile uint8_t intr = 0;
@@ -47,6 +47,17 @@ static void print_usage(void)
     printf("Usage: %s [-t tsec] [-r] [-p bus[,port]] [-c conf_file] [-q]\n"
         "    [file [file ...]]\n", PROG_NAME);
     exit(0);
+}
+
+// bytes per sample ------------------------------------------------------------
+static int sample_byte(int fmt)
+{
+    switch (fmt) {
+        case SDR_FMT_RAW16 :
+        case SDR_FMT_RAW16I: return 2;
+        case SDR_FMT_RAW32 : return 4;
+    }
+    return 1;
 }
 
 // generate lookup table -------------------------------------------------------
@@ -67,27 +78,14 @@ static int write_file(int fmt, const uint8_t *buff, int size, int ch, int IQ,
 {
     static int8_t LUT[4][256] = {{0}};
     
-    
     if (!LUT[0][0]) {
         gen_LUT(LUT);
     }
-    int8_t data[size * IQ];
+    int8_t *data = (int8_t *)sdr_malloc(size * IQ);
     
-    if (fmt == SDR_FMT_RAW8) { // packed 8(4x2) bits raw
-        int pos = ch * 2;
-        for (int i = 0; i < size; i++) {
-            if (IQ == 1) {
-                data[i] = LUT[pos][buff[i]];
-            }
-            else {
-                data[i*2  ] = LUT[pos  ][buff[i]];
-                data[i*2+1] = LUT[pos+1][buff[i]];
-            }
-        }
-    }
-    else if (fmt == SDR_FMT_RAW16) { // packed 16(4x4) bits raw
-        int pos = ch % 2 * 2;
-        for (int i = 0, j = ch / 2; i < size; i++, j += 2) {
+    if (fmt == SDR_FMT_RAW8 || fmt == SDR_FMT_RAW16 || fmt == SDR_FMT_RAW32) {
+        int ns = sample_byte(fmt), pos = ch % 2 * 2;
+        for (int i = 0, j = ch / 2; i < size; i++, j += ns) {
             if (IQ == 1) {
                 data[i] = LUT[pos][buff[j]];
             }
@@ -97,37 +95,46 @@ static int write_file(int fmt, const uint8_t *buff, int size, int ch, int IQ,
             }
         }
     }
-    else { // packed 16(2x8) bits raw
+    else { // SDR_FMT_RAW16I
         int pos = ch % 4;
         for (int i = 0, j = ch / 4; i < size; i++, j += 2) {
             data[i] = LUT[pos][buff[j]];
         }
     }
-    return (int)fwrite(data, 1, size * IQ, fp);
+    int bytes = (int)fwrite(data, 1, size * IQ, fp);
+    sdr_free(data);
+    return bytes;
 }
 
 // print header ----------------------------------------------------------------
-static void print_head(int nfile, FILE **fp)
+static void print_head(int raw, int fmt, int nfile, const int *IQ, FILE **fp)
 {
-    fprintf(stderr, "%9s ", "TIME(s)");
-    for (int i = 0; i < nfile; i++) {
-        if (fp[i]) fprintf(stderr, " %3s   CH%d(Bytes)", "T", i + 1);
+    static const char *str_IQ[] = {"- ", "I ", "IQ", "I "};
+    static const char *str_fmt[] = {
+        "-", "-", "RAW8", "RAW16", "RAW16I", "RAW32"
+    };
+    fprintf(stderr, "%8s", "TIME(s)");
+    if (raw) {
+        if (fp[0]) fprintf(stderr, "    %6s(B)", str_fmt[fmt-1]);
     }
-    fprintf(stderr, " %12s\n", "RATE(Ks/s)");
+    else {
+        for (int i = 0; i < nfile; i++) {
+            if (fp[i]) fprintf(stderr, "    CH%d:%s(B)", i + 1, str_IQ[IQ[i]]);
+        }
+    }
+    fprintf(stderr, " %10s\n", "RATE(Ks/s)");
 }
 
 // print status ----------------------------------------------------------------
 static void print_stat(int nch, const int *IQ, FILE **fp, double time,
     const double *byte, double rate)
 {
-    static const char *str_IQ[] = {"-", "I", "IQ", "I"};
-    
-    fprintf(stderr, "%9.1f ", time);
+    fprintf(stderr, "%8.1f", time);
     for (int i = 0; i < nch; i++) {
         if (!fp[i]) continue;
-        fprintf(stderr, " %3s %12.0f", str_IQ[IQ[i]], byte[i]);
+        fprintf(stderr, "%13.0f", byte[i]);
     }
-    fprintf(stderr, " %12.1f\r", rate * 1e-3);
+    fprintf(stderr, " %10.1f\r", rate * 1e-3);
     fflush(stderr);
 }
 
@@ -137,11 +144,11 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int raw, int fmt,
 {
     double time = 0.0, time_p = 0.0, sample = 0.0, sample_p = 0.0;
     double rate = 0.0, byte[SDR_MAX_RFCH] = {0};
-    int ns = (fmt == SDR_FMT_RAW8) ? 1 : 2;
-    uint8_t buff[SDR_SIZE_BUFF * ns];
+    int ns = sample_byte(fmt);
+    uint8_t *buff = (uint8_t *)sdr_malloc(SDR_SIZE_BUFF * ns);
     
     if (!quiet) {
-        print_head(nfile, fp);
+        print_head(raw, fmt, nfile, IQ, fp);
     }
     uint32_t tick = sdr_get_tick();
     
@@ -181,61 +188,22 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int raw, int fmt,
         print_stat(nfile, IQ, fp, time, byte, rate);
         fprintf(stderr, "\n");
     }
-}
-
-// write tag for IF data dump file ---------------------------------------------
-static int write_tag(const char *file, const char *prog, time_t time, int fmt,
-    double fs, const double *fo, const int *IQ)
-{
-    static const char *fstr[] = {
-        "-", "INT8", "INT8X2", "RAW8", "RAW16", "RAW16I"
-    };
-    FILE *fp;
-    char path[1024+4], tstr[32];
-    
-    snprintf(path, sizeof(path), "%s.tag", file);
-    strftime(tstr, sizeof(tstr), "%Y-%m-%dT%H:%M:%SZ", gmtime(&time));
-    
-    if (!(fp = fopen(path, "w"))) {
-        fprintf(stderr, "tag file open error %s\n", path);
-        return 0;
-    }
-    fprintf(fp, "PROG = %s\n", prog);
-    fprintf(fp, "TIME = %s\n", tstr);
-    fprintf(fp, "FMT  = %s\n", fstr[fmt]);
-    fprintf(fp, "F_S  = %.6g\n", fs * 1e-6);
-    if (fmt >= SDR_FMT_RAW8) {
-        int nch = fmt == SDR_FMT_RAW8 ? 2 : (fmt == SDR_FMT_RAW16 ? 4 : 8);
-        fprintf(fp, "F_LO = ");
-        for (int j = 0; j < nch; j++) {
-            fprintf(fp, "%.6g%s", fo[j] * 1e-6, j < nch - 1 ? "," : "\n");
-        }
-        fprintf(fp, "IQ   = ");
-        for (int j = 0; j < nch; j++) {
-            fprintf(fp, "%d%s", IQ[j], j < nch - 1 ? "," : "\n");
-        }
-    }
-    else {
-        fprintf(fp, "F_LO = %.6g\n", fo[0] * 1e-6);
-        fprintf(fp, "IQ   = %d\n", IQ[0]);
-    }
-    fclose(fp);
-    return 1;
+    sdr_free(buff);
 }
 
 // write tag file --------------------------------------------------------------
-static void write_tag_files(time_t time, int raw, int fmt, double fs,
+static void write_tag_files(gtime_t time, int raw, int fmt, double fs,
     const double *fo, const int *IQ, int nch, char **files)
 {
     for (int i = 0; i < (raw ? 1 : nch); i++) {
         if (!files[i] || !*files[i] || !strcmp(files[i], "-")) continue;
         
         if (raw) {
-            write_tag(files[i], PROG_NAME, time, fmt, fs, fo, IQ);
+            sdr_tag_write(files[i], PROG_NAME, time, fmt, fs, fo, IQ);
         }
         else {
             int fmt_i = IQ[i] == 1 ? SDR_FMT_INT8 : SDR_FMT_INT8X2;
-            write_tag(files[i], PROG_NAME, time, fmt_i, fs, fo + i, IQ + i);
+            sdr_tag_write(files[i], PROG_NAME, time, fmt_i, fs, fo + i, IQ + i);
         }
     }
 }
@@ -289,7 +257,7 @@ int main(int argc, char **argv)
     sdr_dev_t *dev;
     char *files[SDR_MAX_RFCH] = {0}, path[SDR_MAX_RFCH][64];
     const char *conf_file = "";
-    time_t dump_time;
+    gtime_t dump_time;
     double tsec = 0.0, fs, fo[SDR_MAX_RFCH];
     int n = 0, bus = -1, port = -1, raw = 0, quiet = 0;
     int nch, fmt, IQ[SDR_MAX_RFCH], nfile;
@@ -332,13 +300,16 @@ int main(int argc, char **argv)
         return -1;
     }
     nfile = raw ? 1 : nch;
-    dump_time = time(NULL);
+    dump_time = timeget();
     
     if (n == 0) { // set default file paths
         for (int i = 0; i < nfile; i++) {
+            double ep[6] = {0};
             char *p = path[i];
+            time2epoch(dump_time, ep);
             p += sprintf(p, "ch%d_", i + 1);
-            p += strftime(p, 32, "%Y%m%d_%H%M%S.bin", gmtime(&dump_time));
+            p += sprintf(p, "%04.0f%02.0f%02.0f_%02.0f%02.0f%02.0f.bin", ep[0],
+                ep[1], ep[2], ep[3], ep[4], ep[5]);
             files[i] = path[i];
         }
     }
