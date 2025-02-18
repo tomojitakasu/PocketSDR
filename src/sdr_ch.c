@@ -36,6 +36,7 @@
 #define MAX_DOP    5000.0   // max Doppler for acquisition (Hz)
 #define THRES_CN0_L 35.0    // C/N0 threshold (dB-Hz) (lock)
 #define THRES_CN0_U 32.0    // C/N0 threshold (dB-Hz) (lost)
+#define THRES_CN0_L6 33.0   // C/N0 threshold (dB-Hz) (L6D/E lost)
 #define THRES_SYNC 0.02     // threshold for sec-code sync
 #define THRES_LOST 0.002    // threshold for sec-code lost
 #define POS_CORR_N -120.0   // N-correlator position (samples)
@@ -100,15 +101,16 @@ static sdr_trk_t *trk_new(const char *sig, int prn, const int8_t *code,
     int len_code, double T, double fs)
 {
     sdr_trk_t *trk = (sdr_trk_t *)sdr_malloc(sizeof(sdr_trk_t));
-    double sc = T / len_code * fs, sp = sdr_sp_corr * sc; // spacing (sample)
+    double sc = T / sdr_code_len(sig) * fs; // sample / chip
+    double sp = sdr_sp_corr * sc; // correlator spacing (sample)
     int npos = 0;
     trk->pos[npos++] = 0.0;        // P
     trk->pos[npos++] = -0.5 * sp;  // E
     trk->pos[npos++] =  0.5 * sp;  // L
     trk->pos[npos++] = POS_CORR_N; // N
     if (sdr_bump_jump && sdr_sig_boc(sig)) {
-        trk->pos[npos++] = -sc; // VE
-        trk->pos[npos++] =  sc; // VL
+        trk->pos[npos++] = -sc / 2; // VE
+        trk->pos[npos++] =  sc / 2; // VL
     }
     trk->npos = npos;
     for (int j = 0; j < SDR_N_CORRX; j++) {
@@ -242,7 +244,6 @@ static void start_track(sdr_ch_t *ch, double time, double fd, double coff,
     ch->tow_v = 0;
     trk_init(ch->trk);
     sdr_nav_init(ch->nav);
-    sdr_sat_id(ch->sig, ch->prn, ch->sat);
 }
 
 // search signal ---------------------------------------------------------------
@@ -542,12 +543,15 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
     if (ch->lock * ch->T >= T_NPULLIN) {
         sdr_nav_decode(ch);
     }
-    if (ch->cn0 < sdr_thres_cn0_u) { // signal lost 
+    // test signal lost 
+    double t_cn0 = !strncmp(ch->sig, "L6", 2) ? THRES_CN0_L6 : sdr_thres_cn0_u;
+    if (ch->cn0 < t_cn0) {
         ch->state = SDR_STATE_IDLE;
         ch->lock = 0;
         ch->trk->sec_sync = ch->trk->sec_pol = 0;
         ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
         ch->lost++;
+        sdr_sat_id(ch->sig, ch->prn, ch->sat); // for GLONASS FDMA
         sdr_log(3, "$LOG,%.3f,%s,%d,SIGNAL LOST (%.1f)", ch->time, ch->sig,
             ch->prn, ch->cn0);
     }
