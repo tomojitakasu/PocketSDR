@@ -303,7 +303,7 @@ def get_rfch_psd(rcv, ch, tave):
     n = libsdr.sdr_rcv_rfch_psd(rcv, ch, tave, SDR_N_PSD, psd)
     return psd[:n] if n > 0 else psd[:2]
 
-# get RF channel histgram ------------------------------------------------------
+# get RF channel histogram -----------------------------------------------------
 def get_rfch_hist(rcv, ch, tave):
     val = np.zeros(256, dtype='int32')
     hist1 = np.zeros(256, dtype='float64')
@@ -755,13 +755,13 @@ def plot_mark(p, x, y, color):
     yi = [y - 3 / ys, y + 3 / ys, y + 3 / ys, y - 3 / ys]
     plt.plot_poly(p, xi, yi, color=color)
 
-# update histgrams plot --------------------------------------------------------
+# update histograms plot -------------------------------------------------------
 def update_hist_plot(p1, p2, ch, maxq, tave):
     val, hist1, hist2 = get_rfch_hist(rcv_body, ch, tave)
     plot_hist(p1, maxq, val, hist1)
     plot_hist(p2, maxq, val, hist2)
 
-# plot histgram ----------------------------------------------------------------
+# plot histogram ---------------------------------------------------------------
 def plot_hist(p, maxq, val, hist):
     xs, ys = plt.plot_scale(p)
     plt.plot_clear(p)
