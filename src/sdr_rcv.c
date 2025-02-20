@@ -280,6 +280,7 @@ char *sdr_rcv_sat_stat(sdr_rcv_t *rcv, const char *sat)
             eph = timediff(sol->time, eph1->toe) <= 7200.0 ||
                   timediff(sol->time, eph2->toe) <= 7200.0;
             svh = eph1->svh | eph2->svh;
+            if (sys == SYS_QZS) svh &= 0xFE; // mask L6 health
         }
         // sat az el pvt obs eph svh fcn
         sprintf(p, "%s %.1f %.1f %d %d %d %d %d\n", sat, ssat->azel[0] * R2D,
@@ -380,9 +381,9 @@ int sdr_rcv_rfch_hist(sdr_rcv_t *rcv, int ch, double tave, int *val,
 static void out_log_time(double time)
 {
     double t[6] = {0};
-    sdr_get_time(t);
-    sdr_log(3, "$TIME,%.3f,%.0f,%.0f,%.0f,%.0f,%.0f,%.6f,UTC", time, t[0], t[1],
-       t[2], t[3], t[4], t[5]);
+    time2epoch(utc2gpst(timeget()), t);
+    sdr_log(3, "$TIME,%.3f,%.0f,%.0f,%.0f,%.0f,%.0f,%.3f,GPST", time, t[0],
+       t[1], t[2], t[3], t[4], t[5]);
 }
 
 // new SDR receiver channel thread ---------------------------------------------
@@ -812,7 +813,7 @@ int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, const char **paths)
         }
     }
     rcv->state = 1;
-    rcv->start_time = timeget();
+    rcv->start_time = utc2gpst(timeget());
     return !pthread_create(&rcv->thread, NULL, rcv_thread, rcv);
 }
 
