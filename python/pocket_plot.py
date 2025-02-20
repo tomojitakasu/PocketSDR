@@ -19,14 +19,18 @@ import sdr_rtk, sdr_code
 # global settings --------------------------------------------------------------
 CLIGHT = 299792458.0 
 D2R = np.pi / 180
-BG_COLOR = 'white'     # background color
-FG_COLOR = '#555555'   # foreground color
-GR_COLOR = '#DDDDDD'   # grid color
-P1_COLOR = '#003020'   # plot color 1
-P2_COLOR = '#BBBBBB'   # plot color 2
+BG_COLOR = 'white'   # background color
+#FG_COLOR = '#555555' # foreground color
+FG_COLOR = 'g' # foreground color
+GR_COLOR = '#DDDDDD' # grid color
+P1_COLOR = '#0000CC' # plot color 1
+P2_COLOR = '#BBBBBB' # plot color 2
+FONT_SIZE = 9
 mpl.rcParams['toolbar'] = 'None';
-mpl.rcParams['font.size'] = 9
+mpl.rcParams['font.size'] = FONT_SIZE
 mpl.rcParams['axes.edgecolor'] = FG_COLOR
+mpl.rcParams['axes.facecolor'] = BG_COLOR
+mpl.rcParams['axes.labelcolor'] = FG_COLOR
 mpl.rcParams['grid.color'] = GR_COLOR
 mpl.rcParams['xtick.color'] = FG_COLOR
 mpl.rcParams['ytick.color'] = FG_COLOR
@@ -62,10 +66,11 @@ def sig2code(sig):
 
 # string to time ---------------------------------------------------------------
 def str2time(str):
-    return sdr_rtk.epoch2time([float(s) for s in re.split('[/:\-_ ]', str)])
+    ep = [float(s) for s in re.split('[-/:_ ]', str)]
+    return sdr_rtk.epoch2time(ep) if len(ep) >= 3 else sdr_rtk.GTIME()
 
 # time to datetime -------------------------------------------------------------
-def time2dtime(t0, x):
+def time2dtime(t0, x=0.0):
     ep = [int(e) for e in sdr_rtk.time2epoch(sdr_rtk.timeadd(t0, x))]
     return datetime(ep[0], ep[1], ep[2], ep[3], ep[4], ep[5])
 
@@ -75,6 +80,7 @@ def type2unit(type):
 
 # lat/lon/hgt to enu -----------------------------------------------------------
 def llh2enu(llh):
+    if len(llh) <= 0: return np.zeros([3, 0]), np.zeros(3)
     xyz = [sdr_rtk.pos2ecef([p[0] * D2R, p[1] * D2R, p[2]]) for p in llh]
     ref = np.mean(xyz, axis=0)
     pos = sdr_rtk.ecef2pos(ref)
@@ -97,13 +103,6 @@ def rm_off(ys, thres):
     ys_off.extend(ys[i:] - np.mean(ys[i:]))
     return ys_off
 
-# plot breaked lines -----------------------------------------------------------
-def plot_blines(ax, x, y, color, thres):
-    i = 0
-    for j in np.argwhere(np.abs(np.diff(x)) > thres):
-        ax.plot(x[i:j[0]+1], y[i:j[0]+1], '-', lw=0.5, color=color)
-    ax.plot(x[i:], y[i:], '-', lw=0.5, color=color)
-
 # read log $TIME ---------------------------------------------------------------
 def read_log_time(line, t0):
     # $TIME,time,year,month,day,hour,min,sec,timesys
@@ -119,8 +118,7 @@ def read_log_ch(line, t0, tspan, t, sat, sig, type, ts, logs):
     # fsync,rev,week,tow,towv,nnav,nerr,nlol,nfec
     if not t or not type in ('LOCK', 'CN0', 'COFF', 'DOP', 'ADR'): return
     s = line.split(',')
-    if sat != s[4] or sig != s[5]: return
-    if not test_tspan(t, tspan): return
+    if sat != s[4] or sig != s[5] or not test_tspan(t, tspan): return
     if type == 'LOCK':
         logs.append(float(s[7]))
     elif type == 'CN0':
@@ -170,9 +168,7 @@ def read_log_sat(line, t0, tspan, t, sat, type, ts, logs):
     # $SAT,time,sat,pvt,obs,cn0,az,el,res
     if not t or not type in ('AZ', 'EL', 'RES'): return
     s = line.split(',')
-    if sat != s[2]: return
-    t = sdr_rtk.timeadd(t0, float(s[1]))
-    if not test_tspan(t, tspan): return
+    if sat != s[2] or not test_tspan(t, tspan): return
     if type == 'AZ':
         logs.append(float(s[6]))
     elif type == 'EL':
@@ -182,31 +178,29 @@ def read_log_sat(line, t0, tspan, t, sat, type, ts, logs):
         logs.append(float(s[8]))
     ts.append(sdr_rtk.timediff(t, t0))
 
-# read receiver log files -----------------------------------------------------
+# read receiver log -----------------------------------------------------------
 def read_log(tspan, sat, sig, types, files):
-    t0 = None
+    t, t0 = None, None
     ts, logs = [[] for _ in types], [[] for _ in types]
     for file in files:
         try:
-            fp = open(file)
-            print('reading ' + file)
+            with open(file) as fp:
+                print('reading ' + file)
+                for line in fp:
+                    if line.startswith('$TIME'):
+                        t, t0 = read_log_time(line, t0)
+                    if not t0: continue
+                    for i, type in enumerate(types):
+                        if line.startswith('$CH'):
+                            read_log_ch(line, t0, tspan, t, sat, sig, type, ts[i], logs[i])
+                        elif line.startswith('$OBS'):
+                            read_log_obs(line, t0, tspan, sat, sig, type, ts[i], logs[i])
+                        elif line.startswith('$POS'):
+                            read_log_pos(line, t0, tspan, type, ts[i], logs[i])
+                        elif line.startswith('$SAT'):
+                            read_log_sat(line, t0, tspan, t, sat, type, ts[i], logs[i])
         except:
-            continue
-        t = None
-        for line in fp.readlines():
-            if line.startswith('$TIME'):
-                t, t0 = read_log_time(line, t0)
-            if not t or not t0: continue
-            for i, type in enumerate(types):
-                if line.startswith('$CH'):
-                    read_log_ch(line, t0, tspan, t, sat, sig, type, ts[i], logs[i])
-                elif line.startswith('$OBS'):
-                    read_log_obs(line, t0, tspan, sat, sig, type, ts[i], logs[i])
-                elif line.startswith('$POS'):
-                    read_log_pos(line, t0, tspan, type, ts[i], logs[i])
-                elif line.startswith('$SAT'):
-                    read_log_sat(line, t0, tspan, t, sat, type, ts[i], logs[i])
-        fp.close()
+            print('no file ' + file)
     return t0 if t0 else sdr_rtk.epoch2time([2000, 1, 1]), ts, logs
 
 # transform receiver log -------------------------------------------------------
@@ -242,26 +236,40 @@ def set_tspan(tspan, t0, types, xs):
         if xs[i][ 0] < xl[0]: xl[0] = xs[i][ 0]
         if xs[i][-1] > xl[1]: xl[1] = xs[i][-1]
     if xl[0] > xl[1]: xl = [0, 86400]
-    tl = [time2dtime(t0, x) for x in xl]
-    if tspan[0].time: tl[0] = time2dtime(tspan[0], 0.0)
-    if tspan[1].time: tl[1] = time2dtime(tspan[1], 0.0)
-    return tl
+    ts = [sdr_rtk.timeadd(t0, t) for t in xl]
+    if tspan[0].time: ts[0] = tspan[0]
+    if tspan[1].time: ts[1] = tspan[1]
+    return ts
 
 # set plot range ---------------------------------------------------------------
-def set_range(ax, range):
+def set_range(ax, type, range):
     s = range.split('/')
     if len(s) >= 2:
         ax.set_ylim([float(s[0]), float(s[1])])
     elif len(s) >= 1 and s[0] != '':
         ax.set_ylim([-float(s[0]), float(s[0])])
+    elif type == 'CN0':
+        ax.set_ylim([20, 60])
+    elif type == 'LLI':
+        ax.set_ylim([0, 3])
+    elif type == 'AZ':
+        ax.set_ylim([0, 360])
+    elif type == 'EL':
+        ax.set_ylim([0, 90])
+    elif type in ('POS-E', 'POS-N', 'POS-U', 'POS-EN', 'RES'):
+        ax.set_ylim([-10, 10])
+    elif type == 'NSAT':
+        ax.set_ylim([0, 60])
 
-# plot sections as lines -------------------------------------------------------
-def plot_sec(ax, xs, ts, ys, color, thres):
+# plot line sections -----------------------------------------------------------
+def plot_sec(ax, xs, ts, ys, color, lw, thres):
+    dx, dy = np.abs(np.diff(xs)), np.abs(np.diff(ys))
     i = 0
-    for j in np.argwhere(np.abs(np.diff(xs)) > thres):
-        ax.plot(ts[i:j[0]+1], ys[i:j[0]+1], '-', lw=0.5, color=color)
+    #for j in np.argwhere(dx > thres[0] and dy > thres[1]):
+    for j in np.argwhere(dx > thres[0]):
+        ax.plot(ts[i:j[0]+1], ys[i:j[0]+1], '-', lw=lw, color=color)
         i = j[0] + 1
-    ax.plot(ts[i:], ys[i:], '-', lw=0.5, color=color)
+    ax.plot(ts[i:], ys[i:], '-', lw=lw, color=color)
 
 # add statistics ---------------------------------------------------------------
 def add_stats(ax, x, y, type, ys):
@@ -270,19 +278,30 @@ def add_stats(ax, x, y, type, ys):
             np.std(ys), type2unit(type)) 
         ax.text(x, y, text, ha='right', va='top', transform=ax.transAxes)
 
+# add title --------------------------------------------------------------------
+def add_title(fig, rect, sat, sig, tspan):
+    ax = fig.add_axes(rect)
+    ax.axis('off')
+    ti = 'RECEIVER LOG (%s-%s' % (sdr_rtk.time2str(tspan[0], 0),
+        sdr_rtk.time2str(tspan[1], 0))
+    ti += ', SAT=%s' % (sat) if sat != '' else ''
+    ti += ', SIG=%s' % (sig) if sig != '' else ''
+    ti += ')'
+    ax.set_title(ti, fontsize=FONT_SIZE)
+    
 # plot log ---------------------------------------------------------------------
 def plot_log(fig, rect, opts, tspan, t0, types, xs, ys, refs, range, color):
-    n = len(types)
-    box = [rect[0], 0, rect[2], (rect[3] - 0.02 * (n - 1)) / n]
+    n, margin = len(types), 0.02
+    box = [rect[0], 0, rect[2], (rect[3] - margin * (n - 1)) / n]
     
     # set time span
-    tl = set_tspan(tspan, t0, types, xs)
+    tspan = set_tspan(tspan, t0, types, xs)
     
     for i, type in enumerate(types):
-        box[1] = rect[1] + (box[3] + 0.02) * (n - 1 - i)
+        box[1] = rect[1] + (box[3] + margin) * (n - 1 - i)
         ax = fig.add_axes(box)
         ax.grid(True, lw=0.5)
-        set_range(ax, range[i] if i < len(range) else '')
+        set_range(ax, type, range[i] if i < len(range) else '')
         mc = color[i] if i < len(color) else P1_COLOR
         lc = P2_COLOR if opts[0] & 2 else mc
         if type == 'POS-EN':
@@ -291,9 +310,9 @@ def plot_log(fig, rect, opts, tspan, t0, types, xs, ys, refs, range, color):
             ax.set_aspect('equal', adjustable='datalim')
         else:
             ts = [time2dtime(t0, t) for t in xs[i]]
-            if opts[0] & 1: plot_sec(ax, xs[i], ts, ys[i], lc, 10.0)
+            if opts[0] & 1: plot_sec(ax, xs[i], ts, ys[i], lc, 0.5, [10, 0])
             if opts[0] & 2: ax.plot(ts, ys[i], '.', color=mc, ms=opts[1])
-            ax.set_xlim(tl)
+            ax.set_xlim([time2dtime(t) for t in tspan])
             ax.xaxis.set_major_formatter(mpl.dates.DateFormatter('%H:%M'))
         x, y = 0.015, 1.0 - 0.025 * len(types)
         ax.text(x, y, refs[i], ha='left', va='top', transform=ax.transAxes)
@@ -302,29 +321,28 @@ def plot_log(fig, rect, opts, tspan, t0, types, xs, ys, refs, range, color):
         if i < len(types) - 1:
             ax.xaxis.set_ticklabels([])
         ax.set_ylabel(type + ' (' + type2unit(type) + ')')
-    
+    return tspan
+
 #-------------------------------------------------------------------------------
 #
 #   Synopsis
 # 
-#     pocket_plot.py [-sat sat] [-sig sig] [-type type[,type...]]
+#     pocket_plot.py [-type type[,type...]] [-sat sat] [-sig sig]
 #         [-tspan [ts],[te]] [-range rng[,rng]] [-style {1|2|3}] [-mark size]
 #         [-stats] file ...
 # 
 #   Description
 # 
 #     Plot GNSS receiver log written by pocket_trk or pocket_sdr.py.
-# 
+#
+#     Example:
+#     pocket_plot.py -type CN0,EL -sat G01 -sig L1CA -tspan 2025/1/1,2025/1/2 \
+#         -range 0/60 -style 2 -mark 3 test_20250101*.log 
+#
 #   Options ([]: default)
 #  
-#     -sat sat
-#         GNSS Satellite ID (G01, R01, ...) to be plotted.
-# 
-#     -sig sig
-#         GNSS signal type ID (L1CA, L2CM, ...) to be plotted.
-# 
 #     -type type[,type...]
-#         Log type(s) to be plotted as follows.
+#         Plot type(s) of receiver log as follows.
 #           LOCK  : signal lock time
 #           CN0   : signal C/N0
 #           COFF  : code offset
@@ -334,12 +352,24 @@ def plot_log(fig, rect, opts, tspan, t0, types, xs, ys, refs, range, color):
 #           CP    : carrier-phase
 #           PR-CP : psudorange - carrier-phase
 #           LLI   : loss-of-lock indicator
-#           POS   : positioning solution
-#           POSH  : positioning solution horizontal plot
-#           NSAT  : number of used satellites for solution
+#           AZ    : satellite azimuth angle
+#           EL    : satellite elevation angle
+#           RES   : residuals for position solution
+#           POS   : position solution
+#           POSH  : position solution (horizontal plot)
+#           NSAT  : number of used satellites for position
 #
+#     -sat sat
+#         GNSS Satellite ID (G01, R01, ...) to be plotted. It is for plot types:
+#         LOCK, CN0, COFF, DOP, ADR, PR, CP, PR-CP, LLI, AZ, EL, RES.
+# 
+#     -sig sig
+#         GNSS signal type ID (L1CA, L2CM, ...) to be plotted. It is for plot
+#         types: LOCK, CN0, COFF, DOP, ADR, PR, CP, PR-CP, LLI
+# 
 #     -tspan [ts],[te]
-#         Set start and end time as format "y/m/d_h:m:s" (GPST). [all]
+#         Set plot start time ts and end time te (GPST). The format for ts or te
+#         should be "y/m/d_h:m:s", where "_h:m:s" can be omitted. [auto]
 #
 #     -range rng[,rng...]
 #         Set y-axis ranges as format "ymax" for range [-ymax...ymax] or
@@ -351,19 +381,18 @@ def plot_log(fig, rect, opts, tspan, t0, types, xs, ys, refs, range, color):
 #         Set plot style (1:line,2:mark,3:line+mark). [3]
 #
 #     -color color[,color...]
-#         Set mark color(s).
+#         Set mark color(s). [blue]
 #
 #     -mark size
-#         Set mark size in pixels.
+#         Set mark size in pixels. [1.5]
 #
 #     -stats
-#         Show statistics in plots.
+#         Show statistics in plots. [no]
 #
 #     file ...
-#         GNSS receiver log written by pocket_trk or pocket_sdr.py.
+#         GNSS receiver log file(s) written by pocket_trk or pocket_sdr.py.
 #
 if __name__ == '__main__':
-    ti = 'Pocket SDR - GNSS RECEIVER LOG'
     sat, sig, types = '', '', []
     tspan = [sdr_rtk.GTIME(), sdr_rtk.GTIME()]
     range, color = [], []
@@ -386,8 +415,8 @@ if __name__ == '__main__':
         elif sys.argv[i] == '-tspan':
             i += 1
             ts = sys.argv[i].split(',')
-            if ts[0] != '': tspan[0] = str2time(ts[0])
-            if ts[1] != '': tspan[1] = str2time(ts[1])
+            if len(ts) >= 1: tspan[0] = str2time(ts[0])
+            if len(ts) >= 2: tspan[1] = str2time(ts[1])
         elif sys.argv[i] == '-range':
             i += 1
             range = sys.argv[i].split(',')
@@ -419,18 +448,15 @@ if __name__ == '__main__':
     types, xs, ys, refs = trans_log(types, ts, logs)
     
     # generate window
+    ti = 'Pocket SDR - RECEIVER LOG'
     ti += ': %s' % (files[0]) + (' ...' if len(files) > 1 else '')
-    fig = plt.figure(ti, figsize=size)
-    
-    # set title
-    ax0 = fig.add_axes(rect)
-    ax0.axis('off')
-    ti = 'RECEIVER LOG'
-    ti += ' SAT=%s' % (sat) if sat != '' else ''
-    ti += ' SIG=%s' % (sig) if sig != '' else ''
-    ax0.set_title(ti, fontsize=9, fontweight='bold')
+    fig = plt.figure(ti, figsize=size, facecolor=BG_COLOR)
     
     # plot log
-    plot_log(fig, rect, opts, tspan, t0, types, xs, ys, refs, range, color)
+    tspan = plot_log(fig, rect, opts, tspan, t0, types, xs, ys, refs, range,
+        color)
+    
+    # add title
+    add_title(fig, rect, sat, sig, tspan)
     
     plt.show()
