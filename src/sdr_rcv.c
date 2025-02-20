@@ -348,7 +348,7 @@ int sdr_rcv_rfch_psd(sdr_rcv_t *rcv, int ch, double tave, int N, float *psd)
     return rcv->buff[ch-1]->IQ == 1 ? N / 2 : N; // PSD size
 }
 
-// get RF channel histgram -----------------------------------------------------
+// get RF channel histogram ----------------------------------------------------
 int sdr_rcv_rfch_hist(sdr_rcv_t *rcv, int ch, double tave, int *val,
     double *hist1, double *hist2)
 {
