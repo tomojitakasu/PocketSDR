@@ -137,7 +137,7 @@ static void dot_IQ_code(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
 }
 
 static void sdr_corr_std_ref(const sdr_buff_t *buff, int ix, int N, double fs,
-    double fc, double phi, const sdr_cpx16_t *code, const int *pos, int n,
+    double fc, double phi, const sdr_cpx16_t *code, const double *pos, int n,
     sdr_cpx_t *C)
 {
     sdr_cpx16_t IQ[N];
@@ -146,10 +146,10 @@ static void sdr_corr_std_ref(const sdr_buff_t *buff, int ix, int N, double fs,
     
     for (int i = 0; i < n; i++) {
         if (pos[i] > 0) {
-            dot_IQ_code(IQ + pos[i], code, N - pos[i], C + i);
+            dot_IQ_code(IQ + (int)pos[i], code, N - (int)pos[i], C + i);
         }
         else if (pos[i] < 0) {
-            dot_IQ_code(IQ, code - pos[i], N + pos[i], C + i);
+            dot_IQ_code(IQ, code - (int)pos[i], N + (int)pos[i], C + i);
         }
         else {
             dot_IQ_code(IQ, code, N, C + i);
@@ -165,7 +165,7 @@ static void test_03(void)
     double fs[] = {12e6, 16e6, 24e6, 12.345e6, 6.7e6, 0};
     double fc[] = {1000.0, 3456.78, -4999.9, -0.123, 0.0356, 0};
     double phi[] = {0.0, 0.234, -0.567, 123456.0, -78901.345, 0};
-    int pos[] = {0, -3, 3, -80};
+    double pos[] = {0, -3, 3, -80};
     
     for (int i = 0; N[i]; i++) {
         int len_code;
@@ -208,7 +208,7 @@ static void test_05(void)
 {
     int n = 10000;
     double fs = 12e6, fc = 13500.0, coff = 1.345, phi = 3.456;
-    int pos[] = {0, -3, 3, -80};
+    double pos[] = {0, -3, 3, -80};
     int N[] = {12000, 16000, 24000, 32000, 32768, 48000, 65536, 96000, 0};
     
     printf("test_05: performance\n");
