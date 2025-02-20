@@ -300,7 +300,7 @@ int main(int argc, char **argv)
         return -1;
     }
     nfile = raw ? 1 : nch;
-    dump_time = timeget();
+    dump_time = utc2gpst(timeget());
     
     if (n == 0) { // set default file paths
         for (int i = 0; i < nfile; i++) {
