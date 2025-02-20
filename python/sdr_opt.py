@@ -156,9 +156,11 @@ def inp_opt_new(opt_p=None):
         '1246.000', '1207.140', '1268.520']
     opt = Obj()
     opt.inps = ('RF Frontend', 'IF Data')
+    opt.types = ('Pocket SDR FE',)
     opt.fmts = ('INT8', 'INT8X2', 'RAW8', 'RAW16', 'RAW32')
     opt.IQs = ('IQ', 'I')
     opt.inp = IntVar()
+    opt.type = StringVar()
     opt.dev = StringVar()
     opt.conf_ena = IntVar()
     opt.conf_path = StringVar()
@@ -171,6 +173,7 @@ def inp_opt_new(opt_p=None):
     opt.tscale = StringVar()
     if opt_p != None:
         opt.inp.set(opt_p.inp.get())
+        opt.type.set(opt_p.type.get())
         opt.dev.set(opt_p.dev.get())
         opt.conf_ena.set(opt_p.conf_ena.get())
         opt.conf_path.set(opt_p.conf_path.get())
@@ -183,6 +186,7 @@ def inp_opt_new(opt_p=None):
         opt.toff.set(opt_p.toff.get())
         opt.tscale.set(opt_p.tscale.get())
     else:
+        opt.type.set(opt.types[0])
         opt.fmt.set(opt.fmts[0])
         opt.fs.set('24.000')
         for i in range(len(opt.fo)):
@@ -205,6 +209,9 @@ def out_opt_new(opt_p=None):
             opt.path[i].set(opt_p.path[i].get())
         for i in range(len(opt.log_sel)):
             opt.log_sel[i].set(opt_p.log_sel[i].get())
+    else:
+        for i in range(len(opt.log_sel)):
+            opt.log_sel[i].set(1)
     return opt
 
 # generate signal option variables ---------------------------------------------
@@ -400,11 +407,12 @@ def inp_opt_enable_update(sel, p1, p2, p3, p4):
 def rf_opt_panel_new(parent, opt):
     panel = Frame(parent, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     ttk.Label(panel, text=opt.inps[0], justify=LEFT).pack(fill=X, padx=2, pady=2)
+    sel_panel_new(panel, 'Device Type', sels=opt.types, var=opt.type, width=19)
     panel1 = Frame(panel, bg=BG_COLOR)
     panel1.pack(fill=X)
     ttk.Label(panel1, text='Device Selection (Blank: Any)'). pack(side=LEFT,
         padx=(10, 4), pady=2)
-    inp_panel_new(panel1, 'USB Bus/Port', opt.dev).pack(side=RIGHT, padx=4)
+    inp_panel_new(panel1, 'USB Bus/Port', opt.dev).pack(side=RIGHT, padx=(4, 2))
     path_panel_new(panel, 'Device Configuration File', var_path=opt.conf_path,
         var_ena=opt.conf_ena, types=[('Config File', '*.conf'), ('All', '*.*')])
     panel.pack(fill=X, pady=2)
