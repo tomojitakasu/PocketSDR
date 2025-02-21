@@ -90,7 +90,7 @@ static void enable_console_esc(void)
 // initialize GNSS SDR functions -----------------------------------------------
 void sdr_func_init(const char *file)
 {
-    // initilize log stream
+    // initialize log stream
     strinitcom();
     
     // import FFTW wisdom 
@@ -232,7 +232,7 @@ void sdr_buff_free(sdr_buff_t *buff)
 
 //------------------------------------------------------------------------------
 //  Read digitalized IF (inter-frequency) data from file. Supported file format
-//  is signed byte (int8) for I-sampling (real-sampling) or interleaved singned
+//  is signed byte (int8) for I-sampling (real-sampling) or interleaved signed
 //  byte for IQ-sampling (complex-sampling).
 //
 //  args:
@@ -314,7 +314,7 @@ sdr_buff_t *sdr_read_data(const char *file, double fs, int IQ, double T,
 //  args:
 //      file     (I)  IF data file path
 //      prog     (I)  Program name
-//      time     (I)  IF data file recoding start time
+//      time     (I)  IF data file recording start time
 //      fmt      (I)  IF data file format (SDR_FMT_???)
 //      fs       (I)  Sampling frequency (Hz)
 //      fo       (I)  LO frequencies (Hz)
@@ -362,7 +362,7 @@ int sdr_tag_write(const char *file, const char *prog, gtime_t time, int fmt,
 //  args:
 //      file     (I)  IF data file path
 //      prog     (O)  Program name
-//      time     (O)  IF data file recoding start time 
+//      time     (O)  IF data file recording start time 
 //      fmt      (O)  IF data file format (SDR_FMT_???)
 //      fs       (O)  Sampling frequency (Hz)
 //      fo       (O)  LO frequencies (Hz)
