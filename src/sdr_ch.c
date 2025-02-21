@@ -24,11 +24,11 @@
 
 // constants and macros --------------------------------------------------------
 #define SP_CORR    0.25     // correlator spacing (chip)
-#define T_ACQ      0.010    // non-coherent integration time for acquis. (s)
+#define T_ACQ      0.010    // non-coherent integration time for acquisition (s)
 #define T_DLL      0.010    // non-coherent integration time for DLL (s)
 #define T_CN0      1.0      // averaging time for C/N0 (s)
-#define T_FPULLIN  1.0      // frequency pullin time (s)
-#define T_NPULLIN  1.5      // navigation data pullin time (s)
+#define T_FPULLIN  1.0      // frequency pull-in time (s)
+#define T_NPULLIN  1.5      // navigation data pull-in time (s)
 #define B_DLL      0.25     // band-width of DLL filter (Hz)
 #define B_PLL      5.0      // band-width of PLL filter (Hz)
 #define B_FLL_W    5.0      // band-width of FLL filter (Hz) (wide)
