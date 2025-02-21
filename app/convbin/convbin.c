@@ -47,7 +47,13 @@
 *                           update help text
 *                           add patch level of program name in RINEX header
 *
-*           2024/11/26 1.22 Pocket SDR branch for RTCM3 conversion
+*           2025/02/21 1.22 Pocket SDR branch for RTCM3 conversion
+*                           - default RINEX version -> 3.05
+*                           - add options -xd and -xs
+*                           - delete options -od and -os
+*                           - support RTCM3 MSM signal ID extenstions
+*                           - disable sbas log output as default
+*                           - disable globbing of file path for Windows
 *-----------------------------------------------------------------------------*/
 #include <stdio.h>
 #include <stdlib.h>
@@ -59,6 +65,10 @@
 #define PRGNAME   "CONVBIN"
 #define TRACEFILE "convbin.trace"
 #define NOUTFILE        9       /* number of output files */
+
+#ifdef WIN32
+int _CRT_glob = 0; /* disable globbing */
+#endif
 
 /* help text -----------------------------------------------------------------*/
 static const char *help[]={
@@ -139,9 +149,9 @@ static const char *help[]={
 "     -ha ant      RINEX header: antenna number and type separated by /",
 "     -hp pos      RINEX header: approx position x/y/z separated by /",
 "     -hd delta    RINEX header: antenna delta h/e/n separated by /",
-"     -v ver       RINEX version [3.04]",
-"     -od          Include Doppler frequency in RINEX OBS file [off]",
-"     -os          Include SNR in RINEX OBS file [off]",
+"     -v ver       RINEX version [3.05]",
+"     -xd          Exclude Doppler frequency in RINEX OBS file [off]",
+"     -xs          Exclude SNR in RINEX OBS file [off]",
 "     -oi          Include iono correction in RINEX NAV header [off]",
 "     -ot          Include time correction in RINEX NAV header [off]",
 "     -ol          Include leap seconds in RINEX NAV header [off]",
@@ -306,6 +316,7 @@ static int convbin(int format, rnxopt_t *opt, const char *ifile, char **file,
     if (file[8]) { /* SBAS message */
         strcpy_n(ofile[8],file[8],1023);
     }
+#if 0
     else if (*opt->staid) {
         strcpy(ofile[8],"%r%n0_%y.sbs");
     }
@@ -314,6 +325,7 @@ static int convbin(int format, rnxopt_t *opt, const char *ifile, char **file,
         if ((p=strrchr(ofile[8],'.'))) strcpy(p,".sbs");
         else strcat(ofile[8],".sbs");
     }
+#endif
     for (i=0;i<NOUTFILE;i++) {
         if (!*dir||!*ofile[i]) continue;
         if ((p=strrchr(ofile[i],FILEPATHSEP))) strcpy_n(work,p+1,255);
@@ -410,8 +422,8 @@ static int cmdopts(int argc, char **argv, rnxopt_t *opt, char **ifile,
     int i,j,k,sat,nf=5,nc=2,format=-1;
     char *p,*fmt="",*paths[1],path[1024],buff[256];
     
-    opt->rnxver=304;
-    opt->obstype=OBSTYPE_PR|OBSTYPE_CP;
+    opt->rnxver=305;
+    opt->obstype=OBSTYPE_PR|OBSTYPE_CP|OBSTYPE_DOP|OBSTYPE_SNR;
     opt->navsys=SYS_GPS|SYS_GLO|SYS_GAL|SYS_QZS|SYS_SBS|SYS_CMP|SYS_IRN;
     
     for (i=0;i<6;i++) for (j=0;j<MAXCODE;j++) {
@@ -496,11 +508,11 @@ static int cmdopts(int argc, char **argv, rnxopt_t *opt, char **ifile,
         else if (!strcmp(argv[i],"-v" )&&i+1<argc) {
             opt->rnxver=(int)(atof(argv[++i])*100.0);
         }
-        else if (!strcmp(argv[i],"-od")) {
-            opt->obstype|=OBSTYPE_DOP;
+        else if (!strcmp(argv[i],"-xd")) {
+            opt->obstype&=~OBSTYPE_DOP;
         }
-        else if (!strcmp(argv[i],"-os")) {
-            opt->obstype|=OBSTYPE_SNR;
+        else if (!strcmp(argv[i],"-xs")) {
+            opt->obstype&=~OBSTYPE_SNR;
         }
         else if (!strcmp(argv[i],"-oi")) {
             opt->outiono=1;
