@@ -2491,8 +2491,16 @@ static void sat_id_qzss(const char *sig, int prn, char *sat)
     static int sat_L5S[] = {2, 3, 4, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 8, 9};
     
-    if (!strcmp(sig, "L1CB") && prn >= 203 && prn <= 206 && sat_L1B[prn-203]) {
-        sprintf(sat, "J%02d", sat_L1B[prn-203]);
+    if (!strcmp(sig, "L1CB")) {
+        if (prn >= 203 && prn <= 206) {
+            sprintf(sat, "J%02d", sat_L1B[prn-203]);
+        }
+        else if (prn == 198 || prn == 202) {
+            sprintf(sat, "J%02d", prn - 192);
+        }
+        else {
+            sprintf(sat, "???");
+        }
     }
     else if ((!strcmp(sig, "L1CA") || !strcmp(sig, "L1CD") ||
         !strcmp(sig, "L1CP") || !strcmp(sig, "L2CM") || !strcmp(sig, "L5I") ||
