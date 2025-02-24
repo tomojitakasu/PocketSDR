@@ -1007,8 +1007,13 @@ def sat_id_qzss(sig, prn):
     sat_L1B = (4, 5, 8, 9)
     sat_L5S = (2, 3, 4, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 9)
     
-    if sig == 'L1CB' and prn >= 203 and prn <= 206 and sat_L1B[prn-203]:
-        sat = 'J%02d' % (sat_L1B[prn-203])
+    if sig == 'L1CB':
+        if prn >= 203 and prn <= 206:
+            sat = 'J%02d' % (sat_L1B[prn-203])
+        elif prn in (198, 202):
+            sat = 'J%02d' % (prn - 192)
+        else:
+            sat = '???'
     elif (sig == 'L1CA' or sig == 'L1CD' or sig == 'L1CP' or sig == 'L2CM'
         or sig == 'L5I' or sig == 'L5Q' or sig == 'L6D') and \
         prn >= 193 and prn <= 202:
