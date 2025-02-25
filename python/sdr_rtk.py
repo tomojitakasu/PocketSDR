@@ -172,6 +172,12 @@ def code2obs(code):
     librtk.code2obs.restype = c_char_p
     return librtk.code2obs(c_uint8(code)).decode()
 
+# system and obs code to frequency ---------------------------------------------
+def code2freq(sys, code, fcn=0):
+    librtk.code2freq.argtypes = [c_int32, c_uint8, c_int32]
+    librtk.code2freq.restype = c_double
+    return librtk.code2freq(sys, code, fcn)
+
 # epoch to time ----------------------------------------------------------------
 def epoch2time(ep):
     epoch = np.zeros(6)
