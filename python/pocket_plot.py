@@ -14,14 +14,13 @@ import numpy as np
 from datetime import datetime
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import sdr_rtk, sdr_code
+import sdr_func, sdr_rtk, sdr_code
 
 # global settings --------------------------------------------------------------
 CLIGHT = 299792458.0 
 D2R = np.pi / 180
 BG_COLOR = 'white'   # background color
-#FG_COLOR = '#555555' # foreground color
-FG_COLOR = 'g' # foreground color
+FG_COLOR = '#555555' # foreground color
 GR_COLOR = '#DDDDDD' # grid color
 P1_COLOR = '#0000CC' # plot color 1
 P2_COLOR = '#BBBBBB' # plot color 2
@@ -96,11 +95,12 @@ def test_tspan(t, tspan):
 def rm_off(ys, thres):
     # detect large gap and separate sections
     ys_off = []
-    i = 0
-    for j in np.argwhere(np.abs(np.diff(ys)) > thres):
-        ys_off.extend(ys[i:j[0]+1] - np.mean(ys[i:j[0]+1]))
-        i = j[0] + 1
-    ys_off.extend(ys[i:] - np.mean(ys[i:]))
+    if len(ys) > 0:
+        i = 0
+        for j in np.argwhere(np.abs(np.diff(ys)) > thres):
+            ys_off.extend(ys[i:j[0]+1] - np.mean(ys[i:j[0]+1]))
+            i = j[0] + 1
+        ys_off.extend(ys[i:] - np.mean(ys[i:]))
     return ys_off
 
 # read log $TIME ---------------------------------------------------------------
@@ -133,7 +133,7 @@ def read_log_ch(line, t0, tspan, t, sat, sig, type, ts, logs):
 
 # read log $OBS ---------------------------------------------------------------
 def read_log_obs(line, t0, tspan, sat, sig, type, ts, logs):
-    # $OBS,time,year,month,day,hour,min,sec,sat,code,cn0,pr,cp,dop,lli
+    # $OBS,time,year,month,day,hour,min,sec,sat,code,cn0,pr,cp,dop,lli,fcn
     if not type in ('PR', 'CP', 'PR-CP', 'LLI'): return
     s = line.split(',')
     if sat != s[8] or sig2code(sig) != s[9]: return
@@ -144,7 +144,8 @@ def read_log_obs(line, t0, tspan, sat, sig, type, ts, logs):
     elif type == 'CP':
         logs.append(float(s[12]))
     elif type == 'PR-CP':
-        lam = CLIGHT / sdr_code.sig_freq(sig)
+        freq = sdr_code.sig_freq(sig)
+        lam = CLIGHT / sdr_func.shift_freq(sig, float(s[15]), freq)
         logs.append(float(s[11]) - lam * float(s[12]))
     elif type == 'LLI':
         logs.append(float(s[14]))
@@ -199,7 +200,7 @@ def read_log(tspan, sat, sig, types, files):
                             read_log_pos(line, t0, tspan, type, ts[i], logs[i])
                         elif line.startswith('$SAT'):
                             read_log_sat(line, t0, tspan, t, sat, type, ts[i], logs[i])
-        except:
+        except :
             print('no file ' + file)
     return t0 if t0 else sdr_rtk.epoch2time([2000, 1, 1]), ts, logs
 
