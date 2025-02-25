@@ -177,7 +177,7 @@ sdr_ch_t *sdr_ch_new(const char *sig, int prn, double fs, double fi)
         sdr_free(ch);
         return NULL;
     }
-    ch->fc = sdr_sig_freq(sig);
+    ch->fc = sdr_shift_freq(sig, prn, sdr_sig_freq(sig));
     ch->fs = fs;
     ch->fi = sdr_shift_freq(sig, prn, fi);
     ch->T = sdr_code_cyc(sig);
