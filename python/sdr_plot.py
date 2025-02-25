@@ -102,7 +102,7 @@ def plot_circle(plt, x, y, r, color=FG_COLOR, fill=None):
 
 # plot polyline ----------------------------------------------------------------
 def plot_poly(plt, x, y, color=FG_COLOR):
-    if color == None: return
+    if color == None or len(x) <= 1: return
     xp, yp = plot_pos(plt, x, y)
     xp_yp = [(xp[i], yp[i]) for i in range(len(xp))]
     plt.c.create_line(xp_yp, fill=color)
@@ -161,11 +161,11 @@ def plot_grid(plt, color=GR_COLOR):
 def plot_tick_labels(plt, color=FG_COLOR):
     if color == None: return
     xs, ys = plot_scale(plt)
-    if plt.tick & 1:
+    if (plt.tick) & 1 and not (plt.tick & 4):
         for x in get_ticks(plt.xl, xs):
             plot_text(plt, x, plt.yl[0] - 3 / ys, text='%.9g' % (x),
                 color=color, anchor=N)
-    if plt.tick & 2:
+    if (plt.tick) & 2 and not (plt.tick & 8):
         for y in get_ticks(plt.yl, ys):
             plot_text(plt, plt.xl[0] - 3 / xs, y, text='%.9g' % (y),
                 color=color, anchor=E)
