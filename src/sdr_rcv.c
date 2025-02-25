@@ -23,7 +23,7 @@
 // constants and macros ---------------------------------------------------------
 #define MAX_BUFF   8000         // max number of IF data buffer (* SDR_CYC)
 #define LOG_CYC    1000         // receiver channel log cycle (* SDR_CYC)
-#define TH_CYC     10           // receiver channel thread cycle (ms)
+#define TH_CYC     50           // receiver channel thread cycle (ms)
 #define TO_REACQ   60.0         // re-acquisition timeout (s)
 #define MIN_LOCK   2.0          // min lock time for re-acquisition (s)
 #define NUM_COL    106          // number of channel status columns
@@ -172,12 +172,13 @@ static int sat_select(const char *sat, const char *sys)
 //      sys       (I)  system
 //      all       (I)  all channel including IDLE channel
 //      minlock   (I)  min lock time (s)
+//      rfch      (I)  RF CH (0:all)
 //
 //  returns:
 //      channel status string
 //
 char *sdr_rcv_ch_stat(sdr_rcv_t *rcv, const char *sys, int all,
-    double min_lock)
+    double min_lock, int rfch)
 {
     char *p = rcv_ch_stat_buff;
     
@@ -186,7 +187,7 @@ char *sdr_rcv_ch_stat(sdr_rcv_t *rcv, const char *sys, int all,
         sdr_ch_t *ch = rcv->th[i]->ch;
         if (!sat_select(ch->sat, sys)) continue;
         if (all || (ch->state == SDR_STATE_LOCK &&
-            ch->lock * ch->T >= min_lock)) {
+            ch->lock * ch->T >= min_lock && (!rfch || rfch == ch->rf_ch + 1))) {
             p += print_ch_stat(p, ch);
         }
     }
@@ -229,9 +230,9 @@ char *sdr_rcv_rcv_stat(sdr_rcv_t *rcv)
         }
         p += sprintf(p, "%.2f,%d/%d,%.1f,%.1f,", rcv->fs * 1e-6, nch_trk, rcv->nch,
             rcv->data_rate * 1e-6, rcv->buff_use);
-        p += sprintf(p, "%.19s,%.3s,%.11s,%.12s,%.8s,%.3f,%.5s,,%d,%d/%d,%.1f,",
-            solstr, solstr + 64, solstr + 24, solstr + 36, solstr + 49,
-            rcv->pvt->latency, solstr + 58, rcv->pvt->count[0], rcv->pvt->count[1],
+        p += sprintf(p, "%.19s,%.3s,%.12s,%.13s,%.9s,%.3f,%.5s,,%d,%d/%d,%.1f,",
+            solstr, solstr + 65, solstr + 22, solstr + 35, solstr + 49,
+            rcv->pvt->latency, solstr + 59, rcv->pvt->count[0], rcv->pvt->count[1],
             rcv->pvt->count[2], rcv->data_sum);
        }
     else {
@@ -243,8 +244,8 @@ char *sdr_rcv_rcv_stat(sdr_rcv_t *rcv)
             p += sprintf(p, "--%s", i == 7 ? "," : "/");
         }
         p += sprintf(p, "%.2f,%d/%d,%.1f,%.1f,", 0.0, 0, 0, 0.0, 0.0);
-        p += sprintf(p, "1970-01-01 00:00:00,---,%.7f,%.7f,%.2f,%.3f,%d/%d,,%d,"
-            "%d/%d,%.1f,", 0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0.0);
+        p += sprintf(p, "1970-01-01 00:00:00,---,%.8f,%.8f,%.3f,%.3f,%d/%2d,,%d,"
+            "%2d/%2d,%.1f,", 0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0.0);
     }
     return rcv_rcv_stat_buff;
 }
@@ -375,6 +376,14 @@ int sdr_rcv_rfch_hist(sdr_rcv_t *rcv, int ch, double tave, int *val,
         val[nval++] = i - 128;
     }
     return nval;
+}
+
+// get PVT solution ------------------------------------------------------------
+int sdr_rcv_pvt_sol(sdr_rcv_t *rcv, char *buff)
+{
+    if (!rcv || !rcv->state) return 0;
+    sdr_pvt_solstr(rcv->pvt, buff);
+    return 1;
 }
 
 // output log $TIME ------------------------------------------------------------
