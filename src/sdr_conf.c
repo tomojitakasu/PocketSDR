@@ -315,7 +315,7 @@ static void write_MAX2771_stat(FILE *fp, double fx, int ch, uint32_t *reg)
     f_adc *= ADCCLK      ? 1.0 : ratio[REFDIV];
     f_adc *= !FCLKIN     ? 1.0 : ADCCLK_L / (4096.0 - ADCCLK_M + ADCCLK_L);
     double f_cen = FCENX ? (128 - FCEN) / 2.0 * f_step[FBW] : 0.0;
-    fprintf(fp, "#  [CH%d] F_LO =%9.3f MHz, F_ADC =%7.3f MHz (%-2s), "
+    fprintf(fp, "#  [CH%d] F_LO =%13.6f MHz, F_ADC =%10.6f MHz (%-2s), "
         "F_FILT =%5.1f MHz, BW_FILT =%5.1f MHz\n", ch + 1, f_lo, f_adc,
         ENIQ ? "IQ" : "I", f_cen, f_bw[FBW]);
 }
