@@ -125,7 +125,7 @@ static void out_log_ch(sdr_ch_t *ch)
 //  Output log $OBS (observation data).
 //
 //  format:
-//      $OBS,time,year,month,day,hour,min,sec,sat,code,cn0,pr,cp,dop,lli
+//      $OBS,time,year,month,day,hour,min,sec,sat,code,cn0,pr,cp,dop,lli,fcn
 //          time  receiver time (s)
 //          year,month,day  obs data day (GPST)
 //          hour,min,sec  obs data time (GPST)
@@ -136,8 +136,9 @@ static void out_log_ch(sdr_ch_t *ch)
 //          cp    carrier phase (cyc)
 //          dop   Doppler frequency (Hz)
 //          lli   loss of lock indicator
+//          fcn   frequency channel number for GLONASS FDMA signals
 //
-static void out_log_obs(double time, const obs_t *obs)
+static void out_log_obs(double time, const obs_t *obs, const nav_t *nav)
 {
     for (int i = 0; i < obs->n; i++) {
         const obsd_t *data = obs->data + i;
@@ -146,12 +147,16 @@ static void out_log_obs(double time, const obs_t *obs)
         time2epoch(data->time, ep);
         satno2id(data->sat, sat);
         if (sat[0] == '1') sat[0] = 'S';
+        int fcn = 0, prn;
+        if (satsys(data->sat, &prn) == SYS_GLO) {
+            fcn = nav->geph[prn-1].frq;
+        }
         for (int j = 0; j < NFREQ + NEXOBS; j++) {
             if (!data->code[j]) continue;
             sdr_log(3, "$OBS,%.3f,%.0f,%.0f,%.0f,%.0f,%.0f,%.3f,%s,%s,%.1f,"
-                "%.3f,%.3f,%.3f,%d", time, ep[0], ep[1], ep[2], ep[3], ep[4],
+                "%.3f,%.3f,%.3f,%d,%d", time, ep[0], ep[1], ep[2], ep[3], ep[4],
                 ep[5], sat, code2obs(data->code[j]), data->SNR[j] * SNR_UNIT,
-                data->P[j], data->L[j], data->D[j], data->LLI[j]);
+                data->P[j], data->L[j], data->D[j], data->LLI[j], fcn);
         }
     }
 }
@@ -470,9 +475,8 @@ static double gen_prng(gtime_t time, const sdr_ch_t *ch)
 }
 
 // generate carrier-phase ------------------------------------------------------
-static double gen_cphas(const sdr_ch_t *ch)
+static double gen_cphas(const sdr_ch_t *ch, double P)
 {
-    //double L = -ch->adr + ch->fd * ch->coff;
     double L = -ch->adr;
     
     L += (ch->nav->rev ? 0.5 : 0.0) + (ch->trk->sec_pol == 1 ? 0.5 : 0.0);
@@ -519,7 +523,7 @@ static void update_obs(gtime_t time, obs_t *obs, sdr_ch_t *ch)
     }
     obs->data[i].code[j] = code;
     obs->data[i].P[j] = P;
-    obs->data[i].L[j] = gen_cphas(ch);
+    obs->data[i].L[j] = gen_cphas(ch, P);
     obs->data[i].D[j] = ch->fd;
     obs->data[i].SNR[j] = (uint16_t)(ch->cn0 / SNR_UNIT + 0.5);
     if (ch->lock * ch->T <= 2.0 || fabs(ch->trk->err_phas) > 0.2) {
@@ -865,7 +869,7 @@ void sdr_pvt_udsol(sdr_pvt_t *pvt, int64_t ix)
         sortobs(pvt->obs);
         
         // output log $OBS and RTCM3 observation data
-        out_log_obs(pvt->ix * SDR_CYC, pvt->obs);
+        out_log_obs(pvt->ix * SDR_CYC, pvt->obs, pvt->nav);
         out_rtcm3_obs(pvt->rtcm, pvt->obs, pvt->rcv->strs[1]);
         if (pvt->obs->n > 0) pvt->count[1]++;
         
@@ -905,23 +909,24 @@ void sdr_pvt_udsol(sdr_pvt_t *pvt, int64_t ix)
 //
 void sdr_pvt_solstr(sdr_pvt_t *pvt, char *buff)
 {
-    char tstr[32];
+    char tstr[32], nstr[16];
     double pos[3] = {0};
     int stat = 0;
     
     pthread_mutex_lock(&pvt->mtx);
     
     if (norm(pvt->sol->rr, 3) > 1e-6) {
-        time2str(pvt->sol->time, tstr, 3);
+        time2str(pvt->sol->time, tstr, 1);
         ecef2pos(pvt->sol->rr, pos);
         stat = pvt->sol->stat;
     }
     else {
-        time2str(pvt->time, tstr, 3);
+        time2str(pvt->time, tstr, 1);
     }
     pthread_mutex_unlock(&pvt->mtx);
     
     tstr[4] = tstr[7] = '-';
-    sprintf(buff, "%23s %11.7f %12.7f %8.2f %2d/%2d %s", tstr, pos[0] * R2D,
-        pos[1] * R2D, pos[2], pvt->sol->ns, pvt->nsat, stat ? "FIX" : "---");
+    sprintf(nstr, "%d/%d", pvt->sol->ns, pvt->nsat);
+    sprintf(buff, "%21s %12.8f %13.8f %9.3f %-5s %s", tstr, pos[0] * R2D,
+        pos[1] * R2D, pos[2], nstr, stat ? "FIX" : "---");
 }
