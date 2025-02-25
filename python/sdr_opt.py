@@ -99,7 +99,7 @@ def sel_panel_new(parent, label, sels=[], var=None, width=9):
     ttk.Label(panel, text=label).pack(side=LEFT, fill=X)
     ttk.Combobox(panel, width=width, values=sels, textvariable=var,
         justify=CENTER, font=FONT).pack(side=RIGHT)
-    panel.pack(fill=X, padx=(10, 4), pady=2)
+    panel.pack(fill=X, padx=(10, 4), pady=(3, 1))
     return panel
 
 # generate option input panel --------------------------------------------------
@@ -367,7 +367,7 @@ def read_opt(val, opt):
 # show Input Options dialog ----------------------------------------------------
 def inp_opt_dlg(root, opt):
     opt_new = inp_opt_new(opt)
-    dlg = modal_dlg_new(root, 480, 640, 'Input Options')
+    dlg = modal_dlg_new(root, 480, 560, 'Input Options')
     panel = Frame(dlg.panel, width=450, bg=BG_COLOR)
     panel.pack(fill=X, pady=4)
     ttk.Label(panel, text='Input Source').pack(side=LEFT, padx=4)
@@ -435,17 +435,28 @@ def if_opt_panel_new(parent, opt):
 
 # generate channel options panel -----------------------------------------------
 def ch_opt_panel_new(parent, opt):
-    panel = Frame(parent, width=300, height=300, bg=BG_COLOR, relief=GROOVE,
+    panel = Frame(parent, height=300, bg=BG_COLOR, relief=GROOVE,
         borderwidth=2)
+    panel.pack(fill=X, pady=2)
     p1 = sel_panel_new(panel, 'IF Data Format*', opt.fmts, opt.fmt)
-    #p1.pack(pady=(4,0))
-    p1.pack(pady=2)
+    p1.pack(pady=(4, 2))
     p2 = p1.winfo_children()[1]
     p2.bind('<<ComboboxSelected>>', lambda e: on_fmt_select(e, panel))
-    for ch in range(MAX_RFCH):
-        rfch_opt_panel_new(panel, ch, opt)
     inp_panel_new(panel, 'Sampling Rate (Msps)*', opt.fs)
-    panel.pack(fill=X, pady=2)
+    panel1 = Frame(panel, bg=BG_COLOR)
+    panel1.pack(fill=X, pady=(4, 0))
+    label = 'LO Freq (MHz)*   I/IQ*'
+    ttk.Label(panel1, text=label).pack(side=LEFT, padx=(75, 0))
+    ttk.Label(panel1, text=label).pack(side=RIGHT, padx=(0, 12))
+    panel2 = Frame(panel, bg=BG_COLOR)
+    panel2.pack(side=LEFT, pady=2)
+    panel3 = Frame(panel, bg=BG_COLOR)
+    panel3.pack(side=RIGHT, pady=2)
+    n = MAX_RFCH // 2
+    for ch in range(0, n):
+        rfch_opt_panel_new(panel2, ch, opt)
+    for ch in range(n, MAX_RFCH):
+        rfch_opt_panel_new(panel3, ch, opt)
     return panel
 
 # IF data format select callback -----------------------------------------------
@@ -455,24 +466,24 @@ def on_fmt_select(e, p3):
 # update channel options enable ------------------------------------------------
 def ch_opt_enable_update(fmt, p3):
     p = p3.winfo_children()
+    p2 = [p[3].winfo_children(), p[4].winfo_children()]
+    n = MAX_RFCH // 2
     for i in range(MAX_RFCH):
         ena = (fmt in ('INT8', 'INT8X2') and i < 1) or \
             (fmt == 'RAW8' and i < 2) or (fmt == 'RAW16' and i < 4) or \
             (fmt == 'RAW32' and i < 8)
-        config_panel_state(p[i+1], NORMAL if ena else DISABLED)
+        config_panel_state(p2[i//n][i%n], NORMAL if ena else DISABLED)
     p1 = p[1].winfo_children()[1]
     p1.configure(stat=DISABLED if fmt in ('INT8', 'INT8X2') else NORMAL)
 
 # generate RF channel options panel --------------------------------------------
 def rfch_opt_panel_new(parent, ch, opt):
     panel = Frame(parent, bg=BG_COLOR)
-    ttk.Label(panel, text='RF CH%d' % (ch + 1)).pack(side=LEFT)
+    ttk.Label(panel, text='RF CH%d' % (ch + 1)).pack(side=LEFT, padx=(0, 25))
     ttk.Combobox(panel, width=4, justify=CENTER, values=opt.IQs,
         textvariable=opt.IQ[ch], font=FONT).pack(side=RIGHT, pady=2)
-    ttk.Label(panel, text='Sampling*').pack(side=RIGHT, padx=2)
     ttk.Entry(panel, width=10, justify=RIGHT, textvariable=opt.fo[ch],
-        font=FONT).pack(side=RIGHT, padx=2)
-    ttk.Label(panel, text='LO Freq (MHz)*').pack(side=RIGHT, padx=2)
+        font=FONT).pack(side=RIGHT, padx=4)
     panel.pack(fill=X, padx=(10, 4))
     return panel
 
