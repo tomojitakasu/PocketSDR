@@ -395,7 +395,7 @@ char *sdr_rcv_rcv_stat(sdr_rcv_t *rcv);
 void sdr_rcv_str_stat(sdr_rcv_t *rcv, int *stat);
 char *sdr_rcv_sat_stat(sdr_rcv_t *rcv, const char *sat);
 char *sdr_rcv_ch_stat(sdr_rcv_t *rcv, const char *sys, int all,
-    double min_lock);
+    double min_lock, int rfch);
 void sdr_rcv_sel_ch(sdr_rcv_t *rcv, int ch);
 int sdr_rcv_corr_stat(sdr_rcv_t *rcv, int ch, double *stat, double *pos,
     sdr_cpx_t *C);
@@ -405,6 +405,7 @@ int sdr_rcv_rfch_stat(sdr_rcv_t *rcv, int ch, double *stat);
 int sdr_rcv_rfch_psd(sdr_rcv_t *rcv, int ch, double tave, int N, float *psd);
 int sdr_rcv_rfch_hist(sdr_rcv_t *rcv, int ch, double tave, int *val,
     double *hist1, double *hist2);
+int sdr_rcv_pvt_sol(sdr_rcv_t *rcv, char *buff);
 int sdr_rcv_get_gain(sdr_rcv_t *rcv, int ch);
 int sdr_rcv_set_gain(sdr_rcv_t *rcv, int ch, int gain);
 int sdr_rcv_get_filt(sdr_rcv_t *rcv, int ch, double *bw, double *freq,
