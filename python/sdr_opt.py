@@ -367,7 +367,7 @@ def read_opt(val, opt):
 # show Input Options dialog ----------------------------------------------------
 def inp_opt_dlg(root, opt):
     opt_new = inp_opt_new(opt)
-    dlg = modal_dlg_new(root, 480, 560, 'Input Options')
+    dlg = modal_dlg_new(root, 480, 600, 'Input Options')
     panel = Frame(dlg.panel, width=450, bg=BG_COLOR)
     panel.pack(fill=X, pady=4)
     ttk.Label(panel, text='Input Source').pack(side=LEFT, padx=4)
