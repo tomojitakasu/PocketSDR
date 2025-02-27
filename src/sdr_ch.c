@@ -24,8 +24,8 @@
 
 // constants and macros --------------------------------------------------------
 #define SP_CORR    0.25     // correlator spacing (chip)
-#define T_ACQ      0.010    // non-coherent integration time for acquisition (s)
-#define T_DLL      0.010    // non-coherent integration time for DLL (s)
+#define T_ACQ      0.02     // non-coherent integration time for acquisition (s)
+#define T_DLL      0.02     // non-coherent integration time for DLL (s)
 #define T_CN0      1.0      // averaging time for C/N0 (s)
 #define T_FPULLIN  1.0      // frequency pull-in time (s)
 #define T_NPULLIN  1.5      // navigation data pull-in time (s)
@@ -34,8 +34,8 @@
 #define B_FLL_W    5.0      // band-width of FLL filter (Hz) (wide)
 #define B_FLL_N    2.0      // band-width of FLL filter (Hz) (narrow)
 #define MAX_DOP    5000.0   // max Doppler for acquisition (Hz)
-#define THRES_CN0_L 35.0    // C/N0 threshold (dB-Hz) (lock)
-#define THRES_CN0_U 32.0    // C/N0 threshold (dB-Hz) (lost)
+#define THRES_CN0_L 34.0    // C/N0 threshold (dB-Hz) (lock)
+#define THRES_CN0_U 30.0    // C/N0 threshold (dB-Hz) (lost)
 #define THRES_CN0_L6 33.0   // C/N0 threshold (dB-Hz) (L6D/E lost)
 #define THRES_SYNC 0.02     // threshold for sec-code sync
 #define THRES_LOST 0.002    // threshold for sec-code lost
