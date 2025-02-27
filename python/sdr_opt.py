@@ -211,7 +211,7 @@ def out_opt_new(opt_p=None):
             opt.log_sel[i].set(opt_p.log_sel[i].get())
     else:
         for i in range(len(opt.log_sel)):
-            opt.log_sel[i].set(1)
+            opt.log_sel[i].set(0 if i == 6 else 1)
     return opt
 
 # generate signal option variables ---------------------------------------------
