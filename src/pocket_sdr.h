@@ -43,6 +43,8 @@ extern "C" {
 #endif
 
 // constants and macros ------------------------------------------------------
+#define SDR_LIB_NAME   "Pocket SDR" // library name
+#define SDR_LIB_VER    "0.14"   // library version
 #define SDR_MAX_RFCH   8        // max number of RF channels in a SDR device
 #define SDR_MAX_REG    11       // max number of registers in a SDR device
 #define SDR_MAX_BUFF   6        // number of raw data buffer
@@ -251,6 +253,8 @@ void sdr_free(void *p);
 void sdr_get_time(double *t);
 uint32_t sdr_get_tick(void);
 void sdr_sleep_msec(int msec);
+const char *sdr_get_name(void);
+const char *sdr_get_ver(void);
 
 // sdr_usb.c
 sdr_usb_t *sdr_usb_open(int bus, int port, const uint16_t *vid,
