@@ -22,8 +22,6 @@ import sdr_func, sdr_code, sdr_opt, sdr_rtk
 import sdr_plot as plt
 
 # constants --------------------------------------------------------------------
-AP_NAME    = 'Pocket SDR'    # AP name
-VERSION    = 'ver.0.14'      # version
 TITLE      = 'An Open-Source GNSS SDR\n(Software Defined Receiver)'
 AP_URL     = 'https://github.com/tomojitakasu/PocketSDR'
 AP_DIR     = os.path.dirname(__file__)
@@ -247,6 +245,12 @@ def set_log_mask(out_opt):
     log_mask = (c_int32 * len(mask))(*mask)
     libsdr.sdr_log_mask.argtypes = (POINTER(c_int32), c_int32)
     libsdr.sdr_log_mask(log_mask, len(log_mask))
+
+# get library name and version -------------------------------------------------
+def get_name_ver():
+    libsdr.sdr_get_name.restype = c_char_p
+    libsdr.sdr_get_ver.restype = c_char_p
+    return libsdr.sdr_get_name().decode(), libsdr.sdr_get_ver().decode()
 
 # get receiver status ----------------------------------------------------------
 def get_rcv_stat(rcv):
@@ -494,10 +498,10 @@ def sel_box_new(parent, vals=[], val='', width=8):
 # show Help dialog -------------------------------------------------------------
 def help_dlg(root):
     dlg = sdr_opt.modal_dlg_new(root, 280, 180, 'About', nocancel=1)
-    sdr_opt.link_label_new(dlg.panel, text=AP_NAME + ' ' + VERSION,
+    name, ver = get_name_ver()
+    sdr_opt.link_label_new(dlg.panel, text=name + ' ver.' + ver,
         font=get_font(2, 'bold'), link=AP_URL).pack(pady=(4, 0))
-    ttk.Label(dlg.panel, text=TITLE, font=get_font(1),
-        justify=CENTER).pack(pady=2)
+    ttk.Label(dlg.panel, text=TITLE, justify=CENTER).pack(pady=2)
     ttk.Label(dlg.panel, text=COPYRIGHT, justify=CENTER).pack()
     root.wait_window(dlg.win)
 
@@ -564,10 +568,9 @@ def update_rcv_stat(p):
     xs, ys = plt.plot_scale(p)
     for i in range(len(labels)):
         x, y = 0.0 if i < 11 else 0.51, 0.5 + (5 - i % 11) * 20 / ys
-        plt.plot_text(p, x, y, labels[i], anchor=W,
-            font=get_font(1, 'bold'), color=P1_COLOR)
-        plt.plot_text(p, x + 0.48, y, val[i], anchor=E, font=get_font(1),
+        plt.plot_text(p, x, y, labels[i], anchor=W, font=get_font(0, 'bold'),
             color=P1_COLOR)
+        plt.plot_text(p, x + 0.48, y, val[i], anchor=E, color=P1_COLOR)
 
 # update stream status ---------------------------------------------------------
 def update_str_stat(p):
@@ -603,18 +606,17 @@ def update_sig_plot(p, sys):
     plt.plot_xlim(p, [-0.7, len(sats) - 0.3])
     plt.plot_ylim(p, [20, 55])
     xs, ys = plt.plot_scale(p)
-    font = get_font(1)
     plt.plot_axis(p, tcolor=None)
     if sys == 'ALL':
         for i, s in enumerate('GREJCIS'):
             x, y = p.xl[1] + (i * 9 - 70) / xs, p.yl[1] - 16 / ys
-            plt.plot_text(p, x, y, s, color=sat_color(s), font=font)
+            plt.plot_text(p, x, y, s, color=sat_color(s))
     else:
         txt = 'Signals: '
         for s in sigs:
             txt += ' ' + s + ','
         x, y = p.xl[1] - 12 / xs, p.yl[1] - 16 / ys
-        plt.plot_text(p, x, y, txt[:-1], font=font, anchor=E)
+        plt.plot_text(p, x, y, txt[:-1], anchor=E)
     for x, s in enumerate(sats):
         color = sat_color(s, sel=not pvt[x]) if rcv_body else BG_COLOR1
         idx = [i for i, ss in enumerate(sat) if ss == s]
@@ -632,11 +634,9 @@ def update_sig_plot(p, sys):
     plt.plot_axis(p, gcolor=None)
     for x, s in enumerate(sats):
         text = s[1:] if sys == 'ALL' else s
-        plt.plot_text(p, x, p.yl[0] - 2 / ys, text, color=sat_color(s),
-            font=font, anchor=N)
+        plt.plot_text(p, x, p.yl[0] - 2 / ys, text, color=sat_color(s), anchor=N)
     text = '#Sats: %d/%d' % (pvt.count(1), len(sats))
-    plt.plot_text(p, -0.7 + 12 / xs, p.yl[1] - 16 / ys, text, font=font,
-        anchor=W)
+    plt.plot_text(p, -0.7 + 12 / xs, p.yl[1] - 16 / ys, text, anchor=W)
 
 # generate RF Channels page ----------------------------------------------------
 def rfch_page_new(parent):
@@ -672,7 +672,7 @@ def rfch_page_new(parent):
     ttk.Label(p.toolbar, text='Filter BW (MHz)').pack(side=RIGHT)
     sdr_opt.link_label_new(p.toolbar, text='?', link=sdr_opt.SIG_LINK).pack(
         side=LEFT, padx=6)
-    p.txt1 = ttk.Label(p.toolbar, font=get_font(1), foreground=P1_COLOR)
+    p.txt1 = ttk.Label(p.toolbar, foreground=P1_COLOR)
     p.txt1.pack(side=LEFT, expand=1, fill=X, padx=10)
     p.panel1 = Frame(p.panel)
     tis = ('GNSS Signal Band L1 (MHz)', 'GNSS Signal Band L2/L5/L6 (MHz)')
@@ -900,9 +900,9 @@ def bbch_page_new(parent):
     p.box3.pack(side=LEFT)
     sdr_opt.link_label_new(p.toolbar, text='?', link=sdr_opt.SIG_LINK).pack(
         side=LEFT, padx=6)
-    p.txt1 = ttk.Label(p.toolbar, font=get_font(1), width=12)
-    p.txt2 = ttk.Label(p.toolbar, font=get_font(1), width=10, anchor=E)
-    p.txt3 = ttk.Label(p.toolbar, font=get_font(1), width=14, anchor=E)
+    p.txt1 = ttk.Label(p.toolbar, width=12)
+    p.txt2 = ttk.Label(p.toolbar, width=10, anchor=E)
+    p.txt3 = ttk.Label(p.toolbar, width=14, anchor=E)
     p.txt3.pack(side=RIGHT, padx=(2, 15))
     p.txt2.pack(side=RIGHT, padx=2)
     p.txt1.pack(side=RIGHT, padx=2)
@@ -981,7 +981,7 @@ def corr_page_new(parent):
     p.box1.pack(side=LEFT)
     p.btn2 = sdr_opt.custom_btn_new(p.toolbar, label=' > ')
     p.btn2.panel.pack(side=LEFT, padx=2, pady=1)
-    p.txt1 = ttk.Label(p.toolbar, font=get_font(1), foreground=P1_COLOR)
+    p.txt1 = ttk.Label(p.toolbar, foreground=P1_COLOR)
     p.txt1.pack(side=LEFT, expand=1, fill=X, padx=10)
     p.box3 = sel_box_new(p.toolbar, ['0.1', '0.2', '0.3', '0.4', '0.6', '0.8',
         '1.0', '1.5', '2'], '0.4', 3)
@@ -1137,7 +1137,7 @@ def sats_page_new(parent):
     ttk.Label(p.toolbar, text='System').pack(side=LEFT, padx=(8, 4))
     p.box1 = sel_box_new(p.toolbar, SYSTEMS, 'ALL', 8)
     p.box1.pack(side=LEFT)
-    p.txt1 = ttk.Label(p.toolbar, font=get_font(1), foreground=P1_COLOR)
+    p.txt1 = ttk.Label(p.toolbar, foreground=P1_COLOR)
     p.txt1.pack(side=RIGHT, padx=10)
     p.tbl1 = ttk.Treeview(p.panel, show=('headings'))
     p.tbl1.pack(expand=1, fill=BOTH)
@@ -1531,7 +1531,7 @@ def set_styles():
     style.configure('TNotebook.Tab', font=get_font(1), padding=(20, 2))
     style.map('TNotebook.Tab', background=[('selected', BG_COLOR1)])
     style.configure('TCombobox', font=get_font(), background=BG_COLOR1)
-    style.configure('link.TLabel', font=get_font(), foreground='blue')
+    style.configure('link.TLabel', font=get_font(1), foreground='blue')
 
 # main -------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -1540,7 +1540,8 @@ if __name__ == '__main__':
     root = Tk()
     root.geometry('%dx%d' % (WIDTH, HEIGHT))
     root.minsize(WIDTH * 3 // 4, HEIGHT * 3 // 4)
-    root.title(AP_NAME + ' ' + VERSION)
+    name, ver = get_name_ver()
+    root.title(name + ' ver.' + ver)
     root.protocol("WM_DELETE_WINDOW", on_root_close)
     
     # set styles
