@@ -40,7 +40,7 @@ SDR_N_CORR = (6+81)          # number of correlators
 SDR_N_HIST = 5000            # number of correlator history
 SDR_N_PSD  = 2048            # number FFT points for PSD
 MAX_RCVLOG = 2000            # max receiver logs
-MAX_SOLLOG = 10800           # max solution logs
+MAX_SOLLOG = 3600            # max solution logs
 UD_CYCLE1  = 50              # update cycle (ms) RF channels/Correlator pages
 UD_CYCLE2  = 200             # update cycle (ms) other pages
 UD_CYCLE3  = 1000            # update cycle (ms) receiver stopped
@@ -58,8 +58,9 @@ if 'Windows' in env:
     ROW_HEIGHT = 15
 elif 'macOS' in env:
     LIBSDR = AP_DIR + '/../lib/macos/libsdr.so'
-    FONT = ('Arial Narrow', 'Monaco')
-    FONT_SIZE = (14, 10)
+    #FONT = ('Arial Narrow', 'Monaco')
+    FONT = ('Tahoma', 'Monaco')
+    FONT_SIZE = (13, 12)
     BG_COLOR1 = '#E5E5E5'
     BG_COLOR2 = '#ECECEC'
     ROW_HEIGHT = 14
@@ -386,7 +387,7 @@ def get_rcv_pvt_sol(rcv):
     buff = create_string_buffer(128)
     libsdr.sdr_rcv_pvt_sol.argtypes = (c_void_p, c_char_p)
     if not libsdr.sdr_rcv_pvt_sol(rcv, buff):
-        return ''
+        return '1970-01-01 00:00:00.0 0.00000000 0.00000000 0.000 0/0 ---'
     return buff.value.decode() 
 
 # get satellite color ----------------------------------------------------------
@@ -399,7 +400,7 @@ def sat_color(sat, sel=0):
             return colors[sel][i]
     return BG_COLOR1
 
-# update receiver log ----------------------------------------------------------
+# update receiver log ---------------------------------------------------------
 def update_rcv_log():
     global rcv_log, rcv_log_filt
     buff_size = 262144
@@ -411,6 +412,7 @@ def update_rcv_log():
             rcv_log.append(log)
     if len(rcv_log) > MAX_RCVLOG:
         rcv_log = rcv_log[-MAX_RCVLOG:]
+    return 
 
 # update solution log ----------------------------------------------------------
 def update_sol_log():
@@ -420,12 +422,11 @@ def update_sol_log():
     time = str2time(sol[0] + ' ' + sol[1])
     if len(sol_log) > 0 and sdr_rtk.timediff(time, sol_log[-1][0]) < 1e-3:
         return
-    rtime = float(get_rcv_stat(rcv_body).split(',')[0])
     pos = [float(s) for s in sol[2:5]]
     pos[0] *= D2R
     pos[1] *= D2R
-    nsat = [float(s) for s in sol[5].split('/')]
-    sol_log.append([time, rtime, pos, nsat])
+    nsat = int(sol[5].split('/')[0])
+    sol_log.append([time, pos, nsat])
     if len(sol_log) > MAX_SOLLOG:
         sol_log = sol_log[-MAX_SOLLOG:]
 
@@ -517,14 +518,14 @@ def rcv_page_new(parent):
     ttk.Label(p.toolbar, text='System').pack(side=RIGHT)
     panel1 = Frame(p.panel)
     panel1.pack(expand=1, fill=BOTH)
-    p.plt1 = plt.plot_new(panel1, 257, 257, (-1.2, 1.2), (-1.2, 1.2),
-        (0, 0, 0, 0), aspect=1, font=get_font(-1))
+    p.plt1 = plt.plot_new(panel1, 257, 257, margin=(25, 25, 25, 25),
+        xlim=(-1, 1), ylim=(-1, 1), aspect=1, font=get_font(-1))
     p.plt1.c.pack(side=RIGHT, expand=1, fill=BOTH)
     p.stat = plt.plot_new(panel1, 543, 257, margin=(20, 15, 30, 30),
         font=get_font())
     p.stat.c.pack(side=LEFT, expand=1, fill=BOTH)
     p.plt2 = plt.plot_new(p.panel, 800, 245, title='Signal C/N0 (dB-Hz)',
-        font=get_font(), tick=2)
+        font=get_font(), tick=10)
     p.plt2.c.pack(expand=1, fill=BOTH)
     p.box1.bind('<<ComboboxSelected>>', lambda e: on_sys_select(e, p))
     update_rcv_page(p)
@@ -551,16 +552,19 @@ def update_rcv_stat(p):
         'Sampling Rate (Msps)', '# BB CH Locked/All',
         'IF Data Rate (MB/s)', 'IF Data Buffer Usage (%)', 'Time (GPST)',
         'Solution Status', 'Latitude (\xb0)', 'Longitude (\xb0)',
-        'Altitude (m)', 'Solution Latency (s)', '# Sats Used/All',
+        'Altitude (m)', '# Sats Used/All', 'Solution Latency (s)',
         'Output', '# PVT Solutions', '# OBS/NAV Data', 'IF Data Log (MB)')
-    value = get_rcv_stat(rcv_body).split(',')
+    stat = get_rcv_stat(rcv_body).split()
+    sol = get_rcv_pvt_sol(rcv_body).split()
+    val = stat[0:3] + [''] + stat[3:10] + [sol[0] + ' ' + sol[1], sol[6]] + \
+        sol[2:6] + [stat[10], ''] + stat[11:]
     plt.plot_clear(p)
     xs, ys = plt.plot_scale(p)
     for i in range(len(labels)):
         x, y = 0.0 if i < 11 else 0.51, 0.5 + (5 - i % 11) * 20 / ys
         plt.plot_text(p, x, y, labels[i], anchor=W,
             font=get_font(1, 'bold'), color=P1_COLOR)
-        plt.plot_text(p, x + 0.48, y, value[i], anchor=E, font=get_font(1),
+        plt.plot_text(p, x + 0.48, y, val[i], anchor=E, font=get_font(1),
             color=P1_COLOR)
 
 # update stream status ---------------------------------------------------------
@@ -636,14 +640,14 @@ def update_sig_plot(p, sys):
 def rfch_page_new(parent):
     ti = ['Power Spectral Density (dB/Hz)', 'Histogram I', 'Histogram Q']
     labels = ['Frequency (MHz)', 'Quantized Value']
+    chs = ['ALL'] + [str(i + 1) for i in range(8)] + ['1-4', '5-8']
     margin = (35, 25, 25, 40)
     p = Obj()
     p.parent = parent
     p.panel = Frame(parent)
     p.toolbar = tool_bar_new(p.panel)
     ttk.Label(p.toolbar, text='RF CH').pack(side=LEFT, padx=(8, 4))
-    p.box1 = sel_box_new(p.toolbar,
-        [str(i + 1) for i in range(8)] + ['1-4', '5-8'], '1', 5)
+    p.box1 = sel_box_new(p.toolbar, chs, 'ALL', 5)
     p.box1.pack(side=LEFT)
     p.box2 = sel_box_new(p.toolbar, ['5', '10', '20'], '5', 2)
     p.box2.pack(side=RIGHT, padx=(2, 4))
@@ -664,19 +668,29 @@ def rfch_page_new(parent):
         '', 4)
     p.box6.pack(side=RIGHT, padx=(2, 0))
     ttk.Label(p.toolbar, text='Filter BW (MHz)').pack(side=RIGHT)
+    sdr_opt.link_label_new(p.toolbar, text='?', link=sdr_opt.SIG_LINK).pack(
+        side=LEFT, padx=6)
     p.txt1 = ttk.Label(p.toolbar, font=get_font(1), foreground=P1_COLOR)
     p.txt1.pack(side=LEFT, expand=1, fill=X, padx=10)
     p.panel1 = Frame(p.panel)
+    tis = ('GNSS Signal Band L1 (MHz)', 'GNSS Signal Band L2/L5/L6 (MHz)')
+    freq = ((1510, 1650), (1160, 1300))
     p.plt1 = []
-    p.plt1.append(plt.plot_new(p.panel1, 200, 200, (0, 1), (-80, -40), margin,
-        font=get_font(), title=ti[0], xlabel=labels[0]))
     for i in range(2):
-        p.plt1.append(plt.plot_new(p.panel1, 200, 200, (-5, 5), (0, 0.5),
-            margin, font=get_font(), title=ti[1+i], xlabel=labels[1]))
+        p.plt1.append(plt.plot_new(p.panel1, 200, 200, freq[i], font=get_font(),
+            margin=(25, 25, 25, 25), tick=5, title=tis[i]))
+        p.plt1[-1].c.pack(expand=1, fill=BOTH)
     p.panel2 = Frame(p.panel)
     p.plt2 = []
+    p.plt2.append(plt.plot_new(p.panel2, 200, 200, (0, 1), (-80, -40), margin,
+        font=get_font(), title=ti[0], xlabel=labels[0]))
+    for i in range(2):
+        p.plt2.append(plt.plot_new(p.panel2, 200, 200, (-5, 5), (0, 0.5),
+            margin, font=get_font(), title=ti[1+i], xlabel=labels[1]))
+    p.panel3 = Frame(p.panel)
+    p.plt3 = []
     for i in range(4):
-        p.plt2.append(plt.plot_new(p.panel2, 200, 200, (0, 1), (-80, -40),
+        p.plt3.append(plt.plot_new(p.panel3, 200, 200, (0, 1), (-80, -40),
             margin, font=get_font(), title=ti[0], xlabel=labels[0]))
     p.box1.bind('<<ComboboxSelected>>', lambda e: on_rfch_select(e, p))
     p.box2.bind('<<ComboboxSelected>>', lambda e: on_rfch_select(e, p))
@@ -716,24 +730,34 @@ def update_rfch_page(p):
     ch = p.box1.get()
     maxq = float(p.box2.get())
     tave = float(p.box3.get())
-    if ch == '1-4' or ch == '5-8':
+    if ch == 'ALL':
+        p.panel2.pack_forget()
+        p.panel3.pack_forget()
+        p.panel1.pack(expand=1, fill=BOTH)
+        update_freq_plot(p.plt1)
+        p.box4.set('-')
+        p.box5.set('-')
+        p.box6.set('-')
+    elif ch == '1-4' or ch == '5-8':
         p.panel1.pack_forget()
-        p.panel2.pack(side=LEFT, expand=1, fill=BOTH)
+        p.panel2.pack_forget()
+        p.panel3.pack(side=LEFT, expand=1, fill=BOTH)
         for i in range(4):
-            p.plt2[i].c.place(relx=i % 2 * 0.5, rely=i // 2 * 0.5, relwidth=0.5,
+            p.plt3[i].c.place(relx=i % 2 * 0.5, rely=i // 2 * 0.5, relwidth=0.5,
                 relheight=0.5)
-            update_psd_plot(p.plt2[i], i + 1 if ch == '1-4' else i + 5, tave)
+            update_psd_plot(p.plt3[i], i + 1 if ch == '1-4' else i + 5, tave)
         p.box4.set('-')
         p.box5.set('-')
         p.box6.set('-')
     else:
-        p.panel2.pack_forget()
-        p.panel1.pack(side=LEFT, expand=1, fill=BOTH)
-        p.plt1[0].c.place(relx=0, rely=0, relwidth=0.65, relheight=1)
-        p.plt1[1].c.place(relx=0.65, rely=0, relwidth=0.35, relheight=0.5)
-        p.plt1[2].c.place(relx=0.65, rely=0.5, relwidth=0.35, relheight=0.5)
-        update_psd_plot(p.plt1[0], int(ch), tave)
-        update_hist_plot(p.plt1[1], p.plt1[2], int(ch), maxq, tave)
+        p.panel1.pack_forget()
+        p.panel3.pack_forget()
+        p.panel2.pack(side=LEFT, expand=1, fill=BOTH)
+        p.plt2[0].c.place(relx=0, rely=0, relwidth=0.65, relheight=1)
+        p.plt2[1].c.place(relx=0.65, rely=0, relwidth=0.35, relheight=0.5)
+        p.plt2[2].c.place(relx=0.65, rely=0.5, relwidth=0.35, relheight=0.5)
+        update_psd_plot(p.plt2[0], int(ch), tave)
+        update_hist_plot(p.plt2[1], p.plt2[2], int(ch), maxq, tave)
         g = get_rfch_gain(rcv_body, int(ch))
         p.box4.set('-' if g < 0 else 'Auto' if g == 0 else '%d' % (g - 1))
         bw, freq, order = get_rfch_filt(rcv_body, int(ch))
@@ -745,38 +769,74 @@ def update_rfch_page(p):
 def update_psd_plot(p, ch, tave):
     dev, fmt, fs, fo, IQ = get_rfch_stat(rcv_body, ch)
     psd = get_rfch_psd(rcv_body, ch, tave)
-    f = np.linspace(fo, fo + fs * 0.5, len(psd)) if IQ == 1 else \
-        np.linspace(fo - fs * 0.5, fo + fs * 0.5, len(psd))
+    f = np.linspace(fo, fo + fs / 2, len(psd)) if IQ == 1 else \
+        np.linspace(fo - fs / 2, fo + fs / 2, len(psd))
     plt.plot_clear(p)
     plt.plot_xlim(p, [f[0], f[-1]])
     plt.plot_ylim(p, [-80, -45])
     plt.plot_axis(p, fcolor=None, tcolor=None)
     plt.plot_poly(p, [fo, fo], p.yl, color=plt.GR_COLOR)
     plt.plot_poly(p, f, psd, color=P1_COLOR)
+    plot_filt(p, ch, fo)
     plt.plot_axis(p, gcolor=None)
     xs, ys = plt.plot_scale(p)
     plt.plot_poly(p, [fo, fo], [p.yl[0], p.yl[0] + 6 / ys], color=plt.FG_COLOR)
     plt.plot_poly(p, [fo, fo], [p.yl[1], p.yl[1] - 6 / ys], color=plt.FG_COLOR)
     plot_mark(p, fo, p.yl[0] + 16 / ys, color=plt.FG_COLOR)
-    plot_sig_freq(p)
+    plot_sig_freq(p, p.xl, 16)
     plt.plot_text(p, p.xl[0] + 10 / xs, p.yl[1] - 8 / ys, 'CH%d' % (ch),
         font=get_font(1, 'bold'), anchor=NW)
-    plt.plot_text(p, fo + 12 / xs, p.yl[0] + 16 / ys, 'F_LO: %.6f MHz' % (fo),
+    plt.plot_text(p, fo + 12 / xs, p.yl[0] + 16 / ys, '%.6f MHz' % (fo),
         anchor=W)
 
+# update signal frequency plot -------------------------------------------------
+def update_freq_plot(p):
+    for i in range(2):
+        plt.plot_clear(p[i])
+        plt.plot_axis(p[i])
+        for ch in range(1, 9):
+            dev, fmt, fs, fo, IQ = get_rfch_stat(rcv_body, ch)
+            xs, ys = plt.plot_scale(p[i])
+            xl = [fo, fo + fs / 2] if IQ == 1 else [fo - fs / 2, fo + fs / 2]
+            yl = [p[i].yl[0] + 5 / ys, p[i].yl[1] - 20 / ys]
+            plt.plot_rect(p[i], xl[0], yl[0], xl[1], yl[1], color=plt.FG_COLOR)
+            plt.plot_text(p[i], xl[0], yl[1], 'CH%d' % (ch),
+                font=get_font(1, 'bold'), anchor=SW)
+            plt.plot_text(p[i], fo, yl[0] + 6 / ys, '%.3f' % (fo), anchor=S)
+            plt.plot_poly(p[i], [fo, fo], [yl[0], yl[0] + 6 / ys], color=plt.FG_COLOR)
+            plt.plot_poly(p[i], [fo, fo], [yl[1], yl[1] - 6 / ys], color=plt.FG_COLOR)
+            plot_sig_freq(p[i], xl, 35)
+        plt.plot_axis(p[i], fcolor=plt.GR_COLOR, gcolor=None)
+    for i, sys in enumerate(SYSTEMS[1:]):
+        xs, ys = plt.plot_scale(p[0])
+        color = sat_color('GREJCIS'[i])
+        x, y = p[0].xl[1] - 80 / xs, p[0].yl[1] - (25 + 15 * i) / ys
+        plot_mark(p[0], x, y, color)
+        plt.plot_text(p[0], x + 10 / xs, y, sys, color=color, anchor=W)
+
+# plot filter ------------------------------------------------------------------
+def plot_filt(p, ch, fo):
+    bw, freq, order = get_rfch_filt(rcv_body, ch)
+    if bw < 0: return
+    xs, ys = plt.plot_scale(p)
+    x1, x2 = fo + freq - bw * 0.5, fo + freq + bw * 0.5
+    y1, y2 = p.yl[0] + 15 / ys, p.yl[0] + 15 / ys + 3
+    dx = bw * (0.15 if order else 0.1)
+    plt.plot_poly(p, [x1, x1 + dx, x2 - dx, x2], [y1, y2, y2, y1],
+        color=P2_COLOR)
+
 # plot signal frequency marks --------------------------------------------------
-def plot_sig_freq(p):
+def plot_sig_freq(p, xl, yp):
     global sig_opt
     xs, ys = plt.plot_scale(p)
-    y = p.yl[1] - 2
+    y = p.yl[1] - yp / ys
     for i in range(len(sig_opt.sys)):
         if not sig_opt.sys_sel[i].get(): continue
         color = color=sat_color('GREJCIS'[i])
         for j, sig in enumerate(sig_opt.sig[i]):
             if not sig_opt.sig_sel[i][j].get(): continue
             freq = sdr_code.sig_freq(sig) / 1e6
-            if freq < p.xl[0] or freq > p.xl[1]: continue
-            plt.plot_poly(p, [freq, freq], p.yl, color=plt.GR_COLOR)
+            if freq < xl[0] or freq > xl[1]: continue
             if sig in ('G1CA', 'G2CA'):
                 for fcn in range(-7, 7):
                     f = sdr_func.shift_freq(sig, fcn, freq * 1e6) / 1e6
@@ -836,6 +896,8 @@ def bbch_page_new(parent):
     ttk.Label(p.toolbar, text='State').pack(side=LEFT, padx=(8, 4))
     p.box3 = sel_box_new(p.toolbar, ['ALL', 'LOCK'], 'LOCK', 6)
     p.box3.pack(side=LEFT)
+    sdr_opt.link_label_new(p.toolbar, text='?', link=sdr_opt.SIG_LINK).pack(
+        side=LEFT, padx=6)
     p.txt1 = ttk.Label(p.toolbar, font=get_font(1), width=12)
     p.txt2 = ttk.Label(p.toolbar, font=get_font(1), width=10, anchor=E)
     p.txt3 = ttk.Label(p.toolbar, font=get_font(1), width=14, anchor=E)
@@ -1025,7 +1087,7 @@ def update_corr_plot1(p, coff, fs, npos, pos, C, type, rng):
     plt.plot_axis(p, fcolor=None, tcolor=None)
     plt.plot_poly(p, [coff, coff], p.yl, color='grey')
     plt.plot_poly(p, p.xl, [0, 0], color='grey')
-    plt.plot_dots(p, [coff], [0], color=plt.FG_COLOR, size=5)
+    plt.plot_dots(p, [coff], [0], color=plt.FG_COLOR, size=3)
     y = C.real if type == 'I' else abs(C)
     plt.plot_poly(p, x[npos:], y[npos:], color=P2_COLOR)
     plt.plot_dots(p, x[npos:], y[npos:], color=P2_COLOR, fill=P1_COLOR, size=3)
@@ -1042,7 +1104,7 @@ def update_corr_plot2(p, P, rng):
     plt.plot_axis(p, fcolor=None, tcolor=None)
     plt.plot_poly(p, [0, 0], p.yl, color='grey')
     plt.plot_poly(p, p.xl, [0, 0], color='grey')
-    plt.plot_dots(p, [0], [0], color=plt.FG_COLOR, size=5)
+    plt.plot_dots(p, [0], [0], color=plt.FG_COLOR, size=3)
     plt.plot_dots(p, P.real, P.imag, color=P2_COLOR, size=1)
     plt.plot_dots(p, P[-1:].real, P[-1:].imag, color=BG_COLOR1, size=11)
     plt.plot_dots(p, P[-1:].real, P[-1:].imag, color=P1_COLOR, fill=P1_COLOR,
@@ -1133,7 +1195,7 @@ def update_sats_page(p):
 # generate Solution page -------------------------------------------------------
 def sol_page_new(parent):
     ranges = ['0.1', '0.2', '0.5', '1', '2', '5', '10', '20', '50']
-    tspans = ['3', '1', '0.5', '0.25', '0.1', '0.05', '0.01']
+    tspans = ['60', '120', '300', '900', '1800', '3600']
     w = (135, 105, 105, 80)
     p = Obj()
     p.parent = parent
@@ -1142,24 +1204,28 @@ def sol_page_new(parent):
     p.box1 = sel_box_new(p.toolbar, ranges, '10', width=4)
     p.box1.pack(side=RIGHT, padx=(0, 15))
     ttk.Label(p.toolbar, text='Range(m)').pack(side=RIGHT, padx=(6, 2))
-    p.box2 = sel_box_new(p.toolbar, tspans, '0.1', width=4)
+    p.box2 = sel_box_new(p.toolbar, tspans, '300', width=4)
     p.box2.pack(side=RIGHT)
-    ttk.Label(p.toolbar, text='Span(H)').pack(side=RIGHT, padx=(6, 2))
+    ttk.Label(p.toolbar, text='Span(s)').pack(side=RIGHT, padx=(6, 2))
+    p.btn1 = ttk.Button(p.toolbar, width=7, text='Clear')
+    p.btn1.pack(side=RIGHT, padx=2)
+    ttk.Label(p.toolbar, text='Type').pack(side=LEFT, padx=(8, 4))
     p.box3 = sel_box_new(p.toolbar, ['Pos ENU', 'Pos Horiz'], 'Pos ENU', width=8)
-    p.box3.pack(side=RIGHT)
-    ttk.Label(p.toolbar, text='Type').pack(side=RIGHT, padx=(6, 2))
+    p.box3.pack(side=LEFT)
     p.panel1 = Frame(p.panel)
     p.plt = []
     for i in range(4):
         panel = Frame(p.panel1)
         panel.pack(expand=1, fill=BOTH, padx=0, pady=0)
         p.plt.append(plt.plot_new(panel, 200, 100 if i in (1, 2) else 115,
-            tick=7 if i < 3 else 3, margin=(35, 15, 23 if i < 1 else 8,
-            8 if i < 3 else 23)))
+            tick=11 if i < 3 else 15, margin=(35, 28, 23 if i < 1 else 8,
+            8 if i < 3 else 23), taxis=1))
         p.plt[-1].c.pack(expand=1, fill=BOTH)
     p.panel2 = Frame(p.panel)
-    p.plt.append(plt.plot_new(p.panel2, 200, 200, margin=(35, 23, 23, 23)))
+    p.plt.append(plt.plot_new(p.panel2, 200, 200, margin=(45, 25, 25, 35),
+        xlabel='Pos E (m)', ylabel='Pos N (m)'))
     p.plt[-1].c.pack(expand=1, fill=BOTH)
+    p.btn1.bind('<Button-1>', lambda e: on_sol_clear_push(e, p))
     p.box1.bind('<<ComboboxSelected>>', lambda e: on_sol_change(e, p))
     p.box2.bind('<<ComboboxSelected>>', lambda e: on_sol_change(e, p))
     p.box3.bind('<<ComboboxSelected>>', lambda e: on_sol_change(e, p))
@@ -1171,40 +1237,61 @@ def sol_page_new(parent):
 def on_sol_change(e, p):
     update_sol_page(p)
 
+# solution clear button push callback ------------------------------------------
+def on_sol_clear_push(e, p):
+    global sol_log
+    p.ref = []
+    sol_log = []
+    update_sol_page(p)
+
 # update Solution page ---------------------------------------------------------
 def update_sol_page(p):
     global sol_log
-    ti, time, enu, nsat = '', [], [[], [], []], []
-    sol = get_rcv_pvt_sol(rcv_body).split()
-    if len(sol) >= 7:
-        tstr = sol[0].replace('/', '-')
-        ti = '%s %s GPST  %12s\xb0 %13s\xb0 %9sm  %5s  %s' % (tstr, sol[1],
-            sol[2], sol[3], sol[4], sol[5], sol[6])
+    time, enu, nsat = [], [[], [], []], []
     if len(sol_log) > 0:
-        time = np.array([log[1] for log in sol_log])
-        enu, p.ref = pos2enu(sol_log, p.ref)
-        enu = np.transpose(enu)
-        nsat = np.array([log[3][0] for log in sol_log])
+        time = timeval([log[0] for log in sol_log])
+        enu, p.ref = pos2enu([log[1] for log in sol_log], p.ref)
+        nsat = np.array([log[2] for log in sol_log])
+    ymax = float(p.box1.get())
+    tspan = float(p.box2.get())
     if p.box3.get() == 'Pos ENU':
         p.panel2.pack_forget()
         p.panel1.pack(expand=1, fill=BOTH)
-        p.plt[0].title = ti
-        plot_pos_enu(p, time, enu, nsat)
+        plot_pos_enu(p, time, enu, nsat, ymax, tspan)
+        show_sol(p.plt[0])
     else:
         p.panel1.pack_forget()
         p.panel2.pack(expand=1, fill=BOTH)
-        p.plt[4].title = ti
-        plot_pos_hori(p, time, enu)
+        plot_pos_hori(p, time, enu, ymax, tspan)
+        show_sol(p.plt[4])
+
+# time value -------------------------------------------------------------------
+def timeval(time):
+    if len(time) <= 0: return []
+    ep = sdr_rtk.time2epoch(time[0])
+    ep[3:] = 0
+    t0 = sdr_rtk.epoch2time(ep)
+    return np.array([sdr_rtk.timediff(t, t0) for t in time])
+
+# show solution ----------------------------------------------------------------
+def show_sol(ax):
+    sol = get_rcv_pvt_sol(rcv_body).split()
+    if len(sol) >= 7:
+        tstr = sol[0].replace('/', '-')
+        text = '%s %s GPST  %12s\xb0 %13s\xb0 %9sm  %6s  %4s' % (tstr, sol[1],
+            sol[2], sol[3], sol[4], sol[5], sol[6])
+        xs, ys = plt.plot_scale(ax)
+        x, y = (ax.xl[0] + ax.xl[1]) / 2, ax.yl[1] + 4 / ys
+        color = P1_COLOR if sol[6] == 'FIX' else P2_COLOR
+        plt.plot_text(ax, x, y, text, anchor=S, color=color)
 
 # plot ENU position and NSAT ---------------------------------------------------
-def plot_pos_enu(p, time, enu, nsat):
+def plot_pos_enu(p, time, enu, nsat, ymax, tspan):
     label = ['Pos E (m)', 'Pos N (m)', 'Pos U (m)', '# Sats']
-    ymax = float(p.box1.get())
-    tspan = float(p.box2.get()) * 3600
-    rtime = float(get_rcv_stat(rcv_body).split(',')[0])
-    xl = [rtime - tspan, rtime]
+    t = 0 if len(time) <= 0 else time[-1]
+    xl = [t - tspan, t]
     for i in range(4):
-        yl = [-ymax, ymax] if i < 3 else [0, 80]
+        yl = [-ymax, ymax] if i < 3 else [0, 60]
         ax = p.plt[i]
         plt.plot_clear(ax)
         if len(time) > 0:
@@ -1217,21 +1304,22 @@ def plot_pos_enu(p, time, enu, nsat):
             j = np.min(np.where(time >= xl[0]))
             if i < 3:
                 plt.plot_poly(ax, time[j:], enu[i][j:], plt.GR_COLOR)
-                plt.plot_dots(ax, time[j:], enu[i][j:], P1_COLOR, size=2)
+                plt.plot_dots(ax, time[j:], enu[i][j:], P2_COLOR, size=2)
             else:
                 plt.plot_poly(ax, time[j:], nsat[j:], plt.GR_COLOR)
-                plt.plot_dots(ax, time[j:], nsat[j:], P1_COLOR, size=2)
+                plt.plot_dots(ax, time[j:], nsat[j:], P2_COLOR, size=2)
         plt.plot_axis(ax, gcolor=None)
+        if len(time) > 0:
+            if i < 3:
+                plt.plot_dots(ax, time[-1:], enu[i][-1:], P1_COLOR, size=9)
+            else:
+                plt.plot_dots(ax, time[-1:], nsat[-1:], P1_COLOR, size=9)
         xs, ys = plt.plot_scale(ax)
         plt.plot_text(ax, ax.xl[0] + 10 / xs, ax.yl[1] - 8 / ys, label[i],
-            font=get_font(0, 'bold'), anchor=NW, color=P1_COLOR)
+            font=get_font(), anchor=NW, color=P1_COLOR)
 
 # plot horizontal position -----------------------------------------------------
-def plot_pos_hori(p, time, enu):
-    label = 'Pos Horizontal (m)'
-    ymax = float(p.box1.get())
-    tspan = float(p.box2.get()) * 3600
-    rtime = float(get_rcv_stat(rcv_body).split(',')[0])
+def plot_pos_hori(p, time, enu, ymax, tspan):
     yl = [-ymax, ymax]
     w, h = p.panel2.winfo_width(), p.panel2.winfo_height()
     xl = [yl[0] * w / h, yl[1] * w / h]
@@ -1247,23 +1335,20 @@ def plot_pos_hori(p, time, enu):
     plt.plot_poly(ax, [0, 0], yl, P3_COLOR)
     plt.plot_dots(ax, [0], [0], P3_COLOR)
     if len(time) > 0:
-        j = np.min(np.where(time >= rtime - tspan))
+        j = np.min(np.where(time >= time[-1] - tspan))
         plt.plot_poly(ax, enu[0][j:], enu[1][j:], plt.GR_COLOR)
-        plt.plot_dots(ax, enu[0][j:], enu[1][j:], P1_COLOR, size=2)
-        plt.plot_dots(ax, enu[0][-1:], enu[1][-1:], plt.BG_COLOR, size=12)
-        plt.plot_dots(ax, enu[0][-1:], enu[1][-1:], P1_COLOR, size=8)
+        plt.plot_dots(ax, enu[0][j:], enu[1][j:], P2_COLOR, size=2)
+        plt.plot_dots(ax, enu[0][-1:], enu[1][-1:], plt.BG_COLOR, size=11)
+        plt.plot_dots(ax, enu[0][-1:], enu[1][-1:], P1_COLOR, size=9)
     plt.plot_axis(ax, gcolor=None)
-    xs, ys = plt.plot_scale(ax)
-    plt.plot_text(ax, ax.xl[0] + 10 / xs, ax.yl[1] - 8 / ys, label,
-        font=get_font(0, 'bold'), anchor=NW, color=P1_COLOR)
 
 # position to enu --------------------------------------------------------------
-def pos2enu(sol_log, ref):
-    ecef = [sdr_rtk.pos2ecef(log[2]) for log in sol_log]
+def pos2enu(log, ref):
+    ecef = [sdr_rtk.pos2ecef(p) for p in log]
     if len(ref) <= 0:
         ref = ecef[0]
     pos = sdr_rtk.ecef2pos(ref)
-    return [sdr_rtk.ecef2enu(pos, r - ref) for r in ecef], ref
+    return np.transpose([sdr_rtk.ecef2enu(pos, r - ref) for r in ecef]), ref
 
 # generate Log page ------------------------------------------------------------
 def log_page_new(parent):
@@ -1324,7 +1409,7 @@ def show_log_page(p):
 
 # Start button push callback ---------------------------------------------------
 def on_btn_start_push(bar):
-    global rcv_body
+    global rcv_body, rcv_log, sol_log
     if not rcv_body:
         if inp_opt.inp.get() == 0:
             info = ' (bus/port=%s, conf=%s)' % (inp_opt.dev.get(), \
@@ -1423,7 +1508,7 @@ def pages_update(note, pages):
     update_page(i, pages[i])
     if i != 3:
         set_sel_ch(rcv_body, 0)
-    text = 'Time: ' + get_rcv_stat(rcv_body).split(',')[0] + ' s'
+    text = 'Time: ' + get_rcv_stat(rcv_body).split()[0] + ' s'
     stat_bar.msg2.configure(text=text)
     return UD_CYCLE1 if i in (1, 3) else UD_CYCLE2 # update interval (ms)
 
