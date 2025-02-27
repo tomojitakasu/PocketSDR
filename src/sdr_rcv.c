@@ -29,7 +29,6 @@
 #define NUM_COL    106          // number of channel status columns
 #define MAX_ACQ    4e-3         // max code length w/o acquisition assist (s)
 #define MAX_BUFF_USE 90         // max buffer usage rate (%)
-#define RNX_VER    305          // RINEX version
 #define MAX_BAR    12           // C/N0 bar width
 
 #define MIN(x, y)  ((x) < (y) ? (x) : (y))
