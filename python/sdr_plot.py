@@ -122,12 +122,13 @@ def plot_dots(plt, x, y, color=FG_COLOR, fill=FG_COLOR, size=3):
     if color == None: return
     xp, yp = plot_pos(plt, x, y)
     xp_yp = set([(int(xp[i]), int(yp[i])) for i in range(len(xp))])
-    d = size / 2
     for xy in xp_yp:
         if size <= 2:
+            d = size / 2 - 0.5
             plt.c.create_rectangle(xy[0] - d, xy[1] - d, xy[0] + d, xy[1] + d,
                 outline=color, fill=color)
         else:
+            d = size / 2
             plt.c.create_oval(xy[0] - d, xy[1] - d, xy[0] + d, xy[1] + d,
                 outline=color, fill=fill)
 
