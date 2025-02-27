@@ -16,11 +16,16 @@ from tkinter import *
 BG_COLOR = 'white'     # background color
 FG_COLOR = '#555555'   # foreground color
 GR_COLOR = '#DDDDDD'   # grid color
-FONT_SIZE = 9          # default font size
 TICK_SIZE = 6          # tick size
+FONT = ('Tahoma', 9, 'normal')
 
 # general object class ---------------------------------------------------------
 class Obj: pass
+
+# set font ---------------------------------------------------------------------
+def set_font(font):
+    global FONT
+    FONT = font
 
 # get tick positions -----------------------------------------------------------
 def get_ticks(xl, xs, taxis=0):
@@ -41,7 +46,7 @@ def get_ticks(xl, xs, taxis=0):
 # generate plot ----------------------------------------------------------------
 def plot_new(parent, width, height, xlim=(0, 1), ylim=(0, 1),
     margin=(35, 25, 25, 25), tick=15, aspect=0, title='', xlabel='', ylabel='',
-    font=('Tahoma', FONT_SIZE, 'normal'), taxis=0):
+    font=FONT, taxis=0):
     plt = Obj()
     plt.c = Canvas(parent, width=width, height=height, bg=BG_COLOR)
     plt.m = margin # (left, right, top, bottom)
