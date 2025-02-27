@@ -46,7 +46,7 @@ def get_ticks(xl, xs, taxis=0):
 # generate plot ----------------------------------------------------------------
 def plot_new(parent, width, height, xlim=(0, 1), ylim=(0, 1),
     margin=(35, 25, 25, 25), tick=15, aspect=0, title='', xlabel='', ylabel='',
-    font=FONT, taxis=0):
+    font=None, taxis=0):
     plt = Obj()
     plt.c = Canvas(parent, width=width, height=height, bg=BG_COLOR)
     plt.m = margin # (left, right, top, bottom)
@@ -58,7 +58,7 @@ def plot_new(parent, width, height, xlim=(0, 1), ylim=(0, 1),
     plt.title = title
     plt.xlabel = xlabel
     plt.ylabel = ylabel
-    plt.font = font
+    plt.font = FONT if not font else font 
     return plt
 
 # plot update ------------------------------------------------------------------
