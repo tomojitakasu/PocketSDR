@@ -670,7 +670,7 @@ def rfch_page_new(parent):
         '', 4)
     p.box6.pack(side=RIGHT, padx=(2, 0))
     ttk.Label(p.toolbar, text='Filter BW (MHz)').pack(side=RIGHT)
-    sdr_opt.link_label_new(p.toolbar, text='?', link=sdr_opt.SIG_LINK).pack(
+    sdr_opt.link_label_new(p.toolbar, text='?', link=sdr_opt.BAND_LINK).pack(
         side=LEFT, padx=6)
     p.txt1 = ttk.Label(p.toolbar, foreground=P1_COLOR)
     p.txt1.pack(side=LEFT, expand=1, fill=X, padx=10)
@@ -1304,10 +1304,10 @@ def plot_pos_enu(p, time, enu, nsat, ymax, tspan):
             j = np.min(np.where(time >= xl[0]))
             if i < 3:
                 plt.plot_poly(ax, time[j:], enu[i][j:], plt.GR_COLOR)
-                plt.plot_dots(ax, time[j:], enu[i][j:], P2_COLOR, size=2)
+                plt.plot_dots(ax, time[j:], enu[i][j:], P1_COLOR, size=2)
             else:
                 plt.plot_poly(ax, time[j:], nsat[j:], plt.GR_COLOR)
-                plt.plot_dots(ax, time[j:], nsat[j:], P2_COLOR, size=2)
+                plt.plot_dots(ax, time[j:], nsat[j:], P1_COLOR, size=2)
         plt.plot_axis(ax, gcolor=None)
         if len(time) > 0:
             if i < 3:
