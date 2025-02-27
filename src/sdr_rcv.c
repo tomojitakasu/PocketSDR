@@ -209,7 +209,7 @@ void sdr_rcv_str_stat(sdr_rcv_t *rcv, int *stat)
 // get receiver status as string -----------------------------------------------
 char *sdr_rcv_rcv_stat(sdr_rcv_t *rcv)
 {
-    static const char *src_str[] = {"---", "IF Data", "RF Frontend"};
+    static const char *src_str[] = {"---", "IF_Data", "RF_Frontend"};
     static const char *fmt_str[] = {
         "---", "INT8", "INT8X2", "RAW8", "RAW16", "RAW16I", "RAW32"
     };
@@ -217,35 +217,32 @@ char *sdr_rcv_rcv_stat(sdr_rcv_t *rcv)
     char *p = rcv_rcv_stat_buff;
     
     if (rcv && rcv->state) {
-        char solstr[128] = "", sys[16] = "";
+        char sys[16] = "";
         int nch_trk = get_nch_trk(rcv, sys);
-        sdr_pvt_solstr(rcv->pvt, solstr);
-        p += sprintf(p, "%.3f,%s,%s/%d,,", get_buff_ix(rcv) * SDR_CYC,
+        p += sprintf(p, "%.3f %s %s/%d ", get_buff_ix(rcv) * SDR_CYC,
             src_str[rcv->dev], fmt_str[rcv->fmt], rcv->nbuff);
         for (int i = 0; i < 8; i++) {
-            p += sprintf(p, "%.2f%s", rcv->fo[i] * 1e-6, i == 3 || i == 7 ? "," : "/");
+            p += sprintf(p, "%.2f%s", rcv->fo[i] * 1e-6, i == 3 || i == 7 ? " " : "/");
         }
         for (int i = 0; i < 8; i++) {
-            p += sprintf(p, "%s%s", IQ_str[rcv->IQ[i]], i == 7 ? "," : "/");
+            p += sprintf(p, "%s%s", IQ_str[rcv->IQ[i]], i == 7 ? " " : "/");
         }
-        p += sprintf(p, "%.2f,%d/%d,%.1f,%.1f,", rcv->fs * 1e-6, nch_trk, rcv->nch,
+        p += sprintf(p, "%.2f %d/%d %.1f %.1f ", rcv->fs * 1e-6, nch_trk, rcv->nch,
             rcv->data_rate * 1e-6, rcv->buff_use);
-        p += sprintf(p, "%.19s,%.3s,%.12s,%.13s,%.9s,%.3f,%.5s,,%d,%d/%d,%.1f,",
-            solstr, solstr + 65, solstr + 22, solstr + 35, solstr + 49,
-            rcv->pvt->latency, solstr + 59, rcv->pvt->count[0], rcv->pvt->count[1],
-            rcv->pvt->count[2], rcv->data_sum);
+        p += sprintf(p, "%.3f %d %d/%d %.1f", rcv->pvt->latency,
+            rcv->pvt->count[0], rcv->pvt->count[1], rcv->pvt->count[2],
+            rcv->data_sum);
        }
     else {
-        p += sprintf(p, "%.3f,---,---/%d,,", 0.0, 0);
+        p += sprintf(p, "%.3f --- ---/- ", 0.0);
         for (int i = 0; i < 8; i++) {
-            p += sprintf(p, "%.2f%s", 0.0, i == 3 || i == 7 ? "," : "/");
+            p += sprintf(p, "%.2f%s", 0.0, i == 3 || i == 7 ? " " : "/");
         }
         for (int i = 0; i < 8; i++) {
-            p += sprintf(p, "--%s", i == 7 ? "," : "/");
+            p += sprintf(p, "--%s", i == 7 ? " " : "/");
         }
-        p += sprintf(p, "%.2f,%d/%d,%.1f,%.1f,", 0.0, 0, 0, 0.0, 0.0);
-        p += sprintf(p, "1970-01-01 00:00:00,---,%.8f,%.8f,%.3f,%.3f,%d/%2d,,%d,"
-            "%2d/%2d,%.1f,", 0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0.0);
+        p += sprintf(p, "%.2f %d/%d %.1f %.1f ", 0.0, 0, 0, 0.0, 0.0);
+        p += sprintf(p, "%.3f %d %d/%d %.1f", 0.0, 0, 0, 0, 0.0);
     }
     return rcv_rcv_stat_buff;
 }
