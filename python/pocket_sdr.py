@@ -517,7 +517,7 @@ def rcv_page_new(parent):
         ind.pack(fill=BOTH, padx=1, pady=1)
         p.ind.append(ind)
     ttk.Label(p.toolbar, text='Output').pack(side=RIGHT, padx=(8, 4))
-    p.box1 = sel_box_new(p.toolbar, SYSTEMS, 'ALL', width=9)
+    p.box1 = sel_box_new(p.toolbar, SYSTEMS, 'ALL', width=8)
     p.box1.pack(side=RIGHT, padx=4)
     ttk.Label(p.toolbar, text='System').pack(side=RIGHT)
     panel1 = Frame(p.panel)
@@ -525,11 +525,9 @@ def rcv_page_new(parent):
     p.plt1 = plt.plot_new(panel1, 257, 257, margin=(25, 25, 25, 25),
         xlim=(-1, 1), ylim=(-1, 1), aspect=1, font=get_font(-1))
     p.plt1.c.pack(side=RIGHT, expand=1, fill=BOTH)
-    p.stat = plt.plot_new(panel1, 543, 257, margin=(20, 15, 30, 30),
-        font=get_font())
+    p.stat = plt.plot_new(panel1, 543, 257, margin=(20, 15, 30, 30))
     p.stat.c.pack(side=LEFT, expand=1, fill=BOTH)
-    p.plt2 = plt.plot_new(p.panel, 800, 245, title='Signal C/N0 (dB-Hz)',
-        font=get_font(), tick=10)
+    p.plt2 = plt.plot_new(p.panel, 800, 245, title='Signal C/N0 (dB-Hz)', tick=10)
     p.plt2.c.pack(expand=1, fill=BOTH)
     p.box1.bind('<<ComboboxSelected>>', lambda e: on_sys_select(e, p))
     update_rcv_page(p)
@@ -681,21 +679,21 @@ def rfch_page_new(parent):
     freq = ((1510, 1650), (1160, 1300))
     p.plt1 = []
     for i in range(2):
-        p.plt1.append(plt.plot_new(p.panel1, 200, 200, freq[i], font=get_font(),
+        p.plt1.append(plt.plot_new(p.panel1, 200, 200, freq[i],
             margin=(25, 25, 25, 25), tick=5, title=tis[i]))
         p.plt1[-1].c.pack(expand=1, fill=BOTH)
     p.panel2 = Frame(p.panel)
     p.plt2 = []
     p.plt2.append(plt.plot_new(p.panel2, 200, 200, (0, 1), (-80, -40), margin,
-        font=get_font(), title=ti[0], xlabel=labels[0]))
+        title=ti[0], xlabel=labels[0]))
     for i in range(2):
         p.plt2.append(plt.plot_new(p.panel2, 200, 200, (-5, 5), (0, 0.5),
-            margin, font=get_font(), title=ti[1+i], xlabel=labels[1]))
+            margin, title=ti[1+i], xlabel=labels[1]))
     p.panel3 = Frame(p.panel)
     p.plt3 = []
     for i in range(4):
         p.plt3.append(plt.plot_new(p.panel3, 200, 200, (0, 1), (-80, -40),
-            margin, font=get_font(), title=ti[0], xlabel=labels[0]))
+            margin, title=ti[0], xlabel=labels[0]))
     p.box1.bind('<<ComboboxSelected>>', lambda e: on_rfch_select(e, p))
     p.box2.bind('<<ComboboxSelected>>', lambda e: on_rfch_select(e, p))
     p.box3.bind('<<ComboboxSelected>>', lambda e: on_rfch_select(e, p))
@@ -895,7 +893,7 @@ def bbch_page_new(parent):
         'ALL', 5)
     p.box1.pack(side=LEFT)
     ttk.Label(p.toolbar, text='System').pack(side=LEFT, padx=(8, 4))
-    p.box2 = sel_box_new(p.toolbar, SYSTEMS, 'ALL', 9)
+    p.box2 = sel_box_new(p.toolbar, SYSTEMS, 'ALL', 8)
     p.box2.pack(side=LEFT)
     ttk.Label(p.toolbar, text='State').pack(side=LEFT, padx=(8, 4))
     p.box3 = sel_box_new(p.toolbar, ['ALL', 'LOCK'], 'LOCK', 6)
@@ -994,16 +992,14 @@ def corr_page_new(parent):
     p.box4 = sel_box_new(p.toolbar, ['I', 'IQ'], 'I', 3)
     p.box4.pack(side=RIGHT, padx=1)
     ttk.Label(p.toolbar, text='IQ/Span(s)/Range').pack(side=RIGHT, padx=2)
-    p.plt3 = plt.plot_new(p.panel, 800, 245, [0, 1], [-0.6, 0.6],
-        font=get_font(), title=ti[2])
+    p.plt3 = plt.plot_new(p.panel, 800, 245, [0, 1], [-0.6, 0.6], title=ti[2])
     p.plt3.c.pack(side=BOTTOM, expand=1, fill=BOTH)
     panel1 = Frame(p.panel)
     panel1.pack(expand=1, fill=BOTH)
-    p.plt2 = plt.plot_new(panel1, 255, 245, [-0.6, 0.6], [-0.6, 0.6],
-        font=get_font(), aspect=1, title=ti[1])
+    p.plt2 = plt.plot_new(panel1, 255, 245, [-0.6, 0.6], [-0.6, 0.6], aspect=1,
+        title=ti[1])
     p.plt2.c.pack(side=RIGHT, expand=1, fill=BOTH)
-    p.plt1 = plt.plot_new(panel1, 545, 245, [0, 1], [-0.2, 0.6],
-        font=get_font(), title=ti[0])
+    p.plt1 = plt.plot_new(panel1, 545, 245, [0, 1], [-0.2, 0.6], title=ti[0])
     p.plt1.c.pack(side=LEFT, expand=1, fill=BOTH)
     p.btn1.btn.bind('<Button-1>', lambda e: on_corr_ch_down(e, p))
     p.btn2.btn.bind('<Button-1>', lambda e: on_corr_ch_up(e, p))
@@ -1139,7 +1135,7 @@ def sats_page_new(parent):
     p.panel = Frame(parent)
     p.toolbar = tool_bar_new(p.panel)
     ttk.Label(p.toolbar, text='System').pack(side=LEFT, padx=(8, 4))
-    p.box1 = sel_box_new(p.toolbar, SYSTEMS, 'ALL', 9)
+    p.box1 = sel_box_new(p.toolbar, SYSTEMS, 'ALL', 8)
     p.box1.pack(side=LEFT)
     p.txt1 = ttk.Label(p.toolbar, font=get_font(1), foreground=P1_COLOR)
     p.txt1.pack(side=RIGHT, padx=10)
@@ -1551,6 +1547,7 @@ if __name__ == '__main__':
     set_styles()
     
     # load options
+    plt.set_font(get_font())
     sdr_opt.set_bgcolor(BG_COLOR2)
     sdr_opt.set_font(get_font())
     inp_opt = sdr_opt.inp_opt_new()
