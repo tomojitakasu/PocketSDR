@@ -23,27 +23,32 @@ TICK_SIZE = 6          # tick size
 class Obj: pass
 
 # get tick positions -----------------------------------------------------------
-def get_ticks(xl, xs):
+def get_ticks(xl, xs, taxis=0):
+    ti = (0, 15, 30, 60, 120, 300, 900, 1800, 3600, 7200)
     xp = xl[1] - xl[0]
     if xp <= 0.0 or xs <= 0.0:
         return []
     if xp > 500 / xs:
         xp = 500 / xs
-    xt = pow(10.0, floor(log10(xp))) * 0.2
-    if   xp / xt > 20.0: xt *= 5.0
-    elif xp / xt > 10.0: xt *= 2.5
+    if not taxis:
+        xt = pow(10.0, floor(log10(xp))) * 0.2
+        if   xp / xt > 20.0: xt *= 5.0
+        elif xp / xt > 10.0: xt *= 2.5
+    else:
+        xt = ti[np.min(np.where(ti > xp * 0.15))]
     return np.arange(ceil((xl[0] - 1e-6) / xt), xl[1] / xt + 1e-6) * xt
 
 # generate plot ----------------------------------------------------------------
 def plot_new(parent, width, height, xlim=(0, 1), ylim=(0, 1),
-    margin=(35, 25, 25, 25), tick=3, aspect=0, title='', xlabel='', ylabel='',
-    font=('Tahoma', FONT_SIZE, 'normal')):
+    margin=(35, 25, 25, 25), tick=15, aspect=0, title='', xlabel='', ylabel='',
+    font=('Tahoma', FONT_SIZE, 'normal'), taxis=0):
     plt = Obj()
     plt.c = Canvas(parent, width=width, height=height, bg=BG_COLOR)
     plt.m = margin # (left, right, top, bottom)
     plt.xl = np.array(xlim if xlim[0] < xlim[1] else (0, 1))
     plt.yl = np.array(ylim if ylim[0] < ylim[1] else (0, 1))
-    plt.tick = tick # 1:xtick + 2:ytick
+    plt.tick = tick # 1:xtick + 2:ytick + 4:xtick-label + 8:ytick-label
+    plt.taxis = taxis # time axis 0:off, 1:on
     plt.aspect = aspect # 0:independent,1:xy-equal
     plt.title = title
     plt.xlabel = xlabel
@@ -101,23 +106,23 @@ def plot_circle(plt, x, y, r, color=FG_COLOR, fill=None):
         outline=color, fill=fill)
 
 # plot polyline ----------------------------------------------------------------
-def plot_poly(plt, x, y, color=FG_COLOR):
+def plot_poly(plt, x, y, color=FG_COLOR, width=1):
     if color == None or len(x) <= 1: return
     xp, yp = plot_pos(plt, x, y)
     xp_yp = [(xp[i], yp[i]) for i in range(len(xp))]
-    plt.c.create_line(xp_yp, fill=color)
+    plt.c.create_line(xp_yp, fill=color, width=width)
 
 # plot dots --------------------------------------------------------------------
 def plot_dots(plt, x, y, color=FG_COLOR, fill=FG_COLOR, size=3):
     if color == None: return
     xp, yp = plot_pos(plt, x, y)
     xp_yp = set([(int(xp[i]), int(yp[i])) for i in range(len(xp))])
-    if size <= 1:
-        for xy in xp_yp:
-            plt.c.create_line(xy[0], xy[1], xy[0], xy[1] + 1, fill=color)
-    else:
-        d = size / 2
-        for xy in xp_yp:
+    d = size / 2
+    for xy in xp_yp:
+        if size <= 2:
+            plt.c.create_rectangle(xy[0] - d, xy[1] - d, xy[0] + d, xy[1] + d,
+                outline=color, fill=color)
+        else:
             plt.c.create_oval(xy[0] - d, xy[1] - d, xy[0] + d, xy[1] + d,
                 outline=color, fill=fill)
 
@@ -136,7 +141,7 @@ def plot_frm(plt, color=FG_COLOR):
     xs, ys = plot_scale(plt)
     if plt.tick & 1:
         d = TICK_SIZE / ys
-        for x in get_ticks(plt.xl, xs):
+        for x in get_ticks(plt.xl, xs, plt.taxis):
             plot_poly(plt, [x, x], [plt.yl[0], plt.yl[0] + d], color)
             plot_poly(plt, [x, x], [plt.yl[1], plt.yl[1] - d], color)
     if plt.tick & 2:
@@ -151,7 +156,7 @@ def plot_grid(plt, color=GR_COLOR):
     if color == None: return
     xs, ys = plot_scale(plt)
     if plt.tick & 1:
-        for x in get_ticks(plt.xl, xs):
+        for x in get_ticks(plt.xl, xs, plt.taxis):
             plot_poly(plt, [x, x], plt.yl, color)
     if plt.tick & 2:
         for y in get_ticks(plt.yl, ys):
@@ -161,14 +166,20 @@ def plot_grid(plt, color=GR_COLOR):
 def plot_tick_labels(plt, color=FG_COLOR):
     if color == None: return
     xs, ys = plot_scale(plt)
-    if (plt.tick) & 1 and not (plt.tick & 4):
-        for x in get_ticks(plt.xl, xs):
-            plot_text(plt, x, plt.yl[0] - 3 / ys, text='%.9g' % (x),
-                color=color, anchor=N)
-    if (plt.tick) & 2 and not (plt.tick & 8):
+    if plt.tick & 4:
+        for x in get_ticks(plt.xl, xs, plt.taxis):
+            text = '%.9g' % (x) if not plt.taxis else time_label(x)
+            plot_text(plt, x, plt.yl[0] - 3 / ys, text=text, color=color,
+                anchor=N)
+    if plt.tick & 8:
         for y in get_ticks(plt.yl, ys):
             plot_text(plt, plt.xl[0] - 3 / xs, y, text='%.9g' % (y),
                 color=color, anchor=E)
+
+# time label -------------------------------------------------------------------
+def time_label(x):
+    x = int(x - 86400 * floor(x / 86400))
+    return '%02d:%02d:%02d' % (x // 3600, x % 3600 // 60, x % 60)
 
 # plot axis --------------------------------------------------------------------
 def plot_axis(plt, fcolor=FG_COLOR, gcolor=GR_COLOR, tcolor=FG_COLOR):
