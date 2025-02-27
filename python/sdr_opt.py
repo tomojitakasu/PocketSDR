@@ -17,6 +17,7 @@ from tkinter import filedialog
 MAX_RFCH = 8           # max number of RF channels
 BG_COLOR = '#F8F8F8'   # background color
 DLG_MARGIN = (20, 15)  # dialog margin
+BAND_LINK = 'file://' + os.path.dirname(__file__) + '/../doc/signal_bands.pdf'
 SIG_LINK = 'file://' + os.path.dirname(__file__) + '/../doc/signal_IDs.pdf'
 FONT = ('Tahoma', 9, 'normal')
 
