@@ -81,6 +81,10 @@ except:
     print('libsdr load error: ' + LIBSDR)
     exit(-1)
 
+# global variables -------------------------------------------------------------
+rcv_body = None
+sol_log, rcv_log, rcv_log_filt = [], [], ''
+
 # general object class ---------------------------------------------------------
 class Obj: pass
 
@@ -1404,12 +1408,13 @@ def update_log_page(p):
 def show_log_page(p):
     global rcv_log
     p.stxt.delete('1.0', END)
-    p.stxt.insert(INSERT, '\n'.join(rcv_log))
+    p.stxt.insert(END, '\n'.join(rcv_log))
     p.stxt.see(END)
+    p.stxt.xview_moveto(0.0) # prevent x-scroll
 
 # Start button push callback ---------------------------------------------------
 def on_btn_start_push(bar):
-    global rcv_body, rcv_log, sol_log
+    global rcv_body
     if not rcv_body:
         if inp_opt.inp.get() == 0:
             info = ' (bus/port=%s, conf=%s)' % (inp_opt.dev.get(), \
@@ -1553,10 +1558,6 @@ if __name__ == '__main__':
     sig_opt = sdr_opt.sig_opt_new()
     sys_opt = sdr_opt.sys_opt_new()
     sdr_opt.load_opts(OPTS_FILE, inp_opt, out_opt, sig_opt, sys_opt)
-    
-    # SDR receiver
-    rcv_body = None
-    sol_log, rcv_log, rcv_log_filt = [], [], ''
     
     # generate button bar
     labels = ('Start', 'Stop', 'Input ...', 'Output ...', 'Signal ...',
