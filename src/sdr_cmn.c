@@ -17,6 +17,10 @@
 #include <sys/time.h>
 #endif
 
+// global variables ------------------------------------------------------------
+static const char *lib_name = SDR_LIB_NAME;
+static const char *lib_ver = SDR_LIB_VER;
+
 //------------------------------------------------------------------------------
 //  Allocate memory. If no memory allocated, it exits the AP immediately with
 //  an error message.
@@ -129,5 +133,24 @@ void sdr_sleep_msec(int msec)
     ts.tv_nsec = (long)(msec * 1000000);
     nanosleep(&ts, NULL);
 #endif
+}
+
+//------------------------------------------------------------------------------
+//  Get library name and version.
+//  
+//  args:
+//      none
+//
+//  return:
+//      library name or library version
+//
+const char *sdr_get_name(void)
+{
+    return lib_name;
+}
+
+const char *sdr_get_ver(void)
+{
+    return lib_ver;
 }
 
