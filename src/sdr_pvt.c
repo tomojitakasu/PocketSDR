@@ -17,7 +17,7 @@
 
 // constants and macros --------------------------------------------------------
 #define SDR_EPOCH      1.0      // epoch time interval (s)
-#define LAG_EPOCH      0.05     // max PVT epoch lag (s)
+#define LAG_EPOCH      0.5      // max PVT epoch lag (s)
 #define EL_MASK        15.0     // elavation mask (deg)
 #define STD_ERR        0.015    // std-dev of carrier phase noise (m)
 #define FILE_NAV       ".pocket_navdata.csv" // navigation data file
@@ -927,6 +927,6 @@ void sdr_pvt_solstr(sdr_pvt_t *pvt, char *buff)
     
     tstr[4] = tstr[7] = '-';
     sprintf(nstr, "%d/%d", pvt->sol->ns, pvt->nsat);
-    sprintf(buff, "%21s %12.8f %13.8f %9.3f %-5s %s", tstr, pos[0] * R2D,
+    sprintf(buff, "%21s %12.8f %13.8f %9.3f %5s %s", tstr, pos[0] * R2D,
         pos[1] * R2D, pos[2], nstr, stat ? "FIX" : "---");
 }
