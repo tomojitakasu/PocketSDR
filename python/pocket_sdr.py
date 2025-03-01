@@ -82,6 +82,7 @@ except:
 # global variables -------------------------------------------------------------
 rcv_body = None
 sol_log, rcv_log, rcv_log_filt = [], [], ''
+root_resize = 0
 
 # general object class ---------------------------------------------------------
 class Obj: pass
@@ -307,13 +308,13 @@ def get_sat_stat(rcv, sats):
 
 # get RF channel status -------------------------------------------------------
 def get_rfch_stat(rcv, ch):
-    stat = np.zeros(5, dtype='float64')
+    stat = np.zeros(6, dtype='float64')
     libsdr.sdr_rcv_rfch_stat.argtypes = (c_void_p, c_int32,
         ctypeslib.ndpointer('float64'))
     if not libsdr.sdr_rcv_rfch_stat(rcv, ch, stat):
-        return 0, 0, 24.0, 0.0, 0
+        return 0, 0, 24.0, 0.0, 0, 0
     return int(stat[0]), int(stat[1]), stat[2] / 1e6, stat[3] / 1e6, \
-        int(stat[4]) # dev, fmt, fs (MHz), fo (MHz), IQ
+        int(stat[4]), int(stat[5]) # dev, fmt, fs (MHz), fo (MHz), IQ, bits
 
 # get RF channel PSD -----------------------------------------------------------
 def get_rfch_psd(rcv, ch, tave):
@@ -372,14 +373,15 @@ def get_corr_stat(rcv, ch):
     pos = np.zeros(SDR_N_CORR, dtype='float64')
     pos[0:4] = [0, -40, 0, 40]
     C = np.zeros(SDR_N_CORR, dtype='complex64')
+    P = np.zeros(SDR_N_CORR, dtype='float64')
     libsdr.sdr_rcv_corr_stat.argtypes = (c_void_p, c_int32,
         ctypeslib.ndpointer('float64'), ctypeslib.ndpointer('float64'),
-        ctypeslib.ndpointer('complex64'))
-    n = libsdr.sdr_rcv_corr_stat(rcv, ch, stat, pos, C)
-    # state, fs, lock, cn0, coff, fd, pos, C
+        ctypeslib.ndpointer('complex64'), ctypeslib.ndpointer('float64'))
+    n = libsdr.sdr_rcv_corr_stat(rcv, ch, stat, pos, C, P)
+    # state, fs, lock, cn0, coff, fd, pos, C, P
     return int(stat[0]), stat[1], stat[2], stat[3], stat[4], stat[5], \
         int(stat[6]) if n > 0 else 1, pos[:n] if n > 0 else pos[:4], \
-        C[:n] if n > 0 else C[:4]
+        C[:n] if n > 0 else C[:4], P[:n] if n > 0 else P[:4]
 
 # get correlator history --------------------------------------------------------
 def get_corr_hist(rcv, ch, tspan):
@@ -433,7 +435,7 @@ def update_sol_log():
     pos = [float(s) for s in sol[2:5]]
     pos[0] *= D2R
     pos[1] *= D2R
-    nsat = int(sol[5].split('/')[0])
+    nsat = [int(s) for s in sol[5].split('/')]
     sol_log.append([time, pos, nsat])
     if len(sol_log) > MAX_SOLLOG:
         sol_log = sol_log[-MAX_SOLLOG:]
@@ -487,6 +489,11 @@ def status_bar_new(parent):
     bar.msg1.pack(side=LEFT, expand=1, fill=X, padx=2)
     bar.msg2.pack(side=RIGHT, padx=2)
     return bar
+
+# show status bar --------------------------------------------------------------
+def status_bar_show(text):
+    stat_bar.msg1.configure(text=text)
+    stat_bar.msg1.update()
 
 # generate selection box -------------------------------------------------------
 def sel_box_new(parent, vals=[], val='', width=8):
@@ -649,26 +656,23 @@ def rfch_page_new(parent):
     p.panel = Frame(parent)
     p.toolbar = tool_bar_new(p.panel)
     ttk.Label(p.toolbar, text='RF CH').pack(side=LEFT, padx=(8, 4))
-    p.box1 = sel_box_new(p.toolbar, chs, 'ALL', 5)
+    p.box1 = sel_box_new(p.toolbar, chs, '1', 5)
     p.box1.pack(side=LEFT)
-    p.box2 = sel_box_new(p.toolbar, ['5', '10', '20'], '5', 2)
-    p.box2.pack(side=RIGHT, padx=(2, 4))
-    ttk.Label(p.toolbar, text='MaxQ').pack(side=RIGHT)
-    p.box3 = sel_box_new(p.toolbar, ['0.1', '0.03', '0.01', '0.003', '0.001'],
+    p.box2 = sel_box_new(p.toolbar, ['0.1', '0.03', '0.01', '0.003', '0.001'],
         '0.01', 5)
-    p.box3.pack(side=RIGHT, padx=(2, 4))
+    p.box2.pack(side=RIGHT, padx=(2, 4))
     ttk.Label(p.toolbar, text='Ave (s)').pack(side=RIGHT)
     vals = ['-', 'Auto'];
     for g in range(64):
         vals.append(str(g))
-    p.box4 = sel_box_new(p.toolbar, vals, '', 5)
-    p.box4.pack(side=RIGHT, padx=(2, 4))
+    p.box3 = sel_box_new(p.toolbar, vals, '', 5)
+    p.box3.pack(side=RIGHT, padx=(2, 4))
     ttk.Label(p.toolbar, text='LNA Gain').pack(side=RIGHT)
-    p.box5 = sel_box_new(p.toolbar, ['3rd', '5th'], '', 3)
-    p.box5.pack(side=RIGHT, padx=(2, 4))
-    p.box6 = sel_box_new(p.toolbar, ['2.5', '4.2', '8.7', '16.4', '23.4', '36.0'],
+    p.box4 = sel_box_new(p.toolbar, ['3rd', '5th'], '', 3)
+    p.box4.pack(side=RIGHT, padx=(2, 4))
+    p.box5 = sel_box_new(p.toolbar, ['2.5', '4.2', '8.7', '16.4', '23.4', '36.0'],
         '', 4)
-    p.box6.pack(side=RIGHT, padx=(2, 0))
+    p.box5.pack(side=RIGHT, padx=2)
     ttk.Label(p.toolbar, text='Filter BW (MHz)').pack(side=RIGHT)
     sdr_opt.link_label_new(p.toolbar, text='?', link=sdr_opt.BAND_LINK).pack(
         side=LEFT, padx=6)
@@ -696,10 +700,9 @@ def rfch_page_new(parent):
             margin, title=ti[0], xlabel=labels[0]))
     p.box1.bind('<<ComboboxSelected>>', lambda e: on_rfch_select(e, p))
     p.box2.bind('<<ComboboxSelected>>', lambda e: on_rfch_select(e, p))
-    p.box3.bind('<<ComboboxSelected>>', lambda e: on_rfch_select(e, p))
-    p.box4.bind('<<ComboboxSelected>>', lambda e: on_gain_select(e, p))
+    p.box3.bind('<<ComboboxSelected>>', lambda e: on_gain_select(e, p))
+    p.box4.bind('<<ComboboxSelected>>', lambda e: on_filt_select(e, p))
     p.box5.bind('<<ComboboxSelected>>', lambda e: on_filt_select(e, p))
-    p.box6.bind('<<ComboboxSelected>>', lambda e: on_filt_select(e, p))
     update_rfch_page(p)
     return p
 
@@ -710,7 +713,7 @@ def on_rfch_select(e, p):
 # LNA Gain select callback -----------------------------------------------------
 def on_gain_select(e, p):
     ch = p.box1.get()
-    val = p.box4.get()
+    val = p.box3.get()
     if ch == '1-4' or ch == '5-8' or val == '-':
         return
     set_rfch_gain(rcv_body, int(ch), 0 if val == 'Auto' else int(val) + 1)
@@ -718,28 +721,25 @@ def on_gain_select(e, p):
 # IF Filter select callback ----------------------------------------------------
 def on_filt_select(e, p):
     ch = p.box1.get()
-    val1 = p.box5.get()
-    val2 = p.box6.get()
-    if ch == '1-4' or ch == '5-8' or val1 == '-' or val2 == '-':
+    val1 = p.box4.get()
+    val2 = p.box5.get()
+    dev, fmt, fs, fo, IQ, bits = get_rfch_stat(rcv_body, int(ch))
+    if ch == '1-4' or ch == '5-8' or val1 == '-' or val2 == '-' or IQ != 2:
         return
-    dev, fmt, fs, fo, IQ = get_rfch_stat(rcv_body, int(ch))
-    freq = 0.0 if IQ == 2 else fs * 0.25
-    set_rfch_filt(rcv_body, int(ch), float(val2), freq, val1 == '3rd')
+    set_rfch_filt(rcv_body, int(ch), float(val2), 0.0, val1 == '3rd')
 
 # update RF Channels page ------------------------------------------------------
 def update_rfch_page(p):
-    dev, fmt, fs, fo, IQ = get_rfch_stat(rcv_body, 1)
     ch = p.box1.get()
-    maxq = float(p.box2.get())
-    tave = float(p.box3.get())
+    tave = float(p.box2.get())
     if ch == 'ALL':
         p.panel2.pack_forget()
         p.panel3.pack_forget()
         p.panel1.pack(expand=1, fill=BOTH)
         update_freq_plot(p.plt1)
+        p.box3.set('-')
         p.box4.set('-')
         p.box5.set('-')
-        p.box6.set('-')
     elif ch == '1-4' or ch == '5-8':
         p.panel1.pack_forget()
         p.panel2.pack_forget()
@@ -748,9 +748,9 @@ def update_rfch_page(p):
             p.plt3[i].c.place(relx=i % 2 * 0.5, rely=i // 2 * 0.5, relwidth=0.5,
                 relheight=0.5)
             update_psd_plot(p.plt3[i], i + 1 if ch == '1-4' else i + 5, tave)
+        p.box3.set('-')
         p.box4.set('-')
         p.box5.set('-')
-        p.box6.set('-')
     else:
         p.panel1.pack_forget()
         p.panel3.pack_forget()
@@ -759,17 +759,18 @@ def update_rfch_page(p):
         p.plt2[1].c.place(relx=0.65, rely=0, relwidth=0.35, relheight=0.5)
         p.plt2[2].c.place(relx=0.65, rely=0.5, relwidth=0.35, relheight=0.5)
         update_psd_plot(p.plt2[0], int(ch), tave)
-        update_hist_plot(p.plt2[1], p.plt2[2], int(ch), maxq, tave)
+        update_hist_plot(p.plt2[1], p.plt2[2], int(ch), tave)
         g = get_rfch_gain(rcv_body, int(ch))
-        p.box4.set('-' if g < 0 else 'Auto' if g == 0 else '%d' % (g - 1))
+        p.box3.set('-' if g < 0 else 'Auto' if g == 0 else '%d' % (g - 1))
         bw, freq, order = get_rfch_filt(rcv_body, int(ch))
-        p.box5.set('-' if bw < 0 else '3rd' if order else '5th')
-        p.box6.set('-' if bw < 0 else '%.1f' % (bw))
+        p.box4.set('-' if bw < 0 else '3rd' if order else '5th')
+        p.box5.set('-' if bw < 0 else '%.1f' % (bw))
+    dev, fmt, fs, fo, IQ, bits = get_rfch_stat(rcv_body, 1)
     p.txt1.configure(text='F_S: %.6f MHz' % (fs))
 
 # update PSD plot --------------------------------------------------------------
 def update_psd_plot(p, ch, tave):
-    dev, fmt, fs, fo, IQ = get_rfch_stat(rcv_body, ch)
+    dev, fmt, fs, fo, IQ, bits = get_rfch_stat(rcv_body, ch)
     psd = get_rfch_psd(rcv_body, ch, tave)
     f = np.linspace(fo, fo + fs / 2, len(psd)) if IQ == 1 else \
         np.linspace(fo - fs / 2, fo + fs / 2, len(psd))
@@ -797,7 +798,7 @@ def update_freq_plot(p):
         plt.plot_clear(p[i])
         plt.plot_axis(p[i])
         for ch in range(1, 9):
-            dev, fmt, fs, fo, IQ = get_rfch_stat(rcv_body, ch)
+            dev, fmt, fs, fo, IQ, bits = get_rfch_stat(rcv_body, ch)
             xs, ys = plt.plot_scale(p[i])
             xl = [fo, fo + fs / 2] if IQ == 1 else [fo - fs / 2, fo + fs / 2]
             yl = [p[i].yl[0] + 5 / ys, p[i].yl[1] - 20 / ys]
@@ -858,29 +859,31 @@ def plot_mark(p, x, y, color):
     plt.plot_poly(p, xi, yi, color=color)
 
 # update histograms plot -------------------------------------------------------
-def update_hist_plot(p1, p2, ch, maxq, tave):
+def update_hist_plot(p1, p2, ch, tave):
+    dev, fmt, fs, fo, IQ, bits = get_rfch_stat(rcv_body, ch)
     val, hist1, hist2 = get_rfch_hist(rcv_body, ch, tave)
-    plot_hist(p1, maxq, val, hist1)
-    plot_hist(p2, maxq, val, hist2)
+    plot_hist(p1, bits, val, hist1)
+    plot_hist(p2, bits, val, hist2)
 
 # plot histogram ---------------------------------------------------------------
-def plot_hist(p, maxq, val, hist):
+def plot_hist(p, bits, val, hist):
+    xl = (5, 3, 5, 9, 17, 33, 65, 129, 257)
+    yl = (0.4, 0.4, 0.4, 0.3, 0.2, 0.15, 0.1, 0.1, 0.1)
     xs, ys = plt.plot_scale(p)
     plt.plot_clear(p)
     plt.plot_axis(p, fcolor=None, tcolor=None)
-    w = 6 / xs * 5 / maxq
+    w = 6 / xs * 5 / xl[bits]
     for i in range(len(val)):
         plt.plot_rect(p, val[i] - w, 0, val[i] + w, hist[i], fill=P1_COLOR)
-    yl = 0.5 * 5 / maxq
-    plt.plot_xlim(p, [-maxq, maxq])
-    plt.plot_ylim(p, [0, yl])
+    plt.plot_xlim(p, [-xl[bits], xl[bits]])
+    plt.plot_ylim(p, [0, yl[bits]])
     plt.plot_axis(p, gcolor=None)
     if len(val) > 0:
         ave = np.sum(val * hist) / len(val)
         std = sqrt(np.sum((val - ave) ** 2 * hist) / len(val))
-        x = maxq - 12 / xs
-        plt.plot_text(p, x, yl - 10 / ys, 'Ave: %.2f' % (ave), anchor=NE)
-        plt.plot_text(p, x, yl - 26 / ys, 'Std: %.2f' % (std), anchor=NE)
+        x = xl[bits] - 12 / xs
+        plt.plot_text(p, x, yl[bits] - 10 / ys, 'Ave: %.2f' % (ave), anchor=NE)
+        plt.plot_text(p, x, yl[bits] - 26 / ys, 'Std: %.2f' % (std), anchor=NE)
 
 # generate BB Channels page ----------------------------------------------------
 def bbch_page_new(parent):
@@ -989,7 +992,7 @@ def corr_page_new(parent):
     p.box2 = sel_box_new(p.toolbar, ['0.1', '0.2', '0.5', '1', '2', '5', '10'],
         '1', 3)
     p.box2.pack(side=RIGHT, padx=1)
-    p.box4 = sel_box_new(p.toolbar, ['I', 'IQ'], 'I', 3)
+    p.box4 = sel_box_new(p.toolbar, ['I', 'IQ', 'aveIQ'], 'I', 5)
     p.box4.pack(side=RIGHT, padx=1)
     ttk.Label(p.toolbar, text='IQ/Span(s)/Range').pack(side=RIGHT, padx=2)
     p.plt3 = plt.plot_new(p.panel, 800, 245, [0, 1], [-0.6, 0.6], title=ti[2])
@@ -1043,9 +1046,9 @@ def update_corr_page(p):
     ch = int(p.box1.get())
     rng = [float(p.box2.get()), float(p.box3.get())]
     type = p.box4.get()
-    state, fs, lock, cn0, coff, fd, npos, pos, C = get_corr_stat(rcv_body, ch)
+    state, fs, lock, cn0, coff, fd, npos, pos, C, aveC = get_corr_stat(rcv_body, ch)
     tt, T, P = get_corr_hist(rcv_body, ch, rng[0])
-    update_corr_plot1(p.plt1, coff, fs, npos, pos, C, type, rng[1])
+    update_corr_plot1(p.plt1, coff, fs, npos, pos, C, aveC, type, rng[1])
     update_corr_plot2(p.plt2, P, rng[1])
     update_corr_plot3(p.plt3, tt, T, P, rng)
     update_corr_text(p, ch, tt)
@@ -1076,7 +1079,7 @@ def update_corr_text(p, ch, time):
         return
 
 # update correlator plot 1 -----------------------------------------------------
-def update_corr_plot1(p, coff, fs, npos, pos, C, type, rng):
+def update_corr_plot1(p, coff, fs, npos, pos, C, aveC, type, rng):
     x = [coff + pos[i] / fs * 1e3 for i in range(len(pos))]
     C *= np.sign(C[0])
     plt.plot_clear(p)
@@ -1088,7 +1091,7 @@ def update_corr_plot1(p, coff, fs, npos, pos, C, type, rng):
     plt.plot_poly(p, [coff, coff], p.yl, color='grey')
     plt.plot_poly(p, p.xl, [0, 0], color='grey')
     plt.plot_dots(p, [coff], [0], color=plt.FG_COLOR, size=3)
-    y = C.real if type == 'I' else abs(C)
+    y = C.real if type == 'I' else abs(C) if type == 'IQ' else np.sqrt(aveC)
     plt.plot_poly(p, x[npos:], y[npos:], color=P2_COLOR)
     plt.plot_dots(p, x[npos:], y[npos:], color=P2_COLOR, fill=P1_COLOR, size=3)
     plt.plot_dots(p, x[:npos], y[:npos], color=P1_COLOR, fill=P1_COLOR, size=9)
@@ -1247,11 +1250,11 @@ def on_sol_clear_push(e, p):
 # update Solution page ---------------------------------------------------------
 def update_sol_page(p):
     global sol_log
-    time, enu, nsat = [], [[], [], []], []
+    time, enu, nsat = [], [[], [], []], [[], []]
     if len(sol_log) > 0:
         time = timeval([log[0] for log in sol_log])
         enu, p.ref = pos2enu([log[1] for log in sol_log], p.ref)
-        nsat = np.array([log[2] for log in sol_log])
+        nsat = np.transpose([log[2] for log in sol_log])
     ymax = float(p.box1.get())
     tspan = float(p.box2.get())
     if p.box3.get() == 'Pos ENU':
@@ -1291,7 +1294,7 @@ def plot_pos_enu(p, time, enu, nsat, ymax, tspan):
     t = 0 if len(time) <= 0 else time[-1]
     xl = [t - tspan, t]
     for i in range(4):
-        yl = [-ymax, ymax] if i < 3 else [0, 60]
+        yl = [-ymax, ymax] if i < 3 else [0, 80]
         ax = p.plt[i]
         plt.plot_clear(ax)
         if len(time) > 0:
@@ -1306,14 +1309,17 @@ def plot_pos_enu(p, time, enu, nsat, ymax, tspan):
                 plt.plot_poly(ax, time[j:], enu[i][j:], plt.GR_COLOR)
                 plt.plot_dots(ax, time[j:], enu[i][j:], P1_COLOR, size=2)
             else:
-                plt.plot_poly(ax, time[j:], nsat[j:], plt.GR_COLOR)
-                plt.plot_dots(ax, time[j:], nsat[j:], P1_COLOR, size=2)
+                plt.plot_poly(ax, time[j:], nsat[1][j:], plt.GR_COLOR)
+                plt.plot_dots(ax, time[j:], nsat[1][j:], P2_COLOR, size=2)
+                plt.plot_poly(ax, time[j:], nsat[0][j:], plt.GR_COLOR)
+                plt.plot_dots(ax, time[j:], nsat[0][j:], P1_COLOR, size=2)
         plt.plot_axis(ax, gcolor=None)
         if len(time) > 0:
             if i < 3:
                 plt.plot_dots(ax, time[-1:], enu[i][-1:], P1_COLOR, size=9)
             else:
-                plt.plot_dots(ax, time[-1:], nsat[-1:], P1_COLOR, size=9)
+                plt.plot_dots(ax, time[-1:], nsat[1][-1:], P2_COLOR, size=9)
+                plt.plot_dots(ax, time[-1:], nsat[0][-1:], P1_COLOR, size=9)
         xs, ys = plt.plot_scale(ax)
         plt.plot_text(ax, ax.xl[0] + 10 / xs, ax.yl[1] - 8 / ys, label[i],
             font=get_font(), anchor=NW, color=P1_COLOR)
@@ -1412,6 +1418,7 @@ def show_log_page(p):
 def on_btn_start_push(bar):
     global rcv_body
     if not rcv_body:
+        status_bar_show('')
         if inp_opt.inp.get() == 0:
             info = ' (bus/port=%s, conf=%s)' % (inp_opt.dev.get(), \
                 inp_opt.conf_path.get() if inp_opt.conf_ena.get() else '')
@@ -1420,9 +1427,9 @@ def on_btn_start_push(bar):
                 inp_opt.toff.get(), inp_opt.tscale.get())
         rcv_body = rcv_open(sys_opt, inp_opt, out_opt, sig_opt)
         if rcv_body == None:
-            stat_bar.msg1.configure(text='Receiver start error.' + info)
+            status_bar_show('Receiver start error.' + info)
             return
-        stat_bar.msg1.configure(text='Receiver started.' + info)
+        status_bar_show('Receiver started.' + info)
         for i, btn in enumerate(bar.panel.winfo_children()):
             btn.configure(state=NORMAL if i in (1, 6) else DISABLED)
 
@@ -1434,7 +1441,7 @@ def on_btn_stop_push(bar):
         rcv_body = None
         for i, btn in enumerate(bar.panel.winfo_children()):
             btn.configure(state=DISABLED if i in (1,) else NORMAL)
-        stat_bar.msg1.configure(text='Receiver stopped.')
+        status_bar_show('Receiver stopped.')
 
 # Input button push callback ---------------------------------------------------
 def on_btn_input_push(bar):
@@ -1486,9 +1493,24 @@ def on_pages_timer(note, pages):
     ts = (int)((time.time() - tt) * 1e3)
     note.after(ti - ts if ti > ts else 1, lambda: on_pages_timer(note, pages))
 
+# root resize callback ---------------------------------------------------------
+def on_root_resize(e):
+    global root_resize
+    if root_resize == 0:
+        root_resize = 1
+        root.after(100, on_root_end_resize)
+
+# root resize end callback -----------------------------------------------------
+def on_root_end_resize():
+    global root_resize
+    root_resize = 0
+
 # update page ------------------------------------------------------------------
 def update_page(i, page):
-    if i == 0:
+    global root_resize
+    if root_resize:
+        pass
+    elif i == 0:
         update_rcv_page(page)
     elif i == 1:
         update_rfch_page(page)
@@ -1543,6 +1565,7 @@ if __name__ == '__main__':
     name, ver = get_name_ver()
     root.title(name + ' ver.' + ver)
     root.protocol("WM_DELETE_WINDOW", on_root_close)
+    root.bind("<Configure>", on_root_resize)
     
     # set styles
     set_styles()
