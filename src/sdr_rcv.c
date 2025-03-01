@@ -221,12 +221,12 @@ char *sdr_rcv_rcv_stat(sdr_rcv_t *rcv)
         p += sprintf(p, "%.3f %s %s/%d ", get_buff_ix(rcv) * SDR_CYC,
             src_str[rcv->dev], fmt_str[rcv->fmt], rcv->nbuff);
         for (int i = 0; i < 8; i++) {
-            p += sprintf(p, "%.2f%s", rcv->fo[i] * 1e-6, i == 3 || i == 7 ? " " : "/");
+            p += sprintf(p, "%.2f%s", rcv->fo[i] * 1e-6, i == 3 || i == 7 ? " " : ",");
         }
         for (int i = 0; i < 8; i++) {
-            p += sprintf(p, "%s%s", IQ_str[rcv->IQ[i]], i == 7 ? " " : "/");
+            p += sprintf(p, "%s%s", IQ_str[rcv->IQ[i]], i == 7 ? " " : ",");
         }
-        p += sprintf(p, "%.2f %d/%d %.1f %.1f ", rcv->fs * 1e-6, nch_trk, rcv->nch,
+        p += sprintf(p, "%.3f %d/%d %.1f %.1f ", rcv->fs * 1e-6, nch_trk, rcv->nch,
             rcv->data_rate * 1e-6, rcv->buff_use);
         p += sprintf(p, "%.3f %d %d/%d %.1f", rcv->pvt->latency,
             rcv->pvt->count[0], rcv->pvt->count[1], rcv->pvt->count[2],
@@ -235,12 +235,12 @@ char *sdr_rcv_rcv_stat(sdr_rcv_t *rcv)
     else {
         p += sprintf(p, "%.3f --- ---/- ", 0.0);
         for (int i = 0; i < 8; i++) {
-            p += sprintf(p, "%.2f%s", 0.0, i == 3 || i == 7 ? " " : "/");
+            p += sprintf(p, "%.2f%s", 0.0, i == 3 || i == 7 ? " " : ",");
         }
         for (int i = 0; i < 8; i++) {
-            p += sprintf(p, "--%s", i == 7 ? " " : "/");
+            p += sprintf(p, "--%s", i == 7 ? " " : ",");
         }
-        p += sprintf(p, "%.2f %d/%d %.1f %.1f ", 0.0, 0, 0, 0.0, 0.0);
+        p += sprintf(p, "%.3f %d/%d %.1f %.1f ", 0.0, 0, 0, 0.0, 0.0);
         p += sprintf(p, "%.3f %d %d/%d %.1f", 0.0, 0, 0, 0, 0.0);
     }
     return rcv_rcv_stat_buff;
@@ -300,10 +300,10 @@ void sdr_rcv_sel_ch(sdr_rcv_t *rcv, int ch)
 
 // get correlator status -------------------------------------------------------
 int sdr_rcv_corr_stat(sdr_rcv_t *rcv, int ch, double *stat, double *pos,
-    sdr_cpx_t *C)
+    sdr_cpx_t *C, double *P)
 {
     if (!rcv || !rcv->state || ch < 1 || ch > rcv->nch) return 0;
-    return sdr_ch_corr_stat(rcv->th[ch-1]->ch, stat, pos, C);
+    return sdr_ch_corr_stat(rcv->th[ch-1]->ch, stat, pos, C, P);
 }
 
 // get correlator history ------------------------------------------------------
@@ -323,6 +323,7 @@ int sdr_rcv_rfch_stat(sdr_rcv_t *rcv, int ch, double *stat)
     stat[2] = rcv->fs;
     stat[3] = rcv->fo[ch-1];
     stat[4] = rcv->IQ[ch-1];
+    stat[5] = rcv->bits[ch-1];
     return 1;
 }
 
@@ -518,7 +519,8 @@ static int set_rfch(int fmt, double fs, const double *fo, const int *IQ,
 //      SDR receiver (NULL: error)
 //
 sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
-    double fs, const double *fo, const int *IQ, const char *opt)
+    double fs, const double *fo, const int *IQ, const int *bits,
+    const char *opt)
 {
     sdr_rcv_t *rcv = (sdr_rcv_t *)sdr_malloc(sizeof(sdr_rcv_t));
     
@@ -527,6 +529,7 @@ sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
     for (int i = 0; i < SDR_MAX_RFCH; i++) {
         rcv->fo[i] = fo[i];
         rcv->IQ[i] = IQ[i];
+        rcv->bits[i] = bits[i];
     }
     rcv->N = (int)(SDR_CYC * fs);
     for (int i = 0; i < n && rcv->nch < SDR_MAX_NCH; i++) {
@@ -595,16 +598,33 @@ static int read_data(sdr_rcv_t *rcv, uint8_t *raw, int N)
     return N;
 }
 
-// generate raw to IF data LUT -------------------------------------------------
-static void gen_LUT(sdr_buff_t **buff, int nbuff, sdr_cpx8_t LUT[][256])
+// initialize raw to IF data LUT ------------------------------------------------
+static void init_LUT(sdr_rcv_t *rcv)
 {
-    static const int8_t valI[] = {1, 3, -1, -3}, valQ[] = {-1, -3, 1, 3};
+    static const int8_t valI_2b[] = {1, 3, -1, -3}, valQ_2b[] = {-1, -3, 1, 3};
+    static const int8_t valI_3b[] = {1, 3, 5, 7, -1, -3, -5, -7};
     
-    for (int i = 0; i < 256; i++) {
-        int8_t I[] = {valI[(i>>0) & 0x3], valI[(i>>4) & 0x3]};
-        int8_t Q[] = {valQ[(i>>2) & 0x3], valQ[(i>>6) & 0x3]};
-        for (int j = 0; j < nbuff; j++) {
-            LUT[j][i] = SDR_CPX8(I[j%2], buff[j]->IQ == 1 ? 0 : Q[j%2]);
+    if (rcv->fmt != SDR_FMT_RAW8 && rcv->fmt != SDR_FMT_RAW16 &&
+        rcv->fmt != SDR_FMT_RAW32) {
+        return;
+    }
+    for (int i = 0; i < rcv->nbuff; i++) {
+        for (int j = 0; j < 256; j++) {
+            int8_t I, Q = 0;
+            if (rcv->IQ[i] == 1) { // I-sampling
+                if (rcv->bits[i] == 3) { // 3 bits
+                    int bits = (j>>(i % 2 ? 4 : 0)) & 0xF;
+                    I = valI_3b[((bits << 1) & 6) + ((bits >> 3) & 1)];
+                }
+                else { // 2 bits
+                    I = valI_2b[(j>>(i % 2 ? 4 : 0)) & 0x3];
+                }
+            }
+            else { // IQ-sampling
+                I = valI_2b[(j>>(i % 2 ? 4 : 0)) & 0x3];
+                Q = valQ_2b[(j>>(i % 2 ? 6 : 2)) & 0x3];
+            }
+            rcv->LUT[i][j] = SDR_CPX8(I, Q);
         }
     }
 }
@@ -612,13 +632,8 @@ static void gen_LUT(sdr_buff_t **buff, int nbuff, sdr_cpx8_t LUT[][256])
 // write IF data buffer ---------------------------------------------------------
 static void write_buff(sdr_rcv_t *rcv, const uint8_t *raw, int64_t ix)
 {
-    static sdr_cpx8_t LUT[8][256] = {{0}};
     int i = rcv->N * (int)(ix % MAX_BUFF);
     
-    if (!LUT[0][0] && (rcv->fmt == SDR_FMT_RAW8 ||
-        rcv->fmt == SDR_FMT_RAW16 || rcv->fmt == SDR_FMT_RAW32)) {
-        gen_LUT(rcv->buff, rcv->nbuff, LUT);
-    }
     if (rcv->fmt == SDR_FMT_INT8) { // int8
         for (int j = 0; j < rcv->N; i++, j++) {
             rcv->buff[0]->data[i] = SDR_CPX8(raw[j], 0);
@@ -631,28 +646,28 @@ static void write_buff(sdr_rcv_t *rcv, const uint8_t *raw, int64_t ix)
     }
     else if (rcv->fmt == SDR_FMT_RAW8) { // Pocket SDR FE 2CH raw
         for (int j = 0; j < rcv->N; i++, j++) {
-            rcv->buff[0]->data[i] = LUT[0][raw[j]];
-            rcv->buff[1]->data[i] = LUT[1][raw[j]];
+            rcv->buff[0]->data[i] = rcv->LUT[0][raw[j]];
+            rcv->buff[1]->data[i] = rcv->LUT[1][raw[j]];
         }
     }
     else if (rcv->fmt == SDR_FMT_RAW16) { // Pocket SDR FE 4CH raw
         for (int j = 0; j < rcv->N * 2; i++, j += 2) {
-            rcv->buff[0]->data[i] = LUT[0][raw[j  ]];
-            rcv->buff[1]->data[i] = LUT[1][raw[j  ]];
-            rcv->buff[2]->data[i] = LUT[2][raw[j+1]];
-            rcv->buff[3]->data[i] = LUT[3][raw[j+1]];
+            rcv->buff[0]->data[i] = rcv->LUT[0][raw[j  ]];
+            rcv->buff[1]->data[i] = rcv->LUT[1][raw[j  ]];
+            rcv->buff[2]->data[i] = rcv->LUT[2][raw[j+1]];
+            rcv->buff[3]->data[i] = rcv->LUT[3][raw[j+1]];
         }
     }
     else if (rcv->fmt == SDR_FMT_RAW32) { // Pocket SDR FE 8CH raw
         for (int j = 0; j < rcv->N * 4; i++, j += 4) {
-            rcv->buff[0]->data[i] = LUT[0][raw[j  ]];
-            rcv->buff[1]->data[i] = LUT[1][raw[j  ]];
-            rcv->buff[2]->data[i] = LUT[2][raw[j+1]];
-            rcv->buff[3]->data[i] = LUT[3][raw[j+1]];
-            rcv->buff[4]->data[i] = LUT[4][raw[j+2]];
-            rcv->buff[5]->data[i] = LUT[5][raw[j+2]];
-            rcv->buff[6]->data[i] = LUT[6][raw[j+3]];
-            rcv->buff[7]->data[i] = LUT[7][raw[j+3]];
+            rcv->buff[0]->data[i] = rcv->LUT[0][raw[j  ]];
+            rcv->buff[1]->data[i] = rcv->LUT[1][raw[j  ]];
+            rcv->buff[2]->data[i] = rcv->LUT[2][raw[j+1]];
+            rcv->buff[3]->data[i] = rcv->LUT[3][raw[j+1]];
+            rcv->buff[4]->data[i] = rcv->LUT[4][raw[j+2]];
+            rcv->buff[5]->data[i] = rcv->LUT[5][raw[j+2]];
+            rcv->buff[6]->data[i] = rcv->LUT[6][raw[j+3]];
+            rcv->buff[7]->data[i] = rcv->LUT[7][raw[j+3]];
         }
     }
     set_buff_ix(rcv, ix); // update IF data buffer write pointer
@@ -805,6 +820,9 @@ int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, const char **paths)
     
     sdr_log_open(paths[2]);
     
+    // initialize raw to IF data LUT
+    init_LUT(rcv);
+    
     for (int i = 0; i < rcv->nch; i++) {
         ch_th_start(rcv->th[i]);
     }
@@ -862,7 +880,7 @@ void sdr_rcv_stop(sdr_rcv_t *rcv)
     if (rcv->dev == SDR_DEV_USB && rcv->strs[3] &&
         rcv->strs[3]->type == STR_FILE && get_file_path(rcv->strs[3], file)) {
         sdr_tag_write(file, SDR_DEV_NAME, rcv->start_time, rcv->fmt, rcv->fs,
-            rcv->fo, rcv->IQ);
+            rcv->fo, rcv->IQ, rcv->bits);
     }
     for (int i = 0; i < 4; i++) {
         sdr_str_close(rcv->strs[i]);
@@ -921,7 +939,7 @@ sdr_rcv_t *sdr_rcv_open_dev(const char **sigs, int *prns, int n, int bus,
 {
     sdr_dev_t *dev;
     double fs, fo[SDR_MAX_RFCH] = {0};
-    int fmt, nch, IQ[SDR_MAX_RFCH] = {0};
+    int fmt, nch, IQ[SDR_MAX_RFCH] = {0}, bits[SDR_MAX_RFCH] = {0};
     
     if (!(dev = sdr_dev_open(bus, port))) {
         return NULL;
@@ -933,11 +951,11 @@ sdr_rcv_t *sdr_rcv_open_dev(const char **sigs, int *prns, int n, int bus,
         }
         sdr_sleep_msec(50);
     }
-    if (!(nch = sdr_dev_get_info(dev, &fmt, &fs, fo, IQ))) {
+    if (!(nch = sdr_dev_get_info(dev, &fmt, &fs, fo, IQ, bits))) {
         sdr_dev_close(dev);
         return NULL;
     }
-    sdr_rcv_t *rcv = sdr_rcv_new(sigs, prns, n, fmt, fs, fo, IQ, opt);
+    sdr_rcv_t *rcv = sdr_rcv_new(sigs, prns, n, fmt, fs, fo, IQ, bits, opt);
     sdr_rcv_start(rcv, SDR_DEV_USB, (void *)dev, paths);
     
     return rcv;
@@ -954,6 +972,7 @@ sdr_rcv_t *sdr_rcv_open_dev(const char **sigs, int *prns, int n, int bus,
 //      fs        (I)  sampling rate (sps)
 //      fo        (I)  LO frequency for each RFCH (Hz)
 //      IQ        (I)  sampling type for each RFCH (1:I, 2:IQ)
+//      bits      (I)  number of sample bits
 //      toff      (I)  time offset of IF data file (s)
 //      tscale    (I)  time scale of replay IF data file
 //      file      (I)  IF data file
@@ -968,12 +987,12 @@ sdr_rcv_t *sdr_rcv_open_dev(const char **sigs, int *prns, int n, int bus,
 //
 //
 sdr_rcv_t *sdr_rcv_open_file(const char **sigs, int *prns, int n, int fmt,
-    double fs, const double *fo, const int *IQ, double toff, double tscale,
-    const char *file, const char **paths, const char *opt)
+    double fs, const double *fo, const int *IQ, const int *bits, double toff,
+    double tscale, const char *file, const char **paths, const char *opt)
 {
     FILE *fp;
     double fo_t[SDR_MAX_RFCH] = {0};
-    int IQ_t[SDR_MAX_RFCH] = {0};
+    int IQ_t[SDR_MAX_RFCH] = {0}, bits_t[SDR_MAX_RFCH];
     
     if (!(fp = fopen(file, "rb"))) {
         fprintf(stderr, "file open error: %s\n", file);
@@ -982,7 +1001,8 @@ sdr_rcv_t *sdr_rcv_open_file(const char **sigs, int *prns, int n, int fmt,
     // read tag file
     memcpy(fo_t, fo, sizeof(double) * SDR_MAX_RFCH);
     memcpy(IQ_t, IQ, sizeof(int) * SDR_MAX_RFCH);
-    sdr_tag_read(file, NULL, NULL, &fmt, &fs, fo_t, IQ_t);
+    memcpy(bits_t, bits, sizeof(int) * SDR_MAX_RFCH);
+    sdr_tag_read(file, NULL, NULL, &fmt, &fs, fo_t, IQ_t, bits_t);
 #if defined(WIN32) || defined(MACOS)
     fpos_t pos = (fpos_t)(fs * toff * sample_byte(fmt));
 #else
@@ -990,7 +1010,8 @@ sdr_rcv_t *sdr_rcv_open_file(const char **sigs, int *prns, int n, int fmt,
 #endif
     fsetpos(fp, &pos);
     
-    sdr_rcv_t *rcv = sdr_rcv_new(sigs, prns, n, fmt, fs, fo_t, IQ_t, opt);
+    sdr_rcv_t *rcv = sdr_rcv_new(sigs, prns, n, fmt, fs, fo_t, IQ_t, bits_t,
+        opt);
     rcv->tscale = tscale;
     sdr_rcv_start(rcv, SDR_DEV_FILE, (void *)fp, paths);
     return rcv;
