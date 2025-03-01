@@ -56,7 +56,7 @@ static const reg_t MAX2771_field[] = { // MAX2771 register field definitions
     {"SPI_SDIO_CONFIG", 0x1,  2, 13, {1, 1}, {0, 0}, "SPI SDIO pin config (0:none,1:pull-down,2:pull-up,3:bus-hold)"},
     {"AGCMODE"        , 0x1,  2, 11, {0, 0}, {0, 0}, "AGC mode control (0:independent-I/Q,2:gain-set-by-GAININ)"},
     {"FORMAT"         , 0x1,  2,  9, {1, 1}, {1, 1}, "Output data format (0:unsigned,1:sign-magnitude,2:2's-complement)"},
-    {"BITS"           , 0x1,  3,  6, {1, 1}, {2, 2}, "Number of bits in ADC (0:1bit,2:2bit,4:3bit)"},
+    {"BITS"           , 0x1,  3,  6, {0, 0}, {2, 2}, "Number of bits in ADC (0:1bit,2:2bit,4:3bit)"},
     {"DRVCFG"         , 0x1,  2,  4, {1, 1}, {0, 0}, "Output driver config (0:CMOS-logic,2:analog)"},
     {"DIEID"          , 0x1,  2,  0, {1, 1}, {0, 0}, "Identifiers version of IC"},
     {"GAININ"         , 0x2,  6, 22, {0, 0}, {0, 0}, "PGA gain value programming in steps of approx 1dB per LSB (0-63)"},
@@ -112,7 +112,7 @@ static const reg_t MAX2769B_field[] = { // MAX2769B register field definitions
     {"GAINREF"        , 0x1, 12, 15, {0, 0}, {0, 0}, "AGC gain ref value (0-4095)"},
     {"AGCMODE"        , 0x1,  2, 11, {0, 0}, {0, 0}, "AGC mode control (0:independent-I/Q,2:set-from-GAININ)"},
     {"FORMAT"         , 0x1,  2,  9, {1, 1}, {1, 1}, "Output data format (0:unsigned,1:sign-magnitude,2:2's-complement)"},
-    {"BITS"           , 0x1,  3,  6, {1, 1}, {2, 2}, "Number of bits in ADC (0:1bit,2:2bit,4:3bit)"},
+    {"BITS"           , 0x1,  3,  6, {0, 0}, {2, 2}, "Number of bits in ADC (0:1bit,2:2bit,4:3bit)"},
     {"DRVCFG"         , 0x1,  2,  4, {1, 1}, {0, 0}, "Output driver config (0:CMOS-logic,2:analog)"},
     {"DIEID"          , 0x1,  2,  0, {1, 1}, {0, 0}, "Identifiers version of IC"},
     {"GAININ"         , 0x2,  6, 22, {0, 0}, {0, 0}, "PGA gain value programming ((GAININ-1)dB) (0-63)"},
@@ -294,6 +294,7 @@ static void write_MAX2771_stat(FILE *fp, double fx, int ch, uint32_t *reg)
     uint32_t FBW        = (reg[0x0] >>  3) & 0x7;
     uint32_t FCENX      = (reg[0x0] >>  1) & 0x1;
     uint32_t ENIQ       = (reg[0x1] >> 27) & 0x1;
+    uint32_t BITS       = (reg[0x1] >>  6) & 0x7;
     uint32_t INT_PLL    = (reg[0x3] >>  3) & 0x1;
     uint32_t NDIV       = (reg[0x4] >> 13) & 0x7FFF;
     uint32_t RDIV       = (reg[0x4] >>  3) & 0x3FF;
@@ -317,7 +318,7 @@ static void write_MAX2771_stat(FILE *fp, double fx, int ch, uint32_t *reg)
     double f_cen = FCENX ? (128 - FCEN) / 2.0 * f_step[FBW] : 0.0;
     fprintf(fp, "#  [CH%d] F_LO =%13.6f MHz, F_ADC =%10.6f MHz (%-2s), "
         "F_FILT =%5.1f MHz, BW_FILT =%5.1f MHz\n", ch + 1, f_lo, f_adc,
-        ENIQ ? "IQ" : "I", f_cen, f_bw[FBW]);
+        (ENIQ && BITS != 4) ? "IQ" : "I", f_cen, f_bw[FBW]);
 }
 
 // flip bits -------------------------------------------------------------------
@@ -341,6 +342,7 @@ static void write_MAX2769B_stat(FILE *fp, double fx, int ch, uint32_t *reg)
     uint32_t FCENX      = (reg[0x0] >>  1) & 0x1;
     uint32_t FBW        = (reg[0x0] >>  3) & 0x3;
     uint32_t IQEN       = (reg[0x1] >> 27) & 0x1;
+    uint32_t BITS       = (reg[0x1] >>  6) & 0x7;
     uint32_t INT_PLL    = (reg[0x3] >>  3) & 0x1;
     uint32_t NDIV       = (reg[0x4] >> 13) & 0x7FFF;
     uint32_t RDIV       = (reg[0x4] >>  3) & 0x3FF;
@@ -358,7 +360,7 @@ static void write_MAX2769B_stat(FILE *fp, double fx, int ch, uint32_t *reg)
     double f_cen = FCENX ? (128 - flip_bits(FCEN, 7)) / 2.0 * f_step[FBW] : 0.0;
     fprintf(fp, "#  [CH%d] F_LO =%9.3f MHz, F_ADC =%7.3f MHz (%-2s), "
         "F_FILT =%5.1f MHz, BW_FILT =%5.1f MHz\n", ch + 1, f_lo, f_adc,
-        IQEN ? "IQ" : "I", f_cen, f_bw[FBW]);
+        (IQEN && BITS != 4) ? "IQ" : "I", f_cen, f_bw[FBW]);
 }
 
 // write device channel status -------------------------------------------------
