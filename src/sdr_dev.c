@@ -30,12 +30,12 @@
 
 // read MAX2771 status ---------------------------------------------------------
 static int read_MAX2771_stat(sdr_dev_t *dev, int ch, double fx, double *fs,
-    double *fo, int *IQ)
+    double *fo, int *IQ, int *bits)
 {
     static const double ratio[8] = {2.0, 0.25, 0.5, 1.0, 4.0};
     uint8_t data[4];
-    uint32_t reg[11], ENIQ, INT_PLL, NDIV, RDIV, FDIV, REFDIV, FCLKIN, ADCCLK;
-    uint32_t REFCLK_L, REFCLK_M, ADCCLK_L, ADCCLK_M, PREFRACDIV;
+    uint32_t reg[11], ENIQ, BITS, INT_PLL, NDIV, RDIV, FDIV, REFDIV, FCLKIN;
+    uint32_t ADCCLK, REFCLK_L, REFCLK_M, ADCCLK_L, ADCCLK_M, PREFRACDIV;
     
     for (int i = 0; i < 11; i++) {
         if (!sdr_usb_req(dev->usb, 0, SDR_VR_REG_READ, (ch << 8) + i, data,
@@ -47,6 +47,7 @@ static int read_MAX2771_stat(sdr_dev_t *dev, int ch, double fx, double *fs,
         }
     }
     ENIQ     = (reg[ 1] >> 27) & 0x1;
+    BITS     = (reg[ 1] >>  6) & 0x7;
     INT_PLL  = (reg[ 3] >>  3) & 0x1;
     NDIV     = (reg[ 4] >> 13) & 0x7FFF;
     RDIV     = (reg[ 4] >>  3) & 0x3FF;
@@ -65,18 +66,19 @@ static int read_MAX2771_stat(sdr_dev_t *dev, int ch, double fx, double *fs,
         *fs *= !FCLKIN ? 1.0 : ADCCLK_L / (4096.0 - ADCCLK_M + ADCCLK_L);
     }
     *fo = fx / RDIV * (INT_PLL ? NDIV : NDIV + FDIV / 1048576.0);
-    *IQ = ENIQ ? 2 : 1;
+    *IQ = (BITS == 4 || ENIQ == 0) ? 1 : 2;
+    *bits = BITS == 2 ? 2 : (BITS == 4 ? 3 : 1);
     return 1;
 }
 
 // read MAX2769B status --------------------------------------------------------
 static int read_MAX2769B_stat(sdr_dev_t *dev, int ch, double fx, double *fs,
-    double *fo, int *IQ)
+    double *fo, int *IQ, int *bits)
 {
     static const double ratio[8] = {2.0, 0.25, 0.5, 1.0};
     uint8_t data[4];
-    uint32_t reg[8], ENIQ, INT_PLL, NDIV, RDIV, FDIV, REFDIV, L_CNT, M_CNT;
-    uint32_t FCLKIN, ADCCLK;
+    uint32_t reg[8], ENIQ, BITS, INT_PLL, NDIV, RDIV, FDIV, REFDIV, L_CNT;
+    uint32_t M_CNT, FCLKIN, ADCCLK;
     
     for (int i = 0; i < 8; i++) {
         if (!sdr_usb_req(dev->usb, 0, SDR_VR_REG_READ, (ch << 8) + i, data,
@@ -88,6 +90,7 @@ static int read_MAX2769B_stat(sdr_dev_t *dev, int ch, double fx, double *fs,
         }
     }
     ENIQ    = (reg[1] >> 27) & 0x1;
+    BITS    = (reg[1] >>  6) & 0x7;
     INT_PLL = (reg[3] >>  3) & 0x1;
     NDIV    = (reg[4] >> 13) & 0x7FFF;
     RDIV    = (reg[4] >>  3) & 0x3FF;
@@ -102,7 +105,8 @@ static int read_MAX2769B_stat(sdr_dev_t *dev, int ch, double fx, double *fs,
         *fs *= !FCLKIN ? 1.0 : L_CNT / (4096.0 - M_CNT + L_CNT);
     }
     *fo = fx / RDIV * (INT_PLL ? NDIV : NDIV + FDIV / 1048576.0);
-    *IQ = ENIQ ? 2 : 1;
+    *IQ = (BITS == 4 || ENIQ == 0) ? 1 : 2;
+    *bits = BITS == 2 ? 2 : (BITS == 4 ? 3 : 1);
     return 1;
 }
 
@@ -381,11 +385,13 @@ int sdr_dev_read(sdr_dev_t *dev, uint8_t *buff, int size)
 //      fs          (O)   sampling frequency (Hz)
 //      fo          (O)   LO frequency of each RF channel (Hz)
 //      IO          (O)   sampling type of each RF channel (1:I, 2:IQ)
+//      bits        (O)   number of sample bits
 //
 //  return
 //      number of RF channels (0: error)
 //
-int sdr_dev_get_info(sdr_dev_t *dev, int *fmt, double *fs, double *fo, int *IQ)
+int sdr_dev_get_info(sdr_dev_t *dev, int *fmt, double *fs, double *fo, int *IQ,
+    int *bits)
 {
     double fss;
     uint8_t data[6];
@@ -402,7 +408,9 @@ int sdr_dev_get_info(sdr_dev_t *dev, int *fmt, double *fs, double *fo, int *IQ)
         *fmt = SDR_FMT_RAW16I;
         nch = data[3] & 0xF;
         for (int i = 0; i < nch; i++) {
-            if (!read_MAX2769B_stat(dev, i, fx, &fss, fo + i, IQ + i)) return 0;
+            if (!read_MAX2769B_stat(dev, i, fx, &fss, fo + i, IQ + i, bits + i)) {
+                return 0;
+            }
             if (i == 0) *fs = fss;
         }
     }
@@ -411,7 +419,9 @@ int sdr_dev_get_info(sdr_dev_t *dev, int *fmt, double *fs, double *fo, int *IQ)
         *fmt = (ver <= 2) ? SDR_FMT_RAW8 : ((ver <= 3) ? SDR_FMT_RAW16 : SDR_FMT_RAW32);
         nch = (ver <= 2) ? 2 : ((ver <= 3) ? 4 : 8);
         for (int i = 0; i < nch; i++) {
-            if (!read_MAX2771_stat(dev, i, fx, &fss, fo + i, IQ + i)) return 0;
+            if (!read_MAX2771_stat(dev, i, fx, &fss, fo + i, IQ + i, bits + i)) {
+                return 0;
+            }
             if (i == 0) *fs = fss;
         }
     }
@@ -494,13 +504,13 @@ int sdr_dev_set_filt(sdr_dev_t *dev, int ch, double bw, double freq, int order)
         return 0;
     }
     if (FBW < 3 && freq > 0.0) {
-       FCENX = 1; // bandpass
-       FCEN = (uint8_t)(128.0 - freq / fstep[FBW] * 2.0 + 0.5) & 0x7F;
+        FCENX = 1; // bandpass
+        FCEN = (uint8_t)(128.0 - freq / fstep[FBW] * 2.0 + 0.5) & 0x7F;
     }
     reg[2] = (reg[2] & ~0x1F) + (FCEN >> 2);
-    reg[3] = (reg[3] & ~0xC0) + (FCEN << 6);
     reg[3] = (reg[3] & ~0x38) + (FBW << 3);
     reg[3] = (reg[3] & ~0x04) + (F3OR5 << 2);
+    reg[3] = (reg[3] & ~0xC0) + (FCEN << 6);
     reg[3] = (reg[3] & ~0x02) + (FCENX << 1);
     
     // write MAX2771 registers
