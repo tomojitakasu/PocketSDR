@@ -120,8 +120,9 @@ static sdr_trk_t *trk_new(const char *sig, int prn, const int8_t *code,
     trk->nposx = 0;
     trk->sec_sync = trk->sec_pol = 0;
     trk->err_phas = 0.0;
-    trk->sumP = trk->sumE = trk->sumL = trk->sumN = 0.0;
-    trk->sumVE = trk->sumVL = 0.0;
+    trk->sumP = trk->sumN = trk->sumVE = trk->sumVL = 0.0;
+    memset(trk->sumC, 0, sizeof(double) * SDR_MAX_CORR);
+    memset(trk->aveP, 0, sizeof(double) * SDR_MAX_CORR);
     int N = (int)(fs * T);
     if (!strcmp(sig, "L6D") || !strcmp(sig, "L6E")) {
         trk->code_fft = sdr_cpx_malloc(N * SDR_N_CODES);
@@ -222,10 +223,11 @@ static void trk_init(sdr_trk_t *trk)
 {
     trk->err_phas = trk->err_code = 0.0;
     trk->sec_sync = trk->sec_pol = 0;
-    trk->sumP = trk->sumE = trk->sumL = trk->sumN = 0.0;
-    trk->sumVE = trk->sumVL = 0.0;
+    trk->sumP = trk->sumN = trk->sumVE = trk->sumVL = 0.0;
     memset(trk->C, 0, sizeof(sdr_cpx_t) * SDR_MAX_CORR);
     memset(trk->P, 0, sizeof(sdr_cpx_t) * SDR_N_HIST);
+    memset(trk->sumC, 0, sizeof(double) * SDR_MAX_CORR);
+    memset(trk->aveP, 0, sizeof(double) * SDR_MAX_CORR);
 }
 
 // start tracking --------------------------------------------------------------
@@ -363,17 +365,21 @@ static void PLL(sdr_ch_t *ch)
 static void DLL(sdr_ch_t *ch)
 {
     int N = MAX(1, (int)(sdr_t_dll / ch->T));
-    ch->trk->sumE += sdr_cpx_abs(ch->trk->C[1]); // non-coherent sum 
-    ch->trk->sumL += sdr_cpx_abs(ch->trk->C[2]);
+    for (int i = 0; i < ch->trk->npos + ch->trk->nposx; i++) {
+        ch->trk->sumC[i] += SQR(ch->trk->C[i][0]) + SQR(ch->trk->C[i][1]);
+    }
     if (ch->lock % N == 0) {
-        double E = ch->trk->sumE;
-        double L = ch->trk->sumL;
+        double E = sqrt(ch->trk->sumC[1]);
+        double L = sqrt(ch->trk->sumC[2]);
         if (E + L > 0.0) {
             double err_code = (E - L) / (E + L) * 0.5f * ch->T / ch->len_code;
             ch->coff -= sdr_b_dll / 0.25 * err_code * ch->T * N;
             ch->trk->err_code = err_code;
         }
-        ch->trk->sumE = ch->trk->sumL = 0.0;
+        for (int i = 0; i < ch->trk->npos + ch->trk->nposx; i++) {
+            ch->trk->aveP[i] = ch->trk->sumC[i] / N;
+            ch->trk->sumC[i] = 0.0;
+        }
     }
 }
 
@@ -602,7 +608,8 @@ void sdr_ch_set_corr(sdr_ch_t *ch, int nposx)
 }
 
 // get receiver correlator status ----------------------------------------------
-int sdr_ch_corr_stat(sdr_ch_t *ch, double *stat, double *pos, sdr_cpx_t *C)
+int sdr_ch_corr_stat(sdr_ch_t *ch, double *stat, double *pos, sdr_cpx_t *C,
+    double *P)
 {
     pthread_mutex_lock(&ch->mtx);
     int npos = ch->trk->npos + ch->trk->nposx;
@@ -615,6 +622,7 @@ int sdr_ch_corr_stat(sdr_ch_t *ch, double *stat, double *pos, sdr_cpx_t *C)
     stat[6] = ch->trk->npos;
     memcpy(pos, ch->trk->pos, sizeof(double) * npos);
     memcpy(C, ch->trk->C, sizeof(sdr_cpx_t) * npos);
+    memcpy(P, ch->trk->aveP, sizeof(double) * npos);
     pthread_mutex_unlock(&ch->mtx);
     return npos;
 }
