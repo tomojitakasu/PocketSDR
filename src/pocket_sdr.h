@@ -139,7 +139,9 @@ typedef struct {                // signal tracking type
     int sec_pol;                // secondary code polarity 
     double err_phas;            // phase error (cyc) 
     double err_code;            // code error (chip) 
-    double sumP, sumE, sumL, sumN, sumVE, sumVL; // sum of correlations 
+    double sumP, sumN, sumVE, sumVL; // sum of correlations 
+    double sumC[SDR_MAX_CORR];  // sum of correlations DLL
+    double aveP[SDR_MAX_CORR];  // average of correlation powers
     sdr_cpx16_t *code;          // resampled code 
     sdr_cpx_t *code_fft;        // code FFT
 } sdr_trk_t;
@@ -228,6 +230,8 @@ typedef struct sdr_rcv_tag {    // SDR receiver type
     double fs;                  // IF data sampling rate (sps) 
     double fo[SDR_MAX_RFCH];    // LO frequencies (Hz)
     int IQ[SDR_MAX_RFCH];       // IF sampling types (I:1,I/Q:2)
+    int bits[SDR_MAX_RFCH];     // number of sample bits
+    sdr_cpx8_t LUT[SDR_MAX_RFCH][256]; // raw data to IF data LUT
     int N;                      // IF data cycle (sample)
     int nch, nbuff;             // number of receiver channels and IF buffers
     int ich;                    // signal search channel index
@@ -269,7 +273,8 @@ void sdr_dev_close(sdr_dev_t *dev);
 int sdr_dev_start(sdr_dev_t *dev);
 int sdr_dev_stop(sdr_dev_t *dev);
 int sdr_dev_read(sdr_dev_t *dev, uint8_t *buff, int size);
-int sdr_dev_get_info(sdr_dev_t *dev, int *fmt, double *fs, double *fo, int *IQ);
+int sdr_dev_get_info(sdr_dev_t *dev, int *fmt, double *fs, double *fo, int *IQ,
+    int *bits);
 int sdr_dev_get_gain(sdr_dev_t *dev, int ch);
 int sdr_dev_set_gain(sdr_dev_t *dev, int ch, int gain);
 int sdr_dev_get_filt(sdr_dev_t *dev, int ch, double *bw, double *freq,
@@ -292,9 +297,9 @@ void sdr_buff_free(sdr_buff_t *buff);
 sdr_buff_t *sdr_read_data(const char *file, double fs, int IQ, double T,
     double toff);
 int sdr_tag_write(const char *file, const char *prog, gtime_t time, int fmt,
-    double fs, const double *fo, const int *IQ);
+    double fs, const double *fo, const int *IQ, const int *bits);
 int sdr_tag_read(const char *file, char *prog, gtime_t *time, int *fmt,
-    double *fs, double *fo, int *IQ);
+    double *fs, double *fo, int *IQ, int *bits);
 void sdr_search_code(const sdr_cpx_t *code_fft, double T,
     const sdr_buff_t *buff, int ix, int N, double fs, double fi,
     const float *fds, int len_fds, float *P);
@@ -353,7 +358,8 @@ sdr_ch_t *sdr_ch_new(const char *sig, int prn, double fs, double fi);
 void sdr_ch_free(sdr_ch_t *ch);
 void sdr_ch_update(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix);
 void sdr_ch_set_corr(sdr_ch_t *ch, int nposx);
-int sdr_ch_corr_stat(sdr_ch_t *ch, double *stat, double *pos, sdr_cpx_t *C);
+int sdr_ch_corr_stat(sdr_ch_t *ch, double *stat, double *pos, sdr_cpx_t *C,
+    double *P);
 int sdr_ch_corr_hist(sdr_ch_t *ch, double tspan, double *stat, sdr_cpx_t *P);
 
 // sdr_nav.c
@@ -384,15 +390,16 @@ void sdr_pvt_solstr(sdr_pvt_t *pvt, char *buff);
 
 // sdr_rcv.c
 sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
-    double fs, const double *fo, const int *IQ, const char *opt);
+    double fs, const double *fo, const int *IQ, const int *bits,
+    const char *opt);
 void sdr_rcv_free(sdr_rcv_t *rcv);
 int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, const char **paths);
 void sdr_rcv_stop(sdr_rcv_t *rcv);
 sdr_rcv_t *sdr_rcv_open_dev(const char **sigs, int *prns, int n, int bus,
     int port, const char *conf_file, const char **paths, const char *opt);
 sdr_rcv_t *sdr_rcv_open_file(const char **sigs, int *prns, int n, int fmt,
-    double fs, const double *fo, const int *IQ, double toff, double tscale,
-    const char *file, const char **paths, const char *opt);
+    double fs, const double *fo, const int *IQ, const int *bits, double toff,
+    double tscale, const char *file, const char **paths, const char *opt);
 void sdr_rcv_close(sdr_rcv_t *rcv);
 void sdr_rcv_setopt(const char *opt, double value);
 char *sdr_rcv_rcv_stat(sdr_rcv_t *rcv);
@@ -402,7 +409,7 @@ char *sdr_rcv_ch_stat(sdr_rcv_t *rcv, const char *sys, int all,
     double min_lock, int rfch);
 void sdr_rcv_sel_ch(sdr_rcv_t *rcv, int ch);
 int sdr_rcv_corr_stat(sdr_rcv_t *rcv, int ch, double *stat, double *pos,
-    sdr_cpx_t *C);
+    sdr_cpx_t *C, double *P);
 int sdr_rcv_corr_hist(sdr_rcv_t *rcv, int ch, double tspan, double *stat,
     sdr_cpx_t *P);
 int sdr_rcv_rfch_stat(sdr_rcv_t *rcv, int ch, double *stat);
