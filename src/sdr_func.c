@@ -319,12 +319,13 @@ sdr_buff_t *sdr_read_data(const char *file, double fs, int IQ, double T,
 //      fs       (I)  Sampling frequency (Hz)
 //      fo       (I)  LO frequencies (Hz)
 //      IQ       (I)  Sampling types (1: I-sampling, 2: IQ-sampling)
+//      bits     (I)  Number of sample bits
 //
 //  return:
 //      Status (1: OK, 0: error)
 //
 int sdr_tag_write(const char *file, const char *prog, gtime_t time, int fmt,
-    double fs, const double *fo, const int *IQ)
+    double fs, const double *fo, const int *IQ, const int *bits)
 {
     FILE *fp;
     char path[1024+4], tstr[32];
@@ -350,6 +351,10 @@ int sdr_tag_write(const char *file, const char *prog, gtime_t time, int fmt,
     for (int i = 0; i < n; i++) {
         fprintf(fp, "%d%s", IQ[i], i < n - 1 ? "," : "");
     }
+    fprintf(fp, "BITS = ");
+    for (int i = 0; i < n; i++) {
+        fprintf(fp, "%d%s", bits[i], i < n - 1 ? "," : "");
+    }
     fprintf(fp, "\n");
     fclose(fp);
     return 1;
@@ -367,12 +372,13 @@ int sdr_tag_write(const char *file, const char *prog, gtime_t time, int fmt,
 //      fs       (O)  Sampling frequency (Hz)
 //      fo       (O)  LO frequencies (Hz)
 //      IQ       (O)  Sampling types (1: I-sampling, 2: IQ-sampling)
+//      bits     (O)  Number of sample bits
 //
 //  return:
 //      Status (1: OK, 0: error)
 //
 int sdr_tag_read(const char *file, char *prog, gtime_t *time, int *fmt,
-    double *fs, double *fo, int *IQ)
+    double *fs, double *fo, int *IQ, int *bits)
 {
 
     FILE *fp;
@@ -385,7 +391,10 @@ int sdr_tag_read(const char *file, char *prog, gtime_t *time, int *fmt,
         return 0;
     }
     *fmt = 0;
-    
+    for (int i = 0; i < SDR_MAX_RFCH; i++) { // set default
+        fs[i] = fo[i] = 0.0;
+        IQ[i] = bits[i] = 2;
+    }
     while (fgets(buff, sizeof(buff), fp)) {
         if (!(p = strchr(buff, '='))) continue;
         
@@ -417,10 +426,15 @@ int sdr_tag_read(const char *file, char *prog, gtime_t *time, int *fmt,
             sscanf(p + 2, "%d,%d,%d,%d,%d,%d,%d,%d", IQ, IQ + 1, IQ + 2, IQ + 3,
                 IQ + 4, IQ + 5, IQ + 6, IQ + 7);
         }
+        else if (strstr(buff, "BITS") == buff) {
+            sscanf(p + 2, "%d,%d,%d,%d,%d,%d,%d,%d", bits, bits + 1, bits + 2,
+                bits + 3, bits + 4, bits + 5, bits + 6, bits + 7);
+        }
     }
     for (int i = fmt_nch[*fmt]; i < SDR_MAX_RFCH; i++) {
         fo[i] = 0.0;
         IQ[i] = 0;
+        bits[i] = 0;
     }
     fclose(fp);
     return 1;
