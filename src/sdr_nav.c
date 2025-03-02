@@ -824,6 +824,7 @@ static void decode_L5SIV(sdr_ch_t *ch)
 // decode L5SQV nav data ([6]) -------------------------------------------------
 static void decode_L5SQV(sdr_ch_t *ch)
 {
+    decode_L5_SBAS(ch);
 }
 
 // sync and decode L6 frame ([5]) ----------------------------------------------
