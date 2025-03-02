@@ -14,6 +14,13 @@
 // constants and macro ---------------------------------------------------------
 #define PROG_NAME       "pocket_conf" // program name
 
+// print version ---------------------------------------------------------------
+static void print_ver(void)
+{
+     printf("%s ver.%s\n", PROG_NAME, sdr_get_ver());
+     exit(0);
+}
+
 // show usage ------------------------------------------------------------------
 static void show_usage(void)
 {
@@ -96,6 +103,9 @@ int main(int argc, char **argv)
         }
         else if (!strcmp(argv[i], "-p") && i + 1 < argc) {
             sscanf(argv[++i], "%d,%d", &bus, &port);
+        }
+        else if (!strcmp(argv[i], "-v")) {
+            print_ver();
         }
         else if (!strncmp(argv[i], "-", 1)) {
             show_usage();
