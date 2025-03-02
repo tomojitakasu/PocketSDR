@@ -143,8 +143,9 @@ def rcv_open_file(sys_opt, inp_opt, out_opt, sig_opt):
     sigs, prns = get_sig_opt(sig_opt)
     fmt = inp_opt.fmts.index(inp_opt.fmt.get())
     fs = to_float(inp_opt.fs.get()) * 1e6
-    fo = [to_float(inp_opt.fo[i].get()) * 1e6 for i in range(4)]
-    IQ = [1 if inp_opt.IQ[i].get() == 'I' else 2 for i in range(4)]
+    fo = [to_float(inp_opt.fo[i].get()) * 1e6 for i in range(8)]
+    IQ = [1 if inp_opt.IQ[i].get() == 'I' else 2 for i in range(8)]
+    bits = [to_int(inp_opt.bits[i].get()) for i in range(8)]
     toff = to_float(inp_opt.toff.get())
     tscale = to_float(inp_opt.tscale.get())
     path = inp_opt.str_path.get()
@@ -154,16 +155,17 @@ def rcv_open_file(sys_opt, inp_opt, out_opt, sig_opt):
     c_prns = (c_int32 * len(sigs))(*prns)
     c_fo = (c_double * 8)(*fo)
     c_IQ = (c_int32 * 8)(*IQ)
+    c_bits = (c_int32 * 8)(*bits)
     c_paths = (c_char_p * 4)(*[s.encode() for s in paths])
-    
     libsdr.sdr_func_init.argtypes = (c_char_p,)
     libsdr.sdr_func_init(sys_opt.fftw_wisdom_path.get().encode())
     libsdr.sdr_rcv_open_file.argtypes = (POINTER(c_char_p), POINTER(c_int32),
         c_int32, c_int32, c_double, POINTER(c_double), POINTER(c_int32),
-        c_double, c_double, c_char_p, POINTER(c_char_p), c_char_p)
+        POINTER(c_int32), c_double, c_double, c_char_p, POINTER(c_char_p),
+        c_char_p)
     libsdr.sdr_rcv_open_file.restype = c_void_p
     return libsdr.sdr_rcv_open_file(c_sigs, c_prns, len(sigs), fmt, fs, c_fo,
-        c_IQ, toff, tscale, path.encode(), c_paths,
+        c_IQ, c_bits, toff, tscale, path.encode(), c_paths,
         sig_opt.sig_rfch.get().encode())
 
 # get signal options -----------------------------------------------------------
@@ -201,9 +203,6 @@ def add_sig(sigs, prns, i, satno, sig):
 
 # QZSS satellite number to prn -------------------------------------------------
 def qzss_no2prn(sig, no):
-    sat_L1B = (4, 5, 8, 9)
-    sat_L5S = (2, 4, 5, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        7, 8)
     if sig == 'L1CA' or sig == 'L1CD' or sig == 'L1CP' or sig == 'L2CM' or \
        sig == 'L5I' or sig == 'L5Q' or sig == 'L6D':
         return 192 + no
@@ -211,10 +210,12 @@ def qzss_no2prn(sig, no):
         return 182 + no
     elif sig == 'L6E':
         return 202 + no
-    elif sig == 'L1CB':
-        return 203 + sat_L1B.index(no) if no in sat_L1B else 192 + no
-    elif sig[:3] == 'L5S' and no in sat_L5S:
-        return 184 + sat_L5S.index(no)
+    elif sig == 'L1CB' and no in (4, 5, 8, 9, 10):
+        return 199 + no if no <= 5 else 197 + no if no <= 9 else 202
+    elif sig in ('L5SI', 'L5SQ') and no in (2, 3, 4, 7):
+        return 182 + no
+    elif sig in ('L5SIV', 'L5SQV') and no in (4, 8, 9):
+        return 186 if no == 4 else 197 + no
     return 0
 
 # stop receiver ----------------------------------------------------------------
@@ -791,6 +792,8 @@ def update_psd_plot(p, ch, tave):
         font=get_font(1, 'bold'), anchor=NW)
     plt.plot_text(p, fo + 12 / xs, p.yl[0] + 16 / ys, '%.6f MHz' % (fo),
         anchor=W)
+    plt.plot_text(p, p.xl[1] - 10 / xs, p.yl[0] + 16 / ys,
+        '%s (%d bits)' % ('I' if IQ == 1 else 'IQ', bits), anchor=E)
 
 # update signal frequency plot -------------------------------------------------
 def update_freq_plot(p):
