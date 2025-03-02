@@ -12,6 +12,7 @@
 #include "pocket_sdr.h"
 
 // constants --------------------------------------------------------------------
+#define PROG_NAME "pocket_snap" // program name
 #define THRES_CN0  38.0    // threshold to lock signal (dB-Hz)
 #define EL_MASK    15.0    // elevation mask (deg)
 #define MAX_DOP    5000.0  // max Doppler freq. to search signal (Hz)
@@ -43,6 +44,13 @@ typedef struct {           // satellite data type
 // global variables -------------------------------------------------------------
 static sdr_cpx_t *code_fft[MAX_SAT] = {NULL}; // code FFT caches
 static int VERP = 0;       // verpose display flag
+
+// print version ---------------------------------------------------------------
+static void print_ver(void)
+{
+     printf("%s ver.%s\n", PROG_NAME, sdr_get_ver());
+     exit(0);
+}
 
 // show usage -------------------------------------------------------------------
 static void show_usage(void)
@@ -485,7 +493,7 @@ static const char *conv_path(const char *path)
 //     -sys sys[,...]
 //         Select navigation system(s) (G=GPS,E=Galileo,J=QZSS,C=BDS). [G]
 //
-//     -v
+//     -verp
 //         Enable verpose status display.
 //
 //     -w file
@@ -545,11 +553,14 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "-out") && i + 1 < argc) {
             ofile = argv[++i];
         }
-        else if (!strcmp(argv[i], "-v")) {
+        else if (!strcmp(argv[i], "-verp")) {
             VERP = 1;
         }
         else if (!strcmp(argv[i], "-w") && i + 1 < argc) {
             fftw_wisdom = argv[++i];
+        }
+        else if (!strcmp(argv[i], "-v")) {
+            print_ver();
         }
         else if (argv[i][0] == '-') {
             show_usage();
