@@ -12,11 +12,19 @@
 #include "pocket_sdr.h"
 
 // constants -------------------------------------------------------------------
+#define PROG_NAME "pocket_acq" // program name
 #define T_AQC     0.010      // non-coherent integration time for acquisition (s)
 #define THRES_CN0 38.0       // threshold to lock (dB-Hz)
 #define ESC_COL   "\033[34m" // ANSI escape color = blue
 #define ESC_RES   "\033[0m"  // ANSI escape reset
 #define FFTW_WISDOM "../python/fftw_wisdom.txt"
+
+// print version ---------------------------------------------------------------
+static void print_ver(void)
+{
+     printf("%s ver.%s\n", PROG_NAME, sdr_get_ver());
+     exit(0);
+}
 
 // show usage ------------------------------------------------------------------
 static void show_usage(void)
@@ -177,6 +185,9 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "-nz")) {
             opt[2] = 1;
         }
+        else if (!strcmp(argv[i], "-v")) {
+            print_ver();
+        }
         else if (argv[i][0] == '-') {
             show_usage();
         }
@@ -202,8 +213,8 @@ int main(int argc, char **argv)
     
     // read tag file
     double fo[SDR_MAX_RFCH];
-    int IQ_t[SDR_MAX_RFCH];
-    if (sdr_tag_read(file, NULL, NULL, &fmt, &fs, fo, IQ_t)) {
+    int IQ_t[SDR_MAX_RFCH], bits_t[SDR_MAX_RFCH];
+    if (sdr_tag_read(file, NULL, NULL, &fmt, &fs, fo, IQ_t, bits_t)) {
         fi = sdr_sig_freq(sig) - fo[0];
         IQ = IQ_t[0];
     }
