@@ -351,6 +351,7 @@ int sdr_tag_write(const char *file, const char *prog, gtime_t time, int fmt,
     for (int i = 0; i < n; i++) {
         fprintf(fp, "%d%s", IQ[i], i < n - 1 ? "," : "");
     }
+    fprintf(fp, "\n");
     fprintf(fp, "BITS = ");
     for (int i = 0; i < n; i++) {
         fprintf(fp, "%d%s", bits[i], i < n - 1 ? "," : "");
@@ -391,8 +392,9 @@ int sdr_tag_read(const char *file, char *prog, gtime_t *time, int *fmt,
         return 0;
     }
     *fmt = 0;
+    *fs = 0.0;
     for (int i = 0; i < SDR_MAX_RFCH; i++) { // set default
-        fs[i] = fo[i] = 0.0;
+        fo[i] = 0.0;
         IQ[i] = bits[i] = 2;
     }
     while (fgets(buff, sizeof(buff), fp)) {
