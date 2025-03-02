@@ -41,6 +41,13 @@ static void sig_func(int sig)
     signal(sig, sig_func);
 }
 
+// print version ---------------------------------------------------------------
+static void print_ver(void)
+{
+     printf("%s ver.%s\n", PROG_NAME, sdr_get_ver());
+     exit(0);
+}
+
 // print usage -----------------------------------------------------------------
 static void print_usage(void)
 {
@@ -61,25 +68,30 @@ static int sample_byte(int fmt)
 }
 
 // generate lookup table -------------------------------------------------------
-static void gen_LUT(int8_t LUT[][256])
+static void gen_LUT(int8_t LUT_2b[][256], int8_t LUT_3b[][256])
 {
-    static const int8_t val[] = {1, 3, -1, -3}; // sign + magnitude
+    static const int8_t val_2b[] = {1, 3, -1, -3}; // sign + magnitude
+    static const int8_t val_3b[] = {1, 3, 5, 7, -1, -3, -5, -7};
     
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 256; j++) {
-            LUT[i][j] = val[(j >> (i * 2)) & 3];
+            LUT_2b[i][j] = val_2b[(j >> (i * 2)) & 3];
+            if (i % 2 == 0) {
+                int bits = j >> (i * 2);
+                LUT_3b[i][j] = val_3b[((bits << 1) & 6) + ((bits >> 3) & 1)];
+            }
         }
     }
 }
 
 // write IF data to file -------------------------------------------------------
 static int write_file(int fmt, const uint8_t *buff, int size, int ch, int IQ,
-    FILE *fp)
+    int bits, FILE *fp)
 {
-    static int8_t LUT[4][256] = {{0}};
+    static int8_t LUT_2b[4][256] = {{0}}, LUT_3b[4][256] = {{0}};
     
-    if (!LUT[0][0]) {
-        gen_LUT(LUT);
+    if (!LUT_2b[0][0]) {
+        gen_LUT(LUT_2b, LUT_3b);
     }
     int8_t *data = (int8_t *)sdr_malloc(size * IQ);
     
@@ -87,18 +99,23 @@ static int write_file(int fmt, const uint8_t *buff, int size, int ch, int IQ,
         int ns = sample_byte(fmt), pos = ch % 2 * 2;
         for (int i = 0, j = ch / 2; i < size; i++, j += ns) {
             if (IQ == 1) {
-                data[i] = LUT[pos][buff[j]];
+                if (bits == 2) {
+                    data[i] = LUT_2b[pos][buff[j]];
+                }
+                else {
+                    data[i] = LUT_3b[pos][buff[j]];
+                }
             }
             else {
-                data[i*2  ] = LUT[pos  ][buff[j]];
-                data[i*2+1] = LUT[pos+1][buff[j]];
+                data[i*2  ] = LUT_2b[pos  ][buff[j]];
+                data[i*2+1] = LUT_2b[pos+1][buff[j]];
             }
         }
     }
     else { // SDR_FMT_RAW16I
         int pos = ch % 4;
         for (int i = 0, j = ch / 4; i < size; i++, j += 2) {
-            data[i] = LUT[pos][buff[j]];
+            data[i] = LUT_2b[pos][buff[j]];
         }
     }
     int bytes = (int)fwrite(data, 1, size * IQ, fp);
@@ -140,7 +157,7 @@ static void print_stat(int nch, const int *IQ, FILE **fp, double time,
 
 // dump digital IF data --------------------------------------------------------
 static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int raw, int fmt,
-    int nfile, const int *IQ, FILE **fp)
+    int nfile, const int *IQ, const int *bits, FILE **fp)
 {
     double time = 0.0, time_p = 0.0, sample = 0.0, sample_p = 0.0;
     double rate = 0.0, byte[SDR_MAX_RFCH] = {0};
@@ -166,7 +183,7 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int raw, int fmt,
                 }
                 else {
                     byte[j] += write_file(fmt, buff, SDR_SIZE_BUFF, j, IQ[j],
-                        fp[j]);
+                        bits[j], fp[j]);
                 }
             }
             sample += SDR_SIZE_BUFF;
@@ -193,17 +210,18 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int raw, int fmt,
 
 // write tag file --------------------------------------------------------------
 static void write_tag_files(gtime_t time, int raw, int fmt, double fs,
-    const double *fo, const int *IQ, int nch, char **files)
+    const double *fo, const int *IQ, const int *bits, int nch, char **files)
 {
     for (int i = 0; i < (raw ? 1 : nch); i++) {
         if (!files[i] || !*files[i] || !strcmp(files[i], "-")) continue;
         
         if (raw) {
-            sdr_tag_write(files[i], PROG_NAME, time, fmt, fs, fo, IQ);
+            sdr_tag_write(files[i], PROG_NAME, time, fmt, fs, fo, IQ, bits);
         }
         else {
             int fmt_i = IQ[i] == 1 ? SDR_FMT_INT8 : SDR_FMT_INT8X2;
-            sdr_tag_write(files[i], PROG_NAME, time, fmt_i, fs, fo + i, IQ + i);
+            sdr_tag_write(files[i], PROG_NAME, time, fmt_i, fs, fo + i, IQ + i,
+                bits);
         }
     }
 }
@@ -260,7 +278,7 @@ int main(int argc, char **argv)
     gtime_t dump_time;
     double tsec = 0.0, fs, fo[SDR_MAX_RFCH];
     int n = 0, bus = -1, port = -1, raw = 0, quiet = 0;
-    int nch, fmt, IQ[SDR_MAX_RFCH], nfile;
+    int nch, fmt, IQ[SDR_MAX_RFCH], bits[SDR_MAX_RFCH], nfile;
     
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-t") && i + 1 < argc) {
@@ -277,6 +295,9 @@ int main(int argc, char **argv)
         }
         else if (!strcmp(argv[i], "-q")) {
             quiet = 1;
+        }
+        else if (!strcmp(argv[i], "-v")) {
+            print_ver();
         }
         else if (argv[i][0] == '-' && argv[i][1] != '\0') {
             print_usage();
@@ -295,7 +316,7 @@ int main(int argc, char **argv)
         }
         sdr_sleep_msec(50);
     }
-    if (!(nch = sdr_dev_get_info(dev, &fmt, &fs, fo, IQ))) {
+    if (!(nch = sdr_dev_get_info(dev, &fmt, &fs, fo, IQ, bits))) {
         sdr_dev_close(dev);
         return -1;
     }
@@ -330,14 +351,14 @@ int main(int argc, char **argv)
     signal(SIGTERM, sig_func);
     signal(SIGINT, sig_func);
     
-    dump_data(dev, tsec, quiet, raw, fmt, nfile, IQ, fp);
+    dump_data(dev, tsec, quiet, raw, fmt, nfile, IQ, bits, fp);
     
     for (int i = 0; i < nfile; i++) {
         if (fp[i]) fclose(fp[i]);
     }
     sdr_dev_close(dev);
     
-    write_tag_files(dump_time, raw, fmt, fs, fo, IQ, nch, files);
+    write_tag_files(dump_time, raw, fmt, fs, fo, IQ, bits, nch, files);
     
     return 0;
 }
