@@ -29,6 +29,7 @@
 #include "pocket_sdr.h"
 
 // constants and macros ---------------------------------------------------------
+#define PROG_NAME "pocket_trk"  // program name
 #define TRACE_LEVEL 3           // debug trace level
 #define FFTW_WISDOM "../python/fftw_wisdom.txt"
 #define NUM_COL    110          // number of channel status columns
@@ -44,9 +45,9 @@
 static const char *usage_text[] = {
     "Usage: pocket_trk [-sig sig -prn prn[,...] [-rfch ch[,...]] ...]",
     "       [-fmt {INT8|INT8X2|RAW8|RAW16|RAW32}] [-f freq] [-fo freq[,...]]",
-    "       [-IQ {1|2}[,...]] [-toff toff] [-ti tint] [-p bus,[,port]",
-    "       [-c conf_file] [-log path] [-nmea path] [-rtcm path] [-raw path]",
-    "       [-w file] [file]", NULL
+    "       [-IQ {1|2}[,...]] [-bits {2|3}[,...] [-toff toff] [-ti tint]",
+    "       [-p bus,[,port] [-c conf_file] [-log path] [-nmea path] [-rtcm path]",
+    "       [-raw path] [-w file] [file]", NULL
 };
 
 // interrupt flag --------------------------------------------------------------
@@ -57,6 +58,13 @@ static void sig_func(int sig)
 {
     intr = 1;
     signal(sig, sig_func);
+}
+
+// print version ---------------------------------------------------------------
+static void print_ver(void)
+{
+     printf("%s ver.%s\n", PROG_NAME, sdr_get_ver());
+     exit(0);
 }
 
 // show usage ------------------------------------------------------------------
@@ -78,7 +86,7 @@ static int print_rcv_stat(sdr_rcv_t *rcv, int nrow, int max_row)
         printf("%s", ESC_UCUR);
     }
     // get SDR receiver channel status
-    stat = sdr_rcv_ch_stat(rcv, "ALL", 0, MIN_LOCK);
+    stat = sdr_rcv_ch_stat(rcv, "ALL", 0, MIN_LOCK, 0);
     
     for (p = q = stat; (q = strchr(p, '\n')); p = q + 1) {
         if (n < max_row) {
@@ -104,9 +112,9 @@ static int print_rcv_stat(sdr_rcv_t *rcv, int nrow, int max_row)
 //
 //     pocket_trk [-sig sig -prn prn[,...] [-rfch ch[,...]] ...]
 //         [-fmt {INT8|INT8X2|RAW8|RAW16|RAW32}] [-f freq] [-fo freq[,...]]
-//         [-IQ {1|2}[,...]] [-toff toff] [-ti tint] [-p bus,[,port]
-//         [-c conf_file] [-log path] [-nmea path] [-rtcm path] [-raw path]
-//         [-w file] [file]
+//         [-IQ {1|2}[,...]] [-bits {2|3}[,...]] [-toff toff] [-ti tint]
+//         [-p bus,[,port] [-c conf_file] [-log path] [-nmea path] [-rtcm path]
+//         [-raw path] [-w file] [file]
 //
 //   Description
 //
@@ -148,6 +156,12 @@ static int print_rcv_stat(sdr_rcv_t *rcv, int nrow, int max_row)
 //         Specify the sampling type (1 = I-sampline, 2 = IQ-sampling) for each
 //         RF channel separated by "," in case of the IF data foramt as RAW8,
 //         RAW16 or RAW32. [2,2,2,2,2,2,2,2]
+//
+//     -bits {2|3}[,...]
+//         Specify the number of sampling data bits (2 or 3) for each  RF
+//         channel separated by "," in case of the IF data foramt as RAW8,
+//         RAW16 or RAW32 and the sampling type as I-sampling.
+//         [2,2,2,2,2,2,2,2]
 //
 //     -toff toff
 //         Time offset from the start of the IF data in s. [0.0]
@@ -214,6 +228,7 @@ int main(int argc, char **argv)
     sdr_rcv_t *rcv;
     int prns[SDR_MAX_NCH], nch = 0, fmt = SDR_FMT_INT8X2;
     int IQ[SDR_MAX_RFCH] = {2, 2, 2, 2, 2, 2, 2, 2};
+    int bits[SDR_MAX_RFCH] = {2, 2, 2, 2, 2, 2, 2, 2};
     int dev_type = SDR_DEV_FILE, bus = -1, port = -1, nrow = 0;
     int max_row = MAX_ROW;
     double fs = 12e6, fo[SDR_MAX_RFCH] = {0}, toff = 0.0, tscale = 1.0;
@@ -269,6 +284,10 @@ int main(int argc, char **argv)
             sscanf(argv[++i], "%d,%d,%d,%d,%d,%d,%d,%d", IQ, IQ + 1, IQ + 2,
                 IQ + 3, IQ + 4, IQ + 5, IQ + 6, IQ + 7);
         }
+        else if (!strcmp(argv[i], "-bits") && i + 1 < argc) {
+            sscanf(argv[++i], "%d,%d,%d,%d,%d,%d,%d,%d", bits, bits + 1,
+                bits + 2, bits + 3, bits + 4, bits + 5, bits + 6, bits + 7);
+        }
         else if (!strcmp(argv[i], "-ti") && i + 1 < argc) {
             tint = atof(argv[++i]);
         }
@@ -299,6 +318,9 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "-debug") && i + 1 < argc) {
             debug_file = argv[++i];
         }
+        else if (!strcmp(argv[i], "-v")) {
+            print_ver();
+        }
         else if (argv[i][0] == '-') {
             show_usage();
         }
@@ -320,7 +342,7 @@ int main(int argc, char **argv)
     uint32_t tt = sdr_get_tick();
 
     if (*file) {
-        rcv = sdr_rcv_open_file(sigs, prns, nch, fmt, fs, fo, IQ, toff,
+        rcv = sdr_rcv_open_file(sigs, prns, nch, fmt, fs, fo, IQ, bits, toff,
             tscale, file, paths, rfch_opt);
     }
     else {
