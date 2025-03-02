@@ -1034,7 +1034,7 @@ static int8_t *gen_code_L5Q(int prn, int *N)
 // generate L5SI code ([15]) ---------------------------------------------------
 static int8_t *gen_code_L5SI(int prn, int *N)
 {
-    if ((prn < 184 || prn > 189) && (prn < 205 || prn > 206)) {
+    if ((prn < 184 || prn > 186) && prn != 189) {
         return NULL;
     }
     return gen_code_L5I(prn, N);
@@ -1043,13 +1043,16 @@ static int8_t *gen_code_L5SI(int prn, int *N)
 // generate L5SIV code ([15]) --------------------------------------------------
 static int8_t *gen_code_L5SIV(int prn, int *N)
 {
-    return gen_code_L5SI(prn, N);
+    if (prn != 186 && (prn < 205 || prn > 206)) {
+        return NULL;
+    }
+    return gen_code_L5I(prn, N);
 }
 
 // generate L5SQ code ([15]) ---------------------------------------------------
 static int8_t *gen_code_L5SQ(int prn, int *N)
 {
-    if ((prn < 184 || prn > 189) && (prn < 205 || prn > 206)) {
+    if ((prn < 184 || prn > 186) && prn != 189) {
         return NULL;
     }
     return gen_code_L5Q(prn, N);
@@ -1058,7 +1061,10 @@ static int8_t *gen_code_L5SQ(int prn, int *N)
 // generate L5SQV code ([15]) --------------------------------------------------
 static int8_t *gen_code_L5SQV(int prn, int *N)
 {
-    return gen_code_L5SQ(prn, N);
+    if (prn != 186 && (prn < 205 || prn > 206)) {
+        return NULL;
+    }
+    return gen_code_L5Q(prn, N);
 }
 
 // generate L5I secondary code ([2])--------------------------------------------
@@ -1094,7 +1100,7 @@ static int8_t *sec_code_L5SI(int prn, int *N)
 {
     static int8_t code[] = {1};
     
-    if ((prn < 184 || prn > 189) && (prn < 205 || prn > 206)) {
+    if ((prn < 184 || prn > 186) && prn != 189) {
         return NULL;
     }
     *N = 1;
@@ -1104,7 +1110,7 @@ static int8_t *sec_code_L5SI(int prn, int *N)
 // generate L5SIV secondary code ([15]) ----------------------------------------
 static int8_t *sec_code_L5SIV(int prn, int *N)
 {
-    if ((prn < 184 || prn > 189) && (prn < 205 || prn > 206)) {
+    if (prn != 186 && (prn < 205 || prn > 206)) {
         return NULL;
     }
     return sec_code_L5I_SBAS(prn, N); // L5SI verification mode
@@ -1113,7 +1119,7 @@ static int8_t *sec_code_L5SIV(int prn, int *N)
 // generate L5SQ secondary code ([15]) -----------------------------------------
 static int8_t *sec_code_L5SQ(int prn, int *N)
 {
-    if ((prn < 184 || prn > 189) && (prn < 205 || prn > 206)) {
+    if ((prn < 184 || prn > 186) && prn != 189) {
         return NULL;
     }
     return sec_code_L5Q(prn, N); // L5SQ normal mode
@@ -1122,7 +1128,7 @@ static int8_t *sec_code_L5SQ(int prn, int *N)
 // generate L5SQV secondary code ([15]) ----------------------------------------
 static int8_t *sec_code_L5SQV(int prn, int *N)
 {
-    if ((prn < 184 || prn > 189) && (prn < 205 || prn > 206)) {
+    if (prn != 186 && (prn < 205 || prn > 206)) {
         return NULL;
     }
     return sec_code_L5Q_SBAS(prn, N); // L5SQ verification mode
@@ -2488,8 +2494,6 @@ double sdr_sig_freq(const char *sig)
 static void sat_id_qzss(const char *sig, int prn, char *sat)
 {
     static int sat_L1B[] = {4, 5, 8, 9};
-    static int sat_L5S[] = {2, 3, 4, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 8, 9};
     
     if (!strcmp(sig, "L1CB")) {
         if (prn >= 203 && prn <= 206) {
@@ -2511,9 +2515,13 @@ static void sat_id_qzss(const char *sig, int prn, char *sat)
     else if (!strcmp(sig, "L1S") && prn >= 183 && prn <= 189) {
         sprintf(sat, "J%02d", prn - 182);
     }
-    else if (!strncmp(sig, "L5S", 3) && prn >= 184 && prn <= 206 &&
-        sat_L5S[prn-184]) {
-        sprintf(sat, "J%02d", sat_L5S[prn-184]);
+    else if ((!strcmp(sig, "L5SI") || !strcmp(sig, "L5SQ")) &&
+         ((prn >= 184 && prn <= 186) || prn == 189)) {
+        sprintf(sat, "J%02d", prn - 182);
+    }
+    else if ((!strcmp(sig, "L5SIV") || !strcmp(sig, "L5SQV")) &&
+         (prn == 186 || prn == 205 || prn == 206)) {
+        sprintf(sat, "J%02d", prn == 186 ? 4 : prn - 197);
     }
     else if (!strcmp(sig, "L6E") && prn >= 203 && prn <= 212) {
         sprintf(sat, "J%02d", prn - 202);
