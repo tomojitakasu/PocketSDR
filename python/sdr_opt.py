@@ -160,6 +160,7 @@ def inp_opt_new(opt_p=None):
     opt.types = ('Pocket SDR FE',)
     opt.fmts = ('INT8', 'INT8X2', 'RAW8', 'RAW16', 'RAW32')
     opt.IQs = ('IQ', 'I')
+    opt.bitss = ('2', '3')
     opt.inp = IntVar()
     opt.type = StringVar()
     opt.dev = StringVar()
@@ -168,6 +169,7 @@ def inp_opt_new(opt_p=None):
     opt.fmt = StringVar()
     opt.fo = [StringVar() for i in range(MAX_RFCH)]
     opt.IQ = [StringVar() for i in range(MAX_RFCH)]
+    opt.bits = [StringVar() for i in range(MAX_RFCH)]
     opt.fs = StringVar()
     opt.str_path = StringVar()
     opt.toff = StringVar()
@@ -183,6 +185,7 @@ def inp_opt_new(opt_p=None):
         for i in range(len(opt.fo)):
             opt.fo[i].set(opt_p.fo[i].get())
             opt.IQ[i].set(opt_p.IQ[i].get())
+            opt.bits[i].set(opt_p.bits[i].get())
         opt.str_path.set(opt_p.str_path.get())
         opt.toff.set(opt_p.toff.get())
         opt.tscale.set(opt_p.tscale.get())
@@ -193,6 +196,7 @@ def inp_opt_new(opt_p=None):
         for i in range(len(opt.fo)):
             opt.fo[i].set(fo_def[i])
             opt.IQ[i].set(opt.IQs[0])
+            opt.bits[i].set(opt.bitss[0])
         opt.toff.set('0.0')
         opt.tscale.set('1.0')
     return opt
@@ -446,9 +450,9 @@ def ch_opt_panel_new(parent, opt):
     inp_panel_new(panel, 'Sampling Rate (Msps)*', opt.fs)
     panel1 = Frame(panel, bg=BG_COLOR)
     panel1.pack(fill=X, pady=(4, 0))
-    label = 'LO Freq (MHz)*   I/IQ*'
-    ttk.Label(panel1, text=label).pack(side=LEFT, padx=(75, 0))
-    ttk.Label(panel1, text=label).pack(side=RIGHT, padx=(0, 12))
+    label = ' RF   LO Freq (MHz)*  I/IQ*   Bits* '
+    ttk.Label(panel1, text=label).pack(side=LEFT, padx=(10, 0))
+    ttk.Label(panel1, text=label).pack(side=RIGHT, padx=(0, 5))
     panel2 = Frame(panel, bg=BG_COLOR)
     panel2.pack(side=LEFT, pady=2)
     panel3 = Frame(panel, bg=BG_COLOR)
@@ -480,11 +484,13 @@ def ch_opt_enable_update(fmt, p3):
 # generate RF channel options panel --------------------------------------------
 def rfch_opt_panel_new(parent, ch, opt):
     panel = Frame(parent, bg=BG_COLOR)
-    ttk.Label(panel, text='RF CH%d' % (ch + 1)).pack(side=LEFT, padx=(0, 25))
-    ttk.Combobox(panel, width=4, justify=CENTER, values=opt.IQs,
-        textvariable=opt.IQ[ch], font=FONT).pack(side=RIGHT, pady=2)
+    ttk.Label(panel, text='CH%d' % (ch + 1)).pack(side=LEFT, padx=(0, 8))
+    ttk.Combobox(panel, width=2, justify=CENTER, values=opt.bitss,
+        textvariable=opt.bits[ch], font=FONT).pack(side=RIGHT, padx=1)
+    ttk.Combobox(panel, width=3, justify=CENTER, values=opt.IQs,
+        textvariable=opt.IQ[ch], font=FONT).pack(side=RIGHT, padx=1)
     ttk.Entry(panel, width=10, justify=RIGHT, textvariable=opt.fo[ch],
-        font=FONT).pack(side=RIGHT, padx=4)
+        font=FONT).pack(side=RIGHT, padx=1)
     panel.pack(fill=X, padx=(10, 4))
     return panel
 
