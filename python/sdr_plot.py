@@ -15,7 +15,8 @@ from tkinter import *
 # constants --------------------------------------------------------------------
 BG_COLOR = 'white'     # background color
 FG_COLOR = '#555555'   # foreground color
-GR_COLOR = '#DDDDDD'   # grid color
+#GR_COLOR = '#DDDDDD'   # grid color
+GR_COLOR = '#E4E4E4'   # grid color
 TICK_SIZE = 6          # tick size
 FONT = ('Tahoma', 9, 'normal')
 
