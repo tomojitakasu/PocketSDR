@@ -1334,10 +1334,8 @@ def plot_pos_enu(p, time, enu, nsat, ymax, tspan):
                 plt.plot_poly(ax, time[j:], enu[i][j:], plt.GR_COLOR)
                 plt.plot_dots(ax, time[j:], enu[i][j:], P1_COLOR, size=2)
             else:
-                plt.plot_poly(ax, time[j:], nsat[1][j:], plt.GR_COLOR)
-                plt.plot_dots(ax, time[j:], nsat[1][j:], P2_COLOR, size=2)
-                plt.plot_poly(ax, time[j:], nsat[0][j:], plt.GR_COLOR)
-                plt.plot_dots(ax, time[j:], nsat[0][j:], P1_COLOR, size=2)
+                plt.plot_poly(ax, time[j:], nsat[1][j:], P2_COLOR)
+                plt.plot_poly(ax, time[j:], nsat[0][j:], P1_COLOR)
         plt.plot_axis(ax, gcolor=None)
         if len(time) > 0:
             if i < 3:
