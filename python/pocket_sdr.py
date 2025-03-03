@@ -995,7 +995,7 @@ def corr_page_new(parent):
     p.box2 = sel_box_new(p.toolbar, ['0.1', '0.2', '0.5', '1', '2', '5', '10'],
         '1', 3)
     p.box2.pack(side=RIGHT, padx=1)
-    p.box4 = sel_box_new(p.toolbar, ['I', 'IQ', 'aveIQ'], 'I', 5)
+    p.box4 = sel_box_new(p.toolbar, ['I', 'IQ', 'AveIQ'], 'I', 5)
     p.box4.pack(side=RIGHT, padx=1)
     ttk.Label(p.toolbar, text='IQ/Span(s)/Range').pack(side=RIGHT, padx=2)
     p.plt3 = plt.plot_new(p.panel, 800, 245, [0, 1], [-0.6, 0.6], title=ti[2])
@@ -1089,7 +1089,8 @@ def update_corr_plot1(p, coff, fs, npos, pos, C, aveC, type, rng):
     plt.plot_xlim(p, [x[npos], x[-1]])
     plt.plot_ylim(p, [-rng * 0.3 if type == 'I' else 0, rng])
     xs, ys = plt.plot_scale(p)
-    p.title = 'I * sign(IP)' if type == 'I' else '\u221A(I\xb2+Q\xb2)'
+    p.title = 'I * sign(IP)' if type == 'I' else '\u221A (I\xb2+Q\xb2)' \
+        if type == 'IQ' else '\u221A \u03A3 (I\xb2+Q\xb2)'
     plt.plot_axis(p, fcolor=None, tcolor=None)
     plt.plot_poly(p, [coff, coff], p.yl, color='grey')
     plt.plot_poly(p, p.xl, [0, 0], color='grey')
@@ -1101,6 +1102,9 @@ def update_corr_plot1(p, coff, fs, npos, pos, C, aveC, type, rng):
     plt.plot_axis(p, gcolor=None)
     plt.plot_text(p, p.xl[1] - 18 / xs, p.yl[0] + 10 / ys, 'COFF (ms)',
         anchor=SE)
+    if type == 'AveIQ':
+        plt.plot_text(p, p.xl[1] - 18 / xs, p.yl[1] - 10 / ys,
+            'Integ = %s s' % (sys_opt.t_dll.get()), anchor=NE)
 
 # update correlator plot 2 -----------------------------------------------------
 def update_corr_plot2(p, P, rng):
@@ -1214,7 +1218,9 @@ def sol_page_new(parent):
     p.box2.pack(side=RIGHT)
     ttk.Label(p.toolbar, text='Span(s)').pack(side=RIGHT, padx=(6, 2))
     p.btn1 = ttk.Button(p.toolbar, width=7, text='Clear')
-    p.btn1.pack(side=RIGHT, padx=2)
+    p.btn1.pack(side=RIGHT, padx=(0, 2))
+    p.btn2 = ttk.Button(p.toolbar, width=7, text='Ref Pos')
+    p.btn2.pack(side=RIGHT, padx=1)
     ttk.Label(p.toolbar, text='Type').pack(side=LEFT, padx=(8, 4))
     p.box3 = sel_box_new(p.toolbar, ['Pos ENU', 'Pos Horiz'], 'Pos ENU', width=8)
     p.box3.pack(side=LEFT)
@@ -1232,6 +1238,7 @@ def sol_page_new(parent):
         xlabel='Pos E (m)', ylabel='Pos N (m)'))
     p.plt[-1].c.pack(expand=1, fill=BOTH)
     p.btn1.bind('<Button-1>', lambda e: on_sol_clear_push(e, p))
+    p.btn2.bind('<Button-1>', lambda e: on_sol_ref_push(e, p))
     p.box1.bind('<<ComboboxSelected>>', lambda e: on_sol_change(e, p))
     p.box2.bind('<<ComboboxSelected>>', lambda e: on_sol_change(e, p))
     p.box3.bind('<<ComboboxSelected>>', lambda e: on_sol_change(e, p))
@@ -1249,6 +1256,21 @@ def on_sol_clear_push(e, p):
     p.ref = []
     sol_log = []
     update_sol_page(p)
+
+# solution ref button push callback --------------------------------------------
+def on_sol_ref_push(e, p):
+    label = ('Latitude (\xb0)', 'Longitude (\xb0)', 'Altitude (m)')
+    dlg = sdr_opt.modal_dlg_new(root, 260, 150, 'Ref Pos')
+    pos = sdr_rtk.ecef2pos(p.ref) if len(p.ref) else [0, 0, 0] 
+    var = [StringVar() for i in range(3)]
+    for i in range(3):
+        var[i].set('%.8f' % (pos[i] / D2R) if i < 2 else '%.3f' % (pos[i]))
+        sdr_opt.inp_panel_new(dlg.panel, label[i], var[i], width=14, pwidth=180)
+    root.wait_window(dlg.win)
+    pos = [to_float(var[i].get()) * (D2R if i < 2 else 1) for i in range(3)]
+    if dlg.ok and np.any(pos):
+        p.ref = sdr_rtk.pos2ecef(pos)
+        update_sol_page(p)
 
 # update Solution page ---------------------------------------------------------
 def update_sol_page(p):
