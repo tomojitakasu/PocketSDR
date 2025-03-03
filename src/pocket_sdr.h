@@ -162,6 +162,7 @@ typedef struct {                // SDR receiver navigation data type
 typedef struct {                // SDR receiver channel type 
     int no;                     // channel number
     int rf_ch;                  // RF channel
+    int sig_srch;               // signal search flag
     int state;                  // channel state 
     double time;                // receiver time 
     char sat[16];               // satellite ID 
