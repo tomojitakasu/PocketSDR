@@ -821,10 +821,10 @@ static int8_t *gen_legendre_seq(int N)
     int8_t *L = (int8_t *)sdr_malloc(N);
     
     for (int i = 0; i < N; i++) {
-        L[i] = -1;
+        L[i] = 1; // -> 0
     }
     for (int i = 1; i < N; i++) {
-        L[(i * i) % N] = 1;
+        L[(i * i) % N] = -1; // -> 1
     }
     return L;
 }
@@ -859,7 +859,7 @@ static int8_t *mod_code_TMBOC(const int8_t *code, int n)
     for (int i = 0; i < n; i++) {
         int b6 = i % 33 == 0 || i % 33 == 4 || i % 33 == 6 || i % 33 == 29;
         for (int j = 0; j < 12; j++) {
-            int8_t sub_carr = b6 ? (j % 2 ? 1 : -1) : (j >= 6 ? 1 : -1);
+            int8_t sub_carr = b6 ? (j % 2 ? -1 : 1) : (j >= 6 ? -1 : 1);
             code_mod[i*12+j] = code[i] * sub_carr;
         }
     }
@@ -1646,7 +1646,7 @@ static int8_t B1C_weil_code(int k, int w)
     if (!B1C_L_SEQ) {
         B1C_L_SEQ = gen_legendre_seq(10243);
     }
-    return -B1C_L_SEQ[k] * B1C_L_SEQ[(k + w) % 10243];
+    return B1C_L_SEQ[k] * B1C_L_SEQ[(k + w) % 10243];
 }
 
 // generate B1CD code ([8]) ----------------------------------------------------
@@ -1695,7 +1695,7 @@ static int8_t B1C_weil_code_s(int k, int w)
     if (!B1C_L_SEQ_S) {
         B1C_L_SEQ_S = gen_legendre_seq(3607);
     }
-    return -B1C_L_SEQ_S[k] * B1C_L_SEQ_S[(k + w) % 3607];
+    return B1C_L_SEQ_S[k] * B1C_L_SEQ_S[(k + w) % 3607];
 }
 
 // generate B1CP secondary code ([8]) ------------------------------------------
@@ -1812,7 +1812,7 @@ static int8_t B2A_weil_code(int k, int w)
     if (!B2A_L_SEQ) {
         B2A_L_SEQ = gen_legendre_seq(1021);
     }
-    return -B2A_L_SEQ[k] * B2A_L_SEQ[(k + w) % 1021];
+    return B2A_L_SEQ[k] * B2A_L_SEQ[(k + w) % 1021];
 }
 
 // generate B2AP secondary code ([9]) ------------------------------------------
