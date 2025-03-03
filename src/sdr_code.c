@@ -2559,19 +2559,29 @@ void sdr_sat_id(const char *sig, int prn, char *sat)
             sat_id_qzss(Sig, prn ,sat);
         }
     }
-    else if (!strcmp(Sig, "G1CA") || !strcmp(Sig, "G2CA")) { // GLONASS (FDMA)
-        sprintf(sat, "R%c%d", prn < 0 ? '-' : '+', prn < 0 ? -prn : prn);
+    else if ((!strcmp(Sig, "G1CA") || !strcmp(Sig, "G2CA")) &&
+        prn >= -7 && prn <= 6) { // GLONASS (FDMA)
+        sprintf(sat, "R%+d", prn);
     }
-    else if (Sig[0] == 'G') { // GLONASS (CDMA)
+    else if (Sig[0] == 'G' && prn >= 1 && prn <= 27) { // GLONASS (CDMA)
         sprintf(sat, "R%02d", prn);
     }
-    else if (Sig[0] == 'E') { // Galileo
+    else if (Sig[0] == 'E' && prn >= 1 && prn <= 36) { // Galileo
         sprintf(sat, "E%02d", prn);
     }
-    else if (Sig[0] == 'B') { // BDS
-        sprintf(sat, "C%02d", prn);
+    else if (Sig[0] == 'B' && prn >= 1 && prn <= 63) { // BDS
+        if ((!strncmp(Sig, "B1C", 3) || !strncmp(Sig, "B2A", 3)) &&
+            (prn < 19 || prn > 58)) {
+            sprintf(sat, "???");
+        }
+        else if (!strcmp(Sig, "B2I") && prn > 18) {
+            sprintf(sat, "???");
+        }
+        else {
+            sprintf(sat, "C%02d", prn);
+        }
     }
-    else if (Sig[0] == 'I') { // NavIC
+    else if (Sig[0] == 'I' && prn >= 1 && prn <= 14) { // NavIC
         sprintf(sat, "I%02d", prn);
     }
     else {
