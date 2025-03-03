@@ -502,6 +502,23 @@ static int set_rfch(int fmt, double fs, const double *fo, const int *IQ,
     return nch;
 }
 
+// set signal search channels --------------------------------------------------
+static void set_srch_ch(sdr_rcv_t *rcv, const char *opt)
+{
+    int rfch[SDR_MAX_RFCH] = {0}, nch;
+    
+    if (!(nch = opt_rfch(rcv->fmt, "SRCH", opt, rfch))) {
+        return;
+    }
+    for (int i = 0; i < rcv->nch; i++) {
+        int j;
+        for (j = 0; j < nch; j++) {
+            if (rcv->th[i]->ch->rf_ch == rfch[j]) break;
+        }
+        rcv->th[i]->ch->sig_srch = (j >= nch) ? 0 : 1;
+    }
+}
+
 //------------------------------------------------------------------------------
 //  Generate a new SDR receiver.
 //
@@ -541,6 +558,7 @@ sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
             if (th) {
                 th->ch->no = rcv->nch + 1;
                 th->ch->rf_ch = rfch[j];
+                th->ch->sig_srch = 1;
                 rcv->th[rcv->nch++] = th;
             }
             else {
@@ -549,6 +567,7 @@ sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
             }
         }
     }
+    set_srch_ch(rcv, opt);
     rcv->nbuff = num_rfch(fmt);
     for (int i = 0; i < rcv->nbuff; i++) {
         rcv->buff[i] = sdr_buff_new(rcv->N * MAX_BUFF, rcv->IQ[i]);
@@ -735,7 +754,8 @@ static void update_srch_ch(sdr_rcv_t *rcv)
         if (ch->state != SDR_STATE_IDLE) continue;
         
         // re-acquisition, assisted-acquisition or short code cycle
-        if (re_acq(rcv, ch) || assist_acq(rcv, ch) || ch->T <= MAX_ACQ) {
+        if (re_acq(rcv, ch) || assist_acq(rcv, ch) ||
+            (ch->T <= MAX_ACQ && ch->sig_srch)) {
             ch->state = SDR_STATE_SRCH;
             break;
         }
