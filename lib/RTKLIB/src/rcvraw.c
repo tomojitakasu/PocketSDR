@@ -51,6 +51,7 @@
 *
 *           branch for Pocket SDR
 *           2024/04/03 0.1  delete receiver dependent functions
+*           2025/03/05 0.2  support binex, novatel, ublox, septentrio
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -1406,6 +1407,14 @@ extern void free_raw(raw_t *raw)
 *-----------------------------------------------------------------------------*/
 extern int input_raw(raw_t *raw, int format, uint8_t data)
 {
+    trace(5,"input_raw: format=%d data=0x%02x\n",format,data);
+    
+    switch (format) {
+        case STRFMT_OEM4  : return input_oem4  (raw,data);
+        case STRFMT_UBX   : return input_ubx   (raw,data);
+        case STRFMT_BINEX : return input_bnx   (raw,data);
+        case STRFMT_SEPT  : return input_sbf   (raw,data);
+    }
     return 0;
 }
 /* input receiver raw data from file -------------------------------------------
@@ -1417,5 +1426,13 @@ extern int input_raw(raw_t *raw, int format, uint8_t data)
 *-----------------------------------------------------------------------------*/
 extern int input_rawf(raw_t *raw, int format, FILE *fp)
 {
+    trace(4,"input_rawf: format=%d\n",format);
+    
+    switch (format) {
+        case STRFMT_OEM4  : return input_oem4f  (raw,fp);
+        case STRFMT_UBX   : return input_ubxf   (raw,fp);
+        case STRFMT_BINEX : return input_bnxf   (raw,fp);
+        case STRFMT_SEPT  : return input_sbff   (raw,fp);
+    }
     return -2;
 }
