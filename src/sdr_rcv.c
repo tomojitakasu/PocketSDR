@@ -383,7 +383,20 @@ int sdr_rcv_pvt_sol(sdr_rcv_t *rcv, char *buff)
     return 1;
 }
 
-// output log $TIME ------------------------------------------------------------
+// -----------------------------------------------------------------------------
+//  Output log $TIME (time information).
+//
+//  format:
+//      $TIME,time,year,mon,day,hour,min,sec,tsys
+//          time  receiver time (s)
+//          year  year (2000-2099)
+//          mon   month (1-12)
+//          day   day (1-31)
+//          hour  hour (0-23)
+//          min   minute (0-59)
+//          sec   second (0.000-59.999)
+//          tsys  time system ("GPST" or "UTC")
+//
 static void out_log_time(double time)
 {
     double t[6] = {0};
