@@ -29,7 +29,7 @@ CFLAGS = -O3 $(INCLUDE) $(OPTIONS) $(WARNOPTS) -fPIC -g
 OBJ = rtkcmn.o tides.o rtkpos.o geoid.o solution.o lambda.o sbas.o \
       stream.o rcvraw.o rtcm.o rtcm2.o rtcm3.o rtcm3e.o preceph.o options.o \
       pntpos.o ppp.o ppp_ar.o ephemeris.o rinex.o ionex.o convrnx.o \
-      rtklib_wrap.o
+      streamsvr.o binex.o ublox.o novatel.o septentrio.o rtklib_wrap.o
 
 TARGET = librtk.so librtk.a
 
@@ -87,6 +87,16 @@ ionex.o    : $(SRC)/ionex.c
 	$(CC) -c $(CFLAGS) $(SRC)/ionex.c
 convrnx.o  : $(SRC)/convrnx.c
 	$(CC) -c $(CFLAGS) $(SRC)/convrnx.c
+streamsvr.o: $(SRC)/streamsvr.c
+	$(CC) -c $(CFLAGS) $(SRC)/streamsvr.c
+binex.o    : $(SRC)/rcv/binex.c
+	$(CC) -c $(CFLAGS) $(SRC)/rcv/binex.c
+novatel.o  : $(SRC)/rcv/novatel.c
+	$(CC) -c $(CFLAGS) $(SRC)/rcv/novatel.c
+ublox.o    : $(SRC)/rcv/ublox.c
+	$(CC) -c $(CFLAGS) $(SRC)/rcv/ublox.c
+septentrio.o: $(SRC)/rcv/septentrio.c
+	$(CC) -c $(CFLAGS) $(SRC)/rcv/septentrio.c
 
 rtkcmn.o   : $(SRC)/rtklib.h
 rtksvr.o   : $(SRC)/rtklib.h
@@ -111,6 +121,11 @@ ephemeris.o: $(SRC)/rtklib.h
 rinex.o    : $(SRC)/rtklib.h
 ionex.o    : $(SRC)/rtklib.h
 convrnx.o  : $(SRC)/rtklib.h
+streamsvr.o: $(SRC)/rtklib.h
+binex.o    : $(SRC)/rtklib.h
+novatel.o  : $(SRC)/rtklib.h
+ublox.o    : $(SRC)/rtklib.h
+septentrio.o: $(SRC)/rtklib.h
 
 clean:
 	rm -f $(TARGET) *.o
