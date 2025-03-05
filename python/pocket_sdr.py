@@ -881,9 +881,9 @@ def plot_hist(p, bits, val, hist):
     plt.plot_xlim(p, [-xl[bits], xl[bits]])
     plt.plot_ylim(p, [0, yl[bits]])
     plt.plot_axis(p, gcolor=None)
-    if len(val) > 0:
-        ave = np.sum(val * hist) / len(val)
-        std = sqrt(np.sum((val - ave) ** 2 * hist) / len(val))
+    if len(val) > 0 and np.sum(hist) > 0:
+        ave = np.sum(val * hist) / np.sum(hist)
+        std = sqrt(np.sum((val - ave) ** 2 * hist) / np.sum(hist))
         x = xl[bits] - 12 / xs
         plt.plot_text(p, x, yl[bits] - 10 / ys, 'Ave: %.2f' % (ave), anchor=NE)
         plt.plot_text(p, x, yl[bits] - 26 / ys, 'Std: %.2f' % (std), anchor=NE)
@@ -1506,6 +1506,11 @@ def on_root_close():
         rcv_close(rcv_body)
     exit()
 
+# pages change callback --------------------------------------------------------
+def on_pages_change(e, pages):
+    i = e.widget.index('current')
+    update_page(i, pages[i])
+
 # pages interval timer callback ------------------------------------------------
 def on_pages_timer(note, pages):
     tt = time.time()
@@ -1530,10 +1535,7 @@ def on_root_end_resize():
 
 # update page ------------------------------------------------------------------
 def update_page(i, page):
-    global root_resize
-    if root_resize:
-        pass
-    elif i == 0:
+    if i == 0:
         update_rcv_page(page)
     elif i == 1:
         update_rfch_page(page)
@@ -1550,10 +1552,12 @@ def update_page(i, page):
 
 # update pages -----------------------------------------------------------------
 def pages_update(note, pages):
+    global root_resize
     i = note.index('current')
-    update_page(i, pages[i])
-    if i != 3:
-        set_sel_ch(rcv_body, 0)
+    if not root_resize:
+        update_page(i, pages[i])
+        if i != 3:
+            set_sel_ch(rcv_body, 0)
     text = 'Time: ' + get_rcv_stat(rcv_body).split()[0] + ' s'
     stat_bar.msg2.configure(text=text)
     return UD_CYCLE1 if i in (1, 3) else UD_CYCLE2 # update interval (ms)
@@ -1626,6 +1630,7 @@ if __name__ == '__main__':
     for i, page in enumerate(pages):
         note.add(page.panel, text=labels[i])
     note.after(100, lambda: on_pages_timer(note, pages))
+    note.bind('<<NotebookTabChanged>>', lambda e: on_pages_change(e, pages))
     
     # main loop of Tk
     root.mainloop()
