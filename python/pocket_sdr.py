@@ -34,6 +34,7 @@ SB_HEIGHT  = 20              # status bar height
 P1_COLOR   = '#003020'       # plot color 1
 P2_COLOR   = '#888844'       # plot color 2
 P3_COLOR   = '#BBBBBB'       # plot color 3
+WARN_COLOR = '#FF8000'       # warning color
 SDR_N_CORR = (6+81)          # number of correlators
 SDR_N_HIST = 5000            # number of correlator history
 SDR_N_PSD  = 2048            # number FFT points for PSD
@@ -576,9 +577,13 @@ def update_rcv_stat(p):
     xs, ys = plt.plot_scale(p)
     for i in range(len(labels)):
         x, y = 0.0 if i < 11 else 0.51, 0.5 + (5 - i % 11) * 20 / ys
+        color = P1_COLOR
+        if (labels[i] == 'IF Data Buffer Usage (%)' and float(val[i]) > 90.0) or \
+            labels[i] == 'IF Data Log (MB)' and float(val[i]) > 0:
+            color = WARN_COLOR
         plt.plot_text(p, x, y, labels[i], anchor=W, font=get_font(0, 'bold'),
-            color=P1_COLOR)
-        plt.plot_text(p, x + 0.48, y, val[i], anchor=E, color=P1_COLOR)
+            color=color)
+        plt.plot_text(p, x + 0.48, y, val[i], anchor=E, color=color)
 
 # update stream status ---------------------------------------------------------
 def update_str_stat(p):
@@ -950,7 +955,7 @@ def update_bbch_page(p):
     p.txt3.configure(text=lock)
     buff_use = int(re.split('[:%]', buff)[1])
     srch_ch = int(re.split('[:]', srch)[1])
-    p.txt1.configure(foreground='green' if buff_use < 90 else 'red')
+    p.txt1.configure(foreground='green' if buff_use < 90 else WARN_COLOR)
     for c in p.tbl1.get_children():
        p.tbl1.delete(c)
     cols = stat[1].split()
@@ -1197,7 +1202,7 @@ def update_sats_page(p):
         tag = '' if pvt[i] else 'unhealthy' if svh[i] else 'no_pvt'
         p.tbl1.insert('', END, iid=s, values=vals, tags=tag)
     p.tbl1.tag_configure('no_pvt', foreground=P2_COLOR)
-    p.tbl1.tag_configure('unhealthy', foreground='orange')
+    p.tbl1.tag_configure('unhealthy', foreground=WARN_COLOR)
     text = '# Sats Used/Sats Tracked/Signals:  %2d/%2d/%2d' % (pvt.count(1),
         len(sats), len(sat))
     p.txt1.configure(text=text)
