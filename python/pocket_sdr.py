@@ -1381,7 +1381,7 @@ def pos2enu(log, ref):
 
 # generate Log page ------------------------------------------------------------
 def log_page_new(parent):
-    filts = ('', '$TIME', '$CH', '$NAV', '$OBS', '$POS', '$SAT', '$EPH', '$LOG')
+    filts = ('', '$TIME', '$POS', '$OBS', '$NAV', '$SAT', '$CH', '$EPH', '$LOG')
     p = Obj()
     p.parent = parent
     p.panel = Frame(parent)
