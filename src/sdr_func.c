@@ -60,7 +60,7 @@ static fftwf_plan fftw_plans[MAX_FFTW_PLAN][2] = {{0}}; // FFTW plan buffer
 static int fftw_size[MAX_FFTW_PLAN] = {0}; // FFTW plan sizes
 static int log_lvl = 3;            // log level
 static const char *log_types[] = { // log types
-    "$TIME,", "$CH,", "$NAV,", "$OBS,", "$POS,", "$SAT,", "$EPH,", "$LOG,",
+    "$TIME,", "$POS", "$OBS", "$NAV", "$SAT", "$CH,", "$EPH,", "$LOG,",
     NULL
 };
 static int log_mask[16] = {0};    // log mask
