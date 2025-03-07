@@ -87,7 +87,7 @@ static uint8_t sig2code(const char *sig)
 //
 //  format:
 //      $CH,time,ch,rfch,sat,sig,prn,lock,cn0,coff,dop,adr,ssync,bsync,fsync,
-//          rev,week,tow,towv,nnav,nerr,nlol,nfec
+//          rev,srev,err_phas,err_code,tow_v,tow,week,type,nnav,nerr,nlol,nfec
 //          time  receiver time (s)
 //          ch    receiver channel number
 //          rfch  RF channel number
@@ -102,10 +102,14 @@ static uint8_t sig2code(const char *sig)
 //          ssync secondary code sync flag (0:async, 1:sync)
 //          bsync symbol/bit sync flag (0:async, 1:sync)
 //          fsync frame sync flag (0:async, 1:sync)
-//          rev   code polarity (0:normal, 1:reversed)
-//          towv  tow valid flag (0:invalid, 1:valid)
-//          tow   TOW (s)
+//          rev   primary code polarity (0:normal, 1:reversed)
+//          srev  secondary code polarity (0:normal, 1:reversed)
+//          err_phas phase error (cyc)
+//          err_code code error (10^-6 s)
+//          tow_v  tow valid flag (0:invalid, 1:valid, 2:ambiguity unresolved)
+//          tow   time of week (ms)
 //          week  week number (week)
+//          type  navigation subframe or message type
 //          nnav  navigation subframe/message count
 //          nerr  error subframe/message count
 //          nlol  loss-of-lock count
@@ -114,11 +118,13 @@ static uint8_t sig2code(const char *sig)
 static void out_log_ch(sdr_ch_t *ch)
 {
     sdr_log(3, "$CH,%.3f,%d,%d,%s,%s,%d,%.3f,%.1f,%.9f,%.3f,%.3f,%d,%d,%d,%d,"
-        "%d,%.3f,%d,%d,%d,%d,%d", ch->time, ch->no, ch->rf_ch + 1, ch->sat,
-        ch->sig, ch->prn, ch->lock * ch->T, ch->cn0, ch->coff * 1e3, ch->fd,
-        ch->adr, ch->trk->sec_sync != 0, ch->nav->ssync != 0,
-        ch->nav->fsync != 0, ch->nav->rev, ch->tow_v, ch->tow * 1e-3, ch->week,
-        ch->nav->count[0], ch->nav->count[1], ch->lost, ch->nav->nerr);
+        "%d,%.3f,%.3f,%d,%d,%d,%d,%d,%d,%d,%d", ch->time, ch->no, ch->rf_ch + 1,
+        ch->sat, ch->sig, ch->prn, ch->lock * ch->T, ch->cn0, ch->coff * 1e3,
+        ch->fd, ch->adr, ch->trk->sec_sync != 0, ch->nav->ssync != 0,
+        ch->nav->fsync != 0, ch->nav->rev, ch->trk->sec_pol == -1,
+        ch->trk->err_phas, ch->trk->err_code * 1e6, ch->tow_v, ch->tow,
+        ch->week, ch->nav->type, ch->nav->count[0], ch->nav->count[1], ch->lost,
+        ch->nav->nerr);
 }
 
 //------------------------------------------------------------------------------
@@ -485,6 +491,7 @@ static double gen_cphas(const sdr_ch_t *ch, double P)
     if (!strcmp(ch->sig, "L1CD") || !strcmp(ch->sig, "L1CP")) {
         L += 0.25; // + 1/4 cyc
     }
+#if 0 // RINEX convension
     else if (!strcmp(ch->sig, "L5Q") || !strcmp(ch->sig, "G3OCP") ||
         !strcmp(ch->sig, "E5AQ") || !strcmp(ch->sig, "E5BQ") ||
         !strcmp(ch->sig, "L5SQ") || !strcmp(ch->sig, "L5SQV") ||
@@ -494,6 +501,17 @@ static double gen_cphas(const sdr_ch_t *ch, double P)
     else if (!strcmp(ch->sig, "E1C") || !strcmp(ch->sig, "E6C")) {
         L += 0.5; // + 1/2 cyc
     }
+#else
+    else if (!strcmp(ch->sig, "L5Q") || !strcmp(ch->sig, "L5SQ") ||
+        !strcmp(ch->sig, "L5SQV")) {
+        L -= 0.25; // - 1/4 cyc
+    }
+    else if (!strcmp(ch->sig, "G3OCP") || !strcmp(ch->sig, "E5AQ") ||
+        !strcmp(ch->sig, "E5BQ") || !strcmp(ch->sig, "B1CP") ||
+        !strcmp(ch->sig, "B2AP")) {
+        L += 0.25; // + 1/4 cyc
+    }
+#endif
     else if (!strcmp(ch->sig, "L2CM")) {
         L += (ch->sat[0] == 'J') ? 0.0 : -0.25; // 0 cyc (QZSS), -1/4 cyc (GPS)
     }
