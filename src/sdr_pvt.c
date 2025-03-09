@@ -171,7 +171,8 @@ static void out_log_obs(double time, const obs_t *obs, const nav_t *nav)
 //  Output log $POS (position solution).
 //
 //  format:
-//      $POS,time,year,month,day,hour,min,sec,lat,lon,hgt,Q,ns,stdn,stde,stdu
+//      $POS,time,year,month,day,hour,min,sec,lat,lon,hgt,Q,ns,stdn,stde,stdu,
+//        dtr
 //          time  receiver time (s)
 //          year,month,day  solution day (GPST)
 //          hour,min,sec  solution time (GPST)
@@ -183,11 +184,12 @@ static void out_log_obs(double time, const obs_t *obs, const nav_t *nav)
 //          stdn  solution standard deviation north (m)
 //          stde  solution standard deviation east (m)
 //          stdu  solution standard deviation up (m)
+//          dtr   receiver clock bias (s)
 //
 static void out_log_pos(double time, const sol_t *sol, int nsat)
 {
     double ep[6], pos[3], P[9], Q[9];
-    time2epoch(sol->time, ep);
+    time2epoch(timeadd(sol->time, sol->dtr[0]), ep);
     ecef2pos(sol->rr, pos);
     P[0] = sol->qr[0];
     P[4] = sol->qr[1];
@@ -196,18 +198,20 @@ static void out_log_pos(double time, const sol_t *sol, int nsat)
     P[5] = P[7] = sol->qr[4];
     P[2] = P[6] = sol->qr[5];
     covenu(pos, P, Q);
-    sdr_log(3, "$POS,%.3f,%.0f,%.0f,%.0f,%.0f,%.0f,%.9f,%.9f,%.9f,%.3f,%d,%d,"
-        "%.3f,%.3f,%.3f", time, ep[0], ep[1], ep[2], ep[3], ep[4], ep[5],
+    sdr_log(3, "$POS,%.3f,%.0f,%.0f,%.0f,%.0f,%.0f,%.3f,%.9f,%.9f,%.3f,%d,%d,"
+        "%.3f,%.3f,%.3f,%.9f", time, ep[0], ep[1], ep[2], ep[3], ep[4], ep[5],
         pos[0] * R2D, pos[1] * R2D, pos[2], 5, sol->ns, SQRT(Q[4]), SQRT(Q[0]),
-        SQRT(Q[8]));
+        SQRT(Q[8]), sol->dtr[0]);
 }
 
 //------------------------------------------------------------------------------
 //  Output log $SAT (satellite information).
 //
 //  format:
-//      $SAT,time,sat,pvt,obs,cn0,az,el,res
+//      $SAT,time,year,month,day,hour,min,sec,sat,pvt,obs,cn0,az,el,res
 //          time  receiver time (s)
+//          year,month,day  solution day (GPST)
+//          hour,min,sec  solution time (GPST)
 //          sat   satellite ID
 //          pvt   PVT status (0: not used, 1: used)
 //          obs   L1 obs data status (0: not available, 1: available)
@@ -216,14 +220,18 @@ static void out_log_pos(double time, const sol_t *sol, int nsat)
 //          el    elavation angle (deg)
 //          res   L1 pseudorange residual (m)
 //
-static void out_log_sat(double time, int sat, const ssat_t *ssat)
+static void out_log_sat(double time, int sat, const sol_t *sol,
+    const ssat_t *ssat)
 {
+    double ep[6];
     char str[16];
+    time2epoch(timeadd(sol->time, sol->dtr[0]), ep);
     satno2id(sat, str);
     if (str[0] == '1') str[0] = 'S';
-    sdr_log(3, "$SAT,%.3f,%s,%d,%d,%.1f,%.1f,%.1f,%.3f", time, str, ssat->vs,
-        ssat->snr[0] > 0, ssat->snr[0] * SNR_UNIT, ssat->azel[0] * R2D,
-        ssat->azel[1] * R2D, ssat->resp[0]);
+    sdr_log(3, "$SAT,%.3f,%.0f,%.0f,%.0f,%.0f,%.0f,%.3f,%s,%d,%d,%.1f,%.1f,"
+        "%.1f,%.3f", time, ep[0], ep[1], ep[2], ep[3], ep[4], ep[5], str,
+        ssat->vs, ssat->snr[0] > 0, ssat->snr[0] * SNR_UNIT,
+        ssat->azel[0] * R2D, ssat->azel[1] * R2D, ssat->resp[0]);
 }
 
 //------------------------------------------------------------------------------
@@ -803,7 +811,7 @@ static void update_sol(sdr_pvt_t *pvt)
         // output log $SAT
         for (int i = 0; i < MAXSAT; i++) {
             if (pvt->ssat[i].snr[0] == 0) continue;
-            out_log_sat(time, i + 1, pvt->ssat + i);
+            out_log_sat(time, i + 1, pvt->sol, pvt->ssat + i);
         }
     }
     else {
