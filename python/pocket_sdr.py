@@ -9,7 +9,7 @@
 #  2024-06-29  1.0  ver.0.13
 #  2024-12-30  1.1  ver.0.14
 #
-import os, platform, time, re
+import sys, os, platform, time, re
 from math import *
 from ctypes import *
 import numpy as np
@@ -22,10 +22,10 @@ import sdr_func, sdr_code, sdr_opt, sdr_rtk
 import sdr_plot as plt
 
 # constants --------------------------------------------------------------------
-TITLE      = 'An Open-Source GNSS SDR\n(Software Defined Receiver)'
+TITLE      = 'An Open Source GNSS SDR\n(Software Defined Receiver)'
 AP_URL     = 'https://github.com/tomojitakasu/PocketSDR'
 AP_DIR     = os.path.dirname(__file__)
-COPYRIGHT  = 'Copyright (c) 2021-2025, T.Takasu\nAll rights reserved.'
+COPYRIGHT  = 'Copyright (C) 2021-2025 T.Takasu\nAll rights reserved.'
 OPTS_FILE  = AP_DIR + '/pocket_sdr.ini' # options file
 WIDTH      = 800             # root window width
 HEIGHT     = 600             # root window height
@@ -506,12 +506,14 @@ def sel_box_new(parent, vals=[], val='', width=8):
 
 # show Help dialog -------------------------------------------------------------
 def help_dlg(root):
-    dlg = sdr_opt.modal_dlg_new(root, 280, 180, 'About', nocancel=1)
+    dlg = sdr_opt.modal_dlg_new(root, 280, 200, 'About', nocancel=1)
     name, ver = get_name_ver()
+    python_info = 'with Python ' + sys.version.split()[0]
     sdr_opt.link_label_new(dlg.panel, text=name + ' ver.' + ver,
         font=get_font(2, 'bold'), link=AP_URL).pack(pady=(4, 0))
+    ttk.Label(dlg.panel, text=python_info, justify=CENTER).pack(pady=2)
     ttk.Label(dlg.panel, text=TITLE, justify=CENTER).pack(pady=2)
-    ttk.Label(dlg.panel, text=COPYRIGHT, justify=CENTER).pack()
+    ttk.Label(dlg.panel, text=COPYRIGHT, justify=CENTER).pack(pady=2)
     root.wait_window(dlg.win)
 
 # generate Receiver page -------------------------------------------------------
