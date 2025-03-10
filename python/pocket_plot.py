@@ -10,6 +10,7 @@
 #  2025-03-09  1.1  re-written for ver.0.14
 #
 import sys, re, time
+from math import *
 import numpy as np
 from datetime import datetime
 import matplotlib as mpl
@@ -25,6 +26,7 @@ FG_COLOR = '#555555' # foreground color
 GR_COLOR = '#DDDDDD' # grid color
 CLIGHT = 299792458.0 
 D2R = np.pi / 180
+
 mpl.rcParams['toolbar'] = 'None';
 mpl.rcParams['font.size'] = FONT_SIZE
 mpl.rcParams['axes.edgecolor'] = FG_COLOR
@@ -62,8 +64,8 @@ UNITS = ('dB-Hz', 'ms', 'Hz', 'cycle', 'm', 'cycle', 'm', '\xb0', '\xb0', 'm',
 # show usage -------------------------------------------------------------------
 def show_usage():
     print('Usage: pocket_plot.py [-type type[,type...]] [-sat sat[,...]] [-sig sig[,...]]')
-    print('    [-tspan [ts],[te][,ti]] [-range rng[,...]] [-style {-|.|.-|...}] [-mark size]')
-    print('    [-stats] [-legend] [-opt options] file ...')
+    print('    [-tspan [ts],[te]] [-tint ti] [-range rng[,...]] [-style {-|.|.-|...}]')
+    print('    [-mark size] [-stats] [-legend] [-opt options] file ...')
     exit()
 
 # string to time ---------------------------------------------------------------
@@ -196,7 +198,7 @@ def read_log_obs(t0, line, type, sats, sigs, tspan, ts, logs, opt):
 
 # read log $SAT ---------------------------------------------------------------
 def read_log_sat(t0, line, type, sats, tspan, ts, logs, opt):
-    types = ('AZ', 'EL', 'RES')
+    types = ('AZ', 'EL', 'RES', 'SKY')
     if not type in types:
         return t0
     # $SAT,time,year,month,day,hour,min,sec,sat,pvt,obs,cn0,az,el,res
@@ -206,6 +208,9 @@ def read_log_sat(t0, line, type, sats, tspan, ts, logs, opt):
     
     cn0 = get_opt(opt, 'MIN_CN0=')
     if len(cn0) > 0 and float(s[11]) < float(cn0[0]):
+        return t0
+    el = get_opt(opt, 'MIN_EL=')
+    if len(el) > 0 and float(s[13]) < float(el[0]):
         return t0
     
     if ('ALL' in sats or s[8] in sats) and test_time(time, tspan):
@@ -217,12 +222,15 @@ def read_log_sat(t0, line, type, sats, tspan, ts, logs, opt):
         elif type == 'RES':
             if not int(s[9]): return
             logs.append([id, float(s[14])])
+        elif type == 'SKY':
+            logs.append([id, float(s[12]), float(s[13])])
         ts.append(time)
     return t0
 
 # read log $CH -----------------------------------------------------------------
 def read_log_ch(t0, line, type, sats, sigs, tspan, ts, logs, opt):
-    types = ('TRK', 'LOCK', 'CN0', 'COFF', 'DOP', 'ADR', 'SSYNC', 'BSYNC', 'FSYNC')
+    types = ('TRK', 'LOCK', 'CN0', 'COFF', 'DOP', 'ADR', 'SSYNC', 'BSYNC',
+        'FSYNC')
     if not t0 or not type in types:
         return t0
     # $CH,time,ch,rfch,sat,sig,prn,lock,cn0,coff,dop,adr,ssync,bsync,fsync,
@@ -235,6 +243,9 @@ def read_log_ch(t0, line, type, sats, sigs, tspan, ts, logs, opt):
         return t0
     cn0 = get_opt(opt, 'MIN_CN0=')
     if len(cn0) > 0 and float(s[8]) < float(cn0[0]):
+        return t0
+    lock = get_opt(opt, 'MIN_LOCK=')
+    if len(lock) > 0 and float(s[7]) < float(lock[0]):
         return t0
     
     if ('ALL' in sats or s[4] in sats) and ('ALL' in sigs or s[5] in sigs) and \
@@ -322,15 +333,19 @@ def rm_off(ys, thres):
     return ys_off
 
 # separate log -----------------------------------------------------------------
-def sep_log(ts, log):
+def sep_log(type, ts, log):
     ids, xs, ys = [], [], []
     if len(log) > 0:
         log = list(map(list, zip(*log))) # transpose
         for id in sorted(set(log[0])):
             ids.append(id)
             idx = [i for i, x in enumerate(log[0]) if x == id]
-            xs.append(np.array([time2dtime(ts[i]) for i in idx]))
-            ys.append(np.array([log[1][i] for i in idx]))
+            if type == 'SKY':
+                xs.append(np.array([log[1][i] for i in idx]))
+                ys.append(np.array([log[2][i] for i in idx]))
+            else:
+                xs.append(np.array([time2dtime(ts[i]) for i in idx]))
+                ys.append(np.array([log[1][i] for i in idx]))
     return ids, xs, ys
 
 # make difference of logs ------------------------------------------------------
@@ -369,7 +384,7 @@ def sort_log(ids, xs, ys):
 def trans_log(type, ts, log, opt):
     ids, xs, ys, ref, diff = [], [], [], '', []
     
-    if 'POS' in type:
+    if type in ('POS', 'POS-E', 'POS-N', 'POS-U', 'POS-H'):
         types = ('POS-E', 'POS-N', 'POS-U')
         enu, pos = pos2enu(log)
         if type == 'POS':
@@ -387,7 +402,7 @@ def trans_log(type, ts, log, opt):
             ys.append(enu[1])
         ref = 'REF=%.8f\xb0 %.8f\xb0 %.3fm' % (pos[0] / D2R, pos[1] / D2R, pos[2])
     else:
-        ids, xs, ys = sep_log(ts, log)
+        ids, xs, ys = sep_log(type, ts, log)
     
     diff = get_opt(opt, 'RFCH_DIFF=')
     if len(diff) >= 2 and type in ('COFF', 'DOP', 'ADR'):
@@ -409,10 +424,27 @@ def trans_log(type, ts, log, opt):
 def plot_sec(ax, xs, ys, style, color, lw, ms):
     i = 0
     dx = np.abs([d.total_seconds() for d in np.diff(xs)])
-    for j in np.argwhere(dx > 10):
+    for j in np.argwhere(dx > 30):
         ax.plot(xs[i:j[0]+1], ys[i:j[0]+1], style, color=color, lw=lw, ms=ms)
         i = j[0] + 1
     ax.plot(xs[i:], ys[i:], style, color=color, lw=lw, ms=ms)
+
+# plot skyplot -----------------------------------------------------------------
+def plot_sky(ax):
+    ax.axis('off')
+    for az in range(0, 360, 30):
+        x, y = sin(az * D2R), cos(az * D2R)
+        ax.plot([0, x], [0, y], '-', color=GR_COLOR, lw=0.5)
+        text = str(az) if az % 90 else 'NESW'[az // 90]
+        ax.text(x * 1.03, y * 1.03, text, ha='center', va='center',
+            rotation=-az)
+    for el in range(0, 90, 15):
+        x = [sin(az * D2R) * (1 - el / 90) for az in range(0, 363, 3)]
+        y = [cos(az * D2R) * (1 - el / 90) for az in range(0, 363, 3)]
+        color = FG_COLOR if el == 0 else GR_COLOR
+        ax.plot(x, y, '-', color=color, lw=0.8 if el == 0 else 0.5)
+        if el > 0:
+            ax.text(0, 1 - el / 90, str(el), ha='center', va='center')
 
 # plot log type ----------------------------------------------------------------
 def plot_log_type(ax, type, ids, xs, ys, color, opts):
@@ -420,13 +452,26 @@ def plot_log_type(ax, type, ids, xs, ys, color, opts):
     if type == 'TRK':
         ax.grid(True, lw=0.5)
         for i, id in enumerate(ids):
-            col = color if color != '' else sat_color(id)
+            col = sat_color(id) if color == 'sys' else color if color != '' \
+                else COLORS[i % 30]
             y = np.full(len(xs[i]), len(ids) - i)
             plot_sec(ax, xs[i], y, opts[0], col, lw, opts[1])
+    elif type == 'SKY':
+        plot_sky(ax)
+        for i, id in enumerate(ids):
+            col = sat_color(id) if color == 'sys' else color if color != '' \
+                else COLORS[i % 30]
+            x = [sin(xs[i][j] * D2R) * (1 - ys[i][j] / 90) for j in range(len(xs[i]))]
+            y = [cos(xs[i][j] * D2R) * (1 - ys[i][j] / 90) for j in range(len(xs[i]))]
+            ax.plot(x, y, opts[0], color=col, lw=lw, ms=opts[1])
+            if 'PLOT_SAT' in opts[4]:
+                ax.plot(x[0], y[0], 'o', mec=FG_COLOR, mfc=col, ms=22)
+                ax.text(x[0], y[0], id, color=BG_COLOR, ha='center', va='center')
     else:
         ax.grid(True, lw=0.5)
         for i, id in enumerate(ids):
-            col = color if color != '' else COLORS[i % 30]
+            col = sat_color(id) if color == 'sys' else color if color != '' \
+                else COLORS[i % 30]
             if type in ('POS-H',):
                 ax.plot(xs[i], ys[i], opts[0], color=col, lw=lw, ms=opts[1])
             else:
@@ -497,7 +542,7 @@ def plot_log(fig, rect, types, ts, logs, tspan, ranges, colors, opts):
         plot_log_type(ax, type, ids, xs, ys, color, opts)
         
         # set plot x-range
-        if type in ('POS-H',):
+        if type in ('POS-H', 'SKY'):
             ax.set_aspect('equal')
         else:
             ax.set_xlim([time2dtime(t) for t in tspan[:2]])
@@ -509,8 +554,12 @@ def plot_log(fig, rect, types, ts, logs, tspan, ranges, colors, opts):
             for i, id in enumerate(ids):
                 text = id.split('/')[0] + ' '
                 ax.text(xl[0], len(ids) - i, text, ha='right', va='center')
-                ax.set_yticks([])
-                ax.set_yticklabels([])
+            ax.set_yticklabels([])
+            ax.set_yticks(range(len(ids)))
+        
+        elif type == 'SKY':
+            ax.set_xlim([-1.4, 1.4])
+            ax.set_ylim([-1.1, 1.1])
         else:
             set_range(ax, type, ranges[i] if i < len(ranges) else '')
         
@@ -522,7 +571,8 @@ def plot_log(fig, rect, types, ts, logs, tspan, ranges, colors, opts):
         
         # add legend
         if opts[3]:
-            ax.legend([id.split('/')[0] for id in ids], loc='upper right')
+            labels = [id.split('/')[0] for id in ids]
+            ax.legend(labels, loc='upper right')
         
         # set time tick format
         if not type in ('POS-H',):
@@ -560,7 +610,7 @@ def add_title(fig, rect, sats, sigs, tspan, opt):
 #   Synopsis
 # 
 #     pocket_plot.py [-type type[,type...]] [-sat sat[,...]] [-sig sig[,...]]
-#         [-tspan [ts],[te][,ti]] [-range rng[,...]] [-style {-|.|.-|...}]
+#         [-tspan [ts],[te]] [-tint ti] [-range rng[,...]] [-style {-|.|.-|...}]
 #         [-mark size] [-stats] [-legend] [-opt options] file ...
 # 
 #   Description
@@ -570,14 +620,15 @@ def add_title(fig, rect, sats, sigs, tspan, opt):
 #     Example:
 #
 #     pocket_plot.py -type CN0,EL -sat G01,G04,J -sig L1CA,L2CM \
-#         -tspan 2025/1/1,2025/1/2 -range 0/60,0/100 -style . -mark 3 \
-#         test_20250101[2-4].log 
+#         -tspan 2025/1/1,2025/1/2 -tint 30 -range 0/60,0/100 -style . -mark 3 \
+#         test_20250101*.log 
 #
 #   Options ([]: default)
 #  
 #     -type type[,type...]
 #         Plot type(s) of receiver log as follows.
 #           TRK   : signal tracking status
+#           SKY   : satellite position in skyplot
 #           LOCK  : signal lock time
 #           CN0   : signal C/N0
 #           COFF  : code offset
@@ -600,34 +651,35 @@ def add_title(fig, rect, sats, sigs, tspan, opt):
 #
 #     -sat sat[,...]
 #         GNSS satellite IDs (G01, R01, ...), satellite system IDs (G, R, ...)
-#         or "ALL" to be plotted. It is required for plot type: TRK, LOCK, CN0,
-#         COFF, DOP, ADR, PR, CP, PR-CP, LLI, AZ, EL, RES.
+#         or "ALL" to be plotted. It is required for plot type: TRK, SKY, LOCK,
+#         CN0, COFF, DOP, ADR, PR, CP, PR-CP, LLI, AZ, EL, RES.
 # 
 #     -sig sig[,...]
 #         GNSS signal type IDs (L1CA, L2CM, ...) or "ALL" to be plotted. If it
 #         is omitted, the default signals are selected. [auto]
 # 
-#     -tspan [ts],[te][,ti]
-#         Specify plot start time ts and end time te (GPST). The format for ts
-#         or te should be "y/m/d_h:m:s", where "_h:m:s" can be omitted. The
-#         options can be followed by time interval ti in seconds. [auto]
+#     -tspan [ts],[te]
+#         Plot start time ts and end time te in GPST. The format for ts or te
+#         should be "y/m/d_h:m:s", where "_h:m:s" can be omitted. [auto]
+#
+#     -tint ti
+#         Plot time interval ti in seconds. [all]
 #
 #     -range rng[,...]
-#         Specify y-axis ranges as format "ymax" for range [-ymax...ymax] or
-#         "ymin/ymax" for range [ymin...ymax]. The multiple ranges correspond
-#         to multiple plot types. With NULL, the range is automatically
-#         configured by data values. [auto]
+#         Y-axis ranges as format "ymax" for range [-ymax...ymax] or "ymin/ymax"
+#         for range [ymin...ymax]. The multiple ranges correspond to multiple
+#         plot types. With NULL, the range is automatically configured by data
+#         values. [auto]
 #
 #     -color color[,color...]
-#         Specify mark and line color(s). The multiple colors correspond to
-#         multiple plot types. With NULL, the color is automatically configured.
-#         [auto]
+#         Mark and line color(s). The multiple colors correspond to multiple
+#         plot types. With NULL, the color is automatically configured. [auto]
 #
 #     -style {-|.|.-|...}
-#         Specify plot style as same as by matplotlib plot. [.-]
+#         Plot style as same as by matplotlib plot. [.-]
 #
 #     -mark size
-#         Specify mark size in pixels. [2]
+#         Mark size in pixels. [2]
 #
 #     -stats
 #         Show statistics in plots. [no]
@@ -636,13 +688,15 @@ def add_title(fig, rect, sats, sigs, tspan, opt):
 #         Show legends in plots. [no]
 #
 #     -opt options
-#         Specify special options as string. Multiple options should be separated
-#         by spaces. ['']
+#         Special options as string. Multiple options should be separated by
+#         spaces. ['']
 #
-#         MIN_CN0=cn0   : no plot below specified C/N0 (dB-Hz)
+#         MIN_CN0=cn0   : minimum C/N0 (dB-Hz)
+#         MIN_LOCK=lock : mininum lock time (s)
+#         PLOT_SAT      : plot satellite positions in skyplot
 #         RFCH=ch[,...] : select specified RFCH(s)
 #         RFCH_DIFF=ch,ch[,...]:
-#                          make difference of RFCHs referenced by first RFCH
+#                         make difference of RFCHs referenced by first RFCH
 #
 #     file ...
 #         GNSS receiver log file(s) written by pocket_trk or pocket_sdr.py.
@@ -668,7 +722,9 @@ if __name__ == '__main__':
             ts = sys.argv[i].split(',')
             if len(ts) >= 1: tspan[0] = str2time(ts[0])
             if len(ts) >= 2: tspan[1] = str2time(ts[1])
-            if len(ts) >= 3: tspan[2] = float(ts[2])
+        elif sys.argv[i] == '-tint':
+            i += 1
+            tspan[2] = float(sys.argv[i])
         elif sys.argv[i] == '-range':
             i += 1
             ranges = sys.argv[i].split(',')
