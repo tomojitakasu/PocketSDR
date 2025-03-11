@@ -158,6 +158,8 @@ def rcv_open_file(sys_opt, inp_opt, out_opt, sig_opt):
     c_IQ = (c_int32 * 8)(*IQ)
     c_bits = (c_int32 * 8)(*bits)
     c_paths = (c_char_p * 4)(*[s.encode() for s in paths])
+    opt = ''
+    opt += ' -RFCH ' + sig_opt.sig_rfch.get()
     libsdr.sdr_func_init.argtypes = (c_char_p,)
     libsdr.sdr_func_init(sys_opt.fftw_wisdom_path.get().encode())
     libsdr.sdr_rcv_open_file.argtypes = (POINTER(c_char_p), POINTER(c_int32),
@@ -166,8 +168,7 @@ def rcv_open_file(sys_opt, inp_opt, out_opt, sig_opt):
         c_char_p)
     libsdr.sdr_rcv_open_file.restype = c_void_p
     return libsdr.sdr_rcv_open_file(c_sigs, c_prns, len(sigs), fmt, fs, c_fo,
-        c_IQ, c_bits, toff, tscale, path.encode(), c_paths,
-        sig_opt.sig_rfch.get().encode())
+        c_IQ, c_bits, toff, tscale, path.encode(), c_paths, opt.encode())
 
 # get signal options -----------------------------------------------------------
 def get_sig_opt(opt):
