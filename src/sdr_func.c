@@ -284,7 +284,6 @@ sdr_buff_t *sdr_read_data(const char *file, double fs, int IQ, double T,
     pos.__pos = (__off_t)off;
     fsetpos(fp, &pos);
 #endif
-    
     if (fread(raw, 1, cnt, fp) < cnt) {
         fprintf(stderr, "data read error %s\n", file);
         fclose(fp);
@@ -299,7 +298,7 @@ sdr_buff_t *sdr_read_data(const char *file, double fs, int IQ, double T,
     }
     else { // IQ-sampling
         for (int i = 0; i < buff->N; i++) {
-            buff->data[i] = SDR_CPX8(raw[i*2], raw[i*2+1]);
+            buff->data[i] = SDR_CPX8(raw[i*2], -raw[i*2+1]);
         }
     }
     sdr_free(raw);
@@ -367,8 +366,8 @@ int sdr_tag_write(const char *file, const char *prog, gtime_t time, int fmt,
 //
 //  args:
 //      file     (I)  IF data file path
-//      prog     (O)  Program name
-//      time     (O)  IF data file recording start time 
+//      prog     (IO) Program name (NULL: not read)
+//      time     (IO) IF data file recording start time (NULL: not read)
 //      fmt      (O)  IF data file format (SDR_FMT_???)
 //      fs       (O)  Sampling frequency (Hz)
 //      fo       (O)  LO frequencies (Hz)
@@ -381,7 +380,6 @@ int sdr_tag_write(const char *file, const char *prog, gtime_t time, int fmt,
 int sdr_tag_read(const char *file, char *prog, gtime_t *time, int *fmt,
     double *fs, double *fo, int *IQ, int *bits)
 {
-
     FILE *fp;
     char path[1024+4], buff[256], *p;
     
@@ -401,7 +399,7 @@ int sdr_tag_read(const char *file, char *prog, gtime_t *time, int *fmt,
         if (!(p = strchr(buff, '='))) continue;
         
         if (strstr(buff, "PROG") == buff && prog) {
-            sscanf(p + 2, "%[^\n]", prog);
+            sscanf(p + 2, "%16s", prog);
         }
         else if (strstr(buff, "TIME") == buff && time) {
             double ep[6] = {0};
@@ -410,8 +408,10 @@ int sdr_tag_read(const char *file, char *prog, gtime_t *time, int *fmt,
             *time = epoch2time(ep);
         }
         else if (strstr(buff, "FMT") == buff) {
+            char str[32] = "";
+            sscanf(p + 2, "%16s", str);
             for (int i = 0; fmt_str[i]; i++) {
-                if (strncmp(p + 2, fmt_str[i], strlen(fmt_str[i]))) continue;
+                if (strcmp(str, fmt_str[i])) continue;
                 *fmt = i;
                 break;
             }
