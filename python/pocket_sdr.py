@@ -1543,20 +1543,9 @@ def on_root_end_resize():
 
 # update page ------------------------------------------------------------------
 def update_page(i, page):
-    if i == 0:
-        update_rcv_page(page)
-    elif i == 1:
-        update_rfch_page(page)
-    elif i == 2:
-        update_bbch_page(page)
-    elif i == 3:
-        update_corr_page(page)
-    elif i == 4:
-        update_sats_page(page)
-    elif i == 5:
-        update_sol_page(page)
-    elif i == 6:
-        update_log_page(page)
+    funcs = (update_rcv_page, update_rfch_page, update_bbch_page,
+        update_corr_page, update_sats_page, update_sol_page, update_log_page)
+    funcs[i](page)
 
 # update pages -----------------------------------------------------------------
 def pages_update(note, pages):
