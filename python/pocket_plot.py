@@ -213,7 +213,8 @@ def read_log_sat(t0, line, type, sats, tspan, ts, logs, opt):
     if len(el) > 0 and float(s[13]) < float(el[0]):
         return t0
     
-    if ('ALL' in sats or s[8] in sats) and test_time(time, tspan):
+    if ('ALL' in sats or s[8] in sats) and test_time(time, tspan) and \
+        float(s[13]) > 0.0:
         id = s[8]
         if type == 'AZ':
             logs.append([id, float(s[12])])
@@ -464,9 +465,12 @@ def plot_log_type(ax, type, ids, xs, ys, color, opts):
             x = [sin(xs[i][j] * D2R) * (1 - ys[i][j] / 90) for j in range(len(xs[i]))]
             y = [cos(xs[i][j] * D2R) * (1 - ys[i][j] / 90) for j in range(len(xs[i]))]
             ax.plot(x, y, opts[0], color=col, lw=lw, ms=opts[1])
-            if 'PLOT_SAT' in opts[4]:
+            if 'PLOT_SAT=S' in opts[4]:
                 ax.plot(x[0], y[0], 'o', mec=FG_COLOR, mfc=col, ms=22)
                 ax.text(x[0], y[0], id, color=BG_COLOR, ha='center', va='center')
+            elif 'PLOT_SAT=E' in opts[4]:
+                ax.plot(x[-1], y[-1], 'o', mec=FG_COLOR, mfc=col, ms=22)
+                ax.text(x[-1], y[-1], id, color=BG_COLOR, ha='center', va='center')
     else:
         ax.grid(True, lw=0.5)
         for i, id in enumerate(ids):
@@ -693,7 +697,7 @@ def add_title(fig, rect, sats, sigs, tspan, opt):
 #
 #         MIN_CN0=cn0   : minimum C/N0 (dB-Hz)
 #         MIN_LOCK=lock : mininum lock time (s)
-#         PLOT_SAT      : plot satellite positions in skyplot
+#         PLOT_SAT={S|E}: plot satellite positions at start or end in skyplot
 #         RFCH=ch[,...] : select specified RFCH(s)
 #         RFCH_DIFF=ch,ch[,...]:
 #                         make difference of RFCHs referenced by first RFCH
