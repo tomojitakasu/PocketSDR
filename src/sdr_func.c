@@ -208,7 +208,7 @@ void sdr_cpx_mul(const sdr_cpx_t *a, const sdr_cpx_t *b, int N, float s,
 sdr_buff_t *sdr_buff_new(int N, int IQ)
 {
     sdr_buff_t *buff = (sdr_buff_t *)sdr_malloc(sizeof(sdr_buff_t));
-    buff->data = (sdr_cpx8_t *)sdr_malloc(sizeof(sdr_cpx8_t *) * N);
+    buff->data = (sdr_cpx8_t *)sdr_malloc(sizeof(sdr_cpx8_t) * N);
     buff->N = N;
     buff->IQ = IQ;
     return buff;
@@ -298,7 +298,7 @@ sdr_buff_t *sdr_read_data(const char *file, double fs, int IQ, double T,
     }
     else { // IQ-sampling
         for (int i = 0; i < buff->N; i++) {
-            buff->data[i] = SDR_CPX8(raw[i*2], -raw[i*2+1]);
+            buff->data[i] = SDR_CPX8(raw[i*2], -raw[i*2+1]); // flip Q-polarity
         }
     }
     sdr_free(raw);
@@ -340,10 +340,10 @@ int sdr_tag_write(const char *file, const char *prog, gtime_t time, int fmt,
     fprintf(fp, "PROG = %s\n", prog);
     fprintf(fp, "TIME = %s\n", tstr);
     fprintf(fp, "FMT  = %s\n", fmt_str[fmt]);
-    fprintf(fp, "F_S  = %.6g\n", fs * 1e-6);
+    fprintf(fp, "F_S  = %.9g\n", fs * 1e-6);
     fprintf(fp, "F_LO = ");
     for (int i = 0; i < n; i++) {
-        fprintf(fp, "%.6g%s", fo[i] * 1e-6, i < n - 1 ? "," : "");
+        fprintf(fp, "%.9g%s", fo[i] * 1e-6, i < n - 1 ? "," : "");
     }
     fprintf(fp, "\n");
     fprintf(fp, "IQ   = ");
@@ -1097,12 +1097,12 @@ void sdr_pack_bits(const uint8_t *data, int nbit, int nz, uint8_t *buff)
 // unpack uint8_t array to bit array -------------------------------------------
 void sdr_unpack_bits(const uint8_t *data, int nbit, uint8_t *buff)
 {
-    for (int i = 0; i < nbit * 8; i++) {
+    for (int i = 0; i < nbit; i++) {
         buff[i] = (data[i / 8] >> (7 - i % 8)) & 1;
     }
 }
 
-// unpack data to bits ---------------------------------------------------------
+// unpack uint32_t data to bit array -------------------------------------------
 void sdr_unpack_data(uint32_t data, int nbit, uint8_t *buff)
 {
     for (int i = 0; i < nbit; i++) {
