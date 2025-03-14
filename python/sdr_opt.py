@@ -502,7 +502,6 @@ def out_opt_dlg(root, opt):
         'Output Receiver Log Types', 'Keywords Replacement in Path',
         '%Y=Year(yyyy) %y=year(yy) %m=month(mm) %d=day(dd)',
         '%h=hour(00-23) %M=minute(00-59) %S=second(00-59)')
-    rnx_intvs = ('0.1', '0.2', '0.5', '1', '2', '5', '10', '30')
     opt_new = out_opt_new(opt)
     dlg = modal_dlg_new(root, 480, 520, 'Output Options')
     panel1 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
