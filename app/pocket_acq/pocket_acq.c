@@ -215,6 +215,10 @@ int main(int argc, char **argv)
     double fo[SDR_MAX_RFCH];
     int IQ_t[SDR_MAX_RFCH], bits_t[SDR_MAX_RFCH];
     if (sdr_tag_read(file, NULL, NULL, &fmt, &fs, fo, IQ_t, bits_t)) {
+        if (fmt != SDR_FMT_INT8 && fmt != SDR_FMT_INT8X2) {
+            fprintf(stderr, "Unsupported format: %s\n", file);
+            exit(-1);
+        }
         fi = sdr_sig_freq(sig) - fo[0];
         IQ = IQ_t[0];
     }
