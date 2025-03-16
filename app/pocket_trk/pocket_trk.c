@@ -23,6 +23,7 @@
 //                   support tag file input for auto-configuration
 //  2025-02-18  1.9  fix bug on output files
 //                   add -rfch option
+//  2025-03-16  1.10 add -opt option, delete -w option
 //
 #include <math.h>
 #include <signal.h>
@@ -47,7 +48,32 @@ static const char *usage_text[] = {
     "       [-fmt {INT8|INT8X2|RAW8|RAW16|RAW32}] [-f freq] [-fo freq[,...]]",
     "       [-IQ {1|2}[,...]] [-bits {2|3}[,...] [-toff toff] [-ti tint]",
     "       [-p bus,[,port] [-c conf_file] [-log path] [-nmea path] [-rtcm path]",
-    "       [-raw path] [-w file] [file]", NULL
+    "       [-raw path] [-opt file] [file]", NULL
+};
+
+// system options table ---------------------------------------------------------
+static char fftw_wisdom[1024] = "";
+extern double sdr_epoch, sdr_lag_epoch, sdr_el_mask, sdr_sp_corr, sdr_t_acq;
+extern double sdr_t_dll, sdr_b_dll, sdr_b_pll, sdr_b_fll_w, sdr_b_fll_n;
+extern double sdr_max_dop, sdr_thres_cn0_l, sdr_thres_cn0_u;
+extern int sdr_bump_jump;
+static opt_t sys_opt[] = {
+    {"epoch"      , 1, (void *)&sdr_epoch       , ""},
+    {"lag_epoch"  , 1, (void *)&sdr_lag_epoch   , ""},
+    {"el_mask"    , 1, (void *)&sdr_el_mask     , ""},
+    {"sp_corr"    , 1, (void *)&sdr_sp_corr     , ""},
+    {"t_acq"      , 1, (void *)&sdr_t_acq       , ""},
+    {"t_dll"      , 1, (void *)&sdr_t_dll       , ""},
+    {"b_dll"      , 1, (void *)&sdr_b_dll       , ""},
+    {"b_pll"      , 1, (void *)&sdr_b_pll       , ""},
+    {"b_fll_w"    , 1, (void *)&sdr_b_fll_w     , ""},
+    {"b_fll_n"    , 1, (void *)&sdr_b_fll_n     , ""},
+    {"max_dop"    , 1, (void *)&sdr_max_dop     , ""},
+    {"thres_cn0_l", 1, (void *)&sdr_thres_cn0_l , ""},
+    {"thres_cn0_u", 1, (void *)&sdr_thres_cn0_u , ""},
+    {"bump_jump"  , 0, (void *)&sdr_bump_jump   , ""},
+    {"fftw_wisdom", 2, (void *)&fftw_wisdom     , ""},
+    {"", 0, NULL, ""}
 };
 
 // interrupt flag --------------------------------------------------------------
@@ -114,7 +140,7 @@ static int print_rcv_stat(sdr_rcv_t *rcv, int nrow, int max_row)
 //         [-fmt {INT8|INT8X2|RAW8|RAW16|RAW32}] [-f freq] [-fo freq[,...]]
 //         [-IQ {1|2}[,...]] [-bits {2|3}[,...]] [-toff toff] [-ti tint]
 //         [-p bus,[,port] [-c conf_file] [-log path] [-nmea path] [-rtcm path]
-//         [-raw path] [-w file] [file]
+//         [-raw path] [-opt file] [file]
 //
 //   Description
 //
@@ -206,8 +232,9 @@ static int print_rcv_stat(sdr_rcv_t *rcv, int nrow, int max_row)
 //     -h height
 //         Specify the console height (rows). [64]
 //
-//     -w file
-//         Specify the FFTW wisdowm file. [../python/fftw_wisdom.txt]
+//     -opt file
+//         Specify the system options file. Refer pocket_trk_default.conf for
+//         the contents of the file. [""]
 //
 //     [file]
 //         A file path of the input IF data. The Pocket SDR FE deveice and
@@ -234,8 +261,9 @@ int main(int argc, char **argv)
     double fs = 12e6, fo[SDR_MAX_RFCH] = {0}, toff = 0.0, tscale = 1.0;
     double tint = 0.1;
     const char *sig = "L1CA", *sigs[SDR_MAX_NCH];
-    const char *file = "", *fftw_wisdom = FFTW_WISDOM, *conf_file = "";
-    const char *paths[4] = {"", "", "", ""}, *debug_file = "";
+    const char *file = "", *conf_file = "";
+    const char *paths[4] = {"", "", "", ""}, *opt_file = "";
+    const char *debug_file = "";
     char rfch_opt[1024] = "-RFCH";
     
     for (int i = 1; i < argc; i++) {
@@ -297,9 +325,6 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "-c") && i + 1 < argc) {
             conf_file = argv[++i];
         }
-        else if (!strcmp(argv[i], "-w") && i + 1 < argc) {
-            fftw_wisdom = argv[++i];
-        }
         else if (!strcmp(argv[i], "-nmea") && i + 1 < argc) {
             paths[0] = argv[++i];
         }
@@ -314,6 +339,9 @@ int main(int argc, char **argv)
         }
         else if (!strcmp(argv[i], "-h") && i + 1 < argc) {
             max_row = atoi(argv[++i]);
+        }
+        else if (!strcmp(argv[i], "-opt") && i + 1 < argc) {
+            opt_file = argv[++i];
         }
         else if (!strcmp(argv[i], "-debug") && i + 1 < argc) {
             debug_file = argv[++i];
@@ -331,6 +359,9 @@ int main(int argc, char **argv)
     if (*debug_file) {
         traceopen(debug_file);
         tracelevel(TRACE_LEVEL);
+    }
+    if (*opt_file && !loadopts(opt_file, sys_opt)) {
+        fprintf(stderr, "options file read error: %s\n", opt_file);
     }
     sdr_func_init(fftw_wisdom);
     
