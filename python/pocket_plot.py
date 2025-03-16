@@ -44,6 +44,17 @@ cmap1 = mpl.colormaps['tab10']
 cmap2 = mpl.colormaps['tab20']
 COLORS = [cmap1(i) for i in range(10)] + [cmap2(i) for i in range(20)]
 
+# C/N0 color table -------------------------------------------------------------
+cols = ('#808080', '#FF0000', '#0000FF', '#FF00FF', '#FFAA00', '#008000',
+    '#008000', '#008000', '#008000') # 20, 25, 30 ... 55, 60 dB-Hz
+CN0_COLORS = []
+for cn in range(20, 60):
+    d = (cn - 20) / 5
+    col1 = np.array(mpl.colors.to_rgba(cols[int(d)]))
+    col2 = np.array(mpl.colors.to_rgba(cols[int(d)+1]))
+    color = mpl.colors.to_hex((1 - d + int(d)) * col1 + (d - int(d)) * col2)
+    CN0_COLORS.append(color)
+
 # code to signal table ---------------------------------------------------------
 CODES = ('1C', '1Z', '1E', '1L', '1S', '2S', '2L', '5I', '5Q', '5D', '5P', '5D',
     '5P', '6S', '6E', '1C', '2C', '4A', '4B', '6B', '3I', '3Q', '1B', '1C',
@@ -120,11 +131,17 @@ def sat_color(sat):
     i = 'GREJCIS'.find(sat[0])
     return colors[i] if i >= 0 else 'grey'
 
+# get C/N0 color --------------------------------------------------------------
+def cn0_color(cn0):
+    if cn0 >= 60: return CN0_COLORS[-1]
+    if cn0 <= 20: return CN0_COLORS[0]
+    return CN0_COLORS[round(cn0) - 20]
+
 # test time in time span -------------------------------------------------------
 def test_time(time, tspan):
     if tspan[0].time and sdr_rtk.timediff(time, tspan[0]) < 0.0: return 0
     if tspan[1].time and sdr_rtk.timediff(time, tspan[1]) > 0.0: return 0
-    if tspan[2] > 0 and int(time.time) % int(tspan[2]) != 0: return 0
+    if tspan[2] > 0 and round(time.time) % int(tspan[2]) != 0: return 0
     return 1
 
 # get option -------------------------------------------------------------------
@@ -224,7 +241,7 @@ def read_log_sat(t0, line, type, sats, tspan, ts, logs, opt):
             if not int(s[9]): return
             logs.append([id, float(s[14])])
         elif type == 'SKY':
-            logs.append([id, float(s[12]), float(s[13])])
+            logs.append([id, float(s[12]), float(s[13]), float(s[11])])
         ts.append(time)
     return t0
 
@@ -335,7 +352,7 @@ def rm_off(ys, thres):
 
 # separate log -----------------------------------------------------------------
 def sep_log(type, ts, log):
-    ids, xs, ys = [], [], []
+    ids, xs, ys, zs = [], [], [], []
     if len(log) > 0:
         log = list(map(list, zip(*log))) # transpose
         for id in sorted(set(log[0])):
@@ -344,10 +361,11 @@ def sep_log(type, ts, log):
             if type == 'SKY':
                 xs.append(np.array([log[1][i] for i in idx]))
                 ys.append(np.array([log[2][i] for i in idx]))
+                zs.append(np.array([log[3][i] for i in idx]))
             else:
                 xs.append(np.array([time2dtime(ts[i]) for i in idx]))
                 ys.append(np.array([log[1][i] for i in idx]))
-    return ids, xs, ys
+    return ids, xs, ys, zs
 
 # make difference of logs ------------------------------------------------------
 def diff_log(diff, ids, xs, ys):
@@ -373,17 +391,19 @@ def sort_key(key):
     return order.index(key[0]) if key[0] in order else len(order)
 
 # sort receiver log ------------------------------------------------------------
-def sort_log(ids, xs, ys):
+def sort_log(ids, xs, ys, zs):
     idx_ids = list(enumerate(ids))
     idx_ids = sorted(idx_ids, key=lambda x: sort_key(x[1]))
     ids = [id for i, id in idx_ids]
     xs = [xs[i] for i, id in idx_ids]
     ys = [ys[i] for i, id in idx_ids]
-    return ids, xs, ys
+    if len(zs) > 0:
+        zs = [zs[i] for i, id in idx_ids]
+    return ids, xs, ys, zs
     
 # transform receiver log to x-y values -----------------------------------------
 def trans_log(type, ts, log, opt):
-    ids, xs, ys, ref, diff = [], [], [], '', []
+    ids, xs, ys, zs, ref, diff = [], [], [], [], '', []
     
     if type in ('POS', 'POS-E', 'POS-N', 'POS-U', 'POS-H'):
         types = ('POS-E', 'POS-N', 'POS-U')
@@ -403,7 +423,7 @@ def trans_log(type, ts, log, opt):
             ys.append(enu[1])
         ref = 'REF=%.8f\xb0 %.8f\xb0 %.3fm' % (pos[0] / D2R, pos[1] / D2R, pos[2])
     else:
-        ids, xs, ys = sep_log(type, ts, log)
+        ids, xs, ys, zs = sep_log(type, ts, log)
     
     diff = get_opt(opt, 'RFCH_DIFF=')
     if len(diff) >= 2 and type in ('COFF', 'DOP', 'ADR'):
@@ -417,9 +437,9 @@ def trans_log(type, ts, log, opt):
             ys[i] = rm_off(ys[i], 10)
     
     if not type in ('POS', 'POS-E', 'POS-N', 'POS-U', 'POS-H', 'NSAT', 'RCLK'):
-        ids, xs, ys = sort_log(ids, xs, ys)
+        ids, xs, ys, zs = sort_log(ids, xs, ys, zs)
     
-    return ids, xs, ys, ref
+    return ids, xs, ys, zs, ref
 
 # plot line sections -----------------------------------------------------------
 def plot_sec(ax, xs, ys, style, color, lw, ms):
@@ -448,29 +468,45 @@ def plot_sky(ax):
             ax.text(0, 1 - el / 90, str(el), ha='center', va='center')
 
 # plot log type ----------------------------------------------------------------
-def plot_log_type(ax, type, ids, xs, ys, color, opts):
+def plot_log_type(ax, type, ids, xs, ys, zs, color, opts):
     lw = 0.8 if opts[0] == '-' else 0.2
     if type == 'TRK':
         ax.grid(True, lw=0.5)
         for i, id in enumerate(ids):
-            col = sat_color(id) if color == 'sys' else color if color != '' \
-                else COLORS[i % 30]
-            y = np.full(len(xs[i]), len(ids) - i)
-            plot_sec(ax, xs[i], y, opts[0], col, lw, opts[1])
+            y = len(ids) - i
+            if color == 'cn0':
+                for j in range(len(xs[i])):
+                    ax.plot(xs[i][j], y, '.', color=cn0_color(ys[i][j]),
+                        lw=lw, ms=opts[1])
+            else:
+                col = sat_color(id) if color == 'sys' else color if color != '' \
+                    else COLORS[i % 30]
+                ax.plot(xs[i], np.full(len(xs[i]), y), opts[0], color=col, lw=lw,
+                    ms=opts[1])
     elif type == 'SKY':
-        plot_sky(ax)
         for i, id in enumerate(ids):
-            col = sat_color(id) if color == 'sys' else color if color != '' \
-                else COLORS[i % 30]
             x = [sin(xs[i][j] * D2R) * (1 - ys[i][j] / 90) for j in range(len(xs[i]))]
             y = [cos(xs[i][j] * D2R) * (1 - ys[i][j] / 90) for j in range(len(xs[i]))]
-            ax.plot(x, y, opts[0], color=col, lw=lw, ms=opts[1])
+            if color == 'cn0':
+                for j in range(len(x)):
+                    ax.plot(x[j], y[j], '.', color=cn0_color(zs[i][j]), ms=opts[1])
+            else:
+                col = sat_color(id) if color == 'sys' else color if color != '' \
+                    else COLORS[i % 30]
+                ax.plot(x, y, opts[0], color=col, lw=lw, ms=opts[1])
             if 'PLOT_SAT=S' in opts[4]:
+                col = cn0_color(zs[i][0]) if color == 'cn0' else col
                 ax.plot(x[0], y[0], 'o', mec=FG_COLOR, mfc=col, ms=22)
                 ax.text(x[0], y[0], id, color=BG_COLOR, ha='center', va='center')
             elif 'PLOT_SAT=E' in opts[4]:
+                col = cn0_color(zs[i][-1]) if color == 'cn0' else col
                 ax.plot(x[-1], y[-1], 'o', mec=FG_COLOR, mfc=col, ms=22)
                 ax.text(x[-1], y[-1], id, color=BG_COLOR, ha='center', va='center')
+            elif 'PLOT_SAT=L' in opts[4]:
+                xl = x[0] if y[0] < y[-1] else x[-1]
+                yl = y[0] if y[0] < y[-1] else y[-1]
+                ax.text(xl, yl - 0.04, id, color=FG_COLOR, ha='center', va='center')
+        plot_sky(ax)
     else:
         ax.grid(True, lw=0.5)
         for i, id in enumerate(ids):
@@ -539,11 +575,11 @@ def plot_log(fig, rect, types, ts, logs, tspan, ranges, colors, opts):
         ax = fig.add_axes([x, y, w, h])
         
         # transform receiver log to x, y-values
-        ids, xs, ys, ref = trans_log(type, ts[i], logs[i], opts[4])
+        ids, xs, ys, zs, ref = trans_log(type, ts[i], logs[i], opts[4])
         
         # plot log type
         color = colors[i] if i < len(colors) else ''
-        plot_log_type(ax, type, ids, xs, ys, color, opts)
+        plot_log_type(ax, type, ids, xs, ys, zs, color, opts)
         
         # set plot x-range
         if type in ('POS-H', 'SKY'):
@@ -570,11 +606,11 @@ def plot_log(fig, rect, types, ts, logs, tspan, ranges, colors, opts):
         # add reference and stats
         y = 1.0 - 0.025 * len(types)
         ax.text(0.985, y, ref, ha='right', va='top', transform=ax.transAxes)
-        if opts[2]:
+        if opts[2] and not type in ('TRK', 'SKY'):
             add_stats(ax, 0.015, y, type, xs, ys)
         
         # add legend
-        if opts[3]:
+        if opts[3] and not type in ('TRK',):
             labels = [id.split('/')[0] for id in ids]
             ax.legend(labels, loc='upper right')
         
@@ -677,7 +713,9 @@ def add_title(fig, rect, sats, sigs, tspan, opt):
 #
 #     -color color[,color...]
 #         Mark and line color(s). The multiple colors correspond to multiple
-#         plot types. With NULL, the color is automatically configured. [auto]
+#         plot types. With NULL, the color is automatically configured.
+#         "sys" for system color or "cn0" for C/N0 color can be selected for
+#         several plot types. [auto]
 #
 #     -style {-|.|.-|...}
 #         Plot style as same as by matplotlib plot. [.-]
@@ -696,8 +734,10 @@ def add_title(fig, rect, sats, sigs, tspan, opt):
 #         spaces. ['']
 #
 #         MIN_CN0=cn0   : minimum C/N0 (dB-Hz)
+#         MIN_EL=el     : minimum elevation angle (deg)
 #         MIN_LOCK=lock : mininum lock time (s)
-#         PLOT_SAT={S|E}: plot satellite positions at start or end in skyplot
+#         PLOT_SAT={S|E|L}: plot satellite positions in skyplot
+#             (S: mark at start, E: mark at end, L: only label)
 #         RFCH=ch[,...] : select specified RFCH(s)
 #         RFCH_DIFF=ch,ch[,...]:
 #                         make difference of RFCHs referenced by first RFCH
