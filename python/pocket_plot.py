@@ -68,15 +68,16 @@ SIGS = ('L1CA', 'L1S', 'L1CB', 'L1CP', 'L1CD', 'L2CM', 'L2CL', 'L5I', 'L5Q',
 
 # plot type to unit table ------------------------------------------------------
 TYPES = ('CN0', 'COFF', 'DOP', 'ADR', 'PR', 'CP', 'PR-CP', 'AZ', 'EL', 'POS',
-    'POS-E', 'POS-N', 'POS-U', 'POS-H', 'RES', 'RCLK')
+    'POS-E', 'POS-N', 'POS-U', 'POS-H', 'RES', 'RCLK', 'ERR_PHAS', 'ERR_CODE',
+    'NFEC')
 UNITS = ('dB-Hz', 'ms', 'Hz', 'cycle', 'm', 'cycle', 'm', '\xb0', '\xb0', 'm',
-    'm', 'm', 'm', 'm', 'm', 'ms')
+    'm', 'm', 'm', 'm', 'm', 'ms', 'cycle', 'us', 'bits')
 
 # show usage -------------------------------------------------------------------
 def show_usage():
     print('Usage: pocket_plot.py [-type type[,type...]] [-sat sat[,...]] [-sig sig[,...]]')
     print('    [-tspan [ts],[te]] [-tint ti] [-range rng[,...]] [-style {-|.|.-|...}]')
-    print('    [-mark size] [-stats] [-legend] [-opt options] file ...')
+    print('    [-mark size] [-stats] [-legend] [-opt option] file ...')
     exit()
 
 # string to time ---------------------------------------------------------------
@@ -248,7 +249,7 @@ def read_log_sat(t0, line, type, sats, tspan, ts, logs, opt):
 # read log $CH -----------------------------------------------------------------
 def read_log_ch(t0, line, type, sats, sigs, tspan, ts, logs, opt):
     types = ('TRK', 'LOCK', 'CN0', 'COFF', 'DOP', 'ADR', 'SSYNC', 'BSYNC',
-        'FSYNC')
+        'FSYNC', 'ERR_PHAS', 'ERR_CODE', 'NFEC')
     if not t0 or not type in types:
         return t0
     # $CH,time,ch,rfch,sat,sig,prn,lock,cn0,coff,dop,adr,ssync,bsync,fsync,
@@ -285,11 +286,17 @@ def read_log_ch(t0, line, type, sats, sigs, tspan, ts, logs, opt):
             if int(s[15]): adr -= 0.5
             logs.append([id, adr])
         elif type == 'SSYNC':
-            logs.append([id, int(s[12])])
+            logs.append([id, int(s[12]) * (-1 if int(s[16]) else 1)])
         elif type == 'BSYNC':
             logs.append([id, int(s[13])])
         elif type == 'FSYNC':
-            logs.append([id, int(s[14])])
+            logs.append([id, int(s[14]) * (-1 if int(s[15]) else 1)])
+        elif type == 'ERR_PHAS':
+            logs.append([id, float(s[17])])
+        elif type == 'ERR_CODE':
+            logs.append([id, float(s[18])])
+        elif type == 'NFEC':
+            logs.append([id, int(s[25])])
         ts.append(time)
     return t0
 
@@ -651,7 +658,7 @@ def add_title(fig, rect, sats, sigs, tspan, opt):
 # 
 #     pocket_plot.py [-type type[,type...]] [-sat sat[,...]] [-sig sig[,...]]
 #         [-tspan [ts],[te]] [-tint ti] [-range rng[,...]] [-style {-|.|.-|...}]
-#         [-mark size] [-stats] [-legend] [-opt options] file ...
+#         [-mark size] [-stats] [-legend] [-opt option [-opt ...]] file ...
 # 
 #   Description
 # 
@@ -668,12 +675,18 @@ def add_title(fig, rect, sats, sigs, tspan, opt):
 #     -type type[,type...]
 #         Plot type(s) of receiver log as follows.
 #           TRK   : signal tracking status
-#           SKY   : satellite position in skyplot
+#           SKY   : satellite positions in skyplot
 #           LOCK  : signal lock time
 #           CN0   : signal C/N0
 #           COFF  : code offset
 #           DOP   : Doppler frequency
 #           ADR   : accumlated delta range
+#           SSYNC : secondary code sync status (0:no-sync,1:normal-sync,-1:reverse-sync)
+#           BSYNC : bit sync status (0:no-sync, 1:sync)
+#           FSYNC : subframe/message sync status (0:no-sync,1:normal-sync,-1:reverse-sync)
+#           ERR_PHAS: phase error in PLL
+#           ERR_CODE: code error in DLL
+#           NFEC  : number of bit errors corrected
 #           PR    : pseudorange
 #           CP    : carrier-phase
 #           PR-CP : psudorange - carrier-phase
@@ -686,36 +699,37 @@ def add_title(fig, rect, sats, sigs, tspan, opt):
 #           POS-N : position solution north
 #           POS-U : position solution up
 #           POS-H : position solution horizontal
-#           NSAT  : number of used satellites for position
+#           NSAT  : number of used satellites for solution
 #           RCLK  : receiver clock bias
 #
 #     -sat sat[,...]
 #         GNSS satellite IDs (G01, R01, ...), satellite system IDs (G, R, ...)
 #         or "ALL" to be plotted. It is required for plot type: TRK, SKY, LOCK,
-#         CN0, COFF, DOP, ADR, PR, CP, PR-CP, LLI, AZ, EL, RES.
+#         CN0, COFF, DOP, ADR, SSYNC, BSYNC, FSYNC, ERR_PHAS, ERR_CODE, NFEC,
+#         PR, CP, PR-CP, LLI, AZ, EL, RES.
 # 
 #     -sig sig[,...]
-#         GNSS signal type IDs (L1CA, L2CM, ...) or "ALL" to be plotted. If it
-#         is omitted, the default signals are selected. [auto]
+#         GNSS signal type IDs (L1CA, L2CM, ...) or "ALL" to be plotted. If
+#         omitted, default signals are selected. [default]
 # 
 #     -tspan [ts],[te]
 #         Plot start time ts and end time te in GPST. The format for ts or te
 #         should be "y/m/d_h:m:s", where "_h:m:s" can be omitted. [auto]
 #
 #     -tint ti
-#         Plot time interval ti in seconds. [all]
+#         Time interval ti for plot in seconds. [all]
 #
 #     -range rng[,...]
 #         Y-axis ranges as format "ymax" for range [-ymax...ymax] or "ymin/ymax"
-#         for range [ymin...ymax]. The multiple ranges correspond to multiple
-#         plot types. With NULL, the range is automatically configured by data
+#         for range [ymin...ymax]. Multiple ranges correspond to multiple plot
+#         types. With NULL, the range is automatically configured by data
 #         values. [auto]
 #
 #     -color color[,color...]
-#         Mark and line color(s). The multiple colors correspond to multiple
-#         plot types. With NULL, the color is automatically configured.
-#         "sys" for system color or "cn0" for C/N0 color can be selected for
-#         several plot types. [auto]
+#         Mark and line color(s). Multiple colors correspond to multiple plot
+#         types. With NULL, the color is automatically selected. "sys" or
+#         "cn0" can be allowed for system or C/N0 colors in several plot
+#         types. [auto]
 #
 #     -style {-|.|.-|...}
 #         Plot style as same as by matplotlib plot. [.-]
@@ -729,18 +743,18 @@ def add_title(fig, rect, sats, sigs, tspan, opt):
 #     -legend
 #         Show legends in plots. [no]
 #
-#     -opt options
+#     -opt option [-opt ...]
 #         Special options as string. Multiple options should be separated by
 #         spaces. ['']
 #
-#         MIN_CN0=cn0   : minimum C/N0 (dB-Hz)
-#         MIN_EL=el     : minimum elevation angle (deg)
-#         MIN_LOCK=lock : mininum lock time (s)
-#         PLOT_SAT={S|E|L}: plot satellite positions in skyplot
+#         MIN_CN0=cn0   : Minimum C/N0 (dB-Hz)
+#         MIN_EL=el     : Minimum elevation angle (deg)
+#         MIN_LOCK=lock : Mininum lock time (s)
+#         PLOT_SAT={S|E|L}: Plot satellite positions in plot type 'SKY'
 #             (S: mark at start, E: mark at end, L: only label)
-#         RFCH=ch[,...] : select specified RFCH(s)
+#         RFCH=ch[,...] : Select specified RFCH(s)
 #         RFCH_DIFF=ch,ch[,...]:
-#                         make difference of RFCHs referenced by first RFCH
+#             Make difference of RFCHs referenced by first RFCH
 #
 #     file ...
 #         GNSS receiver log file(s) written by pocket_trk or pocket_sdr.py.
