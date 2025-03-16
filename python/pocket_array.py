@@ -49,68 +49,7 @@ ANT_POS_4 = lam / 2 * np.array([ # 8-element array (0,0,8)
     sin(pi*4/8), cos(pi*4/8), sin(pi*6/8), cos(pi*6/8),
     sin(pi*8/8), cos(pi*8/8), sin(pi*10/8), cos(pi*10/8),
     sin(pi*12/8), cos(pi*12/8), sin(pi*14/8), cos(pi*14/8)])
-ANT_POS_5 = lam / 2 * np.array([0.0, 0.0, # 14-element array (1,0,13)
-    sin(pi*0/13), cos(pi*0/13), sin(pi*2/13), cos(pi*2/13),
-    sin(pi*4/13), cos(pi*4/13), sin(pi*6/13), cos(pi*6/13),
-    sin(pi*8/13), cos(pi*8/13), sin(pi*10/13), cos(pi*10/13),
-    sin(pi*12/13), cos(pi*12/13), sin(pi*14/13), cos(pi*14/13),
-    sin(pi*16/13), cos(pi*16/13), sin(pi*18/13), cos(pi*18/13),
-    sin(pi*20/13), cos(pi*20/13), sin(pi*22/13), cos(pi*22/13),
-    sin(pi*24/13), cos(pi*24/13)])
-ANT_POS_6 = lam / 2 * np.array([0.0, 0.0, # 11-element array (1,0,10)
-    sin(pi*0/10), cos(pi*0/10), sin(pi*2/10), cos(pi*2/10),
-    sin(pi*4/10), cos(pi*4/10), sin(pi*6/10), cos(pi*6/10),
-    sin(pi*8/10), cos(pi*8/10), sin(pi*10/10), cos(pi*10/10),
-    sin(pi*12/10), cos(pi*12/10), sin(pi*14/10), cos(pi*14/10),
-    sin(pi*16/10), cos(pi*16/10), sin(pi*18/10), cos(pi*18/10)])
-ANT_POS_7 = lam / 2 * np.array([0.0, 0.0, # 14-element array (1,4,9)
-    sin(pi*0/9), cos(pi*0/9), sin(pi*2/9), cos(pi*2/9),
-    sin(pi*4/9), cos(pi*4/9), sin(pi*6/9), cos(pi*6/9),
-    sin(pi*8/9), cos(pi*8/9), sin(pi*10/9), cos(pi*10/9),
-    sin(pi*12/9), cos(pi*12/9), sin(pi*14/9), cos(pi*14/9),
-    sin(pi*16/9), cos(pi*16/9),
-    sin(pi*0/4)/2, cos(pi*0/4)/2, sin(pi*2/4)/2, cos(pi*2/4)/2,
-    sin(pi*4/4)/2, cos(pi*4/4)/2, sin(pi*6/4)/2, cos(pi*6/4)/2])
-ANT_POS_8 = lam / 2 * np.array([0.0, 0.0, # 9-element array (1,0,8)
-    sin(pi*0/8), cos(pi*0/8), sin(pi*2/8), cos(pi*2/8),
-    sin(pi*4/8), cos(pi*4/8), sin(pi*6/8), cos(pi*6/8),
-    sin(pi*8/8), cos(pi*8/8), sin(pi*10/8), cos(pi*10/8),
-    sin(pi*12/8), cos(pi*12/8), sin(pi*14/8), cos(pi*14/8)])
-ANT_POS_9 = lam / 2 * np.array([0.0, 0.0, # 14-element array (1,5,8)
-    sin(pi*0/8), cos(pi*0/8), sin(pi*2/8), cos(pi*2/8),
-    sin(pi*4/8), cos(pi*4/8), sin(pi*6/8), cos(pi*6/8),
-    sin(pi*8/8), cos(pi*8/8), sin(pi*10/8), cos(pi*10/8),
-    sin(pi*12/8), cos(pi*12/8), sin(pi*14/8), cos(pi*14/8),
-    sin(pi*0/5)/2, cos(pi*0/5)/2, sin(pi*2/5)/2, cos(pi*2/5)/2,
-    sin(pi*4/5)/2, cos(pi*4/5)/2, sin(pi*6/5)/2, cos(pi*6/5)/2,
-    sin(pi*8/5)/2, cos(pi*8/5)/2])
-ANT_POS_10 = lam / 2 * np.array([0.0, 0.0, # 14-element array (1,6,7)
-    sin(pi*0/7), cos(pi*0/7), sin(pi*2/7), cos(pi*2/7),
-    sin(pi*4/7), cos(pi*4/7), sin(pi*6/7), cos(pi*6/7),
-    sin(pi*8/7), cos(pi*8/7), sin(pi*10/7), cos(pi*10/7),
-    sin(pi*12/7), cos(pi*12/7),
-    sin(pi*0/6)/2, cos(pi*0/6)/2, sin(pi*2/6)/2, cos(pi*2/6)/2,
-    sin(pi*4/6)/2, cos(pi*4/6)/2, sin(pi*6/6)/2, cos(pi*6/6)/2,
-    sin(pi*8/6)/2, cos(pi*8/6)/2, sin(pi*10/6)/2, cos(pi*10/6)/2])
-ANT_POS_11 = lam / 2 * np.array([ # 14-element array (0,6,8)
-    sin(pi*0/6)/2, cos(pi*0/6)/2, sin(pi*2/6)/2, cos(pi*2/6)/2,
-    sin(pi*4/6)/2, cos(pi*4/6)/2, sin(pi*6/6)/2, cos(pi*6/6)/2,
-    sin(pi*8/6)/2, cos(pi*8/6)/2, sin(pi*10/6)/2, cos(pi*10/6)/2,
-    sin(pi*0/8), cos(pi*0/8), sin(pi*2/8), cos(pi*2/8),
-    sin(pi*4/8), cos(pi*4/8), sin(pi*6/8), cos(pi*6/8),
-    sin(pi*8/8), cos(pi*8/8), sin(pi*10/8), cos(pi*10/8),
-    sin(pi*12/8), cos(pi*12/8), sin(pi*14/8), cos(pi*14/8)])
-ANT_POS_12 = lam / 2 * np.array([ # 14-element array (0,5,9)
-    sin(pi*0/5)/3, cos(pi*0/5)/3, sin(pi*2/5)/3, cos(pi*2/5)/3,
-    sin(pi*4/5)/3, cos(pi*4/5)/3, sin(pi*6/5)/3, cos(pi*6/5)/3,
-    sin(pi*8/5)/3, cos(pi*8/5)/3,
-    sin(pi*0/9), cos(pi*0/9), sin(pi*2/9), cos(pi*2/9),
-    sin(pi*4/9), cos(pi*4/9), sin(pi*6/9), cos(pi*6/9),
-    sin(pi*8/9), cos(pi*8/9), sin(pi*10/9), cos(pi*10/9),
-    sin(pi*12/9), cos(pi*12/9), sin(pi*14/9), cos(pi*14/9),
-    sin(pi*16/9), cos(pi*16/9)])
-ANT_POSS = (ANT_POS_1, ANT_POS_2, ANT_POS_3, ANT_POS_4, ANT_POS_5, ANT_POS_6,
-    ANT_POS_7, ANT_POS_8, ANT_POS_9, ANT_POS_10, ANT_POS_11, ANT_POS_12)
+ANT_POSS = (ANT_POS_1, ANT_POS_2, ANT_POS_3, ANT_POS_4)
 
 # general object class ---------------------------------------------------------
 class Obj: pass
@@ -166,7 +105,7 @@ def draw_sky(ax, d_az=30, d_el=30, label=0):
             ax.plot(x, y, '-', color=GR_COLOR, lw=0.8, alpha=0.5)
     
 # antenna gain ----------------------------------------------------------------
-def ant_gain(lam, pos, az, el, a, e):
+def ant_gain(lam, pos, az, el, a, e, gain):
     es0 = np.array((sin(az) * cos(el), cos(az) * cos(el), sin(el)))
     es1 = np.array((sin(a) * cos(e), cos(a) * cos(e), sin(e)))
     sig = 0.0
@@ -174,16 +113,16 @@ def ant_gain(lam, pos, az, el, a, e):
     for i in range(len(pos) // 2):
         z = 0.0
         phi = np.dot(np.hstack([pos[i*2:i*2+2], z]), es1 - es0) / lam
-        sig += np.exp(2j * pi * phi)
+        sig += gain[i] * np.exp(2j * pi * phi)
     
     return 10.0 * log10(abs(sig)) # (dB)
 
 # plot antenna gain contour in skyplot -----------------------------------------
-def plot_sky(ax, lam, pos, az, el, bins):
+def plot_sky(ax, lam, pos, az, el, gain, bins):
     ax.axis('off')
     ax.set_aspect('equal')
     ax.set_xlim(-1.05, 1.05)
-    ax.set_ylim(-1.05, 1.05)
+    ax.set_ylim(-1.09, 1.01)
     dx = 0.025
     x = np.arange(-1.0, 1.0 + dx, dx)
     y = np.arange(-1.0, 1.0 + dx, dx)
@@ -192,7 +131,7 @@ def plot_sky(ax, lam, pos, az, el, bins):
         for j in range(len(y)):
             a = atan2(x[i], y[j])
             e = (1.0 - sqrt(x[i]**2 + y[j]**2)) * pi / 2.0
-            z[j][i] = ant_gain(lam, pos, az, el, a, e)
+            z[j][i] = ant_gain(lam, pos, az, el, a, e, gain)
     cont = ax.contourf(x, y, z, bins, extend='both', cmap='jet')
     draw_mask(ax)
     draw_sky(ax, d_el=15, label=1)
@@ -208,7 +147,7 @@ def plot_sky(ax, lam, pos, az, el, bins):
     return cont
 
 # plot antenna gain plot in skyplot --------------------------------------------
-def plot_gain(ax, lam, pos, az, el, bins):
+def plot_gain(ax, lam, pos, az, el, gain, bins):
     ax.axis('off')
     ax.set_aspect('equal')
     ax.set_xlim(-1.05, 1.05)
@@ -217,7 +156,7 @@ def plot_gain(ax, lam, pos, az, el, bins):
     x = np.zeros(len(e))
     y = np.zeros(len(e))
     for i in range(len(e)):
-        p = ant_gain(lam, pos, az, el, az, e[i])
+        p = ant_gain(lam, pos, az, el, az, e[i], gain)
         x[i] = np.max([0.0, (p - bins[0]) / (bins[-1] - bins[0])]) * cos(e[i])
         y[i] = np.max([0.0, (p - bins[0]) / (bins[-1] - bins[0])]) * sin(e[i])
     ax.plot(x, y, color=FG_COLOR, lw=0.8)
@@ -264,7 +203,7 @@ def add_colorbar(fig, rect, cont, bins):
     return bar
     
 # plot antenna array -----------------------------------------------------------
-def plot_array(p, type, azel, ant_pos):
+def plot_array(p, type, azel, gain, ant_pos):
     bins = np.arange(-10, 10.1, 0.1)
     p.ax.cla()
     if p.bar != None:
@@ -272,9 +211,9 @@ def plot_array(p, type, azel, ant_pos):
     if type == 'POS':
         plot_pos(p.ax, lam, ant_pos)
     elif type == 'GAIN':
-        plot_gain(p.ax, lam, ant_pos, azel[0] * D2R, azel[1] * D2R, bins)
+        plot_gain(p.ax, lam, ant_pos, azel[0] * D2R, azel[1] * D2R, gain, bins)
     elif type == 'SKY':
-        cont = plot_sky(p.ax, lam, ant_pos, azel[0] * D2R, azel[1] * D2R, bins)
+        cont = plot_sky(p.ax, lam, ant_pos, azel[0] * D2R, azel[1] * D2R, gain, bins)
         p.bar = add_colorbar(p.fig, [0.0, 0.12, 1, 0.1], cont, bins)
     p.canvas.draw()
     p.canvas.get_tk_widget().pack(fill=BOTH, expand=1)
@@ -296,16 +235,19 @@ def array_page_new(parent):
     p.parent = parent
     p.panel = Frame(parent)
     p.panel.pack(fill=BOTH, expand=1)
+    p.azel = [DoubleVar() for i in range(2)]
+    p.gain = [DoubleVar(value=1) for i in range(16)]
     p.toolbar = tool_bar_new(p.panel)
-    p.azel = [DoubleVar(), DoubleVar()]
-    p.scl1 = ttk.Scale(p.toolbar, variable=p.azel[1], to=90, orient='horizontal',
-        length=110, command=lambda e: on_azel_change(e, p))
-    p.scl1.pack(side=RIGHT, padx=(1, 10))
+    p.scl1 = Scale(p.toolbar, variable=p.azel[1], to=90, orient='horizontal',
+        length=110, sliderlength=20, showvalue=False, bg=BG_COLOR,
+        command=lambda e: on_azel_change(e, p))
+    p.scl1.pack(side=RIGHT, padx=(1, 6))
     p.txt1 = ttk.Label(p.toolbar, text='0\xb0', width=3, anchor=E)
     p.txt1.pack(side=RIGHT, padx=1)
     ttk.Label(p.toolbar, text='EL').pack(side=RIGHT, padx=(6, 1))
-    p.scl2 = ttk.Scale(p.toolbar, variable=p.azel[0], to=360, orient='horizontal',
-        length=110, command=lambda e: on_azel_change(e, p))
+    p.scl2 = Scale(p.toolbar, variable=p.azel[0], to=360, orient='horizontal',
+        length=110, sliderlength=20, showvalue=False, bg=BG_COLOR,
+        command=lambda e: on_azel_change(e, p))
     p.scl2.pack(side=RIGHT, padx=1)
     p.txt2 = ttk.Label(p.toolbar, text='0\xb0', width=4, anchor=E)
     p.txt2.pack(side=RIGHT, padx=1)
@@ -314,6 +256,14 @@ def array_page_new(parent):
     p.box1 = sel_box_new(p.toolbar, vals=[str(i + 1) for i in range(len(ANT_POSS))],
         val='1', width=3)
     p.box1.pack(side=LEFT)
+    p.toolbar2 = tool_bar_new(p.panel)
+    ttk.Label(p.toolbar2, text='RFCH GAIN').pack(side=LEFT, padx=(10, 4))
+    for i in range(8):
+        scl = Scale(p.toolbar2, variable=p.gain[7-i], to=1, orient='horizontal',
+            length=55, sliderlength=20, showvalue=False, resolution=0.05, bg=BG_COLOR,
+            command=lambda e: on_gain_change(e, p))
+        scl.pack(side=RIGHT, padx=(1, 6))
+        ttk.Label(p.toolbar2, text=str(8 - i) + ':').pack(side=RIGHT)
     p.plt1 = plot_new(p.panel, 200, 200)
     p.plt1.c.pack(side=LEFT, expand=1, fill=BOTH, padx=2, pady=2)
     p.panel1 = Frame(p.panel)
@@ -330,26 +280,30 @@ def array_page_new(parent):
 # antenna position select callback ---------------------------------------------
 def on_pos_select(e, p):
     p.ant_pos = ANT_POSS[int(p.box1.get())-1]
-    azel = [p.azel[0].get(), p.azel[1].get()]
-    update_plt(p, azel)
+    update_plt(p)
 
 # plots configure callback -----------------------------------------------------
 def on_plt_configure(e, p):
-    azel = [p.azel[0].get(), p.azel[1].get()]
-    update_plt(p, azel)
+    update_plt(p)
 
 # azel change callback ---------------------------------------------------------
 def on_azel_change(e, p):
-    azel = [p.azel[0].get(), p.azel[1].get()]
+    azel = [p.azel[i].get() for i in range(2)]
     p.txt1.configure(text='%.0f\xb0' % (azel[1]))
     p.txt2.configure(text='%.0f\xb0' % (azel[0]))
-    update_plt(p, azel)
+    update_plt(p)
+
+# gain change callback ---------------------------------------------------------
+def on_gain_change(e, p):
+    update_plt(p)
 
 # update plots -----------------------------------------------------------------
-def update_plt(p, azel):
-    plot_array(p.plt1, 'SKY', azel, p.ant_pos)
-    plot_array(p.plt2, 'GAIN', azel, p.ant_pos)
-    plot_array(p.plt3, 'POS', azel, p.ant_pos)
+def update_plt(p):
+    azel = [p.azel[i].get() for i in range(2)]
+    gain = [p.gain[i].get() for i in range(16)]
+    plot_array(p.plt1, 'SKY', azel, gain, p.ant_pos)
+    plot_array(p.plt2, 'GAIN', azel, gain, p.ant_pos)
+    plot_array(p.plt3, 'POS', azel, gain, p.ant_pos)
 
 # root Window close callback ---------------------------------------------------
 def on_root_close():
