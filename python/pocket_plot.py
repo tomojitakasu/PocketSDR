@@ -44,12 +44,11 @@ cmap1 = mpl.colormaps['tab10']
 cmap2 = mpl.colormaps['tab20']
 COLORS = [cmap1(i) for i in range(10)] + [cmap2(i) for i in range(20)]
 
-# C/N0 color table -------------------------------------------------------------
-cols = ('#808080', '#FF0000', '#0000FF', '#FF00FF', '#FFAA00', '#008000',
-    '#008000', '#008000', '#008000') # 20, 25, 30 ... 55, 60 dB-Hz
+# C/N0 color table (compatible to RTKLIB) --------------------------------------
+cols = ('#808080', '#FF0000', '#0000FF', '#FF00FF', '#FFAA00', '#008000')
 CN0_COLORS = []
 for cn in range(20, 60):
-    d = (cn - 20) / 5
+    d = np.clip((cn - 22.5) / 5, 0, 4.999)
     col1 = np.array(mpl.colors.to_rgba(cols[int(d)]))
     col2 = np.array(mpl.colors.to_rgba(cols[int(d)+1]))
     color = mpl.colors.to_hex((1 - d + int(d)) * col1 + (d - int(d)) * col2)
@@ -598,9 +597,9 @@ def plot_log(fig, rect, types, ts, logs, tspan, ranges, colors, opts):
         if type == 'TRK':
             ax.set_ylim([0, len(ids) + 1])
             xl = ax.get_xlim()
-            for i, id in enumerate(ids):
+            for j, id in enumerate(ids):
                 text = id.split('/')[0] + ' '
-                ax.text(xl[0], len(ids) - i, text, ha='right', va='center')
+                ax.text(xl[0], len(ids) - j, text, ha='right', va='center')
             ax.set_yticklabels([])
             ax.set_yticks(range(len(ids)))
         
@@ -621,6 +620,14 @@ def plot_log(fig, rect, types, ts, logs, tspan, ranges, colors, opts):
             labels = [id.split('/')[0] for id in ids]
             ax.legend(labels, loc='upper right')
         
+        # add legend for C/N0 colors
+        if 'cn0' in colors and i == 0:
+            ax.text(0.86, 1.008, 'C/N0:', ha='center', va='bottom',
+                transform=ax.transAxes)
+            for j, cn in enumerate((25, 30, 35, 40, 45)):
+                ax.text(0.9 + j * 0.023, 1.008, str(cn), color=cn0_color(cn),
+                    ha='center', va='bottom', transform=ax.transAxes)
+        
         # set time tick format
         if not type in ('POS-H',):
             dt = sdr_rtk.timediff(tspan[1], tspan[0]) 
@@ -628,7 +635,7 @@ def plot_log(fig, rect, types, ts, logs, tspan, ranges, colors, opts):
             ax.xaxis.set_major_formatter(mpl.dates.DateFormatter(fmt))
         
         # add y-label
-        if type != 'TRK':
+        if not type in ('TRK', 'SKY'):
             ax.set_ylabel(type + ' (' + type2unit(type) + ')')
 
         # hide x-tick labels
@@ -639,17 +646,8 @@ def plot_log(fig, rect, types, ts, logs, tspan, ranges, colors, opts):
 def add_title(fig, rect, sats, sigs, tspan, opt):
     ax = fig.add_axes(rect)
     ax.axis('off')
-    ti = 'RECEIVER LOG (' + sdr_rtk.time2str(tspan[0], 0) + '-' + \
+    ti = 'TIME: ' + sdr_rtk.time2str(tspan[0], 0) + ' - ' + \
         sdr_rtk.time2str(tspan[1], 0)[11:] + ' GPST'
-    if len(sats) > 0:
-        ti += ', SAT:' + sats[0]
-        for sat in sats[1:]: ti += ' ' + sat
-    if len(sigs) > 0:
-        ti += ', SIG:' + sigs[0]
-        for sig in sigs[1:]: ti += ' ' + sig
-    if len(opt) > 0:
-        ti += ', OPT:' + opt
-    ti += ')'
     ax.set_title(ti, fontsize=FONT_SIZE)
 
 #-------------------------------------------------------------------------------
@@ -822,7 +820,7 @@ if __name__ == '__main__':
     update_tspan(ts, tspan)
     
     # generate window
-    ti = 'Pocket SDR - RECEIVER LOG'
+    ti = 'Pocket SDR - Receiver Log'
     ti += ': %s' % (files[0]) + (' ...' if len(files) > 1 else '')
     fig = plt.figure(ti, figsize=PLOT_SIZE, facecolor=BG_COLOR)
     
