@@ -34,16 +34,16 @@ ANT_POS_1 = lam / 2 * np.array([0.0, 0.0, # 7-element array (1,0,6)
     sin(pi*0/6), cos(pi*0/6), sin(pi*2/6), cos(pi*2/6),
     sin(pi*4/6), cos(pi*4/6), sin(pi*6/6), cos(pi*6/6),
     sin(pi*8/6), cos(pi*8/6), sin(pi*10/6), cos(pi*10/6)])
-ANT_POS_2 = lam / 3 * np.array([ # 8-element array (0,8,0)
-    sin(pi*0/8), cos(pi*0/8), sin(pi*2/8), cos(pi*2/8),
-    sin(pi*4/8), cos(pi*4/8), sin(pi*6/8), cos(pi*6/8),
-    sin(pi*8/8), cos(pi*8/8), sin(pi*10/8), cos(pi*10/8),
-    sin(pi*12/8), cos(pi*12/8), sin(pi*14/8), cos(pi*14/8)])
-ANT_POS_3 = lam / 2 * np.array([0.0, 0.0, # 8-element array (1,0,7)
+ANT_POS_2 = lam / 2 * np.array([0.0, 0.0, # 8-element array (1,0,7)
     sin(pi*0/7), cos(pi*0/7), sin(pi*2/7), cos(pi*2/7),
     sin(pi*4/7), cos(pi*4/7), sin(pi*6/7), cos(pi*6/7),
     sin(pi*8/7), cos(pi*8/7), sin(pi*10/7), cos(pi*10/7),
     sin(pi*12/7), cos(pi*12/7)])
+ANT_POS_3 = lam / 3 * np.array([ # 8-element array (0,8,0)
+    sin(pi*0/8), cos(pi*0/8), sin(pi*2/8), cos(pi*2/8),
+    sin(pi*4/8), cos(pi*4/8), sin(pi*6/8), cos(pi*6/8),
+    sin(pi*8/8), cos(pi*8/8), sin(pi*10/8), cos(pi*10/8),
+    sin(pi*12/8), cos(pi*12/8), sin(pi*14/8), cos(pi*14/8)])
 ANT_POS_4 = lam / 2 * np.array([ # 8-element array (0,0,8)
     sin(pi*0/8), cos(pi*0/8), sin(pi*2/8), cos(pi*2/8),
     sin(pi*4/8), cos(pi*4/8), sin(pi*6/8), cos(pi*6/8),
@@ -95,7 +95,6 @@ def draw_sky(ax, d_az=30, d_el=30, label=0):
             text = ('%.0f' % (az)) if az % 90 else 'NESW'[az//90]
             ax.text(x * 1.05, y * 1.05, text, ha='center', va='center',
                 rotation=-az, fontdict=FONT)
-    
     for el in np.arange(0, 90, d_el):
         x = [(90 - el) / 90 * sin(az * D2R) for az in np.arange(0, 363, 3)]
         y = [(90 - el) / 90 * cos(az * D2R) for az in np.arange(0, 363, 3)]
@@ -105,20 +104,19 @@ def draw_sky(ax, d_az=30, d_el=30, label=0):
             ax.plot(x, y, '-', color=GR_COLOR, lw=0.8, alpha=0.5)
     
 # antenna gain ----------------------------------------------------------------
-def ant_gain(lam, pos, az, el, a, e, gain):
+def ant_gain(lam, pos, az, el, a, e, weight):
     es0 = np.array((sin(az) * cos(el), cos(az) * cos(el), sin(el)))
     es1 = np.array((sin(a) * cos(e), cos(a) * cos(e), sin(e)))
+    n = len(pos) // 2
     sig = 0.0
-    
-    for i in range(len(pos) // 2):
+    for i in range(n):
         z = 0.0
         phi = np.dot(np.hstack([pos[i*2:i*2+2], z]), es1 - es0) / lam
-        sig += gain[i] * np.exp(2j * pi * phi)
-    
+        sig += weight[i] * np.exp(2j * pi * phi)
     return 10.0 * log10(abs(sig)) # (dB)
 
 # plot antenna gain contour in skyplot -----------------------------------------
-def plot_sky(ax, lam, pos, az, el, gain, bins):
+def plot_sky(ax, lam, pos, az, el, weight, bins):
     ax.axis('off')
     ax.set_aspect('equal')
     ax.set_xlim(-1.05, 1.05)
@@ -131,7 +129,7 @@ def plot_sky(ax, lam, pos, az, el, gain, bins):
         for j in range(len(y)):
             a = atan2(x[i], y[j])
             e = (1.0 - sqrt(x[i]**2 + y[j]**2)) * pi / 2.0
-            z[j][i] = ant_gain(lam, pos, az, el, a, e, gain)
+            z[j][i] = ant_gain(lam, pos, az, el, a, e, weight)
     cont = ax.contourf(x, y, z, bins, extend='both', cmap='jet')
     draw_mask(ax)
     draw_sky(ax, d_el=15, label=1)
@@ -147,7 +145,7 @@ def plot_sky(ax, lam, pos, az, el, gain, bins):
     return cont
 
 # plot antenna gain plot in skyplot --------------------------------------------
-def plot_gain(ax, lam, pos, az, el, gain, bins):
+def plot_gain(ax, lam, pos, az, el, weight, bins):
     ax.axis('off')
     ax.set_aspect('equal')
     ax.set_xlim(-1.05, 1.05)
@@ -156,7 +154,7 @@ def plot_gain(ax, lam, pos, az, el, gain, bins):
     x = np.zeros(len(e))
     y = np.zeros(len(e))
     for i in range(len(e)):
-        p = ant_gain(lam, pos, az, el, az, e[i], gain)
+        p = ant_gain(lam, pos, az, el, az, e[i], weight)
         x[i] = np.max([0.0, (p - bins[0]) / (bins[-1] - bins[0])]) * cos(e[i])
         y[i] = np.max([0.0, (p - bins[0]) / (bins[-1] - bins[0])]) * sin(e[i])
     ax.plot(x, y, color=FG_COLOR, lw=0.8)
@@ -172,7 +170,6 @@ def plot_gain(ax, lam, pos, az, el, gain, bins):
     ax.plot(cos(el), sin(el), '.', color=FG_COLOR, ms=10)
     ax.arrow(0, 0, 0.9 * cos(el), 0.9 * sin(el), head_width=0.05,
         head_length=0.1, ec=FG_COLOR, fc=FG_COLOR)
-    ax.text(0, -0.3, 'Antenna Array Gain (dB)', ha='center', va='top', fontdict=FONT)
 
 # plot antenna element positions -----------------------------------------------
 def plot_pos(ax, lam, pos):
@@ -181,7 +178,8 @@ def plot_pos(ax, lam, pos):
     ax.set_ylim(-0.15, 0.13)
     ax.axis('off')
     for ratio in np.arange(0.25, 0.75, 0.25):
-        ax.add_artist(plt.Circle((0, 0), lam * ratio, color=GR_COLOR, lw=0.8, fill=False))
+        ax.add_artist(plt.Circle((0, 0), lam * ratio, color=GR_COLOR, lw=0.8,
+            fill=False))
     ax.add_artist(plt.Circle((0, 0), 0.125, color=FG_COLOR, lw=0.8, fill=False))
     for i in range(len(pos) // 2):
         x = pos[i*2]
@@ -203,7 +201,7 @@ def add_colorbar(fig, rect, cont, bins):
     return bar
     
 # plot antenna array -----------------------------------------------------------
-def plot_array(p, type, azel, gain, ant_pos):
+def plot_array(p, type, azel, weight, ant_pos):
     bins = np.arange(-10, 10.1, 0.1)
     p.ax.cla()
     if p.bar != None:
@@ -211,10 +209,10 @@ def plot_array(p, type, azel, gain, ant_pos):
     if type == 'POS':
         plot_pos(p.ax, lam, ant_pos)
     elif type == 'GAIN':
-        plot_gain(p.ax, lam, ant_pos, azel[0] * D2R, azel[1] * D2R, gain, bins)
+        plot_gain(p.ax, lam, ant_pos, azel[0] * D2R, azel[1] * D2R, weight, bins)
     elif type == 'SKY':
-        cont = plot_sky(p.ax, lam, ant_pos, azel[0] * D2R, azel[1] * D2R, gain, bins)
-        p.bar = add_colorbar(p.fig, [0.0, 0.12, 1, 0.1], cont, bins)
+        cont = plot_sky(p.ax, lam, ant_pos, azel[0] * D2R, azel[1] * D2R, weight, bins)
+        p.bar = add_colorbar(p.fig, [0, 0.11, 1, 0.1], cont, bins)
     p.canvas.draw()
     p.canvas.get_tk_widget().pack(fill=BOTH, expand=1)
 
@@ -236,7 +234,7 @@ def array_page_new(parent):
     p.panel = Frame(parent)
     p.panel.pack(fill=BOTH, expand=1)
     p.azel = [DoubleVar() for i in range(2)]
-    p.gain = [DoubleVar(value=1) for i in range(16)]
+    p.weight = [DoubleVar(value=1) for i in range(16)]
     p.toolbar = tool_bar_new(p.panel)
     p.scl1 = Scale(p.toolbar, variable=p.azel[1], to=90, orient='horizontal',
         length=110, sliderlength=20, showvalue=False, bg=BG_COLOR,
@@ -257,11 +255,11 @@ def array_page_new(parent):
         val='1', width=3)
     p.box1.pack(side=LEFT)
     p.toolbar2 = tool_bar_new(p.panel)
-    ttk.Label(p.toolbar2, text='RFCH GAIN').pack(side=LEFT, padx=(10, 4))
+    ttk.Label(p.toolbar2, text='RFCH WEIGHT').pack(side=LEFT, padx=(10, 4))
     for i in range(8):
-        scl = Scale(p.toolbar2, variable=p.gain[7-i], to=1, orient='horizontal',
+        scl = Scale(p.toolbar2, variable=p.weight[7-i], to=1, orient='horizontal',
             length=55, sliderlength=20, showvalue=False, resolution=0.05, bg=BG_COLOR,
-            command=lambda e: on_gain_change(e, p))
+            command=lambda e: on_weight_change(e, p))
         scl.pack(side=RIGHT, padx=(1, 6))
         ttk.Label(p.toolbar2, text=str(8 - i) + ':').pack(side=RIGHT)
     p.plt1 = plot_new(p.panel, 200, 200)
@@ -293,17 +291,17 @@ def on_azel_change(e, p):
     p.txt2.configure(text='%.0f\xb0' % (azel[0]))
     update_plt(p)
 
-# gain change callback ---------------------------------------------------------
-def on_gain_change(e, p):
+# weight change callback -------------------------------------------------------
+def on_weight_change(e, p):
     update_plt(p)
 
 # update plots -----------------------------------------------------------------
 def update_plt(p):
     azel = [p.azel[i].get() for i in range(2)]
-    gain = [p.gain[i].get() for i in range(16)]
-    plot_array(p.plt1, 'SKY', azel, gain, p.ant_pos)
-    plot_array(p.plt2, 'GAIN', azel, gain, p.ant_pos)
-    plot_array(p.plt3, 'POS', azel, gain, p.ant_pos)
+    weight = [p.weight[i].get() for i in range(16)]
+    plot_array(p.plt1, 'SKY', azel, weight, p.ant_pos)
+    plot_array(p.plt2, 'GAIN', azel, weight, p.ant_pos)
+    plot_array(p.plt3, 'POS', azel, weight, p.ant_pos)
 
 # root Window close callback ---------------------------------------------------
 def on_root_close():
@@ -325,6 +323,7 @@ if __name__ == '__main__':
     root.title('ANTENNA ARRAY SIMULATION')
     root.protocol("WM_DELETE_WINDOW", on_root_close)
     
+    # set styles
     set_styles()
    
     # generate array pages
