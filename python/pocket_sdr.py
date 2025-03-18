@@ -1579,7 +1579,28 @@ def set_styles():
     style.configure('TCombobox', font=get_font(), background=BG_COLOR1)
     style.configure('link.TLabel', font=get_font(1), foreground='blue')
 
-# main -------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#
+#   Synopsis
+# 
+#     pocket_sdr.py
+# 
+#   Description
+# 
+#     A GNSS SDR receiver with GUI (graphical user interface). To start the
+#     receiver, push Start button. To stop the receiver, push Stop button.
+#     To configure the receiver options, puth Input..., Output..., Signal...
+#     or System... button and input settings and push OK on the options dialog. 
+#     By pushing tab Receiver, RF CH, BB CH, Correlator, Satellites, Solution
+#     or Log, the contents of the receiver internal status can be switched.
+#     To exit the receiver, puth Exit button. In this case, the receiver options
+#     are saved as pocket_sdr.ini file in the same directory of the program.
+#     The detaild instruction for the program, refer doc/pocket_sdr_py.pdf.
+#
+#   Options
+#     
+#     No option.
+#
 if __name__ == '__main__':
     
     # generate root window
