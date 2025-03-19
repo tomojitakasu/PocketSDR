@@ -7,7 +7,7 @@
 #
 #  History:
 #  2024-06-29  1.0  ver.0.13
-#  2024-12-30  1.1  ver.0.14
+#  2025-03-19  1.1  ver.0.14
 #
 import sys, os, platform, time, re
 from math import *
@@ -27,7 +27,7 @@ AP_URL     = 'https://github.com/tomojitakasu/PocketSDR'
 AP_DIR     = os.path.dirname(__file__)
 COPYRIGHT  = 'Copyright (C) 2021-2025 T.Takasu\nAll rights reserved.'
 OPTS_FILE  = AP_DIR + '/pocket_sdr.ini' # options file
-HELP_LINK  = 'file://' + AP_DIR + '/../doc/pocket_sdr_py.pdf'
+HELP_LINK  = 'file://' + AP_DIR + '/../doc/pocket_sdr_help.pdf'
 WIDTH      = 800             # root window width
 HEIGHT     = 600             # root window height
 TB_HEIGHT  = 25              # toolbar height
@@ -508,7 +508,7 @@ def sel_box_new(parent, vals=[], val='', width=8):
 
 # show Help dialog -------------------------------------------------------------
 def help_dlg(root):
-    dlg = sdr_opt.modal_dlg_new(root, 280, 200, 'About', nocancel=1)
+    dlg = sdr_opt.modal_dlg_new(root, 280, 220, 'About', nocancel=1)
     name, ver = get_name_ver()
     python_info = 'with Python ' + sys.version.split()[0]
     sdr_opt.link_label_new(dlg.panel, text=name + ' ver.' + ver,
