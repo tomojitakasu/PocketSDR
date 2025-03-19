@@ -27,6 +27,7 @@ AP_URL     = 'https://github.com/tomojitakasu/PocketSDR'
 AP_DIR     = os.path.dirname(__file__)
 COPYRIGHT  = 'Copyright (C) 2021-2025 T.Takasu\nAll rights reserved.'
 OPTS_FILE  = AP_DIR + '/pocket_sdr.ini' # options file
+HELP_LINK  = 'file://' + AP_DIR + '/../doc/pocket_sdr_py.pdf'
 WIDTH      = 800             # root window width
 HEIGHT     = 600             # root window height
 TB_HEIGHT  = 25              # toolbar height
@@ -511,10 +512,12 @@ def help_dlg(root):
     name, ver = get_name_ver()
     python_info = 'with Python ' + sys.version.split()[0]
     sdr_opt.link_label_new(dlg.panel, text=name + ' ver.' + ver,
-        font=get_font(2, 'bold'), link=AP_URL).pack(pady=(4, 0))
-    ttk.Label(dlg.panel, text=python_info, justify=CENTER).pack(pady=2)
-    ttk.Label(dlg.panel, text=TITLE, justify=CENTER).pack(pady=2)
-    ttk.Label(dlg.panel, text=COPYRIGHT, justify=CENTER).pack(pady=2)
+        font=get_font(2, 'bold'), link=AP_URL).pack(pady=1)
+    ttk.Label(dlg.panel, text=python_info, justify=CENTER).pack(pady=1)
+    ttk.Label(dlg.panel, text=TITLE, justify=CENTER).pack(pady=1)
+    sdr_opt.link_label_new(dlg.panel, text='HELP', font=get_font(2, 'bold'),
+        link=HELP_LINK).pack(pady=1)
+    ttk.Label(dlg.panel, text=COPYRIGHT, justify=CENTER).pack(pady=1)
     root.wait_window(dlg.win)
 
 # generate Receiver page -------------------------------------------------------
