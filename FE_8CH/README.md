@@ -14,15 +14,15 @@ sampling rate can be configured up to 48 Msps.
 
 ## **Specifications**
 
-* Number of RF inputs  : 8 CH or 2CH
-* Number of RF channels: 8 CH
-* LO (PLL) Frequency: 1525 ~ 1610 MHz (GNSS L1 band) or
+* **Number of RF Inputs**: 8 CH or 2 CH
+* **Number of RF Channels**: 8 CH
+* **LO (PLL) Frequency**: 1525 ~ 1610 MHz (GNSS L1 band) or
                       1160 ~ 1290 MHz (GNSS L2/L5/L6 band)
-* IF Bandwidth: 2 ~ 36 MHz
-* Sampling Rate: 4, 6, 8, 12, 16, 24, 32 or 48 Msps
-* Sampling Type: I or I/Q sampling, 2 bits resolution
-* Host I/F: USB 3.0, type-C (high-speed 480 Mbps or super speed 5 Gbps)
-* Power: 5V, USB bus power
+* **IF Bandwidth**: 2.5 ~ 36 MHz
+* **Sampling Rate**: 4, 6, 8, 12, 16, 24, 32 or 48 Msps
+* **Sampling Type**: I-sampling 2 or 3 bits,  I/Q-sampling 2 bits
+* **Host I/F**: USB 3.0 (USB 3.2 Gen1, super-speed 5Gbps), type-C
+* **Power Supply**: 5V 330 mA, USB bus power
 
 --------------------------------------------------------------------------------
 
@@ -55,12 +55,31 @@ FE_8CH  -+-- HW     Pocket SDR FE 8CH hardware design data
                      +-- gpif_conf.cyfx  GPIF II Designer config file 
                      +-- gpif_conf.h     GPIF II Designer generated header file
                      +-- ...
+                     +-- Release
+                         +-- pocket_Fw_v4.img Binary image of the F/W
+                         +-- ...
 ```
 --------------------------------------------------------------------------------
 
 ## **Rebuild F/W and Write F/W Image to Pocket SDR FE 8CH**
 
-Same as FE 4CH.
+* Install Cypress EZ-USB FX3 Development Kit (ref [5]) to a Windows PC. As default,
+it is installed to C:\Program Files (x86)\Cypress\EZ-USB FX3 SDK.
+* Execute EZ USB Suite (EZ-USB FX3 SDK\1.3\Eclipse\ezUsbSuite.exe).
+* Execute Menu File - Switch Workspace - Others, select <install_dir>\PocketSDR\FE_8CH\FW\v4.0
+and open the workspace.
+* Select pocket_fw_v4 in Project Explorer and execute Menu Project - Build All and
+you can get a F/W image <install_dir>\PocketSDR\FE_8CH\FW/v4.0\pocket_fw_v4\Release\pocket_fw_v4.img.
+* Disable EEPROM by connecting the J2 jumper pins on the Pocket SDR FE 8CH PCB and
+attach the Pocket SDR FE 8CH via USB cable to the PC.
+* Execute USB Control Center (EZ-USB FX3 SDK\1.3\bin\CyControl.exe).
+* You can see "Cypress FX3 USB BootLoader Device".
+* Re-enable EEPROM by disconnecting the J2 jumper pins on the Pocket SDR FE 8CH PCB.
+* In USB Control Center, select "Cypress FX3 USB Bootloader Device", execute menu
+Program - FX3 - I2C EEPROM, select the F/W image <install_dir>\PocketSDR\FE_8CH\FW\v4.0\pocket_fw_v4\Release\pocket_fw_v4.img
+and open it.
+* If you see "Programming succeeded." in status bar, the F/W is properly written
+to the PocketSDR FE 8CH.
 
 --------------------------------------------------------------------------------
 
@@ -75,3 +94,5 @@ Rev. Z, September 29, 2022
 
 [4] Cypress Semiconductor, FX3 Programmers Manual, Rev.K
 
+[5] Infineon, EZ-USB FX3 Software Development Kit
+    (https://www.infineon.com/cms/jp/design-support/tools/sdk/usb-controllers-sdk/ez-usb-fx3-software-development-kit/)
