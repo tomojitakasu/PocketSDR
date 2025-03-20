@@ -14,13 +14,15 @@ frequency can be configured up to 32 MHz.
 
 ## **Specifications**
 
-* LO (PLL) Frequency: CH1 1525 ~ 1610 MHz (GNSS L1 band),
+* **Number of RF Inputs**: 1 CH
+* **Number of RF Channels**: 2 CH
+* **LO (PLL) Frequency**: CH1 1525 ~ 1610 MHz (GNSS L1 band),
                       CH2 1160 ~ 1290 MHz (GNSS L2/L5/L6 band)
-* IF Bandwidth: 2 ~ 24 MHz
-* Sampling Rate: 4, 6, 8, 10, 12, 16, 20, 24 and 32 Msps
-* Sampling Type: I or I/Q sampling, 2 bits resolution
-* Host I/F: USB 2.0, micro-B (ver.2.1) or type-C (ver.2.3)
-* Power: 5V 140 mA, USB bus power
+* **IF Bandwidth**: 2.5 ~ 23.4 MHz
+* **Sampling Rate**: 4, 6, 8, 10, 12, 16, 20, 24 and 32 Msps
+* **Sampling Type**: I-sampling 2 or 3 bits, I/Q-sampling 2 bits
+* **Host I/F**: USB 2.0 (high-speed 480 Mbps), micro-B (ver.2.1) or type-C (ver.2.3)
+* **Power Supply**: 5V 140 mA, USB bus power
 
 --------------------------------------------------------------------------------
 
