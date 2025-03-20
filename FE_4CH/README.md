@@ -14,14 +14,15 @@ sampling rate can be configured up to 48 Msps.
 
 ## **Specifications**
 
-* Number of RF channels: 4 CH
-* LO (PLL) Frequency: 1525 ~ 1610 MHz (GNSS L1 band) or
+* **Number of RF Inputs**: 1 CH
+* **Number of RF Channels**: 4 CH
+* **LO (PLL) Frequency**: 1525 ~ 1610 MHz (GNSS L1 band) or
                       1160 ~ 1290 MHz (GNSS L2/L5/L6 band)
-* IF Bandwidth: 2 ~ 36 MHz
-* Sampling Rate: 4, 6, 8, 10, 12, 16, 20, 24, 32, 40 or 48 Msps
-* Sampling Type: I or I/Q sampling, 2 bits resolution
-* Host I/F: USB 3.0, type-C (high-speed 480 Mbps or super speed 5 Gbps)
-* Power: 5V, USB bus power
+* **IF Bandwidth**: 2.5 ~ 36 MHz
+* **Sampling Rate**: 4, 6, 8, 10, 12, 16, 20, 24, 32, 40 or 48 Msps
+* **Sampling Type**: I-sampling 2 or 3 bits, I/Q-sampling 2 bits
+* **Host I/F**: USB 3.0 (USB 3.2 Gen1, super-speed 5Gbps), type-C
+* **Power Supply**: 5V 240 mA, USB bus power
 
 --------------------------------------------------------------------------------
 
