@@ -15,7 +15,7 @@ clean:
 	make -C pocket_trk clean
 	make -C pocket_snap clean
 	make -C convbin clean
-	make -C strstr clean
+	make -C str2str clean
 install:
 	make -C pocket_scan install
 	make -C pocket_conf install
