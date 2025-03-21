@@ -221,7 +221,7 @@ static void write_tag_files(gtime_t time, int raw, int fmt, double fs,
         else {
             int fmt_i = IQ[i] == 1 ? SDR_FMT_INT8 : SDR_FMT_INT8X2;
             sdr_tag_write(files[i], PROG_NAME, time, fmt_i, fs, fo + i, IQ + i,
-                bits);
+                bits + i);
         }
     }
 }
