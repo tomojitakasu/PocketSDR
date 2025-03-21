@@ -168,8 +168,7 @@ static void *event_handler(void *arg)
         ctx[i] = ep->BeginDataXfer(dev->buff + len * i, len, &ov[i]); 
     }
     for (int i = 0; dev->state; ) {
-        if (!ep->WaitForXfer(&ov[i], TO_TRANSFER)) {
-            fprintf(stderr, "bulk transfer timeout\n");
+        if (!ep->WaitForXfer(&ov[i], 100)) {
             continue;
         }
         if (!ep->FinishDataXfer(dev->buff + len * i, len, &ov[i], ctx[i])) {
