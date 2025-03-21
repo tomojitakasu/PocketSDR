@@ -9,18 +9,16 @@ in Python, C, and C++. It supports almost all signals for **GPS**, **GLONASS**, 
 **QZSS**, **BeiDou**, **NavIC**, and **SBAS**.
 
 The Pocket SDR FE device includes 2, 4, or 8 RF frontend channels, supporting the
-GNSS L1 band (1525 - 1610 MHz) or L2/L5/L6 bands (1160 - 1290 MHz). Each RF channel
-provides a bandwidth of up to 36 MHz. The ADC sampling rate can be configured up to
-32 Msps (FE 2CH) or 48 Msps (FE 4CH and FE 8CH).
+GNSS L1 band (1525 - 1610 MHz) or L2/L5/L6 bands (1160 - 1290 MHz). For these signal bands, refer to [**GNSS Signal Bands**](/doc/signal_bands.pdf). Each RF channel
+of the Pocket SDR FE device provides IF (intermediate-frequency) bandwidth of up to 36 MHz. The ADC sampling rate can be configured up to 32 Msps (FE 2CH) or 48 Msps (FE 4CH and FE 8CH).
 
 Pocket SDR also includes utility programs to configure the Pocket SDR FE devices,
-capture, and dump digitized IF (inter-frequency) data. These utilities are compatible
-with **Windows**, **Linux**, **Raspberry Pi OS**, **macOS**, and other environments. Additionally,
-Pocket SDR provides GNSS SDR APs to display the PSD (power spectrum density) of
-captured IF data, search for GNSS signals, track these signals, decode navigation data,
-and generate PVT (position, velocity, and time) solutions. The supported GNSS signals
-are as follows. For details on these signals and their IDs, refer to
-[**Pocket SDR Signal IDs**](/doc/signal_IDs.pdf).
+capture, and dump digitized IF data.
+Additionally, Pocket SDR provides GNSS SDR APs to display the PSD (power spectrum density) of captured IF data, search for GNSS signals, track these signals, decode navigation data, and generate PVT (position, velocity, and time) solutions.
+These utilities and APs are compatible with **Windows**, **Linux**, **Raspberry Pi OS**, **macOS**, and other environments.
+
+The supported GNSS signals by Pocket SDR are as follows. For details on these signals and Pocket SDR signal IDs, refer to
+[**GNSS Signals**](/doc/signal_IDs.pdf).
 
 * **GPS**: L1C/A, L1C-D, L1C-P, L2C-M, L5-I, L5-Q
 * **GLONASS**: L1C/A (L1OF), L2C/A (L2OF), L1OCd, L1OCp, L2OCp, L3OCd, L3OCp
@@ -30,7 +28,7 @@ are as follows. For details on these signals and their IDs, refer to
 * **NavIC**: L1-SPS-D, L1-SPS-P, L5-SPS
 * **SBAS**: L1C/A, L5-I, L5-Q
 
-These utilities and applications are written in Python, C, and C++ in a compact and modular way,
+These utilities and APs are written in Python, C, and C++ in a compact and modular way,
 making them easy to modify for adding custom algorithms.
 
 <p align="center">
@@ -40,7 +38,7 @@ making them easy to modify for adding custom algorithms.
 
 <p align="center">
   <img src="image/pocket_sdr_fe_8ch.jpg">
-  <b>Pocket SDR FE 8CH-2ANT and -8ANT</b>
+  <b>Pocket SDR FE 8CH (2-RF-inputs and 8-RF-inputs)</b>
 </p>
 
 <p align="center">
@@ -130,9 +128,9 @@ or
 --------------------------------------------------------------------------------
 
 ## **To rebuild binary programs for Windows**
-* If you want to rebuild the binary APs or the shared libraries for the python APs
-for Windows, you need **MinGW64**. Refer to [**MSYS2**](https://www.msys2.org/) for details.
-In MinGW64 environment, install fundamental development tools and fftw3 library.
+* If you want to rebuild the binary utilities, APs, or shared libraries for python APs
+for Windows, you need [**minGW-w64**](https://www.mingw-w64.org/) environment. To construct the environment, refer to [**MSYS2**](https://www.msys2.org/) for details.
+In MSYS2, you also need to install fundamental development tools and [**FFTW3**](https://www.fftw.org/) library as follows.
 ```
 $ pacman -Syy
 $ pacman -S git
@@ -140,7 +138,7 @@ $ pacman -S make
 $ pacman -S mingw-w64-x86_64-gcc
 $ pacman -S mingw-w64-x86_64-fftw
 ```
-* Move to the library directory, install external library source trees ([1], [2]) as follows:
+* Move to the library directory. The external libraries are for Forward Error Correction (FEC) and Low-Density Parity-Check (LDPC) decoding. Install the external library source trees ([1], [2]) as follows:
 ```
 $ cd <install_dir>/lib
 $ ./clone_lib.sh
@@ -170,7 +168,7 @@ $ unzip PocketSDR.zip
 or
 $ git clone https://github.com/tomojitakasu/PocketSDR
 ```
-* Move to the library directory. The external libraries are for Forward Error Correction (FEC) and Low-Density Parity-Check (LDPC) decoding. Install the external library source trees ([1], [2]) as follows:
+* Move to the library directory and install the external library source trees ([1], [2]) as follows:
 ```
 $ cd <install_dir>/lib
 $ chmod +x clone_lib.sh
@@ -187,13 +185,13 @@ $ cd <install_dir>/app
 $ make
 $ make install
 ```
-* Add the Pocket SDR binary programs path (<install_dir>/PocketSDR/bin) to 
-  the command search path.
+* Add the Pocket SDR binary programs path (<install_dir>/PocketSDR/bin) to the command search path.
 * For Linux or Raspberry Pi OS users, you usually need to have root permission to access USB devices. So you have to add
 "sudo" to execute some utilities, APs or python scripts like:
 ```
 $ sudo pocket_conf ../conf/pocket_L1L6_12MHz.conf
 $ sudo pocket_dump -t 10 ch1.bin ch2.bin
+$ sudo pocket_sdr.py
 ```
 
 --------------------------------------------------------------------------------
@@ -326,10 +324,13 @@ $ pocket_trk.py ch2.bin -f 12 -sig E6B -prn 4 -log trk.log -p -ts 0.2
 
 ## **References**
 
-1. [libfec](https://github.com/quiet/libfec): A library for forward error correction (FEC).
-2. [LDPC-codes](https://github.com/radfordneal/LDPC-codes): A library for LDPC (Low-Density Parity-Check) decoding.
-3. *NMEA 0183: Standard for Interfacing Marine Electronic Devices*, National Marine Electronics Association and International Marine Electronics Association, 2013.
-4. *RTCM 10403.3 with Amendment 1: Differential GNSS (Global Navigation Satellite Systems) Service - Version 3*, Radio Technical Commission for Maritime Services, April 28, 2020.
+[1] [**libfec**](https://github.com/quiet/libfec): A library for forward error correction (FEC).
+
+[2] [**LDPC-codes**](https://github.com/radfordneal/LDPC-codes): A library for LDPC (Low-Density Parity-Check) decoding.
+
+[3] *NMEA 0183: Standard for Interfacing Marine Electronic Devices*, National Marine Electronics Association and International Marine Electronics Association, 2013.
+
+[4] *RTCM 10403.4 with Amendment 1: Differential GNSS (Global Navigation Satellite Systems) Service - Version 3*, Radio Technical Commission for Maritime Services, November 1, 2024
 
 --------------------------------------------------------------------------------
 
