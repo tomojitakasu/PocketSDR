@@ -279,7 +279,7 @@ For more information about this application, please refer to [**pocket_sdr.py he
 
 ## **Execution Examples of Utilities and APs**
 
-Here are some examples of how to execute the utilities and applications:
+Here are some examples of how to execute the utilities and the APs:
 
 ```
 $ sudo pocket_conf
