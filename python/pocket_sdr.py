@@ -143,7 +143,7 @@ def rcv_open_dev(sys_opt, inp_opt, out_opt, sig_opt):
 # start receiver by file -------------------------------------------------------
 def rcv_open_file(sys_opt, inp_opt, out_opt, sig_opt):
     sigs, prns = get_sig_opt(sig_opt)
-    fmt = inp_opt.fmts.index(inp_opt.fmt.get())
+    fmt = inp_opt.fmts.index(inp_opt.fmt.get()) + 1
     fs = to_float(inp_opt.fs.get()) * 1e6
     fo = [to_float(inp_opt.fo[i].get()) * 1e6 for i in range(8)]
     IQ = [1 if inp_opt.IQ[i].get() == 'I' else 2 for i in range(8)]
