@@ -178,6 +178,7 @@ $ ./clone_lib.sh
 ```
 $ cd <install_dir>/lib/build
 $ make
+$ make install
 ```
 * Move to the application program directory and build utilities and APs.
 ```
