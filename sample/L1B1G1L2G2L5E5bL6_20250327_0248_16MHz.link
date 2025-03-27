@@ -1,0 +1,18 @@
+#
+# PocketSDR - Captured Sample Data Files
+#
+
+URL:
+http://gpspp.sakura.ne.jp/pocketsdr/L1B1G1L2G2L5E5bL6_20250327_0248_16MHz.zip
+
+SIZE:
+19,200,000,000 B (300 SEC)
+
+TAG FILE:
+PROG = Pocket SDR
+TIME = 2025/03/27 02:48:56.049
+FMT  = RAW32
+F_S  = 16
+F_LO = 1575.42,1561,1602,1227.6,1246,1176.45,1207.14,1273
+IQ   = 2,2,2,2,2,2,2,2
+BITS = 2,2,2,2,2,2,2,2
