@@ -478,8 +478,8 @@ def ch_opt_enable_update(fmt, p3):
             (fmt == 'RAW8' and i < 2) or (fmt == 'RAW16' and i < 4) or \
             (fmt == 'RAW32' and i < 8)
         config_panel_state(p2[i//n][i%n], NORMAL if ena else DISABLED)
-    p1 = p[1].winfo_children()[1]
-    p1.configure(stat=DISABLED if fmt in ('INT8', 'INT8X2') else NORMAL)
+    #p1 = p[1].winfo_children()[1]
+    #p1.configure(stat=DISABLED if fmt in ('INT8', 'INT8X2') else NORMAL)
 
 # generate RF channel options panel --------------------------------------------
 def rfch_opt_panel_new(parent, ch, opt):
