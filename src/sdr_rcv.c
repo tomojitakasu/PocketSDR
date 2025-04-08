@@ -71,6 +71,7 @@ static int num_rfch(int fmt)
 static int sample_byte(int fmt)
 {
     switch (fmt) {
+        case SDR_FMT_INT8X2:
         case SDR_FMT_RAW16 :
         case SDR_FMT_RAW16I: return 2;
         case SDR_FMT_RAW32 : return 4;
