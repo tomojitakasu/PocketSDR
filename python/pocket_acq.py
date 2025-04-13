@@ -105,7 +105,7 @@ def search_sig(sig, prn, data, fs, fi, max_dop, zero_pad):
     # max correlation power and C/N0
     P_max, ix, cn0 = sdr_func.corr_max(P, T)
     
-    coffs = np.arange(0, T, 1.0 / fs, dtype='float32')
+    coffs = np.arange(N, dtype='float32') / fs
     dop = sdr_func.fine_dop(P.T[ix[1]], fds, ix[0])
     
     return P / P_max, fds, coffs, ix, cn0, dop
