@@ -304,7 +304,7 @@ int sdr_tag_read(const char *file, char *prog, gtime_t *time, int *fmt,
 void sdr_search_code(const sdr_cpx_t *code_fft, double T,
     const sdr_buff_t *buff, int ix, int N, double fs, double fi,
     const float *fds, int len_fds, float *P);
-float sdr_corr_max(const float *P, int N, int M, int Nmax, double T, int *ix);
+float sdr_corr_max(const float *P, int N, int Nmax, int M, double T, int *ix);
 double sdr_fine_dop(const float *P, int N, const float *fds, int len_fds,
     const int *ix);
 double sdr_shift_freq(const char *sig, int fcn, double fi);
