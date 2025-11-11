@@ -44,7 +44,7 @@ extern "C" {
 
 // constants and macros ------------------------------------------------------
 #define SDR_LIB_NAME   "Pocket SDR" // library name
-#define SDR_LIB_VER    "0.14"   // library version
+#define SDR_LIB_VER    "0.15b"  // library version
 #define SDR_MAX_RFCH   8        // max number of RF channels in a SDR device
 #define SDR_MAX_REG    11       // max number of registers in a SDR device
 #define SDR_MAX_BUFF   6        // number of raw data buffer
@@ -64,6 +64,7 @@ extern "C" {
 
 #define SDR_DEV_FILE   1        // SDR device: file
 #define SDR_DEV_USB    2        // SDR device: USB device
+#define SDR_DEV_STR    3        // SDR device: stream
 
 #define SDR_DEV_NAME   "Pocket SDR" // SDR device name 
 #define SDR_DEV_VID    0x04B4   // SDR USB device vendor ID 
@@ -86,6 +87,8 @@ extern "C" {
 #define SDR_FMT_RAW16  4        // SDR IF data format: packed 16 bits raw (4CH)
 #define SDR_FMT_RAW16I 5        // SDR IF data format: packed 16 bits raw (8CH)
 #define SDR_FMT_RAW32  6        // SDR IF data format: packed 32 bits raw (8CH)
+#define SDR_FMT_IBYTE  7        // SDR IF data format: interleaved byte (IQ)
+#define SDR_FMT_ISHORT 8        // SDR IF data format: interleaved short (IQ)
 
 #define SDR_STATE_IDLE 1        // SDR channel state: idle
 #define SDR_STATE_SRCH 2        // SDR channel state: search
