@@ -53,13 +53,18 @@
 //                   $GSTR1, $GSTR3, $INAV, $FNAV, $BCNVD1, $BCNVD2, $BCNV1,
 //                   $BCNV2, $BCNV3, $IRNV1, $IRNV5
 //  2025-02-18  1.7  flip symbol polarity
+//  2025-03-28  1.8  fix symbol table access violation problem
 //
 #include "pocket_sdr.h"
 
 // constants -------------------------------------------------------------------
 #define THRES_SYNC  0.05      // threshold for symbol sync
 #define THRES_LOST  0.001     // threshold for symbol lost
-#define GPST_OFF_W  2048      // GPST offset (week) (2019-4-7 ~ 2038-11-20)
+#if 0
+#define GPST_OFF_W  1024      // GPST offset (week) (1999-08-22 ~ 2019-04-06)
+#else
+#define GPST_OFF_W  2048      // GPST offset (week) (2019-04-07 ~ 2038-11-20)
+#endif
 #define GPST_GST_W  1024      // GPST - GST (week)
 #define GPST_BDT_W  1356      // GPST - BDT (week)
 #define GPST_IRT_W  1024      // GPST - IRT (week)
@@ -106,11 +111,11 @@ static uint32_t BCH_CORR_TBL[] = {
     0x0008, 0x4000, 0x0200, 0x0080, 0x0040, 0x2000, 0x0800, 0x1000
 };
 
-// code caches -----------------------------------------------------------------
-static uint8_t *CNV2_SF1  [400] = {NULL};
-static uint8_t *BCNV1_SF1A[ 63] = {NULL};
-static uint8_t *BCNV1_SF1B[200] = {NULL};
-static uint8_t *IRNV1_SF1 [400] = {NULL};
+// symbol tables ---------------------------------------------------------------
+static uint8_t CNV2_SF1  [400][52]; // GPS/QZSS CNAV-2 subframe 1 symbols
+static uint8_t BCNV1_SF1A[ 63][21]; // BDS B-CNAV1 subframe 1A symbols
+static uint8_t BCNV1_SF1B[200][51]; // BDS B-CNAV1 subframe 1B symbols
+static uint8_t IRNV1_SF1 [400][52]; // NavIC L1-SPS subframe 1 symbols
 
 // convert IP correlation to symbol --------------------------------------------
 static uint8_t IP2sym(const sdr_ch_t *ch)
@@ -289,9 +294,52 @@ static void unsync_nav(sdr_ch_t *ch)
     ch->tow_v = 0;
 }
 
+// initialize symbol tables ----------------------------------------------------
+static void init_sym_tables(void)
+{
+    if (CNV2_SF1[0][0]) return;
+    
+    // generate GPS/QZSS CNAV-2 subframe 1 symbol table
+    for (int t = 0; t < 400; t++) {
+        int8_t *code = LFSR(51, rev_reg(t & 0xFF, 8), 0x9F, 8);
+        uint8_t bit9 = (uint8_t)((t >> 8) & 1);
+        CNV2_SF1[t][0] = bit9;
+        for (int i = 1; i < 52; i++) {
+            CNV2_SF1[t][i] = (uint8_t)((code[i-1] > 0) ? 0 : 1) ^ bit9;
+        }
+        sdr_free(code);
+    }
+    // generate BDS B-CNAV1 subframe 1 symbol table
+    for (int prn = 1; prn <= 63; prn++) {
+        int8_t *code = LFSR(21, rev_reg(prn, 6), 0x17, 6);
+        for (int i = 0; i < 21; i++) {
+            BCNV1_SF1A[prn-1][i] = (code[i] > 0) ? 0 : 1;
+        }
+        sdr_free(code);
+    }
+    for (int soh = 0; soh < 200; soh++) {
+        int8_t *code = LFSR(51, rev_reg(soh, 8), 0x9F, 8);
+        for (int i = 0; i < 51; i++) {
+            BCNV1_SF1B[soh][i] = (code[i] > 0) ? 0 : 1;
+        }
+        sdr_free(code);
+    }
+    // generate NavIC L1-SPS subframe 1 symbol table
+    for (int t = 0; t < 400; t++) {
+        int8_t *code = LFSR(52, rev_reg(t+1, 9), 0x1BF, 9);
+        for (int i = 0; i < 52; i++) {
+            IRNV1_SF1[t][i] = (uint8_t)((code[i] > 0) ? 0 : 1);
+        }
+        sdr_free(code);
+    }
+}
+
 // new nav data ----------------------------------------------------------------
 sdr_nav_t *sdr_nav_new(void)
 {
+    // initialize symbol tables
+    init_sym_tables();
+    
     return (sdr_nav_t *)sdr_malloc(sizeof(sdr_nav_t));
 }
 
@@ -509,19 +557,6 @@ static void decode_L1CB(sdr_ch_t *ch)
 // sync CNAV-2 frame by subframe 1 symbols ([12]) ------------------------------
 static int sync_CNV2_frame(sdr_ch_t *ch, const uint8_t *syms, int toi)
 {
-    // generate CNAV-2 subframe 1 symbols
-    if (!CNV2_SF1[0]) {
-        for (int t = 0; t < 400; t++) {
-            CNV2_SF1[t] = (uint8_t *)sdr_malloc(52);
-            int8_t *code = LFSR(51, rev_reg(t & 0xFF, 8), 0x9F, 8);
-            uint8_t bit9 = (uint8_t)((t >> 8) & 1);
-            CNV2_SF1[t][0] = bit9;
-            for (int i = 1; i < 52; i++) {
-                CNV2_SF1[t][i] = (uint8_t)((code[i-1] > 0) ? 0 : 1) ^ bit9;
-            }
-            sdr_free(code);
-        }
-    }
     uint8_t *SF1 = CNV2_SF1[toi];
     uint8_t *SFn = CNV2_SF1[(toi + 1) % 400];
     
@@ -1601,25 +1636,6 @@ static void decode_B1I(sdr_ch_t *ch)
 // sync B1CD B-CNAV1 frame by subframe 1 symbols -------------------------------
 static int sync_BCNV1_frame(sdr_ch_t *ch, const uint8_t *syms, int soh)
 {
-    // generate CNAV-1 subframe 1 symbols
-    if (!BCNV1_SF1A[ch->prn-1]) {
-        BCNV1_SF1A[ch->prn-1] = (uint8_t *)sdr_malloc(21);
-        int8_t *code = LFSR(21, rev_reg(ch->prn, 6), 0x17, 6);
-        for (int i = 0; i < 21; i++) {
-            BCNV1_SF1A[ch->prn-1][i] = (code[i] > 0) ? 0 : 1;
-        }
-        sdr_free(code);
-    }
-    if (!BCNV1_SF1B[0]) {
-        for (int soh = 0; soh < 200; soh++) {
-            BCNV1_SF1B[soh] = (uint8_t *)sdr_malloc(51);
-            int8_t *code = LFSR(51, rev_reg(soh, 8), 0x9F, 8);
-            for (int i = 0; i < 51; i++) {
-                BCNV1_SF1B[soh][i] = (code[i] > 0) ? 0 : 1;
-            }
-            sdr_free(code);
-        }
-    }
     uint8_t SF1[72], SFn[72];
     memcpy(SF1, BCNV1_SF1A[ch->prn-1], 21);
     memcpy(SFn, BCNV1_SF1A[ch->prn-1], 21);
@@ -1902,17 +1918,6 @@ static void decode_B3I(sdr_ch_t *ch)
 // sync I1SD NavIC L1-SPS NAV frame by subframe 1 symbols ([17]) --------------
 static int sync_IRNV1_frame(sdr_ch_t *ch, const uint8_t *syms, int toi)
 {
-    // generate NavIC L1-SPS subframe 1 symbols
-    if (!IRNV1_SF1[0]) {
-        for (int t = 0; t < 400; t++) {
-            IRNV1_SF1[t] = (uint8_t *)sdr_malloc(52);
-            int8_t *code = LFSR(52, rev_reg(t+1, 9), 0x1BF, 9);
-            for (int i = 0; i < 52; i++) {
-                IRNV1_SF1[t][i] = (uint8_t)((code[i] > 0) ? 0 : 1);
-            }
-            sdr_free(code);
-        }
-    }
     uint8_t *SF1 = IRNV1_SF1[toi];
     uint8_t *SFn = IRNV1_SF1[(toi + 1) % 400];
     
