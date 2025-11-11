@@ -60,7 +60,7 @@ static fftwf_plan fftw_plans[MAX_FFTW_PLAN][2] = {{0}}; // FFTW plan buffer
 static int fftw_size[MAX_FFTW_PLAN] = {0}; // FFTW plan sizes
 static int log_lvl = 3;            // log level
 static const char *log_types[] = { // log types
-    "$TIME,", "$POS", "$OBS", "$NAV", "$SAT", "$CH,", "$EPH,", "$LOG,",
+    "$TIME,", "$POS,", "$OBS,", "$NAV,", "$SAT,", "$CH,", "$EPH,", "$LOG,",
     NULL
 };
 static int log_mask[16] = {1, 1, 1, 1, 1, 1, 0, 1}; // log mask
@@ -69,9 +69,12 @@ static char log_buff[MAX_LOG_BUFF]; // log buffer
 static int log_buff_p = 0;        // log buffer pointer
 static pthread_mutex_t log_buff_mtx = PTHREAD_MUTEX_INITIALIZER;
 static const char *fmt_str[] = { // IF data format string
-    "-", "INT8", "INT8X2", "RAW8", "RAW16", "RAW16I", "RAW32", NULL
+    "-", "INT8", "INT8X2", "RAW8", "RAW16", "RAW16I", "RAW32", "IBYTE", "ISHORT",
+    NULL
 };
-static const int fmt_nch[] = {0, 1, 1, 2, 4, 8, 8}; // IF data format # of CH
+static const int fmt_nch[] = { // IF data format # of CH
+    0, 1, 1, 2, 4, 8, 8, 1, 1
+};
 
 // enable escape sequence for Windows console ----------------------------------
 static void enable_console_esc(void)
@@ -187,6 +190,21 @@ void sdr_cpx_mul(const sdr_cpx_t *a, const sdr_cpx_t *b, int N, float s,
          __m256 yd = _mm256_mul_ps(ya, _mm256_permute_ps(yb, 0xB1));
          __m256 ye = _mm256_permute_ps(_mm256_hadd_ps(yc, yd), 0xD8);
          _mm256_storeu_ps((float *)(c + i), _mm256_mul_ps(ye, ys));
+    }
+#elif defined(NEON)
+    float32x4_t scale = vdupq_n_f32(s);
+    
+    for (; i < N - 3; i += 4) {
+        float32x4x2_t va = vld2q_f32((const float32_t *)(a + i));
+        float32x4x2_t vb = vld2q_f32((const float32_t *)(b + i));
+        float32x4_t re = vsubq_f32(vmulq_f32(va.val[0], vb.val[0]),
+            vmulq_f32(va.val[1], vb.val[1]));
+        float32x4_t im = vaddq_f32(vmulq_f32(va.val[0], vb.val[1]),
+            vmulq_f32(va.val[1], vb.val[0]));
+        re = vmulq_f32(re, scale);
+        im = vmulq_f32(im, scale);
+        float32x4x2_t vc = {re, im};
+        vst2q_f32((float32_t *)(c + i), vc);
     }
 #endif
     for ( ; i < N; i++) {
@@ -695,6 +713,7 @@ static void dot_IQ_code(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
     sum_s16(ysumI, (*c)[0])
     sum_s16(ysumQ, (*c)[1])
 #elif defined(NEON)
+#if 0 // human written code
     int16x8_t ysumI = vdupq_n_s16(0);
     int16x8_t ysumQ = vdupq_n_s16(0);
     
@@ -710,6 +729,24 @@ static void dot_IQ_code(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
     }
     sum_s16(ysumI, (*c)[0])
     sum_s16(ysumQ, (*c)[1])
+#else // AI-generated code
+    int32x4_t ysumI = vdupq_n_s32(0);
+    int32x4_t ysumQ = vdupq_n_s32(0); 
+
+    for (; i <= N - 8; i += 8) {
+        int8x8x2_t ydata = vld2_s8((int8_t *)(IQ + i));
+        int8x8x2_t ycode = vld2_s8((int8_t *)(code + i));
+        ysumI = vmlal_s16(ysumI, vmovl_s8(ydata.val[0]), vmovl_s8(ycode.val[0]));
+        ysumQ = vmlal_s16(ysumQ, vmovl_s8(ydata.val[1]), vmovl_s8(ycode.val[1]));
+    }
+    int32_t sumI[4], sumQ[4];
+    vst1q_s32(sumI, ysumI);
+    vst1q_s32(sumQ, ysumQ);
+    for (int j = 0; j < 4; j++) {
+        (*c)[0] += sumI[j];
+        (*c)[1] += sumQ[j];
+    }
+#endif
 #endif
     for ( ; i < N; i++) {
         (*c)[0] += IQ[i].I * code[i].I;
