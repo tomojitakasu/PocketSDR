@@ -1347,7 +1347,7 @@ static int8_t *sec_code_G2CA(int prn, int *N)
 // generate G1OCD secondary code [19] ------------------------------------------
 static int8_t *sec_code_G1OCD(int prn, int *N)
 {
-    *N = (int)sizeof(MC);
+    *N = 2;
     return MC;
 }
 
@@ -2660,9 +2660,6 @@ void sdr_res_code(const int8_t *code, int len_code, double T, double coff,
 void sdr_gen_code_fft(const int8_t *code, int len_code, double T, double coff,
     double fs, int N, int Nz, sdr_cpx_t *code_fft)
 {
-    static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
-    static fftwf_plan plan = NULL;
-    static int N_plan = 0;
     double dx = len_code / T / fs;
     sdr_cpx_t *code_res = sdr_cpx_malloc(N + Nz);
     
@@ -2670,18 +2667,7 @@ void sdr_gen_code_fft(const int8_t *code, int len_code, double T, double coff,
     for (int i = 0; i < N; i++) {
         code_res[i][0] = code[(int)((coff * fs + i) * dx) % len_code];
     }
-    pthread_mutex_lock(&mtx);
-    if (N + Nz != N_plan) {
-        if (plan) {
-            fftwf_destroy_plan(plan);
-        }
-        plan = fftwf_plan_dft_1d(N + Nz, code_res, code_fft, FFTW_FORWARD,
-            FFTW_ESTIMATE);
-        N_plan = N + Nz;
-    }
-    pthread_mutex_unlock(&mtx);
-    
-    fftwf_execute_dft(plan, code_res, code_fft);
+    sdr_cpx_fft(code_res, N + Nz, 0, code_fft);
     
     // complex conjugate
     for (int i = 0; i < N + Nz; i++) {
