@@ -17,6 +17,7 @@
 //  2024-06-10  1.9  add API sdr_ch_stat_req(), sdr_ch_stat_get()
 //  2024-08-26  1.10 support sdr_corr_std(), sdr_corr_fft() API changes
 //  2024-12-30  1.11 support Bump-jump for BOC modulation
+//  2025-11-19  1.12 improve carrier-phase coherency
 //
 #include <ctype.h>
 #include <math.h>
@@ -225,6 +226,7 @@ static void trk_init(sdr_trk_t *trk)
     trk->sec_sync = trk->sec_pol = 0;
     trk->sumP = trk->sumN = trk->sumVE = trk->sumVL = 0.0;
     memset(trk->C, 0, sizeof(sdr_cpx_t) * SDR_MAX_CORR);
+    trk->C0[0] = trk->C0[1] = trk->C1[0] = trk->C1[1] = 0.0;
     memset(trk->P, 0, sizeof(sdr_cpx_t) * SDR_N_HIST);
     memset(trk->sumC, 0, sizeof(double) * SDR_MAX_CORR);
     memset(trk->aveP, 0, sizeof(double) * SDR_MAX_CORR);
@@ -333,10 +335,10 @@ static void sync_sec_code(sdr_ch_t *ch, int N)
 static void FLL(sdr_ch_t *ch)
 {
     if (ch->lock >= 2) {
-        double IP1 = ch->trk->P[SDR_N_HIST-1][0];
-        double QP1 = ch->trk->P[SDR_N_HIST-1][1];
-        double IP2 = ch->trk->P[SDR_N_HIST-2][0];
-        double QP2 = ch->trk->P[SDR_N_HIST-2][1];
+        double IP1 = ch->trk->C[0][0];
+        double QP1 = ch->trk->C[0][1];
+        double IP2 = ch->trk->C0[0];
+        double QP2 = ch->trk->C0[1];
         double dot   = IP1 * IP2 + QP1 * QP2;
         double cross = IP1 * QP2 - QP1 * IP2;
         if (dot != 0.0) {
@@ -345,6 +347,8 @@ static void FLL(sdr_ch_t *ch)
             ch->fd -= B / 0.25 * err_freq / DPI;
         }
     }
+    ch->trk->C0[0] = ch->trk->C[0][0];
+    ch->trk->C0[1] = ch->trk->C[0][1];
 }
 
 // PLL -------------------------------------------------------------------------
@@ -404,7 +408,8 @@ static void bump_jump(sdr_ch_t *ch)
 // update C/N0 -----------------------------------------------------------------
 static void CN0(sdr_ch_t *ch)
 {
-    ch->trk->sumP += SQR(ch->trk->C[0][0]) + SQR(ch->trk->C[0][1]);
+    ch->trk->sumP +=
+        SQR(ch->trk->P[SDR_N_HIST-1][0]) + SQR(ch->trk->P[SDR_N_HIST-1][1]);
     ch->trk->sumN += SQR(ch->trk->C[3][0]) + SQR(ch->trk->C[3][1]);
     if (ch->trk->npos >= 6) {
         ch->trk->sumVE += SQR(ch->trk->C[4][0]) + SQR(ch->trk->C[4][1]);
@@ -496,38 +501,44 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
     ch->adr += ch->fd * tau;        // accumulated Doppler (cyc)
     ch->coff -= ch->fd / ch->fc * tau; // carrier-aided code offset (s) 
     ch->time = time;
+    double phi = ch->fi * tau + ch->adr; // carrier phase
     
     // adjust code offset
     adj_coff(ch);
     
-    // code position (samples) and carrier phase (cyc) 
-    int i = (int)floor(ch->coff * ch->fs);
-    double sub_pos = ch->coff * ch->fs - i; // 0 <= sub_pos < 1.0
-    double phi = ch->fi * tau + ch->adr + fc * i / ch->fs;
-    
-    // mix carrier
-    sdr_mix_carr(buff, ix + i, ch->N, ch->fs, fc, phi, ch->data);
-    
     if (!strcmp(ch->sig, "L6D") || !strcmp(ch->sig, "L6E")) {
-        int j = (int)(sub_pos * SDR_N_CODES); // code bank index
+        int i = (int)floor(ch->coff * ch->fs);
+        int j = (int)((ch->coff * ch->fs - i) * SDR_N_CODES);
+        
+        // mix carrier
+        sdr_mix_carr(buff, ix + i, ch->N, ch->fs, fc, phi + fc * i / ch->fs,
+            ch->data);
         
         // FFT correlator 
         sdr_corr_fft(ch->data, ch->trk->code_fft + j * ch->N, ch->N, ch->corr);
         
         // decode L6 CSK 
         CSK(ch, ch->corr);
+        
+        // add P correlator outputs to history 
+        sdr_add_buff(ch->trk->P, SDR_N_HIST, ch->trk->C[0], sizeof(sdr_cpx_t));
     }
     else {
-        double pos[SDR_MAX_CORR];
-        for (int j = 0; j < ch->trk->npos + ch->trk->nposx; j++) {
-            pos[j] = ch->trk->pos[j] + sub_pos;
-        }
+        sdr_cpx_t C1[2];
+        
+        // mix carrier
+        sdr_mix_carr(buff, ix, ch->N, ch->fs, fc, phi, ch->data);
+        
         // standard correlator
-        sdr_corr_std(ch->data, ch->trk->code, ch->N, pos,
-            ch->trk->npos + ch->trk->nposx, ch->trk->C);
+        sdr_corr_std(ch->data, ch->trk->code, ch->N, ch->coff * ch->fs,
+            ch->trk->pos, ch->trk->npos + ch->trk->nposx, ch->trk->C, C1);
+        
+        for (int i = 0; i < 2; i++) {
+            C1[0][i] = (C1[0][i] + ch->trk->C1[i]) / ch->N;
+            ch->trk->C1[i] = C1[1][i];
+        }
+        sdr_add_buff(ch->trk->P, SDR_N_HIST, C1[0], sizeof(sdr_cpx_t));
     }
-    // add P correlator outputs to history 
-    sdr_add_buff(ch->trk->P, SDR_N_HIST, ch->trk->C[0], sizeof(sdr_cpx_t));
     update_tow(ch, ch->T);
     ch->lock++;
     
