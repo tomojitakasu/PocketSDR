@@ -157,8 +157,10 @@ def inp_opt_new(opt_p=None):
         '1246.000', '1207.140', '1268.520']
     opt = Obj()
     opt.inps = ('RF Frontend', 'IF Data')
-    opt.types = ('Pocket SDR FE',)
-    opt.fmts = ('INT8', 'INT8X2', 'RAW8', 'RAW16', 'RAW32')
+    opt.types = ('Pocket SDR FE', 'USRP (uhd)', 'LimeSDR (lime)',
+        'RTL-SDR (rtlsdr)', 'Pluto-SDR (plutosdr)')
+    opt.fmts = ('INT8', 'INT8X2', 'RAW8', 'RAW16', 'RAW16I', 'RAW32', 'CS8',
+        'CS16')
     opt.IQs = ('IQ', 'I')
     opt.bitss = ('2', '3')
     opt.inp = IntVar()
@@ -174,6 +176,7 @@ def inp_opt_new(opt_p=None):
     opt.str_path = StringVar()
     opt.toff = StringVar()
     opt.tscale = StringVar()
+    opt.dev_opt = StringVar()
     if opt_p != None:
         opt.inp.set(opt_p.inp.get())
         opt.type.set(opt_p.type.get())
@@ -189,6 +192,7 @@ def inp_opt_new(opt_p=None):
         opt.str_path.set(opt_p.str_path.get())
         opt.toff.set(opt_p.toff.get())
         opt.tscale.set(opt_p.tscale.get())
+        opt.dev_opt.set(opt_p.dev_opt.get())
     else:
         opt.type.set(opt.types[0])
         opt.fmt.set(opt.fmts[0])
@@ -265,7 +269,9 @@ def sys_opt_new(opt_p=None):
     opt.thres_cn0_l = StringVar()
     opt.thres_cn0_u = StringVar()
     opt.bump_jump = StringVar()
+    opt.max_acq = StringVar()
     opt.fftw_wisdom_path = StringVar()
+    opt.rcv_options = StringVar()
     if opt_p != None:
         opt.epoch.set(opt_p.epoch.get())
         opt.lag_epoch.set(opt_p.lag_epoch.get())
@@ -281,7 +287,9 @@ def sys_opt_new(opt_p=None):
         opt.thres_cn0_l.set(opt_p.thres_cn0_l.get())
         opt.thres_cn0_u.set(opt_p.thres_cn0_u.get())
         opt.bump_jump.set(opt_p.bump_jump.get())
+        opt.max_acq.set(opt_p.max_acq.get())
         opt.fftw_wisdom_path.set(opt_p.fftw_wisdom_path.get())
+        opt.rcv_options.set(opt_p.rcv_options.get())
     else:
         opt.epoch.set('1.0')
         opt.lag_epoch.set('0.5')
@@ -297,6 +305,7 @@ def sys_opt_new(opt_p=None):
         opt.thres_cn0_l.set('34.0')
         opt.thres_cn0_u.set('30.0')
         opt.bump_jump.set('OFF')
+        opt.max_acq.set('4.0')
     return opt
 
 # save options -----------------------------------------------------------------
@@ -387,23 +396,36 @@ def inp_opt_dlg(root, opt):
     p4.pack(fill=X)
     text = '* Automatically configured if <Path>.tag file exists.'
     ttk.Label(p4, text=text, anchor=N).pack(fill=X)
-    ch_opt_enable_update(opt_new.fmt.get(), p3)
     inp_opt_enable_update(opt_new.inp.get(), p1, p2, p3, p4)
+    ch_opt_enable_update(opt_new.fmt.get(), p3)
+    dev_opt_enable_update(opt_new.type.get(), p1)
     btn1.bind('<Button-1>', lambda e: on_inp_select(e, 0, p1, p2, p3, p4))
     btn2.bind('<Button-1>', lambda e: on_inp_select(e, 1, p1, p2, p3, p4))
+    sel1 = p1.winfo_children()[1].winfo_children()[1]
+    sel1.bind('<<ComboboxSelected>>', lambda e: on_dev_select(e, p1))
     root.wait_window(dlg.win)
     return opt_new if dlg.ok else opt
+
+# device type select callback --------------------------------------------------
+def on_dev_select(e, p1):
+    dev = p1.winfo_children()[1].winfo_children()[1].get()
+    dev_opt_enable_update(dev, p1)
 
 # input source select callback -------------------------------------------------
 def on_inp_select(e, sel, p1, p2, p3, p4):
     inp_opt_enable_update(sel, p1, p2, p3, p4)
+    on_dev_select(e, p1)
+
+# update device options enalbe -------------------------------------------------
+def dev_opt_enable_update(dev, p1):
+    ena = dev == 'Pocket SDR FE'
+    config_panel_state(p1.winfo_children()[2], NORMAL if ena else DISABLED)
+    config_panel_state(p1.winfo_children()[3], NORMAL if ena else DISABLED)
 
 # update input options enable --------------------------------------------------
 def inp_opt_enable_update(sel, p1, p2, p3, p4):
     config_panel_state(p1, DISABLED if sel else NORMAL)
     config_panel_state(p2, NORMAL if sel else DISABLED)
-    config_panel_state(p3, NORMAL if sel else DISABLED)
-    config_panel_state(p4, NORMAL if sel else DISABLED)
     if sel:
         fmt = p3.winfo_children()[0].winfo_children()[1].get()
         ch_opt_enable_update(fmt, p3)
@@ -412,7 +434,8 @@ def inp_opt_enable_update(sel, p1, p2, p3, p4):
 def rf_opt_panel_new(parent, opt):
     panel = Frame(parent, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     ttk.Label(panel, text=opt.inps[0], justify=LEFT).pack(fill=X, padx=2, pady=2)
-    sel_panel_new(panel, 'Device Type', sels=opt.types, var=opt.type, width=19)
+    sel_panel_new(panel, 'Device Type', sels=opt.types, var=opt.type,
+        width=19)
     panel1 = Frame(panel, bg=BG_COLOR)
     panel1.pack(fill=X)
     ttk.Label(panel1, text='Device Selection (Blank: Any)'). pack(side=LEFT,
@@ -428,7 +451,7 @@ def if_opt_panel_new(parent, opt):
     panel = Frame(parent, width=300, height=300, bg=BG_COLOR, relief=GROOVE,
         borderwidth=2)
     ttk.Label(panel, text=opt.inps[1]).pack(fill=X, padx=2, pady=2)
-    path_panel_new(panel, 'Path (File: local_path)',
+    path_panel_new(panel, 'Path (file: local_path, addr:port: TCP client)',
         var_path=opt.str_path, types=[('Raw IF Data', '*.bin'), ('All', '*.*')])
     p1 = Frame(panel, bg=BG_COLOR)
     p1.pack(fill=X)
@@ -448,6 +471,8 @@ def ch_opt_panel_new(parent, opt):
     p2 = p1.winfo_children()[1]
     p2.bind('<<ComboboxSelected>>', lambda e: on_fmt_select(e, panel))
     inp_panel_new(panel, 'Sampling Rate (Msps)*', opt.fs)
+    inp_panel_new(panel, 'Device Options  ', opt.dev_opt, width=80,
+        justify=LEFT)
     panel1 = Frame(panel, bg=BG_COLOR)
     panel1.pack(fill=X, pady=(4, 0))
     label = ' RF   LO Freq (MHz)*  I/IQ*   Bits* '
@@ -470,16 +495,14 @@ def on_fmt_select(e, p3):
 
 # update channel options enable ------------------------------------------------
 def ch_opt_enable_update(fmt, p3):
+    fmt_int = ('INT8', 'INT8X2', 'CS8', 'CS16')
     p = p3.winfo_children()
-    p2 = [p[3].winfo_children(), p[4].winfo_children()]
+    p2 = [p[4].winfo_children(), p[5].winfo_children()]
     n = MAX_RFCH // 2
     for i in range(MAX_RFCH):
-        ena = (fmt in ('INT8', 'INT8X2') and i < 1) or \
-            (fmt == 'RAW8' and i < 2) or (fmt == 'RAW16' and i < 4) or \
-            (fmt == 'RAW32' and i < 8)
+        ena = (fmt in fmt_int and i < 1) or (fmt == 'RAW8' and i < 2) or \
+            (fmt == 'RAW16' and i < 4) or (fmt == 'RAW32' and i < 8)
         config_panel_state(p2[i//n][i%n], NORMAL if ena else DISABLED)
-    p1 = p[1].winfo_children()[1]
-    p1.configure(stat=DISABLED if fmt in ('INT8', 'INT8X2') else NORMAL)
 
 # generate RF channel options panel --------------------------------------------
 def rfch_opt_panel_new(parent, ch, opt):
@@ -584,7 +607,8 @@ def sys_opt_dlg(root, opt):
         'FLL Loop Filter Bandwidth Narrow (Hz)',
         'Max Doppler Frequency to Search Signal (Hz)',
         'C/N0 Threshold for Signal Locked (dB-Hz)',
-        'C/N0 Threshold for Signal Lost (dB-Hz)', 'Bump Jump for BOC Modulation')
+        'C/N0 Threshold for Signal Lost (dB-Hz)', 'Bump Jump for BOC Modulation',
+        'Max Code Length for direct acquisition (ms)')
     opt_new = sys_opt_new(opt)
     dlg = modal_dlg_new(root, 420, 540, 'System Options')
     panel1 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
@@ -612,15 +636,20 @@ def sys_opt_dlg(root, opt):
     sel_panel_new(panel2, labels[9], sels=('0.5', '1.0', '2.0', '3.0', '4.0',
         '5.0', '6.0'), var=opt_new.b_fll_n, width=8)
     sel_panel_new(panel2, labels[10], sels=('3000', '5000', '7000', '10000',
-        '20000'), var=opt_new.max_dop, width=8)
+        '15000', '20000'), var=opt_new.max_dop, width=8)
     sel_panel_new(panel2, labels[11], sels=('31.0', '32.0', '33.0', '34.0',
         '35.0', '36.0', '37.0'), var=opt_new.thres_cn0_l, width=8)
     sel_panel_new(panel2, labels[12], sels=('27.0', '28.0', '29.0', '30.0',
         '31.0', '32.0', '33.0'), var=opt_new.thres_cn0_u, width=8)
     sel_panel_new(panel2, labels[13], sels=('OFF', 'ON'), var=opt_new.bump_jump,
         width=8)
+    sel_panel_new(panel2, labels[14], sels=('1.0', '2.0', '5.0', '10.0', '20.0'),
+        var=opt_new.max_acq, width=8)
     path_panel_new(dlg.panel, 'FFTW Wisdom Path', out=0,
         var_path=opt_new.fftw_wisdom_path)
+    ttk.Label(dlg.panel, text='Receiver Options').pack(fill=X, padx=10, pady=4)
+    inp_panel_new(dlg.panel, '', opt_new.rcv_options, width=100, justify=LEFT).pack(
+        padx=(0, 4), pady=(2, 6))
     root.wait_window(dlg.win)
     return opt_new if dlg.ok else opt
 

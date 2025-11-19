@@ -8,8 +8,10 @@
 #  History:
 #  2024-06-29  1.0  ver.0.13
 #  2025-03-19  1.1  ver.0.14
+#  2025-11-30  1.2  ver.0.15
 #
 import sys, os, platform, time, re
+from collections import deque
 from math import *
 from ctypes import *
 import numpy as np
@@ -83,7 +85,11 @@ except:
 
 # global variables -------------------------------------------------------------
 rcv_body = None
-sol_log, rcv_log, rcv_log_filt = [], [], ''
+sol_log = deque(maxlen=MAX_SOLLOG)
+rcv_log = deque(maxlen=MAX_RCVLOG)
+rcv_log_filt = ''
+_RCV_LOG_BUFF_SIZE = 262144
+_rcv_log_buff = create_string_buffer(_RCV_LOG_BUFF_SIZE)
 root_resize = 0
 
 # general object class ---------------------------------------------------------
@@ -115,12 +121,14 @@ def str2time(str):
 def rcv_open(sys_opt, inp_opt, out_opt, sig_opt):
     set_rcv_opts(sys_opt)
     set_log_mask(out_opt)
-    if inp_opt.inp.get() == 0:
+    if inp_opt.inp.get() == 1:
+        return rcv_open_file(sys_opt, inp_opt, out_opt, sig_opt)
+    elif inp_opt.type.get() == 'Pocket SDR FE':
         return rcv_open_dev(sys_opt, inp_opt, out_opt, sig_opt)
     else:
-        return rcv_open_file(sys_opt, inp_opt, out_opt, sig_opt)
+        return rcv_open_sdev(sys_opt, inp_opt, out_opt, sig_opt)
 
-# start receiver by device -----------------------------------------------------
+# start receiver by Pocket SDR FE ----------------------------------------------
 def rcv_open_dev(sys_opt, inp_opt, out_opt, sig_opt):
     sigs, prns = get_sig_opt(sig_opt)
     s = inp_opt.dev.get().split(',')
@@ -130,20 +138,46 @@ def rcv_open_dev(sys_opt, inp_opt, out_opt, sig_opt):
     paths = [out_opt.path[i].get() if out_opt.path_ena[i].get() else ''
         for i in range(4)]
     opt = ''
-    opt += ' -RFCH ' + sig_opt.sig_rfch.get()
+    opt += ' -RFCH ' + sig_opt.sig_rfch.get() + ' ' + sys_opt.rcv_options.get()
+    opt += ' ' + inp_opt.dev_opt.get()
     c_sigs = (c_char_p * len(sigs))(*[s.encode() for s in sigs])
     c_prns = (c_int32 * len(sigs))(*prns)
     c_paths = (c_char_p * 4)(*[s.encode() for s in paths])
     libsdr.sdr_rcv_open_dev.argtypes = [POINTER(c_char_p), POINTER(c_int32),
         c_int32, c_int32, c_int32, c_char_p, POINTER(c_char_p), c_char_p]
     libsdr.sdr_rcv_open_dev.restype = c_void_p
+    info = '(bus/port=%d/%d, conf=%s)' % (bus, port, conf_file)
     return libsdr.sdr_rcv_open_dev(c_sigs, c_prns, len(sigs), bus, port,
-        conf_file.encode(), c_paths, opt.encode())
+        conf_file.encode(), c_paths, opt.encode()), info
+
+# start receiver by SoapySDR device --------------------------------------------
+def rcv_open_sdev(sys_opt, inp_opt, out_opt, sig_opt):
+    sigs, prns = get_sig_opt(sig_opt)
+    fmt = inp_opt.fmts.index(inp_opt.fmt.get()) + 1
+    driver = re.findall('\\((.*)\\)', inp_opt.type.get())[0]
+    rate = to_float(inp_opt.fs.get()) * 1e6
+    freq = to_float(inp_opt.fo[0].get()) * 1e6
+    paths = [out_opt.path[i].get() if out_opt.path_ena[i].get() else ''
+        for i in range(4)]
+    opt = ''
+    opt += ' -RFCH ' + sig_opt.sig_rfch.get() + ' ' + sys_opt.rcv_options.get()
+    opt += ' ' + inp_opt.dev_opt.get()
+    c_sigs = (c_char_p * len(sigs))(*[s.encode() for s in sigs])
+    c_prns = (c_int32 * len(sigs))(*prns)
+    c_paths = (c_char_p * 4)(*[s.encode() for s in paths])
+    libsdr.sdr_rcv_open_sdev.argtypes = [POINTER(c_char_p), POINTER(c_int32),
+        c_int32, c_char_p, c_int32, c_double, c_double, POINTER(c_char_p),
+        c_char_p]
+    libsdr.sdr_rcv_open_sdev.restype = c_void_p
+    info = '(driver=%s, rate=%.3fMsps, freq=%.3fMHz)' % (
+        driver, rate * 1e-6, freq * 1e-6)
+    return libsdr.sdr_rcv_open_sdev(c_sigs, c_prns, len(sigs), driver.encode(),
+        fmt, rate, freq, c_paths, opt.encode()), info
 
 # start receiver by file -------------------------------------------------------
 def rcv_open_file(sys_opt, inp_opt, out_opt, sig_opt):
     sigs, prns = get_sig_opt(sig_opt)
-    fmt = inp_opt.fmts.index(inp_opt.fmt.get())
+    fmt = inp_opt.fmts.index(inp_opt.fmt.get()) + 1
     fs = to_float(inp_opt.fs.get()) * 1e6
     fo = [to_float(inp_opt.fo[i].get()) * 1e6 for i in range(8)]
     IQ = [1 if inp_opt.IQ[i].get() == 'I' else 2 for i in range(8)]
@@ -160,7 +194,8 @@ def rcv_open_file(sys_opt, inp_opt, out_opt, sig_opt):
     c_bits = (c_int32 * 8)(*bits)
     c_paths = (c_char_p * 4)(*[s.encode() for s in paths])
     opt = ''
-    opt += ' -RFCH ' + sig_opt.sig_rfch.get()
+    opt += ' -RFCH ' + sig_opt.sig_rfch.get() + ' ' + sys_opt.rcv_options.get()
+    opt += ' ' + inp_opt.dev_opt.get()
     libsdr.sdr_func_init.argtypes = (c_char_p,)
     libsdr.sdr_func_init(sys_opt.fftw_wisdom_path.get().encode())
     libsdr.sdr_rcv_open_file.argtypes = (POINTER(c_char_p), POINTER(c_int32),
@@ -168,8 +203,10 @@ def rcv_open_file(sys_opt, inp_opt, out_opt, sig_opt):
         POINTER(c_int32), c_double, c_double, c_char_p, POINTER(c_char_p),
         c_char_p)
     libsdr.sdr_rcv_open_file.restype = c_void_p
+    info = '(path=%s, toff=%s, tscale=%s)' % (inp_opt.str_path.get(),
+        inp_opt.toff.get(), inp_opt.tscale.get())
     return libsdr.sdr_rcv_open_file(c_sigs, c_prns, len(sigs), fmt, fs, c_fo,
-        c_IQ, c_bits, toff, tscale, path.encode(), c_paths, opt.encode())
+        c_IQ, c_bits, toff, tscale, path.encode(), c_paths, opt.encode()), info
 
 # get signal options -----------------------------------------------------------
 def get_sig_opt(opt):
@@ -243,6 +280,7 @@ def set_rcv_opts(sys_opt):
     libsdr.sdr_rcv_setopt('thres_cn0_l'.encode(), float(sys_opt.thres_cn0_l.get()))
     libsdr.sdr_rcv_setopt('thres_cn0_u'.encode(), float(sys_opt.thres_cn0_u.get()))
     libsdr.sdr_rcv_setopt('bump_jump'.encode(), float(sys_opt.bump_jump.get() == 'ON'))
+    libsdr.sdr_rcv_setopt('max_acq'.encode(), float(sys_opt.max_acq.get()))
 
 # set log mask -----------------------------------------------------------------
 def set_log_mask(out_opt):
@@ -271,11 +309,11 @@ def get_str_stat(rcv):
     return stat
 
 # get receiver channel status --------------------------------------------------
-def get_ch_stat(rcv, sys, all=0, min_lock=2.0, rfch=0):
+def get_ch_stat(rcv, sys, chno=0, min_lock=2.0, rfch=0, opt=0):
     libsdr.sdr_rcv_ch_stat.argtypes = (c_void_p, c_char_p, c_int32, c_double,
-        c_int32)
+        c_int32, c_int32)
     libsdr.sdr_rcv_ch_stat.restype = c_char_p
-    stat = libsdr.sdr_rcv_ch_stat(rcv, sys.encode(), all, min_lock, rfch)
+    stat = libsdr.sdr_rcv_ch_stat(rcv, sys.encode(), chno, min_lock, rfch, opt)
     return stat.decode().splitlines()
 
 # get signal status ------------------------------------------------------------
@@ -290,8 +328,8 @@ def get_sig_stat(rcv, sys, sort=0):
     sig_stat = sorted(sig_stat)
     sat = [s[2] for s in sig_stat]
     sig = [s[3] for s in sig_stat]
-    cn0  = [s[4] for s in sig_stat]
-    prn  = [s[5] for s in sig_stat]
+    cn0 = [s[4] for s in sig_stat]
+    prn = [s[5] for s in sig_stat]
     return sorted(set(sat), key=sat.index), sat, sig, cn0, prn
 
 # get satellite status ---------------------------------------------------------
@@ -312,13 +350,14 @@ def get_sat_stat(rcv, sats):
 
 # get RF channel status -------------------------------------------------------
 def get_rfch_stat(rcv, ch):
-    stat = np.zeros(6, dtype='float64')
+    stat = np.zeros(7, dtype='float64')
     libsdr.sdr_rcv_rfch_stat.argtypes = (c_void_p, c_int32,
         ctypeslib.ndpointer('float64'))
     if not libsdr.sdr_rcv_rfch_stat(rcv, ch, stat):
-        return 0, 0, 24.0, 0.0, 0, 0
+        return 0, 0, 24.0, 0.0, 0, 0, 0.0
     return int(stat[0]), int(stat[1]), stat[2] / 1e6, stat[3] / 1e6, \
-        int(stat[4]), int(stat[5]) # dev, fmt, fs (MHz), fo (MHz), IQ, bits
+        int(stat[4]), int(stat[5]), stat[6]
+    # dev, fmt, fs (MHz), fo (MHz), IQ, bits, std-dev
 
 # get RF channel PSD -----------------------------------------------------------
 def get_rfch_psd(rcv, ch, tave):
@@ -416,16 +455,16 @@ def sat_color(sat, sel=0):
 
 # update receiver log ---------------------------------------------------------
 def update_rcv_log():
-    global rcv_log, rcv_log_filt
-    buff_size = 262144
-    buff = create_string_buffer(buff_size)
+    global rcv_log, rcv_log_filt, _rcv_log_buff, _RCV_LOG_BUFF_SIZE
     libsdr.sdr_get_log.argtypes = (POINTER(c_char), c_int32)
-    size = libsdr.sdr_get_log(buff, buff_size)
-    for log in buff.value.decode().splitlines():
+    size = libsdr.sdr_get_log(_rcv_log_buff, _RCV_LOG_BUFF_SIZE)
+    if size <= 0:
+        return
+    # decode only the valid bytes returned to avoid scanning large buffers
+    data = _rcv_log_buff.raw[:size].decode(errors='ignore')
+    for log in data.splitlines():
         if len(log) > 0 and filt_log(rcv_log_filt, log):
             rcv_log.append(log)
-    if len(rcv_log) > MAX_RCVLOG:
-        rcv_log = rcv_log[-MAX_RCVLOG:]
     return 
 
 # update solution log ----------------------------------------------------------
@@ -441,8 +480,6 @@ def update_sol_log():
     pos[1] *= D2R
     nsat = [int(s) for s in sol[5].split('/')]
     sol_log.append([time, pos, nsat])
-    if len(sol_log) > MAX_SOLLOG:
-        sol_log = sol_log[-MAX_SOLLOG:]
 
 # filter log -------------------------------------------------------------------
 def filt_log(filt, log):
@@ -735,7 +772,7 @@ def on_filt_select(e, p):
     ch = p.box1.get()
     val1 = p.box4.get()
     val2 = p.box5.get()
-    dev, fmt, fs, fo, IQ, bits = get_rfch_stat(rcv_body, int(ch))
+    dev, fmt, fs, fo, IQ, bits, std = get_rfch_stat(rcv_body, int(ch))
     if ch == '1-4' or ch == '5-8' or val1 == '-' or val2 == '-' or IQ != 2:
         return
     set_rfch_filt(rcv_body, int(ch), float(val2), 0.0, val1 == '3rd')
@@ -777,12 +814,12 @@ def update_rfch_page(p):
         bw, freq, order = get_rfch_filt(rcv_body, int(ch))
         p.box4.set('-' if bw < 0 else '3rd' if order else '5th')
         p.box5.set('-' if bw < 0 else '%.1f' % (bw))
-    dev, fmt, fs, fo, IQ, bits = get_rfch_stat(rcv_body, 1)
+    dev, fmt, fs, fo, IQ, bits, std = get_rfch_stat(rcv_body, 1)
     p.txt1.configure(text='F_S: %.6f MHz' % (fs))
 
 # update PSD plot --------------------------------------------------------------
 def update_psd_plot(p, ch, tave):
-    dev, fmt, fs, fo, IQ, bits = get_rfch_stat(rcv_body, ch)
+    dev, fmt, fs, fo, IQ, bits, std = get_rfch_stat(rcv_body, ch)
     psd = get_rfch_psd(rcv_body, ch, tave)
     f = np.linspace(fo, fo + fs / 2, len(psd)) if IQ == 1 else \
         np.linspace(fo - fs / 2, fo + fs / 2, len(psd))
@@ -801,10 +838,10 @@ def update_psd_plot(p, ch, tave):
     plot_sig_freq(p, p.xl, 16)
     plt.plot_text(p, p.xl[0] + 10 / xs, p.yl[1] - 8 / ys, 'CH%d' % (ch),
         font=get_font(1, 'bold'), anchor=NW)
-    plt.plot_text(p, fo + 12 / xs, p.yl[0] + 16 / ys, '%.6f MHz' % (fo),
-        anchor=W)
-    plt.plot_text(p, p.xl[1] - 10 / xs, p.yl[0] + 16 / ys,
-        '%s (%d bits)' % ('I' if IQ == 1 else 'IQ', bits), anchor=E)
+    plt.plot_text(p, fo - 12 / xs, p.yl[0] + 16 / ys, '%.6f MHz' % (fo),
+        anchor=E)
+    text = '%s (%d bits, Std %.1f)' % ('I' if IQ == 1 else 'IQ', bits, std)
+    plt.plot_text(p, p.xl[1] - 10 / xs, p.yl[0] + 16 / ys, text, anchor=E)
 
 # update signal frequency plot -------------------------------------------------
 def update_freq_plot(p):
@@ -812,7 +849,13 @@ def update_freq_plot(p):
         plt.plot_clear(p[i])
         plt.plot_axis(p[i])
         for ch in range(1, 9):
-            dev, fmt, fs, fo, IQ, bits = get_rfch_stat(rcv_body, ch)
+            dev, fmt, fs, fo, IQ, bits, std = get_rfch_stat(rcv_body, ch)
+            xs, ys = plt.plot_scale(p[i])
+            xl = [fo, fo + fs / 2] if IQ == 1 else [fo - fs / 2, fo + fs / 2]
+            yl = [p[i].yl[0] + 5 / ys, p[i].yl[1] - 20 / ys]
+            plt.plot_rect(p[i], xl[0], yl[0], xl[1], yl[1], fill='#F8F8F8')
+        for ch in range(1, 9):
+            dev, fmt, fs, fo, IQ, bits, std = get_rfch_stat(rcv_body, ch)
             xs, ys = plt.plot_scale(p[i])
             xl = [fo, fo + fs / 2] if IQ == 1 else [fo - fs / 2, fo + fs / 2]
             yl = [p[i].yl[0] + 5 / ys, p[i].yl[1] - 20 / ys]
@@ -874,15 +917,16 @@ def plot_mark(p, x, y, color):
 
 # update histograms plot -------------------------------------------------------
 def update_hist_plot(p1, p2, ch, tave):
-    dev, fmt, fs, fo, IQ, bits = get_rfch_stat(rcv_body, ch)
+    dev, fmt, fs, fo, IQ, bits, std = get_rfch_stat(rcv_body, ch)
     val, hist1, hist2 = get_rfch_hist(rcv_body, ch, tave)
     plot_hist(p1, bits, val, hist1)
     plot_hist(p2, bits, val, hist2)
 
 # plot histogram ---------------------------------------------------------------
 def plot_hist(p, bits, val, hist):
-    xl = (5, 3, 5, 9, 17, 33, 65, 129, 257)
-    yl = (0.4, 0.4, 0.4, 0.3, 0.2, 0.15, 0.1, 0.1, 0.1)
+    bits = bits if bits <= 3 else 3
+    xl = (5, 3, 5, 9)
+    yl = (0.4, 0.4, 0.4, 0.2)
     xs, ys = plt.plot_scale(p)
     plt.plot_clear(p)
     plt.plot_axis(p, fcolor=None, tcolor=None)
@@ -929,6 +973,10 @@ def bbch_page_new(parent):
     p.scl1.pack(side=RIGHT, fill=Y)
     p.tbl1.configure(yscrollcommand=p.scl1.set)
     p.tbl1.pack(expand=1, fill=BOTH)
+    p.tbl1.tag_configure('idle', foreground=P2_COLOR)
+    p.tbl1.tag_configure('srch', foreground='blue')
+    p.tbl1_cols = ()
+    p.tbl1_last_width = 0
     p.box1.bind('<<ComboboxSelected>>', lambda e: on_bbch_sys_select(e, p))
     p.box2.bind('<<ComboboxSelected>>', lambda e: on_bbch_sys_select(e, p))
     p.tbl1.bind('<<TreeviewSelect>>', lambda e: on_bbch_ch_select(e, p))
@@ -951,7 +999,7 @@ def update_bbch_page(p):
     rfch = p.box1.get()
     sys = p.box2.get()
     state = p.box3.get()
-    stat = get_ch_stat(rcv_body, sys, all=(state == 'ALL'),
+    stat = get_ch_stat(rcv_body, sys, chno=(-1 if state == 'ALL' else 0),
         rfch=(0 if rfch == 'ALL' else int(rfch)))
     w = (40, 22, 36, 52, 32, 68, 38, 70, 82, 62, 84, 44, 48, 36, 34, 32)
     a = 'ecccceeweeeceeee'
@@ -962,22 +1010,38 @@ def update_bbch_page(p):
     buff_use = int(re.split('[:%]', buff)[1])
     srch_ch = int(re.split('[:]', srch)[1])
     p.txt1.configure(foreground='green' if buff_use < 90 else WARN_COLOR)
-    for c in p.tbl1.get_children():
-       p.tbl1.delete(c)
     cols = stat[1].split()
-    p.tbl1.configure(columns=cols)
-    ws = (p.tbl1.winfo_width() - 8) / sum(w)
-    for i in range(len(cols)):
-        p.tbl1.heading(cols[i], text=cols[i])
-        p.tbl1.column(cols[i], width=int(ws * w[i]), anchor=a[i], stretch=0)
+    need_reconf_cols = tuple(cols) != tuple(p.tbl1_cols)
+    cur_width = p.tbl1.winfo_width()
+    ws = (cur_width - 8) / sum(w) if sum(w) else 1
+    if need_reconf_cols:
+        p.tbl1.configure(columns=cols)
+        for i in range(len(cols)):
+            p.tbl1.heading(cols[i], text=cols[i])
+            p.tbl1.column(cols[i], width=int(ws * w[i]), anchor=a[i], stretch=0)
+        p.tbl1_cols = tuple(cols)
+        p.tbl1_last_width = cur_width
+    elif cur_width != p.tbl1_last_width:
+        for i in range(len(cols)):
+            p.tbl1.column(cols[i], width=int(ws * w[i]))
+        p.tbl1_last_width = cur_width
+
+    new_ids = set()
     for s in stat[2:]:
         vals = s.split()
         vals[7] = bar_cn0(float(vals[6]), int(ws * w[7]))
         tag = 'idle' if float(vals[5]) == 0.0 else ''
         tag = 'srch' if int(vals[0]) == srch_ch else tag
-        p.tbl1.insert('', END, iid=vals[0], values=vals, tags=tag)
-    p.tbl1.tag_configure('idle', foreground=P2_COLOR)
-    p.tbl1.tag_configure('srch', foreground='blue')
+        iid = vals[0]
+        new_ids.add(iid)
+        if p.tbl1.exists(iid):
+            p.tbl1.item(iid, values=vals, tags=tag)
+        else:
+            p.tbl1.insert('', END, iid=iid, values=vals, tags=tag)
+    
+    for iid in list(p.tbl1.get_children()):
+        if iid not in new_ids:
+            p.tbl1.delete(iid)
 
 # C/N0 bar ---------------------------------------------------------------------
 def bar_cn0(cn0, width):
@@ -1069,7 +1133,7 @@ def update_corr_page(p):
     
 # update correlator channel selection ------------------------------------------
 def update_corr_ch_sel(p):
-    chs = [s.split()[0] for s in get_ch_stat(rcv_body, 'ALL', 0, 0.0)[2:]]
+    chs = [s.split()[0] for s in get_ch_stat(rcv_body, 'ALL')[2:]]
     p.box1.configure(values=chs, height=min([len(chs), 32]))
     if len(chs) > 0 and not p.box1.get() in chs:
         p.box1.set(chs[0])
@@ -1079,18 +1143,22 @@ def update_corr_ch_sel(p):
 
 # update correlator text -------------------------------------------------------
 def update_corr_text(p, ch, time):
-    for s in get_ch_stat(rcv_body, 'ALL', 0, 0.0)[2:]:
-        ss = s.split()
-        if int(ss[0]) != ch: continue
-        text = 'SAT: %s  SIG: %s  PRN: %s  LOCK: %s s' % (ss[2], ss[3], ss[4],
-            ss[5])
-        p.txt1.configure(text=text)
-        xs, ys = plt.plot_scale(p.plt3)
-        text = ('C/N0: %s dB-Hz  COFF: %s ms  DOP: %s Hz  ADR: %s cyc  SYNC: %s' +
-            '  #NAV: %s') % (ss[6], ss[8], ss[9], ss[10], ss[11], ss[12])
-        plt.plot_text(p.plt3, p.plt3.xl[0] + 12 / xs, p.plt3.yl[1] - 15 / ys,
-            text, anchor=W)
-        return
+    s = get_ch_stat(rcv_body, 'ALL', chno=int(ch), opt=1)[2:]
+    if not s: return
+    ss = s[0].split()
+    text = 'SAT: %s  SIG: %s  PRN: %s  LOCK: %s s' % (ss[2], ss[3], ss[4],
+        ss[5])
+    p.txt1.configure(text=text)
+    xs, ys = plt.plot_scale(p.plt3)
+    text = ('C/N0: %s dB-Hz  COFF: %s ms  DOP: %s Hz  ADR: %s cyc  SYNC: %s' +
+        '  #NAV: %s') % (ss[6], ss[8], ss[9], ss[10], ss[11], ss[12])
+    plt.plot_text(p.plt3, p.plt3.xl[0] + 12 / xs, p.plt3.yl[1] - 15 / ys,
+        text, anchor=W)
+    text = ('ERR_P: %7s cyc  ERR_C: %7s m  NAV: %2s-%2s-%2s  WEEK: %4s  TOW: %6s') % (
+        ss[16], ss[17], ss[19], ss[20], ss[21], ss[22],
+        ss[23] if int(ss[24]) else '------')
+    plt.plot_text(p.plt3, p.plt3.xl[0] + 12 / xs, p.plt3.yl[0] + 15 / ys,
+        text, anchor=W)
 
 # update correlator plot 1 -----------------------------------------------------
 def update_corr_plot1(p, coff, fs, npos, pos, C, aveC, type, rng):
@@ -1265,7 +1333,7 @@ def on_sol_change(e, p):
 def on_sol_clear_push(e, p):
     global sol_log
     p.ref = []
-    sol_log = []
+    sol_log.clear()
     update_sol_page(p)
 
 # solution ref button push callback --------------------------------------------
@@ -1453,17 +1521,11 @@ def on_btn_start_push(bar):
     global rcv_body
     if not rcv_body:
         status_bar_show('')
-        if inp_opt.inp.get() == 0:
-            info = ' (bus/port=%s, conf=%s)' % (inp_opt.dev.get(), \
-                inp_opt.conf_path.get() if inp_opt.conf_ena.get() else '')
-        else:
-            info = ' (path=%s, toff=%s, tscale=%s)' % (inp_opt.str_path.get(),
-                inp_opt.toff.get(), inp_opt.tscale.get())
-        rcv_body = rcv_open(sys_opt, inp_opt, out_opt, sig_opt)
+        rcv_body, info = rcv_open(sys_opt, inp_opt, out_opt, sig_opt)
         if rcv_body == None:
-            status_bar_show('Receiver start error.' + info)
+            status_bar_show('Receiver start error. ' + info)
             return
-        status_bar_show('Receiver started.' + info)
+        status_bar_show('Receiver started. ' + info)
         for i, btn in enumerate(bar.panel.winfo_children()):
             btn.configure(state=NORMAL if i in (1, 6) else DISABLED)
 
@@ -1530,7 +1592,11 @@ def on_pages_timer(note, pages):
     ti = pages_update(note, pages)
     if not rcv_body: ti = UD_CYCLE3
     ts = (int)((time.time() - tt) * 1e3)
-    note.after(ti - ts if ti > ts else 1, lambda: on_pages_timer(note, pages))
+    # Apply backpressure: if processing took longer than the target interval,
+    # schedule the next update after the full interval to avoid event backlog.
+    delay = ti - ts if ti > ts else ti
+    # enforce a small minimum delay to keep UI responsive
+    note.after(max(10, delay), lambda: on_pages_timer(note, pages))
 
 # root resize callback ---------------------------------------------------------
 def on_root_resize(e):
