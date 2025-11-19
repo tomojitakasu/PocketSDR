@@ -29,6 +29,8 @@
 //  2024-11-21  1.16 add API sdr_tag_read(), sdr_tag_write(), sdr_log_mask(),
 //                   sdr_log_stat()
 //                   modify API sdr_corr_std(), sdr_corr_std_cpx()
+//  2025-11-15  1.17 add API sdr_cpx_fft()
+//                   modify API sdr_tag_read(), sdr_tag_write()
 //
 #include <math.h>
 #include <stdarg.h>
@@ -42,6 +44,11 @@
 #elif defined(NEON)
 #include <arm_neon.h>
 #endif
+#if defined(FFTW)
+#include <fftw3.h>
+#else
+#include "pocketfft.h"
+#endif
 
 // constants and macros --------------------------------------------------------
 #define NTBL          256   // carrier-mixed-data LUT size
@@ -52,7 +59,7 @@
 
 #define SQR(x)        ((x) * (x))
 #define MIN(x, y)     ((x) < (y) ? (x) : (y))
-#define ROUND(x)      floor(x + 0.5)
+#define ROUND(x)      floor((x) + 0.5)
 
 // global variables ------------------------------------------------------------
 static sdr_cpx16_t mix_tbl[NTBL*256] = {{0,0}}; // carrier-mixed-data LUT
@@ -69,8 +76,8 @@ static char log_buff[MAX_LOG_BUFF]; // log buffer
 static int log_buff_p = 0;        // log buffer pointer
 static pthread_mutex_t log_buff_mtx = PTHREAD_MUTEX_INITIALIZER;
 static const char *fmt_str[] = { // IF data format string
-    "-", "INT8", "INT8X2", "RAW8", "RAW16", "RAW16I", "RAW32", "IBYTE", "ISHORT",
-    NULL
+    "-", "INT8", "INT8X2", "RAW8", "RAW16", "RAW16I", "RAW32", "INT16",
+    "INT16X2", NULL
 };
 static const int fmt_nch[] = { // IF data format # of CH
     0, 1, 1, 2, 4, 8, 8, 1, 1
@@ -211,6 +218,38 @@ void sdr_cpx_mul(const sdr_cpx_t *a, const sdr_cpx_t *b, int N, float s,
         c[i][0] = (a[i][0] * b[i][0] - a[i][1] * b[i][1]) * s;
         c[i][1] = (a[i][0] * b[i][1] + a[i][1] * b[i][0]) * s;
     }
+}
+
+// FFT and IFFT of complex -----------------------------------------------------
+int sdr_cpx_fft(sdr_cpx_t *cpx1, int N, int dir, sdr_cpx_t *cpx2)
+{
+    static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
+    int i;
+    
+    if (dir != SDR_FFT_FORWARD && dir != SDR_FFT_BACKWARD) return 0;
+    
+    pthread_mutex_lock(&mtx);
+    
+    for (i = 0; i < MAX_FFTW_PLAN; i++) {
+        if (fftw_size[i] == 0) {
+            sdr_cpx_t *cpx1 = sdr_cpx_malloc(N);
+            sdr_cpx_t *cpx2 = sdr_cpx_malloc(N);
+            fftw_plans[i][0] = fftwf_plan_dft_1d(N, cpx1, cpx2, FFTW_FORWARD,  FFTW_FLAG);
+            fftw_plans[i][1] = fftwf_plan_dft_1d(N, cpx2, cpx1, FFTW_BACKWARD, FFTW_FLAG);
+            fftw_size[i] = N;
+            sdr_cpx_free(cpx1);
+            sdr_cpx_free(cpx2);
+        }
+        if (fftw_size[i] == N) break;
+    }
+    pthread_mutex_unlock(&mtx);
+    
+    if (i >= MAX_FFTW_PLAN) {
+        fprintf(stderr, "fftw plan buffer overflow N=%d\n", N);
+        return 0;
+    }
+    fftwf_execute_dft(fftw_plans[i][dir], cpx1, cpx2);
+    return 1;
 }
 
 //------------------------------------------------------------------------------
@@ -453,8 +492,7 @@ int sdr_tag_read(const char *file, char *prog, gtime_t *time, int *fmt,
     }
     for (int i = fmt_nch[*fmt]; i < SDR_MAX_RFCH; i++) {
         fo[i] = 0.0;
-        IQ[i] = 0;
-        bits[i] = 0;
+        IQ[i] = bits[i] = 0;
     }
     fclose(fp);
     return 1;
@@ -713,7 +751,6 @@ static void dot_IQ_code(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
     sum_s16(ysumI, (*c)[0])
     sum_s16(ysumQ, (*c)[1])
 #elif defined(NEON)
-#if 0 // human written code
     int16x8_t ysumI = vdupq_n_s16(0);
     int16x8_t ysumQ = vdupq_n_s16(0);
     
@@ -729,24 +766,6 @@ static void dot_IQ_code(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
     }
     sum_s16(ysumI, (*c)[0])
     sum_s16(ysumQ, (*c)[1])
-#else // AI-generated code
-    int32x4_t ysumI = vdupq_n_s32(0);
-    int32x4_t ysumQ = vdupq_n_s32(0); 
-
-    for (; i <= N - 8; i += 8) {
-        int8x8x2_t ydata = vld2_s8((int8_t *)(IQ + i));
-        int8x8x2_t ycode = vld2_s8((int8_t *)(code + i));
-        ysumI = vmlal_s16(ysumI, vmovl_s8(ydata.val[0]), vmovl_s8(ycode.val[0]));
-        ysumQ = vmlal_s16(ysumQ, vmovl_s8(ydata.val[1]), vmovl_s8(ycode.val[1]));
-    }
-    int32_t sumI[4], sumQ[4];
-    vst1q_s32(sumI, ysumI);
-    vst1q_s32(sumQ, ysumQ);
-    for (int j = 0; j < 4; j++) {
-        (*c)[0] += sumI[j];
-        (*c)[1] += sumQ[j];
-    }
-#endif
 #endif
     for ( ; i < N; i++) {
         (*c)[0] += IQ[i].I * code[i].I;
@@ -765,9 +784,11 @@ static void dot_IQ_code(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
 //      IQ       (I) IF-carrier-mixed IF data as sdr_cpx_16_t array (N x 1)
 //      code     (I) resampled code bank (N x SDR_N_CODES)
 //      N        (I) size of IQ and code
+//      coff     (I) code offset (samples)
 //      pos      (I) correlator shift positions (n x 1) (samples)
 //      n        (I) size of pos (number of correlators)
 //      corr     (O) correlations as sdr_cpx_t array (n x 1)
+//      C        (O) correlations before and after bit transition
 //
 //  return:
 //      none
@@ -778,21 +799,31 @@ static void dot_IQ_code(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
 //      to optimize computation efficiency.
 //
 void sdr_corr_std(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
-    const double *pos, int n, sdr_cpx_t *corr)
+    double coff, const double *pos, int n, sdr_cpx_t *corr, sdr_cpx_t *C)
 {
+    sdr_cpx_t corr1[SDR_MAX_CORR], corr2[SDR_MAX_CORR];
+    float dot_EPL = 0.0, sign;
+    
     for (int i = 0; i < n; i++) {
-        int j = (int)floor(pos[i]), k = (int)((pos[i] - j) * SDR_N_CODES);
-        if (j > 0) {
-            int M = N - j;
-            dot_IQ_code(IQ + j, code + k * N, M, 1.0f / M, corr + i);
-        }
-        else if (j < 0) {
-            int M = N + j;
-            dot_IQ_code(IQ, code + k * N - j, M, 1.0f / M, corr + i);
-        }
-        else {
-            dot_IQ_code(IQ, code + k * N, N, 1.0f / N, corr + i);
-        }
+        double p = coff + pos[i];
+        int j = (int)floor(p), k = (int)((p - j) * SDR_N_CODES);
+        if (j < 0) j += N; else if (j >= N) j -= N;
+        dot_IQ_code(IQ, code + k * N + N - j, j, 1.0, corr1 + i);
+        dot_IQ_code(IQ + j, code + k * N, N - j, 1.0, corr2 + i);
+    }
+    // detect polarity flip
+    for (int i = 0; i < 3; i++) {
+        dot_EPL += corr1[i][0] * corr2[i][0] + corr1[i][1] * corr2[i][1];
+    }
+    sign = dot_EPL < 0.0 ? -1.0 : 1.0;
+    
+    for (int i = 0; i < n; i++) {
+        corr[i][0] = (corr1[i][0] + sign * corr2[i][0]) / N;
+        corr[i][1] = (corr1[i][1] + sign * corr2[i][1]) / N;
+    }
+    for (int i = 0; i < 2; i++) {
+        C[0][i] = corr1[0][i];
+        C[1][i] = corr2[0][i];
     }
 }
 
@@ -801,42 +832,14 @@ void sdr_corr_std_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N,
     double fs, double fc, double phi, const float *code, const double *pos,
     int n, sdr_cpx_t *corr)
 {
+    sdr_cpx_t C[2];
     sdr_cpx16_t *IQ = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N * 2);
     mix_carr_cpx(buff, len_buff, ix, N, fs, fc, phi, IQ);
     for (int i = 0; i < N; i++) {
         IQ[N+i].I = IQ[N+i].Q = (int8_t)code[i];
     }
-    sdr_corr_std(IQ, IQ + N, N, pos, n, corr);
+    sdr_corr_std(IQ, IQ + N, N, 0.0, pos, n, corr, C);
     sdr_free(IQ);
-}
-
-// get FFTW plan ---------------------------------------------------------------
-static int get_fftw_plan(int N, fftwf_plan *plan)
-{
-    static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
-    
-    pthread_mutex_lock(&mtx);
-    
-    for (int i = 0; i < MAX_FFTW_PLAN; i++) {
-        if (fftw_size[i] == 0) {
-            sdr_cpx_t *cpx1 = sdr_cpx_malloc(N);
-            sdr_cpx_t *cpx2 = sdr_cpx_malloc(N);
-            fftw_plans[i][0] = fftwf_plan_dft_1d(N, cpx1, cpx2, FFTW_FORWARD,  FFTW_FLAG);
-            fftw_plans[i][1] = fftwf_plan_dft_1d(N, cpx2, cpx1, FFTW_BACKWARD, FFTW_FLAG);
-            fftw_size[i] = N;
-            sdr_cpx_free(cpx1);
-            sdr_cpx_free(cpx2);
-        }
-        if (fftw_size[i] == N) {
-            plan[0] = fftw_plans[i][0];
-            plan[1] = fftw_plans[i][1];
-            pthread_mutex_unlock(&mtx);
-            return 1;
-        }
-    }
-    fprintf(stderr, "fftw plan buffer overflow N=%d\n", N);
-    pthread_mutex_unlock(&mtx);
-    return 0;
 }
 
 //------------------------------------------------------------------------------
@@ -856,19 +859,16 @@ static int get_fftw_plan(int N, fftwf_plan *plan)
 void sdr_corr_fft(const sdr_cpx16_t *IQ, const sdr_cpx_t *code_fft, int N,
     sdr_cpx_t *corr)
 {
-    fftwf_plan plan[2];
-    
-    if (!get_fftw_plan(N, plan)) return;
     sdr_cpx_t *cpx = sdr_cpx_malloc(N * 2);
     for (int i = 0; i < N; i++) {
         cpx[i][0] = IQ[i].I * SDR_CSCALE;
         cpx[i][1] = IQ[i].Q * SDR_CSCALE;
     }
     // ifft(fft(data) * code_fft) / N^2 
-    fftwf_execute_dft(plan[0], cpx, cpx + N);
-    sdr_cpx_mul(cpx + N, code_fft, N, 1.0f / N / N, cpx);
-    fftwf_execute_dft(plan[1], cpx, corr);
-    
+    if (sdr_cpx_fft(cpx, N, SDR_FFT_FORWARD, cpx + N)) {
+        sdr_cpx_mul(cpx + N, code_fft, N, 1.0f / N / N, cpx);
+        (void)sdr_cpx_fft(cpx, N, SDR_FFT_BACKWARD, corr);
+    }
     sdr_cpx_free(cpx);
 }
 
@@ -912,10 +912,6 @@ static float hann_window(int N, float *w)
 void sdr_psd_cpx(const sdr_cpx_t *buff, int len_buff, int N, double fs, int IQ,
     float *psd)
 {
-    fftwf_plan plan[2];
-    
-    if (!get_fftw_plan(N, plan)) return;
-    
     float *p = (float *)sdr_malloc(sizeof(float) * N);
     float *w = (float *)sdr_malloc(sizeof(float) * N);
     sdr_cpx_t *cpx1 = sdr_cpx_malloc(N);
@@ -930,7 +926,7 @@ void sdr_psd_cpx(const sdr_cpx_t *buff, int len_buff, int N, double fs, int IQ,
             cpx1[j][0] = buff[N*i+j][0] * w[j];
             cpx1[j][1] = buff[N*i+j][1] * w[j];
         }
-        fftwf_execute_dft(plan[0], cpx1, cpx2);
+        if (!sdr_cpx_fft(cpx1, N, SDR_FFT_FORWARD, cpx2)) break;
         for (int j = 0; j < N; j++) {
             p[j] += SQR(cpx2[j][0]) + SQR(cpx2[j][1]);
         }
