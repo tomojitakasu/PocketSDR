@@ -71,20 +71,21 @@
 #define GPST_BDT    14.0      // GPST - BDT (s)
 #define GPST_UTC    18.0      // GPST - UTC (s) (2017-1-1 ~ )
 #define TOFF_L1CA   0.160     // time offset (s) L1CA
-#define TOFF_L1CA_S 1.084     // time offset (s) L1CA SBAS
-#define TOFF_L1CD  18.511     // time offset (s) L1CD
-#define TOFF_L1CP  17.991     // time offset (s) L1CP
-#define TOFF_L2CM   0.861     // time offset (s) L2CM
+#define TOFF_L1CA_S 1.088     // time offset (s) L1CA SBAS
+#define TOFF_L1CD  18.520     // time offset (s) L1CD
+#define TOFF_L1CP  18.000     // time offset (s) L1CP
+#define TOFF_L2CM   0.880     // time offset (s) L2CM
 #define TOFF_L5I    0.440     // time offset (s) L5I
-#define TOFF_L5Q    0.440     // time offset (s) L5Q ?
-#define TOFF_L5I_S  1.088     // time offset (s) L5I SBAS
-#define TOFF_L6DE   1.0175    // time offset (s) L6D/E
+#define TOFF_L5Q    0.440     // time offset (s) L5Q
+#define TOFF_L5I_S  1.092     // time offset (s) L5I SBAS (BDSBAS)
+#define TOFF_L5SI   1.088     // time offset (s) L5SI
+#define TOFF_L6DE   1.0165    // time offset (s) L6D/E
 #define TOFF_G1CA   2.000     // time offset (s) G1CA
-#define TOFF_G1OCD  2.207     // time offset (s) G1OCD
+#define TOFF_G1OCD  2.208     // time offset (s) G1OCD
 #define TOFF_G3OCD  0.340     // time offset (s) G3OCD
 #define TOFF_G3OCP  0.340     // time offset (s) G3OCP
-#define TOFF_E1B    2.037     // time offset (s) E1B
-#define TOFF_E1C    0.897     // time offset (s) E1C
+#define TOFF_E1B    2.040     // time offset (s) E1B
+#define TOFF_E1C    0.900     // time offset (s) E1C
 #define TOFF_E5AI  10.240     // time offset (s) E5AI
 #define TOFF_E5AQ   0.900     // time offset (s) E5AQ
 #define TOFF_E5BI   2.040     // time offset (s) E5BI
@@ -93,8 +94,8 @@
 #define TOFF_E6C    0.900     // time offset (s) E6C
 #define TOFF_B1I_D1 6.220     // time offset (s) B1I D1
 #define TOFF_B1I_D2 0.622     // time offset (s) B1I D2
-#define TOFF_B1CD  18.711     // time offset (s) B1CD
-#define TOFF_B1CP  13.991     // time offset (s) B1CP
+#define TOFF_B1CD  18.720     // time offset (s) B1CD
+#define TOFF_B1CP  14.000     // time offset (s) B1CP
 #define TOFF_B2AD   3.120     // time offset (s) B2AD
 #define TOFF_B2AP   0.900     // time offset (s) B2AP
 #define TOFF_B2BI   1.016     // time offset (s) B2BI
@@ -385,7 +386,8 @@ static int sync_SBAS_msgs(const uint8_t *bits, int N)
 // decode SBAS message ---------------------------------------------------------
 static void decode_SBAS_msgs(sdr_ch_t *ch, const uint8_t *bits, int rev)
 {
-    double toff = !strcmp(ch->sig, "L1CA") ? TOFF_L1CA_S : TOFF_L5I_S;
+    double toff = !strcmp(ch->sig, "L1CA") || !strcmp(ch->sig, "L1S") ?
+       TOFF_L1CA_S : (!strcmp(ch->sig, "L5SI") ? TOFF_L5SI : TOFF_L5I_S);
     double time = ch->time - toff;
     uint8_t buff[250];
     
@@ -397,7 +399,7 @@ static void decode_SBAS_msgs(sdr_ch_t *ch, const uint8_t *bits, int rev)
         ch->nav->rev = rev;
         ch->tow = (int)(toff / 1e-3);
         ch->tow_v = 2;
-        int off = !strcmp(ch->sig, "L1CA") ? 8 : 6;
+        int off = !strcmp(ch->sig, "L1CA") || !strcmp(ch->sig, "L1S") ? 8 : 6;
         sdr_pack_bits(buff, 250, 0, ch->nav->data); // SBAS message (250 bits)
         ch->nav->type = getbitu(ch->nav->data, off, 6); // SBAS message type
         ch->nav->stat = 1;
