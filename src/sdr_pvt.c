@@ -395,6 +395,9 @@ static void set_obs_idx(sdr_rcv_t *rcv)
             ch->obs_idx = k;
             break;
         }
+        if (sys == SYS_QZS && !strcmp(ch->sig, "L1CB")) {
+            ch->obs_idx = 0; // L1C/A and L1C/B exclusive
+        }
     }
 }
 
@@ -481,10 +484,9 @@ static double gen_prng(gtime_t time, const sdr_ch_t *ch)
         tau -= floor(tau / 0.1) * 0.1;
         if (tau < 0.05) tau += 0.1;
     }
-#if 1 // for debug
-    trace(2, "%s %-5s %3d %4d %10.3f %10.3f %12.9f %12.9f\n", ch->sat, ch->sig,
+    // for debug
+    trace(3, "%s %-5s %3d %4d %10.3f %10.3f %12.9f %12.9f\n", ch->sat, ch->sig,
         ch->prn, ch->week, tow, ch->tow * 1e-3, ch->coff, tau);
-#endif
     return CLIGHT * tau;
 }
 
@@ -523,6 +525,10 @@ static double gen_cphas(const sdr_ch_t *ch, double P)
     else if (!strcmp(ch->sig, "L2CM")) {
         L += (ch->sat[0] == 'J') ? 0.0 : -0.25; // 0 cyc (QZSS), -1/4 cyc (GPS)
     }
+    else if ((!strcmp(ch->sig, "B1I") || !strcmp(ch->sig, "B2I")) &&
+        (ch->prn <= 5 || ch->prn >= 59)) {
+        L += 0.5;
+    }
     return L;
 }
 
@@ -552,7 +558,7 @@ static void update_obs(gtime_t time, obs_t *obs, sdr_ch_t *ch)
     obs->data[i].L[j] = gen_cphas(ch, P);
     obs->data[i].D[j] = ch->fd;
     obs->data[i].SNR[j] = (uint16_t)(ch->cn0 / SNR_UNIT + 0.5);
-    if (ch->lock * ch->T <= 2.0 || fabs(ch->trk->err_phas) > 0.2) {
+    if (ch->lock * ch->T <= 2.0 || fabs(ch->trk->err_phas) > 0.25) {
         obs->data[i].LLI[j] |= 1; // PLL unlock
     }
     if (ch->nav->fsync <= 0 && ch->trk->sec_sync <= 0) {
@@ -820,23 +826,23 @@ static void update_sol(sdr_pvt_t *pvt)
     }
     pvt->nsat = pvt->obs->n;
     
-#if 0 // for debug
+    // for debug
     double pos[3];
     ecef2pos(pvt->sol->rr, pos);
-    trace(2, "%s %12.8f %13.8f %8.2f %d %2d/%2d DTR=%.1f %.1f %.1f (%s)\n",
+    trace(3, "%s %12.8f %13.8f %8.2f %d %2d/%2d DTR=%.1f %.1f %.1f %.1f (%s)\n",
         time_str(pvt->sol->time, 9), pos[0] * R2D, pos[1] * R2D, pos[2],
-        pvt->sol->stat, pvt->sol->ns, pvt->nsat, pvt->sol->dtr[1] * 1e9,
-        pvt->sol->dtr[2] * 1e9, pvt->sol->dtr[3] * 1e9, msg);
+        pvt->sol->stat, pvt->sol->ns, pvt->nsat, pvt->sol->dtr[0] * 1e9,
+        pvt->sol->dtr[1] * 1e9, pvt->sol->dtr[2] * 1e9, pvt->sol->dtr[3] * 1e9,
+        msg);
     for (int i = 0; i < MAXSAT; i++) {
         ssat_t *ssat = pvt->ssat + i;
         if (ssat->azel[1] <= 0.0) continue;
         char sat[16];
         satno2id(i+1, sat);
-        trace(2, "%s %d %4.1f %5.1f %4.1f %12.3f\n", sat, ssat->vs,
+        trace(3, "%s %d %4.1f %5.1f %4.1f %12.3f\n", sat, ssat->vs,
             ssat->snr[0] * SNR_UNIT, ssat->azel[0] * R2D, ssat->azel[1] * R2D,
             ssat->resp[0]);
     }
-#endif
 }
 
 // resolve msec ambiguity in pseudorange ---------------------------------------
