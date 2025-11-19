@@ -1,5 +1,5 @@
 // 
-//  Pocket SDR C Library - GNSS SDR Device Functions.
+//  Pocket SDR C Library - Pocket SDR FE Device Functions.
 //
 //  Author:
 //  T.TAKASU
@@ -17,7 +17,7 @@
 //  2024-05-28  1.6  delete API sdr_dev_info()
 //  2024-06-29  1.7  add API sdr_dev_get_info(), sdr_dev_set_gain(),
 //                   sdr_dev_get_gain()
-//  2025-12-30  1.8  add API sdr_dev_get_filt(), sdr_dev_set_filt()
+//  2024-12-30  1.8  add API sdr_dev_get_filt(), sdr_dev_set_filt()
 //
 #include "pocket_sdr.h"
 #ifdef WIN32
