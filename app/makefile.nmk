@@ -1,0 +1,31 @@
+all:
+	cd .\pocket_scan && nmake /nologo /f makefile.nmk
+	cd .\pocket_conf && nmake /nologo /f makefile.nmk
+	cd .\pocket_dump && nmake /nologo /f makefile.nmk
+	cd .\pocket_acq && nmake /nologo /f makefile.nmk
+	cd .\pocket_trk && nmake /nologo /f makefile.nmk
+	cd .\pocket_snap && nmake /nologo /f makefile.nmk
+	cd .\convbin && nmake /nologo /f makefile.nmk
+	cd .\str2str && nmake /nologo /f makefile.nmk
+
+clean:
+	cd .\pocket_scan && nmake /nologo /f makefile.nmk clean
+	cd .\pocket_conf && nmake /nologo /f makefile.nmk clean
+	cd .\pocket_dump && nmake /nologo /f makefile.nmk clean
+	cd .\pocket_acq && nmake /nologo /f makefile.nmk clean
+	cd .\pocket_trk && nmake /nologo /f makefile.nmk clean
+	cd .\pocket_snap && nmake /nologo /f makefile.nmk clean
+	cd .\convbin && nmake /nologo /f makefile.nmk clean
+	cd .\str2str && nmake /nologo /f makefile.nmk clean
+
+install:
+	cd .\pocket_scan && nmake /nologo /f makefile.nmk install
+	cd .\pocket_conf && nmake /nologo /f makefile.nmk install
+	cd .\pocket_dump && nmake /nologo /f makefile.nmk install
+	cd .\pocket_acq && nmake /nologo /f makefile.nmk install
+	cd .\pocket_trk && nmake /nologo /f makefile.nmk install
+	cd .\pocket_snap && nmake /nologo /f makefile.nmk install
+	cd .\convbin && nmake /nologo /f makefile.nmk install
+	cd .\str2str && nmake /nologo /f makefile.nmk install
+
+
