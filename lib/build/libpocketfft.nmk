@@ -1,0 +1,31 @@
+#
+#  nmake file for PocketFFT (libpocketfft.so, libpocketfft.a)
+#
+
+SRC = ..\pocketfft
+INSTALL = ..\win32_msvc
+CXX = cl
+LD = link
+AR = lib
+
+CXXFLAGS = /nologo /O2 /W3 /MT /EHsc /std:c++17 /I$(SRC) /DPOCKETFFT_CACHE_SIZE=96000
+OBJ = pocketfft_wrap.obj
+TARGET = libpocketfft.so libpocketfft.a
+
+all: $(TARGET)
+
+libpocketfft.so: $(OBJ)
+	$(LD) /NOLOGO /DLL /OUT:$@ $(OBJ)
+
+libpocketfft.a: $(OBJ)
+	$(AR) /NOLOGO /OUT:$@ $(OBJ)
+
+pocketfft_wrap.obj: $(SRC)\pocketfft_wrap.cpp
+	$(CXX) /c $(CXXFLAGS) /Fo$@ $(SRC)\pocketfft_wrap.cpp
+
+clean:
+	-del /Q $(TARGET) *.obj 2>NUL
+
+install:
+	-if not exist $(INSTALL) mkdir $(INSTALL)
+	-for %f in ($(TARGET)) do copy /Y %f $(INSTALL) >NUL
