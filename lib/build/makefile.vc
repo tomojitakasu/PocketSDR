@@ -1,0 +1,27 @@
+#
+#  nmake file for Pocket SDR external shared and static libraries
+#
+
+all:
+	nmake /nologo /f librtk.vc
+	nmake /nologo /f libldpc.vc
+	nmake /nologo /f libfec.vc
+	nmake /nologo /f libpocketfft.vc
+	nmake /nologo /f libsdr.vc
+
+clean:
+	nmake /nologo /f libsdr.vc clean
+	nmake /nologo /f libpocketfft.vc clean
+	nmake /nologo /f libfec.vc clean
+	nmake /nologo /f libldpc.vc clean
+	nmake /nologo /f librtk.vc clean
+
+install:
+	nmake /nologo /f librtk.vc install
+	nmake /nologo /f libldpc.vc install
+	nmake /nologo /f libfec.vc install
+	nmake /nologo /f libpocketfft.vc install
+	nmake /nologo /f libsdr.vc install
+
+
+
