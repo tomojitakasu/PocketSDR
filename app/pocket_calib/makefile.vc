@@ -1,0 +1,25 @@
+SRC = ..\..\src
+LIBDIR = ..\..\lib
+BIN = ..\..\bin
+CC = cl
+LD = link
+
+CFLAGS = /nologo /O2 /W3 /MD /arch:AVX2 /DWIN32 /DWIN32_LEAN_AND_MEAN /D_CRT_SECURE_NO_WARNINGS /DAVX2 /I$(SRC) /I$(LIBDIR)\RTKLIB\src /I$(LIBDIR)\cyusb
+LDLIBS = $(LIBDIR)\win32_msvc\libsdr.lib $(LIBDIR)\win32_msvc\librtk.lib $(LIBDIR)\win32_msvc\libfec.lib $(LIBDIR)\win32_msvc\libldpc.lib $(LIBDIR)\win32_msvc\libpocketfft.lib $(LIBDIR)\cyusb\CyAPI.lib setupapi.lib avrt.lib winmm.lib ws2_32.lib user32.lib legacy_stdio_definitions.lib
+
+TARGET = pocket_calib.exe
+OBJ = pocket_calib.obj
+
+all: $(TARGET)
+
+$(TARGET): $(OBJ)
+	$(LD) /NOLOGO /OUT:$@ $(OBJ) $(LDLIBS)
+
+$(OBJ): pocket_calib.c $(SRC)\pocket_sdr.h
+	$(CC) /c $(CFLAGS) /Fo$@ pocket_calib.c
+
+clean:
+	-del /Q $(TARGET) $(OBJ) *.pdb *.ilk 2>NUL
+
+install:
+	-copy /Y $(TARGET) $(BIN) >NUL
