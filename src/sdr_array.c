@@ -11,7 +11,7 @@
 
 #define DPI         (2.0 * PI)
 #define YAW_STEP    30.0        // yaw search step (deg)
-#define MAX_ITER    20          // max NLSQ iterations per yaw initial
+#define MAX_ITER    15          // max NLSQ iterations per yaw initial
 #define CONV_THRES_A 1e-6       // angle update convergence (rad)
 #define CONV_THRES_B 1e-5       // bias update convergence (m)
 #define MIN_EL      15.0        // elevation mask (deg)
@@ -61,7 +61,7 @@ static double sd_proj(const double *e, const double *b, const double *R,
     const double *Dr, const double *Dp, const double *Dy, double *hrpy)
 {
     double v[3], vr[3], vp[3], vy[3];
-
+    
     matmul("NN", 3, 1, 3, 1.0, R,  b, 0.0, v );
     matmul("NN", 3, 1, 3, 1.0, Dr, b, 0.0, vr);
     matmul("NN", 3, 1, 3, 1.0, Dp, b, 0.0, vp);
@@ -79,7 +79,7 @@ static int build_neq(obsd_t * const *obs, const int *nobs, int nep,
 {
     double pos[3], R[9], Dr[9], Dp[9], Dy[9];
     int nv = 0, nx = 3 + nant - 1, nv_max = MAXOBS * (nant - 1) * nep;
-
+    
     ecef2pos(rr, pos);
     euler_rot(rpy, R, Dr, Dp, Dy);
     
@@ -99,7 +99,7 @@ static int build_neq(obsd_t * const *obs, const int *nobs, int nep,
                 const obsd_t *q = obs[k] + j;
                 double b_body[3], hrpy[3], proj, dr;
                 int a = q->rcv;
-
+                
                 if (q->sat != p->sat || a <= 1 || a > nant) continue;
                 if (q->L[freq] == 0.0) continue;
                 
@@ -127,7 +127,7 @@ static int est_bias_att(obsd_t * const *obs, const int *nobs, int nep,
     int nx = 3 + nant - 1;
     double dx[3+SDR_MAX_RFCH], Q[(3+SDR_MAX_RFCH)*(3+SDR_MAX_RFCH)];
     int iter, nv = 0, ret = 0;
-
+    
     for (iter = 0; iter < MAX_ITER; iter++) {
         
         // build normal equations
@@ -136,11 +136,11 @@ static int est_bias_att(obsd_t * const *obs, const int *nobs, int nep,
         
         // least square estimation
         if (nv < MIN_MEAS || lsq(H, v, nx, nv, dx, Q)) break;
-
+        
         for (int i = 0; i < 3; i++) rpy[i] += dx[i];
         for (int i = 1; i < nant; i++) bias[i] += dx[2+i];
         *rms = sqrt(dot(v, v, nv) / nv);
-
+        
         // test convergence
         if (norm(dx, 3) < CONV_THRES_A && norm(dx + 3, nx - 3) < CONV_THRES_B) {
             rpy[2] -= DPI * floor((rpy[2] + PI) / DPI);
@@ -148,7 +148,7 @@ static int est_bias_att(obsd_t * const *obs, const int *nobs, int nep,
             break;
         }
     }
-#if 0 // for debug
+#if 1 // for debug
     printf("iter=%2d,nv=%d,rms=%.5f\n", iter, nv, *rms);
 #endif
     return ret;
@@ -173,9 +173,9 @@ static int est_bias_att(obsd_t * const *obs, const int *nobs, int nep,
 //
 //  returns: status (1:OK, 0:error)
 //
-int array_calib(obsd_t * const *obs, const int *nobs, int nep, const nav_t *nav,
-    const double *ant_pos, int nant, int freq, const double *rr, double *bias,
-    double *rpy, double *rms)
+int sdr_array_calib(obsd_t * const *obs, const int *nobs, int nep,
+    const nav_t *nav, const double *ant_pos, int nant, int freq,
+    const double *rr, double *bias, double *rpy, double *rms)
 {
     if (nant < 2 || nant > SDR_MAX_RFCH || freq < 0 || freq >= NFREQ ||
         nep <= 0) {
@@ -185,7 +185,7 @@ int array_calib(obsd_t * const *obs, const int *nobs, int nep, const nav_t *nav,
     double *H = mat(nx, nv_max), *v = mat(nv_max, 1);
     
     *rms = 1e9;
-
+    
     for (double y = -PI; y < PI; y += YAW_STEP * D2R) {
         double rpy_s[] = {0.0, 0.0, y}, bias_s[SDR_MAX_RFCH] = {0};
         double rms_s = 0.0;
