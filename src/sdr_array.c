@@ -1,36 +1,26 @@
 //
-//  Pocket SDR C Library - Antenna Array Live Calibration.
-//
-//  Given the array geometry, per-element carrier-phase observations over
-//  some period, and the navigation data, this estimates the per-element
-//  hardware delay (referenced to CH1) and the array attitude (roll, pitch,
-//  yaw) by non-linear least squares on SD carrier-phase only.
-//
-//  The integer ambiguity is resolved by rounding to the nearest cycle, which
-//  is valid as long as element spacing and hardware delays are both within
-//  +/- lambda/2. The yaw initial is searched at 15-deg intervals; roll and
-//  pitch initials are fixed to zero.
+//  Pocket SDR C Library - Antenna Array Functions
 //
 //  Author:
 //  T.TAKASU
 //
 //  History:
 //  2026-04-17  1.0  new
-//  2026-04-17  1.1  SD carrier-phase only (pseudorange dropped)
 //
 #include "pocket_sdr.h"
 
 #define DPI         (2.0 * PI)
 #define YAW_STEP    30.0        // yaw search step (deg)
 #define MAX_ITER    20          // max NLSQ iterations per yaw initial
-#define CONV_THRES  1e-5        // state update convergence (m or rad)
+#define CONV_THRES_A 1e-6       // angle update convergence (rad)
+#define CONV_THRES_B 1e-5       // bias update convergence (m)
 #define MIN_EL      15.0        // elevation mask (deg)
 #define MIN_MEAS    8           // min number of SD measurements
-#define MAX_RMS     0.1         // max RMS of residuals (m)
+#define MAX_RMS     0.03        // max RMS of residuals (m)
 #define ROUND(x)    floor((x) + 0.5)
 
 // rotation matrix and partials by Euler angles (Z-Y-X: yaw,pitch,roll) --------
-static void euler_rot(double *rpy, double *R, double *Dr, double *Dp,
+static void euler_rot(const double *rpy, double *R, double *Dr, double *Dp,
     double *Dy)
 {
     double cr = cos(rpy[0]), sr = sin(rpy[0]), cp = cos(rpy[1]);
@@ -88,7 +78,7 @@ static int build_neq(obsd_t * const *obs, const int *nobs, int nep,
     int freq, double *rpy, const double *bias, double *H, double *v)
 {
     double pos[3], R[9], Dr[9], Dp[9], Dy[9];
-    int nv = 0, nx = 3 + nant - 1, nv_max = MAXSAT * nant * nep;
+    int nv = 0, nx = 3 + nant - 1, nv_max = MAXOBS * (nant - 1) * nep;
 
     ecef2pos(rr, pos);
     euler_rot(rpy, R, Dr, Dp, Dy);
@@ -119,6 +109,7 @@ static int build_neq(obsd_t * const *obs, const int *nobs, int nep,
                 proj = sd_proj(e, b_body, R, Dr, Dp, Dy, hrpy);
                 dr = lam * (q->L[freq] - p->L[freq]) - (bias[a-1] - proj);
                 dr -= lam * ROUND(dr / lam);
+                memset(H + nx * nv, 0, sizeof(double) * nx);
                 for (int l = 0; l < 3; l++) H[nx*nv+l] = -hrpy[l];
                 H[nx*nv+3+(a-2)] = 1.0;
                 v[nv++] = dr;
@@ -131,10 +122,9 @@ static int build_neq(obsd_t * const *obs, const int *nobs, int nep,
 // estimate H/W delays and attitude --------------------------------------------
 static int est_bias_att(obsd_t * const *obs, const int *nobs, int nep,
     const nav_t *nav, const double *rr, const double *ant_pos, int nant,
-    int freq, double *rpy, double *bias, double *rms)
+    int freq, double *rpy, double *bias, double *rms, double *H, double *v)
 {
-    int nx = 3 + nant - 1, nv_max = MAXSAT * nant * nep;
-    double *H = zeros(nx, nv_max), *v = zeros(nv_max, 1);
+    int nx = 3 + nant - 1;
     double dx[3+SDR_MAX_RFCH], Q[(3+SDR_MAX_RFCH)*(3+SDR_MAX_RFCH)];
     int iter, nv = 0, ret = 0;
 
@@ -151,14 +141,16 @@ static int est_bias_att(obsd_t * const *obs, const int *nobs, int nep,
         for (int i = 1; i < nant; i++) bias[i] += dx[2+i];
         *rms = sqrt(dot(v, v, nv) / nv);
 
-        if (norm(dx, nx) < CONV_THRES) { // test convergence
+        // test convergence
+        if (norm(dx, 3) < CONV_THRES_A && norm(dx + 3, nx - 3) < CONV_THRES_B) {
             rpy[2] -= DPI * floor((rpy[2] + PI) / DPI);
             ret = 1;
             break;
         }
     }
-    free(H); free(v);
+#if 0 // for debug
     printf("iter=%2d,nv=%d,rms=%.5f\n", iter, nv, *rms);
+#endif
     return ret;
 }
 
@@ -175,7 +167,7 @@ static int est_bias_att(obsd_t * const *obs, const int *nobs, int nep,
 //      nant     (I)  number of array elements (<= SDR_MAX_RFCH)
 //      freq     (I)  frequency index (0:L1,1:L2,...)
 //      rr       (I)  receiver ECEF position {x,y,z} (m)
-//      bias     (O)  hardware delays wrt CH1 (m) (nant x 1)
+//      bias     (O)  hardware delays wrt CH1 (m) (nant x 1) (bias[0] = 0)
 //      rpy      (O)  attitude {roll,pitch,yaw} (rad)
 //      rms      (O)  RMS of residuals (m)
 //
@@ -185,8 +177,13 @@ int array_calib(obsd_t * const *obs, const int *nobs, int nep, const nav_t *nav,
     const double *ant_pos, int nant, int freq, const double *rr, double *bias,
     double *rpy, double *rms)
 {
-    if (nant < 2 || nant > SDR_MAX_RFCH || nep <= 0) return 0;
-
+    if (nant < 2 || nant > SDR_MAX_RFCH || freq < 0 || freq >= NFREQ ||
+        nep <= 0) {
+        return 0;
+    }
+    int nx = 3 + nant - 1, nv_max = MAXOBS * (nant - 1) * nep;
+    double *H = mat(nx, nv_max), *v = mat(nv_max, 1);
+    
     *rms = 1e9;
 
     for (double y = -PI; y < PI; y += YAW_STEP * D2R) {
@@ -195,7 +192,7 @@ int array_calib(obsd_t * const *obs, const int *nobs, int nep, const nav_t *nav,
         
         // estimate H/W delays and attitude
         if (!est_bias_att(obs, nobs, nep, nav, rr, ant_pos, nant, freq,
-            rpy_s, bias_s, &rms_s)) {
+            rpy_s, bias_s, &rms_s, H, v)) {
             continue;
         }
         if (rms_s < *rms) {
@@ -204,5 +201,6 @@ int array_calib(obsd_t * const *obs, const int *nobs, int nep, const nav_t *nav,
             *rms = rms_s;
         }
     }
+    free(H); free(v);
     return *rms <= MAX_RMS;
 }
