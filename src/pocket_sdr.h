@@ -28,12 +28,11 @@
 #include <string.h>
 #include <stdint.h>
 #include <time.h>
-#include <pthread.h>
 #include "rtklib.h"
 #ifdef WIN32
 #include <windows.h>
-#include <CyAPI.h>
 #else
+#include <pthread.h>
 #include <libusb-1.0/libusb.h>
 #endif // WIN32
 
@@ -44,7 +43,7 @@ extern "C" {
 // constants and macros ------------------------------------------------------
 #define SDR_LIB_NAME   "Pocket SDR" // library name
 #define SDR_LIB_VER    "0.15b"  // library version
-#define SDR_MAX_RFCH   8        // max number of RF channels in a SDR device
+#define SDR_MAX_RFCH   (8+8)    // max number of RF channels in a SDR device
 #define SDR_MAX_REG    11       // max number of registers in a SDR device
 #define SDR_MAX_BUFF   6        // number of raw data buffer
 #define SDR_SIZE_BUFF  (1<<20)  // size of raw data buffer (bytes)
@@ -102,18 +101,29 @@ extern "C" {
 #define SDR_CPX8_Q(x)  ((int8_t)((x)<<0)>>4)
 
 // type definitions ----------------------------------------------------------
-typedef uint8_t sdr_cpx8_t;      // 8(4+4) bits complex type 
-typedef struct {int8_t I, Q;} sdr_cpx16_t; // 16(8+8) bits complex type 
-typedef float sdr_cpx_t[2];      // single precision complex type 
+typedef uint8_t sdr_cpx8_t;      // 8(4+4) bits complex type
+typedef struct {int8_t I, Q;} sdr_cpx16_t; // 16(8+8) bits complex type
+typedef float sdr_cpx_t[2];      // single precision complex type
+typedef struct sdr_lpf_tag sdr_lpf_t; // LPF state (opaque, see sdr_rcv.c)
 
 #ifdef WIN32
-typedef CCyUSBDevice sdr_usb_t; // USB device type 
+typedef HANDLE sdr_thread_t;     // thread type
+typedef SRWLOCK sdr_mutex_t;     // mutex type
+#define SDR_MUTEX_INIT SRWLOCK_INIT // mutex initializer
 #else
+typedef pthread_t sdr_thread_t;
+typedef pthread_mutex_t sdr_mutex_t;
+#define SDR_MUTEX_INIT PTHREAD_MUTEX_INITIALIZER
+#endif
+
 typedef struct {                // USB device type
+#ifdef WIN32
+    void *h;                    // USB device handle
+#else
     libusb_context *ctx;        // USB context
     libusb_device_handle *h;    // USB device handle
-} sdr_usb_t;
 #endif
+} sdr_usb_t;
 
 typedef struct {                // Pocket SDR FE device type
     sdr_usb_t *usb;             // USB device
@@ -123,8 +133,8 @@ typedef struct {                // Pocket SDR FE device type
 #ifndef WIN32
     struct libusb_transfer *transfer[SDR_MAX_BUFF]; // USB transfers
 #endif
-    pthread_t thread;           // USB event handler thread
-    pthread_mutex_t mtx;        // lock flag
+    sdr_thread_t thread;        // USB event handler thread
+    sdr_mutex_t mtx;            // lock flag
 } sdr_dev_t;
 
 typedef struct {                // SoapySDR device type
@@ -135,8 +145,8 @@ typedef struct {                // SoapySDR device type
     int state;                  // state of sampling thread
     int64_t rp, wp;             // read/write pointer of sampling data buffer
     int ssize;                  // sample size
-    pthread_t thread;           // reading sampling thread
-    pthread_mutex_t mtx;        // lock flag
+    sdr_thread_t thread;        // reading sampling thread
+    sdr_mutex_t mtx;            // lock flag
 } sdr_sdev_t;
 
 typedef struct {                // signal acquisition type 
@@ -209,7 +219,7 @@ typedef struct {                // SDR receiver channel type
     sdr_nav_t *nav;             // navigation decoder
     sdr_cpx16_t *data;          // data buffer
     sdr_cpx_t *corr;            // correlation buffer
-    pthread_mutex_t mtx;        // lock flag
+    sdr_mutex_t mtx;            // lock flag
 } sdr_ch_t;
 
 typedef struct {                // IF data buffer type
@@ -224,8 +234,17 @@ typedef struct {                // SDR receiver channel thread type
     sdr_ch_t *ch;               // SDR receiver channel
     int64_t ix;                 // IF data buffer read pointer (cyc)
     struct sdr_rcv_tag *rcv;    // pointer to SDR receiver
-    pthread_t thread;           // SDR receiver channel thread
+    sdr_thread_t thread;        // SDR receiver channel thread
 } sdr_ch_th_t;
+
+typedef struct {                // SDR attitude solution type
+    gtime_t time;               // epoch time
+    int nobs;                   // number of valid obs data
+    double freq;                // frequency
+    double ant_pos[SDR_MAX_RFCH][3]; // ant positions in body frame (m) (X=right,Y=forward,Z=up)
+    double bias[SDR_MAX_RFCH];  // H/W bias of each RF CH (s)
+    double roll, pitch, yaw;    // roll, pitch, yaw (rad)
+} sdr_att_t;
 
 typedef struct {                // SDR PVT type
     gtime_t time;               // epoch time
@@ -235,18 +254,17 @@ typedef struct {                // SDR PVT type
     nav_t *nav;                 // navigation data
     sol_t *sol;                 // PVT solution
     ssat_t *ssat;               // satellite status
+    sdr_att_t *att;             // SDR attitude solution
     rtcm_t *rtcm;               // RTCM control
     double latency;             // solution latency (s)
     int count[3];               // solution, OBS and NAV count
     struct sdr_rcv_tag *rcv;    // pointer to SDR receiver
-    pthread_mutex_t mtx;        // lock flag
+    sdr_mutex_t mtx;            // lock flag
 } sdr_pvt_t;
 
 typedef struct {                // SDR RF channel type
     double fo;                  // LO frequencies (Hz)
     int IQ, bits;               // IF sampling types (I:1,I/Q:2), bits
-    sdr_cpx8_t *LUT;            // raw data to IF data LUT
-    int8_t *LUT16;              // INT data to IF data LUT
 } sdr_rfch_t;
 
 typedef struct sdr_rcv_tag {    // SDR receiver type
@@ -256,11 +274,14 @@ typedef struct sdr_rcv_tag {    // SDR receiver type
     int fmt;                    // IF data format (SDR_FMT_???)
     double fs;                  // IF data sampling rate (sps) 
     int N;                      // IF data cycle (sample)
-    int nch, nrfch;             // number of receiver channels and RF channels
+    int nch, nrfch, narch;      // number of BB, RF and array channels
     int ich;                    // signal search channel index
-    sdr_rfch_t rfch[SDR_MAX_RFCH]; // SDR RF channels
+    sdr_rfch_t rfch[SDR_MAX_RFCH]; // SDR RF and array channels
     sdr_ch_th_t *th[SDR_MAX_NCH]; // SDR receiver channel threads
     sdr_buff_t *buff[SDR_MAX_RFCH]; // IF data buffers
+    void *LUT[SDR_MAX_RFCH];    // raw to IF data LUT (256 or 4*256 entries)
+    int rtoc[SDR_MAX_RFCH];     // real-to-complex enable flag (auto, per RF CH)
+    sdr_lpf_t *lpf[SDR_MAX_RFCH]; // LPF state per RF CH (NULL = disabled)
     int64_t ix;                 // IF data cycle count (cyc)
     double tscale;              // time scale to replay IF data file
     double data_std;            // IF data std-dev
@@ -272,8 +293,8 @@ typedef struct sdr_rcv_tag {    // SDR receiver type
     stream_t *strs[4];          // NMEA, RTCM3 and IF data log streams
     gtime_t start_time;         // receiver start time (UTC)
     char opt[1024];             // receiver options
-    pthread_t thread;           // SDR receiver thread
-    pthread_mutex_t mtx;        // lock flag
+    sdr_thread_t thread;        // SDR receiver thread
+    sdr_mutex_t mtx;            // lock flag
 } sdr_rcv_t;
 
 // function prototypes -------------------------------------------------------
@@ -286,6 +307,11 @@ uint32_t sdr_get_tick(void);
 void sdr_sleep_msec(int msec);
 const char *sdr_get_name(void);
 const char *sdr_get_ver(void);
+int sdr_thread_create(sdr_thread_t *thread, void *(func)(void *), void *arg);
+void sdr_thread_join(sdr_thread_t thread);
+void sdr_mutex_init(sdr_mutex_t *mtx);
+void sdr_mutex_lock(sdr_mutex_t *mtx);
+void sdr_mutex_unlock(sdr_mutex_t *mtx);
 
 // sdr_usb.c
 sdr_usb_t *sdr_usb_open(int bus, int port, const uint16_t *vid,
@@ -340,7 +366,7 @@ int sdr_tag_read(const char *file, char *prog, gtime_t *time, int *fmt,
 void sdr_search_code(const sdr_cpx_t *code_fft, double T,
     const sdr_buff_t *buff, int ix, int N, double fs, double fi,
     const float *fds, int len_fds, float *P);
-float sdr_corr_max(const float *P, int N, int M, int Nmax, double T, int *ix);
+float sdr_corr_max(const float *P, int N, int Nmax, int M, double T, int *ix);
 double sdr_fine_dop(const float *P, int N, const float *fds, int len_fds,
     const int *ix);
 double sdr_shift_freq(const char *sig, int fcn, double fi);
@@ -376,6 +402,9 @@ void sdr_unpack_bits(const uint8_t *data, int nbit, uint8_t *buff);
 void sdr_unpack_data(uint32_t data, int nbit, uint8_t *buff);
 uint8_t sdr_xor_bits(uint32_t X);
 int sdr_gen_fftw_wisdom(const char *file, int N);
+sdr_lpf_t *sdr_lpf_new(double fc, double fs);
+void sdr_lpf_free(sdr_lpf_t *lpf);
+void sdr_lpf_apply(sdr_lpf_t *lpf, sdr_cpx8_t *data, int N);
 
 // sdr_code.c
 int8_t *sdr_gen_code(const char *sig, int prn, int *N);
@@ -423,7 +452,12 @@ void sdr_pvt_free(sdr_pvt_t *pvt);
 void sdr_pvt_udobs(sdr_pvt_t *pvt, int64_t ix, sdr_ch_t *ch);
 void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch);
 void sdr_pvt_udsol(sdr_pvt_t *pvt, int64_t ix);
-void sdr_pvt_solstr(sdr_pvt_t *pvt, char *buff);
+void sdr_pvt_solstr(sdr_pvt_t *pvt, char *buff, int size);
+
+// sdr_array.c
+int sdr_array_calib(obsd_t * const *obs, const int *nobs, int nep,
+    const nav_t *nav, const double *ant_pos, int narr, int freq,
+    const double *rr, double *bias, double *rpy, double *rms);
 
 // sdr_rcv.c
 sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
@@ -442,11 +476,11 @@ sdr_rcv_t *sdr_rcv_open_file(const char **sigs, int *prns, int n, int fmt,
     double tscale, const char *file, const char **paths, const char *opt);
 void sdr_rcv_close(sdr_rcv_t *rcv);
 void sdr_rcv_setopt(const char *opt, double value);
-char *sdr_rcv_rcv_stat(sdr_rcv_t *rcv);
+int sdr_rcv_rcv_stat(sdr_rcv_t *rcv, char *buff, int size);
 void sdr_rcv_str_stat(sdr_rcv_t *rcv, int *stat);
-char *sdr_rcv_sat_stat(sdr_rcv_t *rcv, const char *sat);
-char *sdr_rcv_ch_stat(sdr_rcv_t *rcv, const char *sys, int all,
-    double min_lock, int rfch, int opt);
+int sdr_rcv_sat_stat(sdr_rcv_t *rcv, const char *sat, char *buff, int size);
+int sdr_rcv_ch_stat(sdr_rcv_t *rcv, const char *sys, int all,
+    double min_lock, int rfch, int opt, char *buff, int size);
 void sdr_rcv_sel_ch(sdr_rcv_t *rcv, int ch);
 int sdr_rcv_corr_stat(sdr_rcv_t *rcv, int ch, double *stat, double *pos,
     sdr_cpx_t *C, double *P);
@@ -456,7 +490,7 @@ int sdr_rcv_rfch_stat(sdr_rcv_t *rcv, int ch, double *stat);
 int sdr_rcv_rfch_psd(sdr_rcv_t *rcv, int ch, double tave, int N, float *psd);
 int sdr_rcv_rfch_hist(sdr_rcv_t *rcv, int ch, double tave, int *val,
     double *hist1, double *hist2);
-int sdr_rcv_pvt_sol(sdr_rcv_t *rcv, char *buff);
+int sdr_rcv_pvt_sol(sdr_rcv_t *rcv, char *buff, int size);
 int sdr_rcv_get_gain(sdr_rcv_t *rcv, int ch);
 int sdr_rcv_set_gain(sdr_rcv_t *rcv, int ch, int gain);
 int sdr_rcv_get_filt(sdr_rcv_t *rcv, int ch, double *bw, double *freq,
