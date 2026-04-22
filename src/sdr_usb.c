@@ -12,6 +12,9 @@
 //  2024-06-29  1.1  change API sdr_usb_open()
 //
 #include "pocket_sdr.h"
+#ifdef WIN32
+#include <CyAPI.h>
+#endif
 
 // constants and macros --------------------------------------------------------
 #ifndef WIN32
@@ -38,19 +41,22 @@ sdr_usb_t *sdr_usb_open(int bus, int port, const uint16_t *vid,
     const uint16_t *pid, int n)
 {
 #ifdef WIN32
-    sdr_usb_t *usb = new CCyUSBDevice();
+    CCyUSBDevice *h = new CCyUSBDevice();
+    sdr_usb_t *usb;
     
-    for (int i = 0; i < usb->DeviceCount(); i++) {
-        usb->Open(i);
+    for (int i = 0; i < h->DeviceCount(); i++) {
+        h->Open(i);
         for (int j = 0; j < n; j++) {
-            if ((bus < 0 || usb->USBAddress == bus) &&
-                usb->VendorID == vid[j] && usb->ProductID == pid[j]) {
+            if ((bus < 0 || h->USBAddress == bus) &&
+                h->VendorID == vid[j] && h->ProductID == pid[j]) {
+                usb = (sdr_usb_t *)sdr_malloc(sizeof(sdr_usb_t));
+                usb->h = (void *)h;
                 return usb;
             }
         }
-        usb->Close();
+        h->Close();
     }
-    delete usb;
+    delete h;
     return NULL;
 #else
     libusb_device **devs;
@@ -107,15 +113,17 @@ sdr_usb_t *sdr_usb_open(int bus, int port, const uint16_t *vid,
 //
 void sdr_usb_close(sdr_usb_t *usb)
 {
+    if (!usb) return;
 #ifdef WIN32
-    usb->Close();
-    delete usb;
+    CCyUSBDevice *h = (CCyUSBDevice *)usb->h;
+    h->Close();
+    delete h;
 #else
     libusb_release_interface(usb->h, SDR_DEV_IF);
     libusb_close(usb->h);
     libusb_exit(usb->ctx);
-    sdr_free(usb);
 #endif // WIN32
+    sdr_free(usb);
 }
 
 //------------------------------------------------------------------------------
@@ -135,10 +143,11 @@ void sdr_usb_close(sdr_usb_t *usb)
 int sdr_usb_req(sdr_usb_t *usb, int mode, uint8_t req, uint16_t val,
         uint8_t *data, int size)
 {
-    if (size > 64) return 0;
+    if (!usb || size > 64) return 0;
     
 #ifdef WIN32
-    CCyControlEndPoint *ep = usb->ControlEndPt;
+    CCyUSBDevice *h = (CCyUSBDevice *)usb->h;
+    CCyControlEndPoint *ep = h->ControlEndPt;
     long len = size;
     
     ep->Target    = TGT_DEVICE;
