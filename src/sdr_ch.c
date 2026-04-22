@@ -81,7 +81,7 @@ static sdr_acq_t *acq_new(const int8_t *code, int len_code, double T, double fs,
     acq->code_fft = sdr_cpx_malloc(2 * N);
     sdr_gen_code_fft(code, len_code, T, 0.0, fs, N, N, acq->code_fft);
     acq->fd_ext = 0.0;
-    acq->fds = sdr_dop_bins(T, 0.0, sdr_max_dop, &acq->len_fds);
+    acq->fds = sdr_dop_bins(T, 0.0f, (float)sdr_max_dop, &acq->len_fds);
     acq->P_sum = NULL;
     acq->n_sum = 0;
     return acq;
@@ -195,7 +195,7 @@ sdr_ch_t *sdr_ch_new(const char *sig, int prn, double fs, double fi)
     if (!strcmp(ch->sig, "L6D") || !strcmp(ch->sig, "L6E")) {
         ch->corr = sdr_cpx_malloc(ch->N);
     }
-    pthread_mutex_init(&ch->mtx, NULL);
+    sdr_mutex_init(&ch->mtx);
     return ch;
 }
 
@@ -259,7 +259,7 @@ static void search_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff,
     
     if (ch->acq->fd_ext != 0.0) { // assist by external Doppler
         for (n = 0; n < 3; n++) {
-            fd_ext[n] = ch->acq->fd_ext + (n - 1) * 0.5 / ch->T;
+            fd_ext[n] = (float)(ch->acq->fd_ext + (n - 1) * 0.5 / ch->T);
         }
         fds = fd_ext;
     }
@@ -272,14 +272,15 @@ static void search_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff,
     ch->acq->n_sum++;
     
     if (ch->acq->n_sum * ch->T >= sdr_t_acq) {
-        int ix[2];
+        int idx[2];
         
         // search max correlation power
-        float cn0 = sdr_corr_max(ch->acq->P_sum, 2 * ch->N, ch->N, n, ch->T, ix);
+        float cn0 = sdr_corr_max(ch->acq->P_sum, 2 * ch->N, ch->N, n, ch->T,
+            idx);
         
         if (cn0 >= sdr_thres_cn0_l) {
-            double fd = sdr_fine_dop(ch->acq->P_sum, 2 * ch->N, fds, n, ix);
-            double coff = ix[1] / ch->fs;
+            double fd = sdr_fine_dop(ch->acq->P_sum, 2 * ch->N, fds, n, idx);
+            double coff = idx[1] / ch->fs;
             start_track(ch, time, fd, coff, cn0);
             sdr_log(3, "$LOG,%.3f,%s,%d,SIGNAL FOUND (%.1f,%.1f,%.7f)", ch->time,
                 ch->sig, ch->prn, cn0, fd, coff * 1e3);
@@ -432,8 +433,8 @@ static void interp_corr(const sdr_cpx_t *C, double x, sdr_cpx_t *c)
 {
     int i = (int)x;
     double a1 = x - i, a0 = 1.0 - a1;
-    (*c)[0] = a0 * C[i][0] + a1 * C[i+1][0];
-    (*c)[1] = a0 * C[i][1] + a1 * C[i+1][1];
+    (*c)[0] = (float)(a0 * C[i][0] + a1 * C[i+1][0]);
+    (*c)[1] = (float)(a0 * C[i][1] + a1 * C[i+1][1]);
 }
 
 // decode L6 CSK ---------------------------------------------------------------
@@ -604,25 +605,25 @@ void sdr_ch_update(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
         search_sig(ch, time, buff, ix);
     }
     else if (ch->state == SDR_STATE_LOCK) {
-        pthread_mutex_lock(&ch->mtx);
+        sdr_mutex_lock(&ch->mtx);
         track_sig(ch, time, buff, ix);
-        pthread_mutex_unlock(&ch->mtx);
+        sdr_mutex_unlock(&ch->mtx);
     }
 }
 
 // set receiver channel correlator ---------------------------------------------
 void sdr_ch_set_corr(sdr_ch_t *ch, int nposx)
 {
-    pthread_mutex_lock(&ch->mtx);
+    sdr_mutex_lock(&ch->mtx);
     ch->trk->nposx = nposx;
-    pthread_mutex_unlock(&ch->mtx);
+    sdr_mutex_unlock(&ch->mtx);
 }
 
 // get receiver correlator status ----------------------------------------------
 int sdr_ch_corr_stat(sdr_ch_t *ch, double *stat, double *pos, sdr_cpx_t *C,
     double *P)
 {
-    pthread_mutex_lock(&ch->mtx);
+    sdr_mutex_lock(&ch->mtx);
     int npos = ch->trk->npos + ch->trk->nposx;
     stat[0] = ch->state;
     stat[1] = ch->fs;
@@ -634,18 +635,18 @@ int sdr_ch_corr_stat(sdr_ch_t *ch, double *stat, double *pos, sdr_cpx_t *C,
     memcpy(pos, ch->trk->pos, sizeof(double) * npos);
     memcpy(C, ch->trk->C, sizeof(sdr_cpx_t) * npos);
     memcpy(P, ch->trk->aveP, sizeof(double) * npos);
-    pthread_mutex_unlock(&ch->mtx);
+    sdr_mutex_unlock(&ch->mtx);
     return npos;
 }
 
 // get receiver correlator history ---------------------------------------------
 int sdr_ch_corr_hist(sdr_ch_t *ch, double tspan, double *stat, sdr_cpx_t *P)
 {
-    pthread_mutex_lock(&ch->mtx);
+    sdr_mutex_lock(&ch->mtx);
     int n = MIN((int)(tspan / ch->T), SDR_N_HIST);
     stat[0] = ch->time;
     stat[1] = ch->T;
     memcpy(P, ch->trk->P + SDR_N_HIST - n, sizeof(sdr_cpx_t) * n);
-    pthread_mutex_unlock(&ch->mtx);
+    sdr_mutex_unlock(&ch->mtx);
     return n;
 }
