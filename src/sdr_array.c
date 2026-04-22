@@ -19,25 +19,30 @@
 #define MAX_RMS     0.03        // max RMS of residuals (m)
 #define ROUND(x)    floor((x) + 0.5)
 
-// rotation matrix and partials by Euler angles (Z-Y-X: yaw,pitch,roll) --------
+// rotation matrix and partials by Euler angles (Z-X-Y: yaw,pitch,roll) --------
+// Body frame: X=right, Y=forward, Z=up. R maps body to local (ENU).
+//   roll (rpy[0]) : rotation about body Y (forward)
+//   pitch(rpy[1]) : rotation about body X (right)
+//   yaw  (rpy[2]) : rotation about body Z (up)
+//   R = Rz(yaw) * Rx(pitch) * Ry(roll)
 static void euler_rot(const double *rpy, double *R, double *Dr, double *Dp,
     double *Dy)
 {
     double cr = cos(rpy[0]), sr = sin(rpy[0]), cp = cos(rpy[1]);
     double sp = sin(rpy[1]), cy = cos(rpy[2]), sy = sin(rpy[2]);
-    
-    R [0] =  cp*cy;  R [3] =  sr*sp*cy - cr*sy; R [6] =  cr*sp*cy + sr*sy;
-    R [1] =  cp*sy;  R [4] =  sr*sp*sy + cr*cy; R [7] =  cr*sp*sy - sr*cy;
-    R [2] = -sp;     R [5] =  sr*cp;            R [8] =  cr*cp;
-    Dr[0] =  0.0;    Dr[3] =  cr*sp*cy + sr*sy; Dr[6] = -sr*sp*cy + cr*sy;
-    Dr[1] =  0.0;    Dr[4] =  cr*sp*sy - sr*cy; Dr[7] = -sr*sp*sy - cr*cy;
-    Dr[2] =  0.0;    Dr[5] =  cr*cp;            Dr[8] = -sr*cp;
-    Dp[0] = -sp*cy;  Dp[3] =  sr*cp*cy;         Dp[6] =  cr*cp*cy;
-    Dp[1] = -sp*sy;  Dp[4] =  sr*cp*sy;         Dp[7] =  cr*cp*sy;
-    Dp[2] = -cp;     Dp[5] = -sr*sp;            Dp[8] = -cr*sp;
-    Dy[0] = -cp*sy;  Dy[3] = -sr*sp*sy - cr*cy; Dy[6] = -cr*sp*sy + sr*cy;
-    Dy[1] =  cp*cy;  Dy[4] =  sr*sp*cy - cr*sy; Dy[7] =  cr*sp*cy + sr*sy;
-    Dy[2] =  0.0;    Dy[5] =  0.0;              Dy[8] =  0.0;
+
+    R [0] =  cy*cr - sy*sp*sr; R [3] = -sy*cp; R [6] =  cy*sr + sy*sp*cr;
+    R [1] =  sy*cr + cy*sp*sr; R [4] =  cy*cp; R [7] =  sy*sr - cy*sp*cr;
+    R [2] = -cp*sr;            R [5] =  sp;    R [8] =  cp*cr;
+    Dr[0] = -cy*sr - sy*sp*cr; Dr[3] =  0.0;   Dr[6] =  cy*cr - sy*sp*sr;
+    Dr[1] = -sy*sr + cy*sp*cr; Dr[4] =  0.0;   Dr[7] =  sy*cr + cy*sp*sr;
+    Dr[2] = -cp*cr;            Dr[5] =  0.0;   Dr[8] = -cp*sr;
+    Dp[0] = -sy*cp*sr;         Dp[3] =  sy*sp; Dp[6] =  sy*cp*cr;
+    Dp[1] =  cy*cp*sr;         Dp[4] = -cy*sp; Dp[7] = -cy*cp*cr;
+    Dp[2] =  sp*sr;            Dp[5] =  cp;    Dp[8] = -sp*cr;
+    Dy[0] = -sy*cr - cy*sp*sr; Dy[3] = -cy*cp; Dy[6] = -sy*sr + cy*sp*cr;
+    Dy[1] =  cy*cr - sy*sp*sr; Dy[4] = -sy*cp; Dy[7] =  cy*sr + sy*sp*cr;
+    Dy[2] =  0.0;              Dy[5] =  0.0;   Dy[8] =  0.0;
 }
 
 // LOS unit vector from receiver to satellite in local (ENU) frame -------------
@@ -164,6 +169,7 @@ static int est_bias_att(obsd_t * const *obs, const int *nobs, int nep,
 //      nobs,nep (I)  number of obs data per epoch and epochs
 //      nav      (I)  navigation data
 //      ant_pos  (I)  array element positions in body frame (m)
+//                    (X=right, Y=forward, Z=up)
 //      nant     (I)  number of array elements (<= SDR_MAX_RFCH)
 //      freq     (I)  frequency index (0:L1,1:L2,...)
 //      rr       (I)  receiver ECEF position {x,y,z} (m)
