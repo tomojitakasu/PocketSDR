@@ -247,7 +247,7 @@ int sdr_decode_NB_LDPC(const uint8_t H_idx[][4], const uint8_t H_ele[][4],
     for (int i = 0; i < n; i++) {
         L[i] = (float *)sdr_malloc(sizeof(float) * Q_GF);
     }
-    init_LLR(code, n, ERR_PROB, L);
+    init_LLR(code, n, (float)ERR_PROB, L);
     
     for (int i = 0; i < ne; i++) {
         permute_V2C(he[i], L[je[i]], V2C[i]);
