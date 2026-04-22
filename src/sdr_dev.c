@@ -21,6 +21,7 @@
 //
 #include "pocket_sdr.h"
 #ifdef WIN32
+#include <CyAPI.h>
 #include <avrt.h>
 #endif
 
@@ -137,10 +138,12 @@ static void rise_pri(void)
 // get bulk transfer endpoint --------------------------------------------------
 static CCyBulkEndPoint *get_bulk_ep(sdr_usb_t *usb, int ep)
 {
-    for (int i = 0; i < usb->EndPointCount(); i++) {
-        if (usb->EndPoints[i]->Attributes == 2 &&
-            usb->EndPoints[i]->Address == ep) {
-            return (CCyBulkEndPoint *)usb->EndPoints[i];
+    CCyUSBDevice *h = (CCyUSBDevice *)usb->h;
+    
+    for (int i = 0; i < h->EndPointCount(); i++) {
+        if (h->EndPoints[i]->Attributes == 2 &&
+            h->EndPoints[i]->Address == ep) {
+            return (CCyBulkEndPoint *)h->EndPoints[i];
         }
     }
     return NULL;
@@ -176,9 +179,9 @@ static void *event_handler(void *arg)
             break;
         }
         ctx[i] = ep->BeginDataXfer(dev->buff + len * i, len, &ov[i]);
-        pthread_mutex_lock(&dev->mtx);
+        sdr_mutex_lock(&dev->mtx);
         dev->wp += len;
-        pthread_mutex_unlock(&dev->mtx);
+        sdr_mutex_unlock(&dev->mtx);
         i = (i + 1) % SDR_MAX_BUFF;
     }
     for (int i = 0; i < SDR_MAX_BUFF; i++) {
@@ -197,10 +200,11 @@ static void transfer_cb(struct libusb_transfer *transfer)
     
     if (transfer->status != LIBUSB_TRANSFER_COMPLETED) {
         fprintf(stderr, "libusb bulk transfer error (%d)\n", transfer->status);
+        return;
     }
-    pthread_mutex_lock(&dev->mtx);
+    sdr_mutex_lock(&dev->mtx);
     dev->wp += SDR_SIZE_BUFF;
-    pthread_mutex_unlock(&dev->mtx);
+    sdr_mutex_unlock(&dev->mtx);
     
     libusb_submit_transfer(transfer);
 }
@@ -211,6 +215,8 @@ static void *event_handler(void *arg)
     sdr_dev_t *dev = (sdr_dev_t *)arg;
     struct sched_param param = {99};
     struct timeval to = {0, 100000};
+    
+    dev->rp = dev->wp = 0;
     
     // set thread scheduling real-time
     if (pthread_setschedparam(dev->thread, SCHED_RR, &param)) {
@@ -253,12 +259,14 @@ sdr_dev_t *sdr_dev_open(int bus, int port)
         if (!(dev->transfer[i] = libusb_alloc_transfer(0))) {
             fprintf(stderr, "libusb_alloc_transfer(%d) error\n", i);
             sdr_usb_close(dev->usb);
+            for (i--; i >= 0; i--) libusb_free_transfer(dev->transfer[i]);
+            sdr_free(dev->buff);
             sdr_free(dev);
             return NULL;
         }
     }
 #endif
-    pthread_mutex_init(&dev->mtx, NULL);
+    sdr_mutex_init(&dev->mtx);
     return dev;
 }
 
@@ -304,6 +312,7 @@ int sdr_dev_start(sdr_dev_t *dev)
             TO_TRANSFER);
         if ((ret = libusb_submit_transfer(dev->transfer[i]))) {
             fprintf(stderr, "libusb_submit_transfer(%d) error (%d)\n", i, ret);
+            for ( ; i >= 0; i--) libusb_cancel_transfer(dev->transfer[i]);
             return 0;
         }
     }
@@ -311,8 +320,16 @@ int sdr_dev_start(sdr_dev_t *dev)
     sdr_usb_req(dev->usb, 0, SDR_VR_START, 0, NULL, 0);
     
     dev->state = 1;
-    dev->rp = dev->wp = 0;
-    pthread_create(&dev->thread, NULL, event_handler, dev);
+    if (!sdr_thread_create(&dev->thread, event_handler, dev)) {
+        dev->state = 0;
+        sdr_usb_req(dev->usb, 0, SDR_VR_STOP, 0, NULL, 0);
+#ifndef WIN32
+        for (int i = 0; i < SDR_MAX_BUFF; i++) {
+            libusb_cancel_transfer(dev->transfer[i]);
+        }
+#endif
+        return 0;
+    }
     return 1;
 }
 
@@ -332,7 +349,7 @@ int sdr_dev_stop(sdr_dev_t *dev)
     sdr_usb_req(dev->usb, 0, SDR_VR_STOP, 0, NULL, 0);
     
     dev->state = 0;
-    pthread_join(dev->thread, NULL);
+    sdr_thread_join(dev->thread);
 #ifndef WIN32
     for (int i = 0; i < SDR_MAX_BUFF; i++) {
         libusb_cancel_transfer(dev->transfer[i]);
@@ -355,9 +372,9 @@ int sdr_dev_stop(sdr_dev_t *dev)
 //
 int sdr_dev_read(sdr_dev_t *dev, uint8_t *buff, int size)
 {
-    pthread_mutex_lock(&dev->mtx);
+    sdr_mutex_lock(&dev->mtx);
     int64_t wp = dev->wp;
-    pthread_mutex_unlock(&dev->mtx);
+    sdr_mutex_unlock(&dev->mtx);
     
     if (wp < dev->rp + size) {
         return 0;
