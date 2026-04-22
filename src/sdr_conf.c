@@ -13,6 +13,7 @@
 //  2024-06-29  1.4  delete API sdr_read_settings(), sdr_write_settings()
 //                   add API sdr_conf_read(), sdr_conf_write()
 //  2024-11-25  1.5  support Pocket SDR FE 8CH
+//  2026-04-22  1.6  support [CHALL] for same settings for all CHs
 //
 #include "pocket_sdr.h"
 
@@ -229,37 +230,51 @@ static void read_config_key(FILE *fp, int type, uint32_t regs[][SDR_MAX_REG])
     const reg_t *reg_field =
         (type == TYPE_SPIDER) ? MAX2769B_field : MAX2771_field;
     char buff[128];
-    int ch = 1;
+    int i, ch, m = max_ch(type), ch_mask[SDR_MAX_RFCH] = {0};
     
-    while (fgets(buff, sizeof(buff), fp)) {
-        uint32_t val, mask;
+    for (int l = 0; fgets(buff, sizeof(buff), fp); l++) {
+        uint32_t val, reg_mask;
         char key[32], *p;
         
         if ((p = strchr(buff, '#'))) *p = '\0';
-        if (sscanf(buff, "[CH%d]", &ch) == 1) continue;
-        if (ch < 1 || ch > max_ch(type)) continue;
+        
+        if (!strncmp(buff, "[CHALL]", 7)) {
+            for (int j = 0; j < m; j++) ch_mask[j] = 1;
+            continue;
+        }
+        if (sscanf(buff, "[CH%d", &ch) == 1) {
+            if (ch >= 1 && ch <= m) {
+                for (int j = 0; j < m; j++) ch_mask[j] = j + 1 == ch;
+            } else {
+                fprintf(stderr, "Invalid CH (%d): CH=%d\n", l + 1, ch);
+            }
+            continue;
+        }
         if (!(p = strchr(buff, '='))) continue;
         *p++ = '\0';
         if (sscanf(buff, "%31s", key) < 1) continue;
-        int i;
         for (i = 0; *reg_field[i].field; i++) {
             if (!strcmp(key, reg_field[i].field)) break;
         }
         if (!*reg_field[i].field) {
-            fprintf(stderr, "Invalid field: [CH%d] %s\n", ch, key);
+            fprintf(stderr, "Invalid field (%d): %s\n", l + 1, key);
             continue;
         }
         if (sscanf(p, "%d", (int *)&val) < 1 && sscanf(p, "0x%X", &val) < 1) {
-            fprintf(stderr, "Invalid value: [CH%d] %s = %s\n", ch, key, p);
+            fprintf(stderr, "Invalid value (%d): %s = %s\n", l + 1, key, p);
             continue;
         }
         if (val >= ((uint32_t)1 << reg_field[i].nbit)) {
-            fprintf(stderr, "Invalid value: [CH%d] %s = %d\n", ch, key, val);
+            fprintf(stderr, "Invalid value (%d): %s = %d\n", l + 1, key, val);
             continue;
         }
-        mask = bit_mask(reg_field + i);
-        regs[ch-1][reg_field[i].addr] &= ~mask;
-        regs[ch-1][reg_field[i].addr] |= (val << reg_field[i].pos) & mask;
+        reg_mask = bit_mask(reg_field + i);
+        
+        for (int j = 0; j < max_ch(type); j++) {
+            if (!ch_mask[j]) continue;
+            regs[j][reg_field[i].addr] &= ~reg_mask;
+            regs[j][reg_field[i].addr] |= (val << reg_field[i].pos) & reg_mask;
+        }
     }
 }
 
@@ -275,8 +290,7 @@ static int read_config(const char *file, int type, uint32_t regs[][SDR_MAX_REG],
     }
     if (opt & 4) {
         read_config_hex(fp, type, regs);
-    }
-    else {
+    } else {
         read_config_key(fp, type, regs);
     }
     fclose(fp);
@@ -368,8 +382,7 @@ static void write_stat(FILE *fp, int type, double fx, int ch, uint32_t *reg)
 {
     if (type == TYPE_SPIDER) {
         write_MAX2769B_stat(fp, fx, ch, reg);
-    }
-    else {
+    } else {
         write_MAX2771_stat(fp, fx, ch, reg);
     }
 }
@@ -409,8 +422,7 @@ static void write_config_key(FILE *fp, int type, double fx,
             if (!(opt & 1)) {
                 if (type == TYPE_SPIDER) {
                     if (reg_field[j].fix[0]) continue;
-                }
-                else {
+                } else {
                     if (reg_field[j].fix[i >= 1 ? 1 : 0]) continue;
                 }
             }
@@ -434,8 +446,7 @@ static int write_config(const char *file, int type, double fx,
     }
     if (opt & 4) {
         write_config_hex(fp, type, regs);
-    }
-    else {
+    } else {
         write_config_key(fp, type, fx, regs, opt);
     }
     fclose(fp);
@@ -496,11 +507,9 @@ static void set_fixed(int type, uint32_t regs[][SDR_MAX_REG])
             if (type == TYPE_SPIDER) {
                 if (!reg_field[i].fix[0]) continue;
                 val = reg_field[i].val[0];
-            }
-            else if (!strcmp(reg_field[i].field, "EXTADCCLK")) {
+            } else if (!strcmp(reg_field[i].field, "EXTADCCLK")) {
                 val = (type == TYPE_POCKET_2CH && j == 0) ? 0 : 1; // 0:int,1:ext
-            }
-            else {
+            } else {
                 if (!reg_field[i].fix[j >= 1 ? 1 : 0]) continue;
                 val = reg_field[i].val[j >= 1 ? 1 : 0];
             }
@@ -519,8 +528,7 @@ static void write_regs(sdr_usb_t *usb, int type, uint32_t regs[][SDR_MAX_REG])
             // write register except reserved or test reg
             if (type == TYPE_SPIDER) {
                 if (j == 6 || j == 8) continue;
-            }
-            else { // Pocket SDR
+            } else { // Pocket SDR
                 if (j == 6 || j == 8 || j == 9) continue;
             }
             write_reg(usb, i, j, regs[i][j]);
