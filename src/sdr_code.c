@@ -44,6 +44,8 @@
 //      Service Navigation Signal in L2 frequency band Edition 1.0, 2016
 //  [21] IS-QZSS-L1S-007, Quasi-Zenith Satellite System Interface Specification
 //      Sub-meter Level Augmentation Service, April 18, 2024
+//  [22] Galileo Open Service Signal In Space Interface Control Document -
+//      Issue 2.2, November 2025
 //
 //  Author:
 //  T.TAKASU
@@ -71,6 +73,7 @@
 //                   flip polarity of NH20 and BC secondary codes
 //  2025-01-12  1.16 filp code polarity
 //                   L1CP modulation: BOC(1,1) -> TMBOC(6,1,4/33)
+//  2025-11-20  1.17 add Galileo E5a-QP as E5AQP
 //
 #include <ctype.h>
 #include "pocket_sdr.h"
@@ -110,6 +113,7 @@ static int8_t *E1C  [ 50] = {0};
 static int8_t *E1CS       = NULL;
 static int8_t *E5AI [ 50] = {0};
 static int8_t *E5AQ [ 50] = {0};
+static int8_t *E5AQP[ 40] = {0};
 static int8_t *E5AIS      = NULL;
 static int8_t *E5AQS[ 50] = {0};
 static int8_t *E5BI [ 50] = {0};
@@ -453,6 +457,29 @@ static const uint16_t E5AQ_X2_init[] = { // PRN 1 - 50
     005052, 027553, 003711, 002041, 034775, 005274, 037356, 016205,
     036270, 006600, 026773, 017375, 035267, 036255, 012044, 026442,
     021621, 025411
+};
+
+static const uint16_t E5AQP_gen[][3] = { // PRN 1 - 40
+    {0x335A, 0x60A, 0x384}, {0x146E, 0x1C8, 0x238},
+    {0x3876, 0x7AE, 0x4D4}, {0x499A, 0x688, 0x064},
+    {0x3548, 0x2C0, 0x588}, {0x052E, 0x504, 0x070},
+    {0x598C, 0x6E2, 0x530}, {0x2E84, 0x064, 0x658},
+    {0x01F2, 0x298, 0x6E4}, {0x3162, 0x134, 0x478},
+    {0x3E16, 0x148, 0x378}, {0x2722, 0x712, 0x468},
+    {0x4E9E, 0x5EC, 0x1BC}, {0x20CA, 0x046, 0x580},
+    {0x78FA, 0x74E, 0x6E0}, {0x029E, 0x4D0, 0x4C0},
+    {0x3D78, 0x106, 0x770}, {0x4990, 0x5C4, 0x00C},
+    {0x75D6, 0x034, 0x760}, {0x03D6, 0x286, 0x20C},
+    {0x456A, 0x114, 0x49C}, {0x3AE0, 0x48E, 0x658},
+    {0x4EBE, 0x2BE, 0x314}, {0x7DB8, 0x67E, 0x7E4},
+    {0x1056, 0x5DE, 0x270}, {0x0E76, 0x620, 0x300},
+    {0x401E, 0x63E, 0x1BC}, {0x1DF2, 0x73E, 0x478},
+    {0x691E, 0x37E, 0x194}, {0x25EE, 0x328, 0x668},
+    {0x4C08, 0x0A6, 0x3F8}, {0x442C, 0x302, 0x580},
+    {0x0272, 0x37C, 0x450}, {0x42C4, 0x7A6, 0x32C},
+    {0x25A2, 0x11A, 0x1D8}, {0x5598, 0x4DE, 0x190},
+    {0x2DD6, 0x508, 0x658}, {0x1D64, 0x3BA, 0x5C4},
+    {0x3E4C, 0x68E, 0x014}, {0x7EC0, 0x60A, 0x5E8}
 };
 
 static const uint16_t E5BI_X2_init[] = { // PRN 1 - 50
@@ -1331,8 +1358,7 @@ static int8_t *sec_code_G1CA(int prn, int *N)
     if (prn % 2 == 0) { // even FCN
         *N = 1;
         return code;
-    }
-    else { // odd FCN
+    } else { // odd FCN
         *N = 2;
         return MC;
     }
@@ -1489,6 +1515,25 @@ static int8_t *sec_code_E5AQ(int prn, int *N)
     return E5AQS[prn-1];
 }
 
+// generate E5AQP code ([22]) ----------------------------------------------------
+static int8_t *gen_code_E5AQP(int prn, int *N)
+{
+    if (prn < 1 || prn > 40) {
+        return NULL;
+    }
+    *N = 330;
+    if (!E5AQP[prn-1]) {
+        const uint16_t *G = E5AQP_gen[prn-1];
+        E5AQP[prn-1] = (int8_t *)sdr_malloc(*N);
+        for (int i = 0; i < *N; i++) {
+            uint16_t code = (G[0] >> (14 - i % 15)) ^ (G[1] >> (10 - i % 11)) ^
+                 (G[2] >> (9 - i % 10));
+            E5AQP[prn-1][i] = CHIP[code & 1];
+        }
+    }
+    return E5AQP[prn-1];
+}
+
 // generate E5BI code ([5]) ----------------------------------------------------
 static int8_t *gen_code_E5BI(int prn, int *N)
 {
@@ -1632,8 +1677,7 @@ static int8_t *sec_code_B1I(int prn, int *N)
     if ((prn >= 1 && prn <= 5) || (prn >=59 && prn <= 63)) { // D2 (GEO)
        *N = 1;
        return code;
-    }
-    else if (prn >= 6 && prn <= 58) { // D1 (MEO/IGSO)
+    } else if (prn >= 6 && prn <= 58) { // D1 (MEO/IGSO)
        *N = 20;
        return NH20;
     }
@@ -2045,128 +2089,89 @@ static int8_t *gen_code(const char *sig, int prn, int *N)
     
     if (!strcmp(Sig, "L1CA")) {
         return gen_code_L1CA(prn, N);
-    }
-    else if (!strcmp(Sig, "L1S")) {
+    } else if (!strcmp(Sig, "L1S")) {
         return gen_code_L1S(prn, N);
-    }
-    else if (!strcmp(Sig, "L1CB")) {
+    } else if (!strcmp(Sig, "L1CB")) {
         return gen_code_L1CB(prn, N);
-    }
-    else if (!strcmp(Sig, "L1CP")) {
+    } else if (!strcmp(Sig, "L1CP")) {
         return gen_code_L1CP(prn, N);
-    }
-    else if (!strcmp(Sig, "L1CD")) {
+    } else if (!strcmp(Sig, "L1CD")) {
         return gen_code_L1CD(prn, N);
-    }
-    else if (!strcmp(Sig, "L2CM")) {
+    } else if (!strcmp(Sig, "L2CM")) {
         return gen_code_L2CM(prn, N);
-    }
-    else if (!strcmp(Sig, "L2CL")) {
+    } else if (!strcmp(Sig, "L2CL")) {
         return gen_code_L2CL(prn, N);
-    }
-    else if (!strcmp(Sig, "L5I")) {
+    } else if (!strcmp(Sig, "L5I")) {
         return gen_code_L5I(prn, N);
-    }
-    else if (!strcmp(Sig, "L5Q")) {
+    } else if (!strcmp(Sig, "L5Q")) {
         return gen_code_L5Q(prn, N);
-    }
-    else if (!strcmp(Sig, "L5SI")) {
+    } else if (!strcmp(Sig, "L5SI")) {
         return gen_code_L5SI(prn, N);
-    }
-    else if (!strcmp(Sig, "L5SIV")) {
+    } else if (!strcmp(Sig, "L5SIV")) {
         return gen_code_L5SIV(prn, N);
-    }
-    else if (!strcmp(Sig, "L5SQ")) {
+    } else if (!strcmp(Sig, "L5SQ")) {
         return gen_code_L5SQ(prn, N);
-    }
-    else if (!strcmp(Sig, "L5SQV")) {
+    } else if (!strcmp(Sig, "L5SQV")) {
         return gen_code_L5SQV(prn, N);
-    }
-    else if (!strcmp(Sig, "L6D")) {
+    } else if (!strcmp(Sig, "L6D")) {
         return gen_code_L6D(prn, N);
-    }
-    else if (!strcmp(Sig, "L6E")) {
+    } else if (!strcmp(Sig, "L6E")) {
         return gen_code_L6E(prn, N);
-    }
-    else if (!strcmp(Sig, "G1CA")) {
+    } else if (!strcmp(Sig, "G1CA")) {
         return gen_code_G1CA(prn, N);
-    }
-    else if (!strcmp(Sig, "G2CA")) {
+    } else if (!strcmp(Sig, "G2CA")) {
         return gen_code_G2CA(prn, N);
-    }
-    else if (!strcmp(Sig, "G1OCD")) {
+    } else if (!strcmp(Sig, "G1OCD")) {
         return gen_code_G1OCD(prn, N);
-    }
-    else if (!strcmp(Sig, "G1OCP")) {
+    } else if (!strcmp(Sig, "G1OCP")) {
         return gen_code_G1OCP(prn, N);
-    }
-    else if (!strcmp(Sig, "G2OCP")) {
+    } else if (!strcmp(Sig, "G2OCP")) {
         return gen_code_G2OCP(prn, N);
-    }
-    else if (!strcmp(Sig, "G3OCD")) {
+    } else if (!strcmp(Sig, "G3OCD")) {
         return gen_code_G3OCD(prn, N);
-    }
-    else if (!strcmp(Sig, "G3OCP")) {
+    } else if (!strcmp(Sig, "G3OCP")) {
         return gen_code_G3OCP(prn, N);
-    }
-    else if (!strcmp(Sig, "E1B")) {
+    } else if (!strcmp(Sig, "E1B")) {
         return gen_code_E1B(prn, N);
-    }
-    else if (!strcmp(Sig, "E1C")) {
+    } else if (!strcmp(Sig, "E1C")) {
         return gen_code_E1C(prn, N);
-    }
-    else if (!strcmp(Sig, "E5AI")) {
+    } else if (!strcmp(Sig, "E5AI")) {
         return gen_code_E5AI(prn, N);
-    }
-    else if (!strcmp(Sig, "E5AQ")) {
+    } else if (!strcmp(Sig, "E5AQ")) {
         return gen_code_E5AQ(prn, N);
-    }
-    else if (!strcmp(Sig, "E5BI")) {
+    } else if (!strcmp(Sig, "E5AQP")) {
+        return gen_code_E5AQP(prn, N);
+    } else if (!strcmp(Sig, "E5BI")) {
         return gen_code_E5BI(prn, N);
-    }
-    else if (!strcmp(Sig, "E5BQ")) {
+    } else if (!strcmp(Sig, "E5BQ")) {
         return gen_code_E5BQ(prn, N);
-    }
-    else if (!strcmp(Sig, "E6B")) {
+    } else if (!strcmp(Sig, "E6B")) {
         return gen_code_E6B(prn, N);
-    }
-    else if (!strcmp(Sig, "E6C")) {
+    } else if (!strcmp(Sig, "E6C")) {
         return gen_code_E6C(prn, N);
-    }
-    else if (!strcmp(Sig, "B1I")) {
+    } else if (!strcmp(Sig, "B1I")) {
         return gen_code_B1I(prn, N);
-    }
-    else if (!strcmp(Sig, "B1CD")) {
+    } else if (!strcmp(Sig, "B1CD")) {
         return gen_code_B1CD(prn, N);
-    }
-    else if (!strcmp(Sig, "B1CP")) {
+    } else if (!strcmp(Sig, "B1CP")) {
         return gen_code_B1CP(prn, N);
-    }
-    else if (!strcmp(Sig, "B2I")) {
+    } else if (!strcmp(Sig, "B2I")) {
         return gen_code_B2I(prn, N);
-    }
-    else if (!strcmp(Sig, "B2AD")) {
+    } else if (!strcmp(Sig, "B2AD")) {
         return gen_code_B2AD(prn, N);
-    }
-    else if (!strcmp(Sig, "B2AP")) {
+    } else if (!strcmp(Sig, "B2AP")) {
         return gen_code_B2AP(prn, N);
-    }
-    else if (!strcmp(Sig, "B2BI")) {
+    } else if (!strcmp(Sig, "B2BI")) {
         return gen_code_B2BI(prn, N);
-    }
-    else if (!strcmp(Sig, "B3I")) {
+    } else if (!strcmp(Sig, "B3I")) {
         return gen_code_B3I(prn, N);
-    }
-    else if (!strcmp(Sig, "I1SD")) {
+    } else if (!strcmp(Sig, "I1SD")) {
         return gen_code_I1SD(prn, N);
-    }
-    else if (!strcmp(Sig, "I1SP")) {
+    } else if (!strcmp(Sig, "I1SP")) {
         return gen_code_I1SP(prn, N);
-    }
-    else if (!strcmp(Sig, "I5S")) {
+    } else if (!strcmp(Sig, "I5S")) {
         return gen_code_I5S(prn, N);
-    }
-    else if (!strcmp(Sig, "ISS")) {
+    } else if (!strcmp(Sig, "ISS")) {
         return gen_code_ISS(prn, N);
     }
     return NULL;
@@ -2186,11 +2191,11 @@ static int8_t *gen_code(const char *sig, int prn, int *N)
 //
 int8_t *sdr_gen_code(const char *sig, int prn, int *N)
 {
-    static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
+    static sdr_mutex_t mtx = SDR_MUTEX_INIT;
     
-    pthread_mutex_lock(&mtx);
+    sdr_mutex_lock(&mtx);
     int8_t *code = gen_code(sig, prn, N);
-    pthread_mutex_unlock(&mtx);
+    sdr_mutex_unlock(&mtx);
     
     return code;
 }
@@ -2211,93 +2216,65 @@ static int8_t *sec_code(const char *sig, int prn, int *N)
         !strcmp(Sig, "ISS" )) {
         *N = 1;
         return code;
-    }
-    else if (!strcmp(Sig, "L1CP")) {
+    } else if (!strcmp(Sig, "L1CP")) {
         return sec_code_L1CP(prn, N);
-    }
-    else if (!strcmp(Sig, "L5I")) {
+    } else if (!strcmp(Sig, "L5I")) {
         if (prn >= 120 && prn <=158) {
             return sec_code_L5I_SBAS(prn, N);
-        }
-        else {
+        } else {
             return sec_code_L5I(prn, N);
         }
-    }
-    else if (!strcmp(Sig, "L5Q")) {
+    } else if (!strcmp(Sig, "L5Q")) {
         if (prn >= 120 && prn <=158) {
             return sec_code_L5Q_SBAS(prn, N);
-        }
-        else {
+        } else {
             return sec_code_L5Q(prn, N);
         }
-    }
-    else if (!strcmp(Sig, "L5SI")) {
+    } else if (!strcmp(Sig, "L5SI")) {
         return sec_code_L5SI(prn, N);
-    }
-    else if (!strcmp(Sig, "L5SIV")) {
+    } else if (!strcmp(Sig, "L5SIV")) {
         return sec_code_L5SIV(prn, N);
-    }
-    else if (!strcmp(Sig, "L5SQ")) {
+    } else if (!strcmp(Sig, "L5SQ")) {
         return sec_code_L5SQ(prn, N);
-    }
-    else if (!strcmp(Sig, "L5SQV")) {
+    } else if (!strcmp(Sig, "L5SQV")) {
         return sec_code_L5SQV(prn, N);
-    }
-    else if (!strcmp(Sig, "G1CA")) {
+    } else if (!strcmp(Sig, "G1CA")) {
         return sec_code_G1CA(prn, N);
-    }
-    else if (!strcmp(Sig, "G2CA")) {
+    } else if (!strcmp(Sig, "G2CA")) {
         return sec_code_G2CA(prn, N);
-    }
-    else if (!strcmp(Sig, "G1OCD")) {
+    } else if (!strcmp(Sig, "G1OCD")) {
         return sec_code_G1OCD(prn, N);
-    }
-    else if (!strcmp(Sig, "G2OCP")) {
+    } else if (!strcmp(Sig, "G2OCP")) {
         return sec_code_G2OCP(prn, N);
-    }
-    else if (!strcmp(Sig, "G3OCD")) {
+    } else if (!strcmp(Sig, "G3OCD")) {
         return sec_code_G3OCD(prn, N);
-    }
-    else if (!strcmp(Sig, "G3OCP")) {
+    } else if (!strcmp(Sig, "G3OCP")) {
         return sec_code_G3OCP(prn, N);
-    }
-    else if (!strcmp(Sig, "E1C")) {
+    } else if (!strcmp(Sig, "E1C")) {
         return sec_code_E1C(prn, N);
-    }
-    else if (!strcmp(Sig, "E5AI")) {
+    } else if (!strcmp(Sig, "E5AI")) {
         return sec_code_E5AI(prn, N);
-    }
-    else if (!strcmp(Sig, "E5AQ")) {
+    } else if (!strcmp(Sig, "E5AQ")) {
         return sec_code_E5AQ(prn, N);
-    }
-    else if (!strcmp(Sig, "E5BI")) {
+    } else if (!strcmp(Sig, "E5BI")) {
         return sec_code_E5BI(prn, N);
-    }
-    else if (!strcmp(Sig, "E5BQ")) {
+    } else if (!strcmp(Sig, "E5BQ")) {
         return sec_code_E5BQ(prn, N);
-    }
-    else if (!strcmp(Sig, "E6C")) {
+    } else if (!strcmp(Sig, "E6C")) {
         return sec_code_E6C(prn, N);
-    }
-    else if (!strcmp(Sig, "B1I")) {
+    } else if (!strcmp(Sig, "B1I")) {
         return sec_code_B1I(prn, N);
-    }
-    else if (!strcmp(Sig, "B1CP")) {
+    } else if (!strcmp(Sig, "B1CP")) {
         return sec_code_B1CP(prn, N);
-    }
-    else if (!strcmp(Sig, "B2I")) {
+    } else if (!strcmp(Sig, "B2I")) {
         return sec_code_B2I(prn, N);
-    }
-    else if (!strcmp(Sig, "B2AD")) {
+    } else if (!strcmp(Sig, "B2AD")) {
         return sec_code_B2AD(prn, N);
-    }
-    else if (!strcmp(Sig, "B2AP")) {
+    } else if (!strcmp(Sig, "B2AP")) {
         return sec_code_B2AP(prn, N);
-    }
-    else if (!strcmp(Sig, "B3I")) {
+    } else if (!strcmp(Sig, "B3I")) {
         return sec_code_B3I(prn, N);
-    }
-    else if (!strcmp(Sig, "I1SP")) {
+    } else if (!strcmp(Sig, "I1SP")) {
         return sec_code_I1SP(prn, N);
     }
     *N = 0;
@@ -2317,11 +2294,11 @@ static int8_t *sec_code(const char *sig, int prn, int *N)
 //
 int8_t *sdr_sec_code(const char *sig, int prn, int *N)
 {
-    static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
+    static sdr_mutex_t mtx = SDR_MUTEX_INIT;
     
-    pthread_mutex_lock(&mtx);
+    sdr_mutex_lock(&mtx);
     int8_t *code = sec_code(sig, prn, N);
-    pthread_mutex_unlock(&mtx);
+    sdr_mutex_unlock(&mtx);
     
     return code;
 }
@@ -2351,26 +2328,22 @@ double sdr_code_cyc(const char *sig)
         !strcmp(Sig, "B2AD") || !strcmp(Sig, "B2AP") || !strcmp(Sig, "B2BI") ||
         !strcmp(Sig, "B3I" ) || !strcmp(Sig, "I5S" ) || !strcmp(Sig, "ISS" )) {
         return 1e-3;
-    }
-    else if (!strcmp(Sig, "G1OCD")) {
+    } else if (!strcmp(Sig, "E5AQP")) {
+        return 330.0 / 5.115e6;
+    } else if (!strcmp(Sig, "G1OCD")) {
         return 2e-3;
-    }
-    else if (!strcmp(Sig, "L6D" ) || !strcmp(Sig, "L6E" ) ||
+    } else if (!strcmp(Sig, "L6D" ) || !strcmp(Sig, "L6E" ) ||
         !strcmp(Sig, "E1B" ) || !strcmp(Sig, "E1C" )) {
         return 4e-3;
-    }
-    else if (!strcmp(Sig, "G1OCP")) {
+    } else if (!strcmp(Sig, "G1OCP")) {
         return 8e-3;
-    }
-    else if (!strcmp(Sig, "L1CP") || !strcmp(Sig, "L1CD") ||
+    } else if (!strcmp(Sig, "L1CP") || !strcmp(Sig, "L1CD") ||
         !strcmp(Sig, "B1CD") || !strcmp(Sig, "B1CP") || !strcmp(Sig, "I1SD") ||
         !strcmp(Sig, "I1SP")) {
         return 10e-3;
-    }
-    else if (!strcmp(Sig, "L2CM") || !strcmp(Sig, "G2OCP")) {
+    } else if (!strcmp(Sig, "L2CM") || !strcmp(Sig, "G2OCP")) {
         return 20e-3;
-    }
-    else if (!strcmp(Sig, "L2CL")) {
+    } else if (!strcmp(Sig, "L2CL")) {
         return 1500e-3;
     }
     return 0.0;
@@ -2394,8 +2367,7 @@ int sdr_code_len(const char *sig)
     if (!strcmp(Sig, "L1CA") || !strcmp(Sig, "L1CB") || !strcmp(Sig, "L1S" ) ||
         !strcmp(Sig, "G1OCD") || !strcmp(Sig, "I5S" ) || !strcmp(Sig, "ISS" )) {
         return 1023;
-    }
-    else if (!strcmp(Sig, "L1CP") || !strcmp(Sig, "L1CD") ||
+    } else if (!strcmp(Sig, "L1CP") || !strcmp(Sig, "L1CD") ||
         !strcmp(Sig, "L2CM") || !strcmp(Sig, "L5I" ) || !strcmp(Sig, "L5Q" ) ||
         !strcmp(Sig, "L5SI") || !strcmp(Sig, "L5SIV") || !strcmp(Sig, "L5SQ") ||
         !strcmp(Sig, "L5SQV") || !strcmp(Sig, "L6D" ) || !strcmp(Sig, "L6E" ) ||
@@ -2405,21 +2377,18 @@ int sdr_code_len(const char *sig)
         !strcmp(Sig, "B2AD") || !strcmp(Sig, "B2AP") || !strcmp(Sig, "B2BI") ||
         !strcmp(Sig, "B3I" ) || !strcmp(Sig, "I1SD") || !strcmp(Sig, "I1SP")) {
         return 10230;
-    }
-    else if (!strcmp(Sig, "L2CL")) {
+    } else if (!strcmp(Sig, "L2CL")) {
         return 767250;
-    }
-    else if (!strcmp(Sig, "E6B" ) || !strcmp(Sig, "E6C" )) {
+    } else if (!strcmp(Sig, "E5AQP")) {
+        return 330;
+    } else if (!strcmp(Sig, "E6B" ) || !strcmp(Sig, "E6C" )) {
         return 5115;
-    }
-    else if (!strcmp(Sig, "E1B" ) || !strcmp(Sig, "E1C" ) ||
+    } else if (!strcmp(Sig, "E1B" ) || !strcmp(Sig, "E1C" ) ||
              !strcmp(Sig, "G1OCP")) {
         return 4092;
-    }
-    else if (!strcmp(Sig, "G1CA") || !strcmp(Sig, "G2CA")) {
+    } else if (!strcmp(Sig, "G1CA") || !strcmp(Sig, "G2CA")) {
         return 511;
-    }
-    else if (!strcmp(Sig, "B1I" ) || !strcmp(Sig, "B2I" )) {
+    } else if (!strcmp(Sig, "B1I" ) || !strcmp(Sig, "B2I" )) {
         return 2046;
     }
     return 0;
@@ -2445,46 +2414,35 @@ double sdr_sig_freq(const char *sig)
         !strcmp(Sig, "L1CD") || !strcmp(Sig, "B1CD") || !strcmp(Sig, "B1CP") ||
         !strcmp(Sig, "I1SD") || !strcmp(Sig, "I1SP")) {
         return 1575.42e6;
-    }
-    else if (!strcmp(Sig, "L2CM") || !strcmp(Sig, "L2CL")) {
+    } else if (!strcmp(Sig, "L2CM") || !strcmp(Sig, "L2CL")) {
         return 1227.60e6;
-    }
-    else if (!strcmp(Sig, "L5I" ) || !strcmp(Sig, "L5Q" ) ||
+    } else if (!strcmp(Sig, "L5I" ) || !strcmp(Sig, "L5Q" ) ||
         !strcmp(Sig, "L5SI") || !strcmp(Sig, "L5SIV") || !strcmp(Sig, "L5SQ") ||
         !strcmp(Sig, "L5SQV") || !strcmp(Sig, "E5AI") || !strcmp(Sig, "E5AQ") ||
-        !strcmp(Sig, "B2AD") || !strcmp(Sig, "B2AP") || !strcmp(Sig, "I5S")) {
+        !strcmp(Sig, "E5AQP") || !strcmp(Sig, "B2AD") || !strcmp(Sig, "B2AP") ||
+        !strcmp(Sig, "I5S")) {
         return 1176.45e6;
-    }
-    else if (!strcmp(Sig, "E5BI") || !strcmp(Sig, "E5BQ") ||
+    } else if (!strcmp(Sig, "E5BI") || !strcmp(Sig, "E5BQ") ||
              !strcmp(Sig, "B2I" ) || !strcmp(Sig, "B2BI")) {
         return 1207.14e6;
-    }
-    else if (!strcmp(Sig, "L6D" ) || !strcmp(Sig, "L6E" ) ||
+    } else if (!strcmp(Sig, "L6D" ) || !strcmp(Sig, "L6E" ) ||
              !strcmp(Sig, "E6B" ) || !strcmp(Sig, "E6C" )) {
         return 1278.75e6;
-    }
-    else if (!strcmp(Sig, "B1I" )) {
+    } else if (!strcmp(Sig, "B1I" )) {
         return 1561.098e6;
-    }
-    else if (!strcmp(Sig, "B3I" )) {
+    } else if (!strcmp(Sig, "B3I" )) {
         return 1268.52e6;
-    }
-    else if (!strcmp(Sig, "G1CA")) {
+    } else if (!strcmp(Sig, "G1CA")) {
         return 1602.0e6;
-    }
-    else if (!strcmp(Sig, "G1OCD") || !strcmp(Sig, "G1OCP")) {
+    } else if (!strcmp(Sig, "G1OCD") || !strcmp(Sig, "G1OCP")) {
         return 1600.995e6;
-    }
-    else if (!strcmp(Sig, "G2CA")) {
+    } else if (!strcmp(Sig, "G2CA")) {
         return 1246.0e6;
-    }
-    else if (!strcmp(Sig, "G2OCP")) {
+    } else if (!strcmp(Sig, "G2OCP")) {
         return 1248.0e6;
-    }
-    else if (!strcmp(Sig, "G3OCD") || !strcmp(Sig, "G3OCP")) {
+    } else if (!strcmp(Sig, "G3OCD") || !strcmp(Sig, "G3OCP")) {
         return 1202.025e6;
-    }
-    else if (!strcmp(Sig, "ISS" )) {
+    } else if (!strcmp(Sig, "ISS" )) {
         return 2492.028e6;
     }
     return 0.0;
@@ -2498,35 +2456,27 @@ static void sat_id_qzss(const char *sig, int prn, char *sat)
     if (!strcmp(sig, "L1CB")) {
         if (prn >= 203 && prn <= 206) {
             sprintf(sat, "J%02d", sat_L1B[prn-203]);
-        }
-        else if (prn == 198 || prn == 202) {
+        } else if (prn == 198 || prn == 202) {
             sprintf(sat, "J%02d", prn - 192);
-        }
-        else {
+        } else {
             sprintf(sat, "???");
         }
-    }
-    else if ((!strcmp(sig, "L1CA") || !strcmp(sig, "L1CD") ||
+    } else if ((!strcmp(sig, "L1CA") || !strcmp(sig, "L1CD") ||
         !strcmp(sig, "L1CP") || !strcmp(sig, "L2CM") || !strcmp(sig, "L5I") ||
         !strcmp(sig, "L5Q") || !strcmp(sig, "L6D")) &&
         prn >= 193 && prn <= 202) {
         sprintf(sat, "J%02d", prn - 192);
-    }
-    else if (!strcmp(sig, "L1S") && prn >= 183 && prn <= 189) {
+    } else if (!strcmp(sig, "L1S") && prn >= 183 && prn <= 189) {
         sprintf(sat, "J%02d", prn - 182);
-    }
-    else if ((!strcmp(sig, "L5SI") || !strcmp(sig, "L5SQ")) &&
+    } else if ((!strcmp(sig, "L5SI") || !strcmp(sig, "L5SQ")) &&
          ((prn >= 184 && prn <= 186) || prn == 189)) {
         sprintf(sat, "J%02d", prn - 182);
-    }
-    else if ((!strcmp(sig, "L5SIV") || !strcmp(sig, "L5SQV")) &&
+    } else if ((!strcmp(sig, "L5SIV") || !strcmp(sig, "L5SQV")) &&
          (prn == 186 || prn == 205 || prn == 206)) {
         sprintf(sat, "J%02d", prn == 186 ? 4 : prn - 197);
-    }
-    else if (!strcmp(sig, "L6E") && prn >= 203 && prn <= 212) {
+    } else if (!strcmp(sig, "L6E") && prn >= 203 && prn <= 212) {
         sprintf(sat, "J%02d", prn - 202);
-    }
-    else {
+    } else {
         sprintf(sat, "???");
     }
 }
@@ -2551,40 +2501,30 @@ void sdr_sat_id(const char *sig, int prn, char *sat)
     if (Sig[0] == 'L') {
         if (prn >= 1 && prn <= 63) { // GPS
             sprintf(sat, "G%02d", prn);
-        }
-        else if (prn >= 120 && prn <= 158) { // SBAS
+        } else if (prn >= 120 && prn <= 158) { // SBAS
             sprintf(sat, "S%02d", prn - 100);
-        }
-        else { // QZSS
+        } else { // QZSS
             sat_id_qzss(Sig, prn ,sat);
         }
-    }
-    else if ((!strcmp(Sig, "G1CA") || !strcmp(Sig, "G2CA")) &&
+    } else if ((!strcmp(Sig, "G1CA") || !strcmp(Sig, "G2CA")) &&
         prn >= -7 && prn <= 6) { // GLONASS (FDMA)
         sprintf(sat, "R%+d", prn);
-    }
-    else if (Sig[0] == 'G' && prn >= 1 && prn <= 27) { // GLONASS (CDMA)
+    } else if (Sig[0] == 'G' && prn >= 1 && prn <= 27) { // GLONASS (CDMA)
         sprintf(sat, "R%02d", prn);
-    }
-    else if (Sig[0] == 'E' && prn >= 1 && prn <= 36) { // Galileo
+    } else if (Sig[0] == 'E' && prn >= 1 && prn <= 36) { // Galileo
         sprintf(sat, "E%02d", prn);
-    }
-    else if (Sig[0] == 'B' && prn >= 1 && prn <= 63) { // BDS
+    } else if (Sig[0] == 'B' && prn >= 1 && prn <= 63) { // BDS
         if ((!strncmp(Sig, "B1C", 3) || !strncmp(Sig, "B2A", 3)) &&
             (prn < 19 || prn > 58)) {
             sprintf(sat, "???");
-        }
-        else if (!strcmp(Sig, "B2I") && prn > 18) {
+        } else if (!strcmp(Sig, "B2I") && prn > 18) {
             sprintf(sat, "???");
-        }
-        else {
+        } else {
             sprintf(sat, "C%02d", prn);
         }
-    }
-    else if (Sig[0] == 'I' && prn >= 1 && prn <= 14) { // NavIC
+    } else if (Sig[0] == 'I' && prn >= 1 && prn <= 14) { // NavIC
         sprintf(sat, "I%02d", prn);
-    }
-    else {
+    } else {
         sprintf(sat, "???");
     }
 }
@@ -2667,7 +2607,7 @@ void sdr_gen_code_fft(const int8_t *code, int len_code, double T, double coff,
     for (int i = 0; i < N; i++) {
         code_res[i][0] = code[(int)((coff * fs + i) * dx) % len_code];
     }
-    sdr_cpx_fft(code_res, N + Nz, 0, code_fft);
+    sdr_cpx_fft(code_res, N + Nz, SDR_FFT_FORWARD, code_fft);
     
     // complex conjugate
     for (int i = 0; i < N + Nz; i++) {
