@@ -101,9 +101,9 @@ static int sample_byte(int fmt)
 }
 
 // C/N0 bar --------------------------------------------------------------------
-static void cn0_bar(float cn0, char *buff, int size)
+static void cn0_bar(float cn0, char *buff, int max_bar)
 {
-    int n = MIN((int)(MAX_BAR / 20.0 * (cn0 - 30.0)) + 1, size - 1);
+    int n = CLIP((int)(max_bar / 20.0 * (cn0 - 30.0)) + 1, 0, max_bar);
     for (int i = 0; i < n; i++) {
         buff[i] = '|';
     }
@@ -160,9 +160,9 @@ static int print_head(sdr_rcv_t *rcv, char *buff, int size)
 // print SDR receiver channel status -------------------------------------------
 static int print_ch_stat(sdr_ch_t *ch, int opt, char *buff, int size)
 {
-    char bar[16], stat[16];
+    char bar[MAX_BAR+1], stat[16];
     int n = 0;
-    cn0_bar((float)ch->cn0, bar, sizeof(bar));
+    cn0_bar((float)ch->cn0, bar, MAX_BAR);
     sync_stat(ch, stat, sizeof(stat));
     n += ap_str(buff + n, size - n, "%4d %2d %4s %5s %3d %8.2f %4.1f %-13s"
         "%11.7f %7.1f %11.1f %s %5d %4d %4d %3d", ch->no, ch->rf_ch + 1,
@@ -378,7 +378,7 @@ int sdr_rcv_rfch_psd(sdr_rcv_t *rcv, int ch, double tave, int N, float *psd)
     if (!rcv || !rcv->state || ch < 1 || ch > rcv->nrfch + rcv->narch) return 0;
     int n = (int)(rcv->fs * tave);
     int64_t ix = get_buff_ix(rcv);
-    if (ix * rcv->N < n) return 0;
+    if (N < 0 || n < N || ix * rcv->N < n) return 0;
     sdr_cpx_t *buff = sdr_cpx_malloc(n);
     for (int i = 0; i < n; i++) {
         int j = (int)((ix * rcv->N - n + i) % rcv->buff[ch-1]->N);
@@ -717,10 +717,12 @@ static int read_data(sdr_rcv_t *rcv, uint8_t *raw, int N)
             sdr_sleep_msec(1);
         }
     } else if (rcv->dev == SDR_DEV_SOAPY) { // SoapySDR device
-        while (!sdr_sdev_read((sdr_sdev_t *)rcv->dp, raw, N)) {
+        int n;
+        while ((n = sdr_sdev_read((sdr_sdev_t *)rcv->dp, raw, N)) == 0) {
             if (!rcv->state) return 0;
             sdr_sleep_msec(1);
         }
+        if (n < 0) return 0;
     } else { // SDR_DEV_STR
         for (int n = 0; n < N; ) {
             n += strread((stream_t *)rcv->dp, raw + n, N - n);
@@ -1426,7 +1428,7 @@ static sdr_rcv_t *rcv_open_str(const char **sigs, int *prns, int n, int fmt,
 {
     stream_t *str = strnew();
     
-    if (!stropen(str, STR_MODE_R, STR_TCPCLI, path)) {
+    if (!stropen(str, STR_TCPCLI, STR_MODE_R, path)) {
         fprintf(stderr, "stream open error %s\n", path);
         strfree(str);
         return NULL;
