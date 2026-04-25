@@ -131,7 +131,7 @@ static void out_log_ch(sdr_ch_t *ch)
 //  Output log $OBS (observation data).
 //
 //  format:
-//      $OBS,time,year,month,day,hour,min,sec,sat,code,cn0,pr,cp,dop,lli,fcn
+//      $OBS,time,year,month,day,hour,min,sec,sat,code,cn0,pr,cp,dop,lli,fcn,ch
 //          time  receiver time (s)
 //          year,month,day  obs data day (GPST)
 //          hour,min,sec  obs data time (GPST)
@@ -143,6 +143,7 @@ static void out_log_ch(sdr_ch_t *ch)
 //          dop   Doppler frequency (Hz)
 //          lli   loss of lock indicator
 //          fcn   frequency channel number for GLONASS FDMA signals
+//          ch    RF ch number for L1 data
 //
 static void out_log_obs(double time, const obs_t *obs, const nav_t *nav)
 {
@@ -160,9 +161,10 @@ static void out_log_obs(double time, const obs_t *obs, const nav_t *nav)
         for (int j = 0; j < NFREQ + NEXOBS; j++) {
             if (!data->code[j]) continue;
             sdr_log(3, "$OBS,%.3f,%.0f,%.0f,%.0f,%.0f,%.0f,%.3f,%s,%s,%.1f,"
-                "%.3f,%.3f,%.3f,%d,%d", time, ep[0], ep[1], ep[2], ep[3], ep[4],
-                ep[5], sat, code2obs(data->code[j]), data->SNR[j] * SNR_UNIT,
-                data->P[j], data->L[j], data->D[j], data->LLI[j], fcn);
+                "%.3f,%.3f,%.3f,%d,%d,%d", time, ep[0], ep[1], ep[2], ep[3],
+                ep[4], ep[5], sat, code2obs(data->code[j]),
+                data->SNR[j] * SNR_UNIT, data->P[j], data->L[j], data->D[j],
+                data->LLI[j], fcn, data->rcv);
         }
     }
 }
@@ -202,6 +204,38 @@ static void out_log_pos(double time, const sol_t *sol, int nsat)
         "%.3f,%.3f,%.3f,%.9f", time, ep[0], ep[1], ep[2], ep[3], ep[4], ep[5],
         pos[0] * R2D, pos[1] * R2D, pos[2], 5, sol->ns, SQRT(Q[4]), SQRT(Q[0]),
         SQRT(Q[8]), sol->dtr[0]);
+}
+
+//------------------------------------------------------------------------------
+//  Output log $ATT (attitude solution).
+//
+//  format:
+//      $ATT,time,year,month,day,hour,min,sec,roll,pitch,yaw,nobs,bias1,bias2,
+//          bias3,bias4,bias5,bias6,bias7,bias8
+//          time  receiver time (s)
+//          year,month,day  solution day (GPST)
+//          hour,min,sec  solution time (GPST)
+//          roll  roll angle (deg)
+//          pitch pitch angle (deg)
+//          yaw   yaw angle (deg)
+//          nobs  number of obs data
+//          bias1 hardware bias RFCH 1 (ns)
+//          bias2 hardware bias RFCH 2 (ns)
+//          ...
+//          bias8 hardware bias RFCH 8 (ns)
+//
+static void out_log_att(double time, const sdr_att_t *att)
+{
+    double ep[6];
+    time2epoch(att->time, ep);
+    sdr_log(3, "$ATT,%.3f,%.0f,%.0f,%.0f,%.0f,%.0f,%.3f,%.3f,%.3f,%.3f,%d,%.3f,"
+        "%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f", time, ep[0], ep[1], ep[2], ep[3],
+        ep[4], ep[5], att->roll * R2D, att->pitch * R2D, att->yaw * R2D,
+        att->pitch * R2D, att->nobs, att->bias[0] * CLIGHT / 1e9,
+        att->bias[1] * CLIGHT / 1e9, att->bias[2] * CLIGHT / 1e9,
+        att->bias[3] * CLIGHT / 1e9, att->bias[4] * CLIGHT / 1e9,
+        att->bias[5] * CLIGHT / 1e9, att->bias[6] * CLIGHT / 1e9,
+        att->bias[7] * CLIGHT / 1e9);
 }
 
 //------------------------------------------------------------------------------
@@ -256,19 +290,18 @@ static void out_log_eph(double time, const char *sat, const char *sig,
     
     if (sat[0] != 'R') {
         const eph_t *eph = (const eph_t *)p;
-        sprintf(buff, "%d,%d,%d,%d,%d,%d,%d,%.14E,%.14E,%.14E,%.14E,%.14E,"
+        snprintf(buff, sizeof(buff), "%d,%d,%d,%d,%d,%d,%d,%.14E,%.14E,%.14E,"
             "%.14E,%.14E,%.14E,%.14E,%.14E,%.14E,%.14E,%.14E,%.14E,%.14E,%.14E,"
-            "%.14E,%.14E,%.14E,%.14E,%.14E,%d,%d", eph->iode, eph->iodc,
-            eph->sva, eph->svh, (int)eph->toe.time, (int)eph->toc.time,
+            "%.14E,%.14E,%.14E,%.14E,%.14E,%.14E,%.14E,%d,%d", eph->iode,
+            eph->iodc, eph->sva, eph->svh, (int)eph->toe.time, (int)eph->toc.time,
             (int)eph->ttr.time, eph->A, eph->e, eph->i0, eph->OMG0, eph->omg,
             eph->M0, eph->deln, eph->OMGd, eph->idot, eph->crc, eph->crs,
             eph->cuc, eph->cus, eph->cic, eph->cis, eph->toes, eph->fit,
             eph->f0, eph->f1, eph->f2, eph->tgd[0], eph->code, eph->flag);
-    }
-    else {
+    } else {
         const geph_t *geph = (const geph_t *)p;
-        sprintf(buff, "%d,%d,%d,%d,%d,%d,%d,%.14E,%.14E,%.14E,%.14E,%.14E,"
-            "%.14E,%.14E,%.14E,%.14E,%.14E,%.14E,%.14E", geph->iode,
+        snprintf(buff, sizeof(buff), "%d,%d,%d,%d,%d,%d,%d,%.14E,%.14E,%.14E,"
+            "%.14E,%.14E,%.14E,%.14E,%.14E,%.14E,%.14E,%.14E,%.14E", geph->iode,
             geph->frq, geph->svh, geph->sva, geph->age, (int)geph->toe.time,
             (int)geph->tof.time, geph->pos[0], geph->pos[1], geph->pos[2],
             geph->vel[0], geph->vel[1], geph->vel[2], geph->acc[0], geph->acc[1],
@@ -291,13 +324,15 @@ static void out_nmea(const sol_t *sol, const ssat_t *ssat, stream_t *str)
 }
 
 // count number of signals -----------------------------------------------------
-static int num_sigs(int idx, const obs_t *obs)
+//   rcv_no: RF CH filter (0: all)
+static int num_sigs(int idx, const obs_t *obs, int rcv_no)
 {
     int nsig = 0, mask[MAXCODE] = {0};
     
     for (int i = 0; i < obs->n; i++) {
         obsd_t *data = obs->data + i;
         if (sys_idx(data->sat) != idx) continue;
+        if (rcv_no > 0 && data->rcv != rcv_no) continue;
         for (int j = 0; j < NFREQ + NEXOBS; j++) {
             if (!data->code[j] || mask[data->code[j]-1]) continue;
             mask[data->code[j]-1] = 1;
@@ -307,24 +342,26 @@ static int num_sigs(int idx, const obs_t *obs)
     return nsig;
 }
 
-// output RTCM3 observation data -----------------------------------------------
-static void out_rtcm3_obs(rtcm_t *rtcm, const obs_t *obs, stream_t *str)
+// output RTCM3 MSM messages for a single RF CH (rcv_no = 0: all CHs merged) ---
+static void out_rtcm3_msm(rtcm_t *rtcm, const obs_t *obs, stream_t *str,
+    int rcv_no)
 {
     // RTCM3 MSM message types
     static const int msgs[] = {1077, 1087, 1097, 1117, 1127, 1137, 1107, 0};
-    int nsig[7] = {0}, idx_tail = 0;
+    int nsig[7] = {0}, idx_tail = -1;
     
-    if (!str || obs->n <= 0) return;
-    
-    rtcm->time = obs->data[0].time;
     for (int i = 0; msgs[i]; i++) {
-        if ((nsig[i] = num_sigs(i, obs))) idx_tail = i;
+        if ((nsig[i] = num_sigs(i, obs, rcv_no))) idx_tail = i;
     }
-    for (int i = 0; i < msgs[i]; i++) {
+    if (idx_tail < 0) return;
+    
+    for (int i = 0; msgs[i]; i++) {
+        if (!nsig[i]) continue;
         rtcm->obs.n = 0;
         for (int j = 0; j < obs->n; j++) {
             obsd_t *data = obs->data + j;
             if (sys_idx(data->sat) != i) continue;
+            if (rcv_no > 0 && data->rcv != rcv_no) continue;
             
             // separate messages if nsat x nsig > 64
             if ((rtcm->obs.n + 1) * nsig[i] > 64) {
@@ -341,6 +378,30 @@ static void out_rtcm3_obs(rtcm_t *rtcm, const obs_t *obs, stream_t *str)
     }
 }
 
+// output RTCM3 observation data -----------------------------------------------
+//   If -ARRAY is set in rcv option, MSM messages are split per RF CH with
+//   rtcm->staid set to the RF CH number (1..narch). Otherwise all CHs are
+//   merged in a single set of messages.
+static void out_rtcm3_obs(rtcm_t *rtcm, const obs_t *obs, stream_t *str,
+    const sdr_rcv_t *rcv)
+{
+    if (!str || obs->n <= 0) return;
+    
+    rtcm->time = obs->data[0].time;
+    
+    if (rcv && strstr(rcv->opt, "-ARRAY")) {
+        int staid_save = rtcm->staid;
+        int narch = rcv->narch > 0 ? rcv->narch : rcv->nrfch;
+        for (int k = 1; k <= narch; k++) {
+            rtcm->staid = k; // RF CH as RTCM station ID
+            out_rtcm3_msm(rtcm, obs, str, k);
+        }
+        rtcm->staid = staid_save;
+    } else {
+        out_rtcm3_msm(rtcm, obs, str, 0);
+    }
+}
+
 // output RTCM3 navigation data ------------------------------------------------
 static void out_rtcm3_nav(rtcm_t *rtcm, int sat, int type, const nav_t *nav,
     stream_t *str)
@@ -352,8 +413,7 @@ static void out_rtcm3_nav(rtcm_t *rtcm, int sat, int type, const nav_t *nav,
     if (!str || idx < 0 || !msgs[idx]) return;
     if (sys == SYS_GLO) {
         rtcm->nav.geph[prn-1] = nav->geph[prn-1];
-    }
-    else {
+    } else {
         rtcm->nav.eph[MAXSAT*type+sat-1] = nav->eph[MAXSAT*type+sat-1];
     }
     rtcm->ephsat = sat;
@@ -425,11 +485,12 @@ sdr_pvt_t *sdr_pvt_new(sdr_rcv_t *rcv)
     pvt->nav->ns = pvt->nav->nsmax = NSATSBS * 2;
     pvt->sol = (sol_t *)sdr_malloc(sizeof(sol_t));
     pvt->ssat = (ssat_t *)sdr_malloc(sizeof(ssat_t) * MAXSAT);
+    pvt->att = (sdr_att_t *)sdr_malloc(sizeof(sdr_att_t));
     pvt->rtcm = (rtcm_t *)sdr_malloc(sizeof(rtcm_t));
     init_rtcm(pvt->rtcm);
     set_obs_idx(rcv);
     pvt->rcv = rcv;
-    pthread_mutex_init(&pvt->mtx, NULL);
+    sdr_mutex_init(&pvt->mtx);
     readnav(FILE_NAV, pvt->nav); // load navigation data
     return pvt;
 }
@@ -455,6 +516,7 @@ void sdr_pvt_free(sdr_pvt_t *pvt)
     sdr_free(pvt->nav);
     sdr_free(pvt->sol);
     sdr_free(pvt->ssat);
+    sdr_free(pvt->att);
     free_rtcm(pvt->rtcm);
     sdr_free(pvt->rtcm);
     sdr_free(pvt);
@@ -478,8 +540,7 @@ static double gen_prng(gtime_t time, const sdr_ch_t *ch)
     
     if (ch->week > 0) {
         tau = (week - ch->week) * 86400.0 * 7 + tow - ch->tow * 1e-3 + ch->coff;
-    }
-    else if (ch->tow_v == 2) { // resolve 100 ms ambiguity (0.05 <= tau < 0.15)
+    } else if (ch->tow_v == 2) { // resolve 100 ms ambiguity (0.05 <= tau < 0.15)
         tau = tow - ch->tow * 1e-3 + ch->coff + ch->nav->coff;
         tau -= floor(tau / 0.1) * 0.1;
         if (tau < 0.05) tau += 0.1;
@@ -500,32 +561,16 @@ static double gen_cphas(const sdr_ch_t *ch, double P)
     // phase alignment ([1] Table A23)
     if (!strcmp(ch->sig, "L1CD") || !strcmp(ch->sig, "L1CP")) {
         L += 0.25; // + 1/4 cyc
-    }
-#if 0 // RINEX convension
-    else if (!strcmp(ch->sig, "L5Q") || !strcmp(ch->sig, "G3OCP") ||
-        !strcmp(ch->sig, "E5AQ") || !strcmp(ch->sig, "E5BQ") ||
-        !strcmp(ch->sig, "L5SQ") || !strcmp(ch->sig, "L5SQV") ||
-        !strcmp(ch->sig, "B1CP") || !strcmp(ch->sig, "B2AP")) {
-        L -= 0.25; // - 1/4 cyc
-    }
-    else if (!strcmp(ch->sig, "E1C") || !strcmp(ch->sig, "E6C")) {
-        L += 0.5; // + 1/2 cyc
-    }
-#else
-    else if (!strcmp(ch->sig, "L5Q") || !strcmp(ch->sig, "L5SQ") ||
+    } else if (!strcmp(ch->sig, "L5Q") || !strcmp(ch->sig, "L5SQ") ||
         !strcmp(ch->sig, "L5SQV")) {
         L -= 0.25; // - 1/4 cyc
-    }
-    else if (!strcmp(ch->sig, "G3OCP") || !strcmp(ch->sig, "E5AQ") ||
+    } else if (!strcmp(ch->sig, "G3OCP") || !strcmp(ch->sig, "E5AQ") ||
         !strcmp(ch->sig, "E5BQ") || !strcmp(ch->sig, "B1CP") ||
         !strcmp(ch->sig, "B2AP")) {
         L += 0.25; // + 1/4 cyc
-    }
-#endif
-    else if (!strcmp(ch->sig, "L2CM")) {
+    } else if (!strcmp(ch->sig, "L2CM")) {
         L += (ch->sat[0] == 'J') ? 0.0 : -0.25; // 0 cyc (QZSS), -1/4 cyc (GPS)
-    }
-    else if ((!strcmp(ch->sig, "B1I") || !strcmp(ch->sig, "B2I")) &&
+    } else if ((!strcmp(ch->sig, "B1I") || !strcmp(ch->sig, "B2I")) &&
         (ch->prn <= 5 || ch->prn >= 59)) {
         L += 0.5;
     }
@@ -537,32 +582,33 @@ static void update_obs(gtime_t time, obs_t *obs, sdr_ch_t *ch)
 {
     uint8_t code = sig2code(ch->sig);
     double P = gen_prng(time, ch);
-    int i, j = ch->obs_idx, sat;
+    int i, idx = ch->obs_idx, sat;
     
     if (strstr(ch->sat, "R-") || strstr(ch->sat, "R+")) return;
-    if (P <= 0.0 || j < 0 || !(sat = satid2no(ch->sat))) return;
+    if (P <= 0.0 || idx < 0 || !(sat = satid2no(ch->sat))) return;
     
     for (i = 0; i < obs->n; i++) {
-        if (sat == obs->data[i].sat) break;
+        if (sat == obs->data[i].sat &&
+            (idx != 0 || obs->data[i].rcv == ch->rf_ch + 1)) break;
     }
     if (i >= obs->n) {
         if (i >= MAXSAT) return;
         memset(obs->data + i, 0, sizeof(obsd_t));
         obs->data[i].time = time;
         obs->data[i].sat = sat;
-        obs->data[i].rcv = 1;
+        obs->data[i].rcv = idx == 0 ? ch->rf_ch + 1 : 0;
         obs->n++;
     }
-    obs->data[i].code[j] = code;
-    obs->data[i].P[j] = P;
-    obs->data[i].L[j] = gen_cphas(ch, P);
-    obs->data[i].D[j] = ch->fd;
-    obs->data[i].SNR[j] = (uint16_t)(ch->cn0 / SNR_UNIT + 0.5);
+    obs->data[i].code[idx] = code;
+    obs->data[i].P[idx] = P;
+    obs->data[i].L[idx] = gen_cphas(ch, P);
+    obs->data[i].D[idx] = (float)ch->fd;
+    obs->data[i].SNR[idx] = (uint16_t)(ch->cn0 / SNR_UNIT + 0.5);
     if (ch->lock * ch->T <= 2.0 || fabs(ch->trk->err_phas) > 0.25) {
-        obs->data[i].LLI[j] |= 1; // PLL unlock
+        obs->data[i].LLI[idx] |= 1; // PLL unlock
     }
     if (ch->nav->fsync <= 0 && ch->trk->sec_sync <= 0) {
-        obs->data[i].LLI[j] |= 2; // half-cyc-amb unknown
+        obs->data[i].LLI[idx] |= 2; // half-cyc-amb unknown
     }
 }
 
@@ -579,7 +625,7 @@ static void update_obs(gtime_t time, obs_t *obs, sdr_ch_t *ch)
 //
 void sdr_pvt_udobs(sdr_pvt_t *pvt, int64_t ix, sdr_ch_t *ch)
 {
-    pthread_mutex_lock(&pvt->mtx);
+    sdr_mutex_lock(&pvt->mtx);
     
     if (pvt->ix <= 0) { // initialize epoch time and cycle
         init_epoch(pvt, ix, ch);
@@ -596,7 +642,7 @@ void sdr_pvt_udobs(sdr_pvt_t *pvt, int64_t ix, sdr_ch_t *ch)
             out_log_ch(ch);
         }
     }
-    pthread_mutex_unlock(&pvt->mtx);
+    sdr_mutex_unlock(&pvt->mtx);
 }
 
 // test nav data consistency for GLONASS ---------------------------------------
@@ -630,8 +676,7 @@ static int test_match_eph(eph_t *eph1, const eph_t *eph2)
         *(eph1 + MAXSAT) = *eph2;
         *eph1 = *eph2;
         return 1;   
-    }
-    else { // not match previous ephemeris
+    } else { // not match previous ephemeris
         *(eph1 + MAXSAT) = *eph2;
         return 0;   
     }
@@ -654,7 +699,7 @@ void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch)
     
     if (sys == SYS_NONE) return;
     
-    pthread_mutex_lock(&pvt->mtx);
+    sdr_mutex_lock(&pvt->mtx);
     
     if (!strcmp(ch->sig, "L1CA") && sys == SYS_SBS) { // SBAS
         if (ch->nav->type == 9) { // geo navigation message
@@ -665,8 +710,7 @@ void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch)
                 pvt->count[2]++;
             }
         }
-    }
-    else if (!strcmp(ch->sig, "L1CA") || !strcmp(ch->sig, "L1CB")) { // GPS/QZS LNAV
+    } else if (!strcmp(ch->sig, "L1CA") || !strcmp(ch->sig, "L1CB")) { // GPS/QZS LNAV
         if (ch->nav->type == 3 &&
             decode_frame(data, pvt->nav->eph + sat - 1, NULL, NULL, NULL)) {
             pvt->nav->eph[sat-1].sat = sat;
@@ -677,8 +721,7 @@ void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch)
         if (sys == SYS_GPS && ch->nav->type == 4) {
             decode_frame(data, NULL, NULL, pvt->nav->ion_gps, NULL);
         }
-    }
-    else if (!strcmp(ch->sig, "G1CA") || !strcmp(ch->sig, "G2CA")) { // GLO NAV
+    } else if (!strcmp(ch->sig, "G1CA") || !strcmp(ch->sig, "G2CA")) { // GLO NAV
         pvt->nav->geph[prn-1].tof = pvt->time;
         if (ch->nav->type == 4 && test_nav_glo(ch) &&
             decode_glostr(data, pvt->nav->geph + prn - 1, NULL)) {
@@ -688,8 +731,7 @@ void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch)
             out_rtcm3_nav(pvt->rtcm, sat, 0, pvt->nav, pvt->rcv->strs[1]);
             pvt->count[2]++;
         }
-    }
-    else if (!strcmp(ch->sig, "E1B") || !strcmp(ch->sig, "E5BI")) { // GAL I/NAV
+    } else if (!strcmp(ch->sig, "E1B") || !strcmp(ch->sig, "E5BI")) { // GAL I/NAV
         if (ch->nav->type == 4 &&
             decode_gal_inav(data, pvt->nav->eph + sat - 1, NULL, NULL)) {
             pvt->nav->eph[sat-1].sat = sat;
@@ -697,8 +739,7 @@ void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch)
             out_rtcm3_nav(pvt->rtcm, sat, 0, pvt->nav, pvt->rcv->strs[1]);
             pvt->count[2]++;
         }
-    }
-    else if (!strcmp(ch->sig, "E5AI")) { // GAL F/NAV
+    } else if (!strcmp(ch->sig, "E5AI")) { // GAL F/NAV
         if (ch->nav->type == 4 &&
             decode_gal_fnav(data, pvt->nav->eph + MAXSAT + sat - 1, NULL,
                 NULL)) {
@@ -708,8 +749,7 @@ void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch)
             out_rtcm3_nav(pvt->rtcm, sat, 1, pvt->nav, pvt->rcv->strs[1]);
             pvt->count[2]++;
         }
-    }
-    else if (!strcmp(ch->sig, "B1I") || !strcmp(ch->sig, "B2I") ||
+    } else if (!strcmp(ch->sig, "B1I") || !strcmp(ch->sig, "B2I") ||
              !strcmp(ch->sig, "B3I")) {
         eph_t eph = {0};
         if (ch->prn >= 6 && ch->prn <= 58) { // BDS D1 NAV
@@ -719,31 +759,27 @@ void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch)
                     out_log_eph(ch->time, ch->sat, ch->sig, pvt->nav->eph + sat - 1);
                     out_rtcm3_nav(pvt->rtcm, sat, 0, pvt->nav, pvt->rcv->strs[1]);
                     pvt->count[2]++;
-                }
-                else {
+                } else {
                     out_log_eph(ch->time, ch->sat, ch->sig, &eph);
                     sdr_log(3, "$LOG,%.3f,%s,%s,EPHEMERIS UNMATCH", ch->time,
                         ch->sat, ch->sig);
                 }
             }
-        }
-        else { // BDS D2 NAV
+        } else { // BDS D2 NAV
             if (ch->nav->type == 10 && decode_bds_d2(data, &eph, NULL)) {
                 if (test_match_eph(pvt->nav->eph + sat - 1, &eph)) {
                     pvt->nav->eph[sat-1].sat = sat;
                     out_log_eph(ch->time, ch->sat, ch->sig, pvt->nav->eph + sat - 1);
                     out_rtcm3_nav(pvt->rtcm, sat, 0, pvt->nav, pvt->rcv->strs[1]);
                     pvt->count[2]++;
-                }
-                else {
+                } else {
                     out_log_eph(ch->time, ch->sat, ch->sig, &eph);
                     sdr_log(3, "$LOG,%.3f,%s,%s,EPHEMERIS UNMATCH", ch->time,
                         ch->sat, ch->sig);
                 }
             }
         }
-    }
-    else if (!strcmp(ch->sig, "I5S") || !strcmp(ch->sig, "ISS")) { // NavIC NAV
+    } else if (!strcmp(ch->sig, "I5S") || !strcmp(ch->sig, "ISS")) { // NavIC NAV
         if (ch->nav->type == 2 &&
             decode_irn_nav(data, pvt->nav->eph + sat - 1, NULL, NULL)) {
             pvt->nav->eph[sat-1].sat = sat;
@@ -752,7 +788,7 @@ void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch)
             pvt->count[2]++;
         }
     }
-    pthread_mutex_unlock(&pvt->mtx);
+    sdr_mutex_unlock(&pvt->mtx);
 }
 
 // correct solution time -------------------------------------------------------
@@ -819,8 +855,7 @@ static void update_sol(sdr_pvt_t *pvt)
             if (pvt->ssat[i].snr[0] == 0) continue;
             out_log_sat(time, i + 1, pvt->sol, pvt->ssat + i);
         }
-    }
-    else {
+    } else {
         pvt->sol->ns = 0;
         sdr_log(3, "$LOG,%.3f,PNTPOS ERROR,%s", time, msg);
     }
@@ -842,6 +877,121 @@ static void update_sol(sdr_pvt_t *pvt)
         trace(3, "%s %d %4.1f %5.1f %4.1f %12.3f\n", sat, ssat->vs,
             ssat->snr[0] * SNR_UNIT, ssat->azel[0] * R2D, ssat->azel[1] * R2D,
             ssat->resp[0]);
+    }
+}
+
+// LOS vector in local frame ---------------------------------------------------
+static int los_vec(int sat, const ssat_t *ssat, double *e)
+{
+    double cos_el;
+    
+    if (!ssat[sat-1].vs || ssat[sat-1].azel[1] < sdr_el_mask * D2R) return 0;
+    cos_el = cos(ssat[sat-1].azel[1]);
+    e[0] = sin(ssat[sat-1].azel[0]) * cos_el;
+    e[1] = cos(ssat[sat-1].azel[0]) * cos_el;
+    e[2] = sin(ssat[sat-1].azel[1]);
+    return 1;
+}
+
+// rotation matrix and jacobian by Euler angles (Z-Y-X) -------------------------
+static void euler_rot(double roll, double pitch, double yaw, double *R,
+    double *Dr, double *Dp, double *Dy)
+{
+    double cr = cos(roll), sr = sin(roll), cp = cos(pitch), sp = sin(pitch);
+    double cy = cos(yaw), sy = sin(yaw);
+
+    // Body frame: X=right, Y=forward, Z=up. R = Rz(yaw)*Rx(pitch)*Ry(roll)
+    //   roll : rotation about body Y (forward)
+    //   pitch: rotation about body X (right)
+    //   yaw  : rotation about body Z (up)
+    R [0] =  cy*cr - sy*sp*sr; R [3] = -sy*cp; R [6] =  cy*sr + sy*sp*cr;
+    R [1] =  sy*cr + cy*sp*sr; R [4] =  cy*cp; R [7] =  sy*sr - cy*sp*cr;
+    R [2] = -cp*sr;            R [5] =  sp;    R [8] =  cp*cr;
+    Dr[0] = -cy*sr - sy*sp*cr; Dr[3] =  0.0;   Dr[6] =  cy*cr - sy*sp*sr;
+    Dr[1] = -sy*sr + cy*sp*cr; Dr[4] =  0.0;   Dr[7] =  sy*cr + cy*sp*sr;
+    Dr[2] = -cp*cr;            Dr[5] =  0.0;   Dr[8] = -cp*sr;
+    Dp[0] = -sy*cp*sr;         Dp[3] =  sy*sp; Dp[6] =  sy*cp*cr;
+    Dp[1] =  cy*cp*sr;         Dp[4] = -cy*sp; Dp[7] = -cy*cp*cr;
+    Dp[2] =  sp*sr;            Dp[5] =  cp;    Dp[8] = -sp*cr;
+    Dy[0] = -sy*cr - cy*sp*sr; Dy[3] = -cy*cp; Dy[6] = -sy*sr + cy*sp*cr;
+    Dy[1] =  cy*cr - sy*sp*sr; Dy[4] = -sy*cp; Dy[7] =  cy*sr + sy*sp*cr;
+    Dy[2] =  0.0;              Dy[5] =  0.0;   Dy[8] =  0.0;
+}
+
+// baseline vector in local frame ----------------------------------------------
+static void baseline(const sdr_att_t *att, int ant1, int ant2, double *b,
+    double *dbdr, double *dbdp, double *dbdy)
+{
+    double b_body[3], R[9], Dr[9], Dp[9], Dy[9];
+    
+    for (int i = 0; i < 3; i++) { // baseline in body frame
+        b_body[i] = att->ant_pos[ant2-1][i] - att->ant_pos[ant1-1][i];
+    }
+    euler_rot(att->roll, att->pitch, att->yaw, R, Dr, Dp, Dy);
+    matmul("NN", 3, 1, 3, 1.0, R, b_body, 0.0, b);
+    matmul("NN", 3, 1, 3, 1.0, Dr, b_body, 0.0, dbdr);
+    matmul("NN", 3, 1, 3, 1.0, Dp, b_body, 0.0, dbdp);
+    matmul("NN", 3, 1, 3, 1.0, Dy, b_body, 0.0, dbdy);
+}
+
+// attitude estimation ----------------------------------------------------------
+static int est_att(sdr_pvt_t *pvt)
+{
+    sdr_att_t *att = pvt->att;
+    double e[3], b[3], dbdr[3], dbdp[3], dbdy[3];
+    double v[MAXSAT], H[MAXSAT*(3+SDR_MAX_RFCH)] = {0}, dx[3+SDR_MAX_RFCH];
+    double Q[(3+SDR_MAX_RFCH)*(3+SDR_MAX_RFCH)];
+    int m = 0, n = 3 + SDR_MAX_RFCH;
+
+    for (int i = 0; i < pvt->obs->n; ) {
+       int sat = pvt->obs->data[i].sat;
+       int ant1 = pvt->obs->data[i].rcv;
+       if (ant1 > SDR_MAX_RFCH || !los_vec(sat, pvt->ssat, e)) {
+           i++;
+           continue;
+       }
+       for (m = 0, i++; i < pvt->obs->n; i++) {
+          if (pvt->obs->data[i].sat != sat) break;
+          int ant2 = pvt->obs->data[i].rcv;
+          if (ant2 > SDR_MAX_RFCH) continue;
+          baseline(att, ant1, ant2, b, dbdr, dbdp, dbdy);
+          H[n*m  ] = dot(e, dbdr, 3);
+          H[n*m+1] = dot(e, dbdp, 3);
+          H[n*m+2] = dot(e, dbdy, 3);
+          H[n*m+3+ant1-1] = -1.0;
+          H[n*m+3+ant2-1] = 1.0;
+          v[m] = dot(e, b, 3);
+          v[m++] = dot(e, b, 3);
+       }
+    }
+    // constraint to avoid rank-deficient
+    for (int i = 0; i < SDR_MAX_RFCH; i++) {
+        H[n*m+3+i] = 1.0;
+        v[m++] = 1e-12;
+    }
+    if (lsq(H, v, n, m, dx, Q)) return -1;
+    
+    att->time = pvt->time;
+    att->nobs = m;
+    att->roll  += dx[0];
+    att->pitch += dx[1];
+    att->yaw   += dx[2];
+    for (int i = 0; i < SDR_MAX_RFCH; i++) {
+        att->bias[i] += dx[3+i];
+    }
+    return norm(dx, 3 + SDR_MAX_RFCH) <= 1e-3;
+}
+
+// update attitude solution ----------------------------------------------------
+static void update_att(sdr_pvt_t *pvt)
+{
+    int ret = 0;
+    
+    for (int iter = 0; iter < 10 && !ret; iter++) {
+        if ((ret = est_att(pvt)) < 0) return;
+    }
+    if (ret) {
+        out_log_att(pvt->ix * SDR_CYC, pvt->att);
     }
 }
 
@@ -886,7 +1036,7 @@ static void res_obs_amb(obs_t *obs, int sys, uint8_t code, double sec)
 //
 void sdr_pvt_udsol(sdr_pvt_t *pvt, int64_t ix)
 {
-    pthread_mutex_lock(&pvt->mtx);
+    sdr_mutex_lock(&pvt->mtx);
     
     if (pvt->ix > 0 && (pvt->nch >= pvt->rcv->nch ||
         ix >= pvt->ix + (int)(sdr_lag_epoch / SDR_CYC))) {
@@ -902,11 +1052,14 @@ void sdr_pvt_udsol(sdr_pvt_t *pvt, int64_t ix)
         
         // output log $OBS and RTCM3 observation data
         out_log_obs(pvt->ix * SDR_CYC, pvt->obs, pvt->nav);
-        out_rtcm3_obs(pvt->rtcm, pvt->obs, pvt->rcv->strs[1]);
+        out_rtcm3_obs(pvt->rtcm, pvt->obs, pvt->rcv->strs[1], pvt->rcv);
         if (pvt->obs->n > 0) pvt->count[1]++;
         
         // update PVT solution
         update_sol(pvt);
+        
+        // update attitude solution
+        update_att(pvt);
         
         // solution latency (s)
         pvt->latency = (ix - pvt->ix) * SDR_CYC;
@@ -926,7 +1079,7 @@ void sdr_pvt_udsol(sdr_pvt_t *pvt, int64_t ix)
             }
         }
     }
-    pthread_mutex_unlock(&pvt->mtx);
+    sdr_mutex_unlock(&pvt->mtx);
 }
 
 //------------------------------------------------------------------------------
@@ -935,30 +1088,30 @@ void sdr_pvt_udsol(sdr_pvt_t *pvt, int64_t ix)
 //  args:
 //      pvt      (I)  SDR PVT
 //      buff     (IO) PVT solution string buffer
+//      size     (I)  size of string buffer
 //
 //  returns:
 //      none
 //
-void sdr_pvt_solstr(sdr_pvt_t *pvt, char *buff)
+void sdr_pvt_solstr(sdr_pvt_t *pvt, char *buff, int size)
 {
-    char tstr[32], nstr[16];
+    char tstr[32] = "", nstr[16] = "";
     double pos[3] = {0};
     int stat = 0;
     
-    pthread_mutex_lock(&pvt->mtx);
+    sdr_mutex_lock(&pvt->mtx);
     
     if (norm(pvt->sol->rr, 3) > 1e-6) {
         time2str(pvt->sol->time, tstr, 1);
         ecef2pos(pvt->sol->rr, pos);
         stat = pvt->sol->stat;
-    }
-    else {
+    } else {
         time2str(pvt->time, tstr, 1);
     }
-    pthread_mutex_unlock(&pvt->mtx);
+    sdr_mutex_unlock(&pvt->mtx);
     
     tstr[4] = tstr[7] = '-';
-    sprintf(nstr, "%d/%d", pvt->sol->ns, pvt->nsat);
-    sprintf(buff, "%21s %12.8f %13.8f %9.3f %5s %s", tstr, pos[0] * R2D,
+    snprintf(nstr, sizeof(nstr), "%d/%d", pvt->sol->ns, pvt->nsat);
+    snprintf(buff, size, "%21s %12.8f %13.8f %9.3f %5s %s", tstr, pos[0] * R2D,
         pos[1] * R2D, pos[2], nstr, stat ? "FIX" : "---");
 }
