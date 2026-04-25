@@ -141,10 +141,10 @@ typedef struct {                // SoapySDR device type
     void *dev;                  // SoapySDR device handle
     void *str;                  // SoapySDR device stream
     char driver[32];            // SoapySDR driver
-    uint8_t *buff;              // sample data buffer
+    uint8_t *buff;              // sample buffer
     int state;                  // state of sampling thread
     int64_t rp, wp;             // read/write pointer of sampling data buffer
-    int ssize;                  // sample size
+    int ssize;                  // sample size (bytes/sample)
     sdr_thread_t thread;        // reading sampling thread
     sdr_mutex_t mtx;            // lock flag
 } sdr_sdev_t;
