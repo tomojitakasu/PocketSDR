@@ -67,8 +67,8 @@ def plot_update(plt):
     plt.c.update()
 
 # plot clear -------------------------------------------------------------------
-def plot_clear(plt):
-    plt.c.delete('all')
+def plot_clear(plt, tag=''):
+    plt.c.delete('all' if tag == '' else tag)
 
 # set plot x-limit -------------------------------------------------------------
 def plot_xlim(plt, xlim):
@@ -97,29 +97,34 @@ def plot_pos(plt, x, y):
     return xp, yp
 
 # plot rectangle ---------------------------------------------------------------
-def plot_rect(plt, x1, y1, x2, y2, color=FG_COLOR, fill=None):
+def plot_rect(plt, x1, y1, x2, y2, color=FG_COLOR, fill=None, tag=''):
     if color == None: return
     xp1, yp1 = plot_pos(plt, x1, y1)
     xp2, yp2 = plot_pos(plt, x2, y2)
-    plt.c.create_rectangle(xp1, yp1, xp2, yp2, outline=color, fill=fill)
+    plt.c.create_rectangle(xp1, yp1, xp2, yp2, outline=color, fill=fill,
+        tag=tag)
 
 # plot circle ------------------------------------------------------------------
-def plot_circle(plt, x, y, r, color=FG_COLOR, fill=None):
+def plot_circle(plt, x, y, r, color=FG_COLOR, fill=None, tag=''):
     if color == None: return
     xp, yp = plot_pos(plt, x, y)
     xs, ys = plot_scale(plt)
     plt.c.create_oval(xp - r * xs, yp - r * ys, xp + r * xs, yp + r * ys,
-        outline=color, fill=fill)
+        outline=color, fill=fill, tag=tag)
 
 # plot polyline ----------------------------------------------------------------
-def plot_poly(plt, x, y, color=FG_COLOR, width=1):
+def plot_poly(plt, x, y, color=FG_COLOR, width=1, fill=0, tag=''):
     if color == None or len(x) <= 1: return
     xp, yp = plot_pos(plt, x, y)
     xp_yp = [(xp[i], yp[i]) for i in range(len(xp))]
-    plt.c.create_line(xp_yp, fill=color, width=width)
+    if fill:
+        plt.c.create_polygon(xp_yp, outline=color, fill=color, width=width,
+            tag=tag)
+    else:
+        plt.c.create_line(xp_yp, fill=color, width=width, tag=tag)
 
 # plot dots --------------------------------------------------------------------
-def plot_dots(plt, x, y, color=FG_COLOR, fill=FG_COLOR, size=3):
+def plot_dots(plt, x, y, color=FG_COLOR, fill=FG_COLOR, size=3, tag=''):
     if color == None: return
     xp, yp = plot_pos(plt, x, y)
     xp_yp = set([(int(xp[i]), int(yp[i])) for i in range(len(xp))])
@@ -127,15 +132,15 @@ def plot_dots(plt, x, y, color=FG_COLOR, fill=FG_COLOR, size=3):
         if size <= 2:
             d = size / 2 - 0.5
             plt.c.create_rectangle(xy[0] - d, xy[1] - d, xy[0] + d, xy[1] + d,
-                outline=color, fill=color)
+                outline=color, fill=color, tag=tag)
         else:
             d = size / 2
             plt.c.create_oval(xy[0] - d, xy[1] - d, xy[0] + d, xy[1] + d,
-                outline=color, fill=fill)
+                outline=color, fill=fill, tag=tag)
 
 # plot text --------------------------------------------------------------------
 def plot_text(plt, x, y, text, color=FG_COLOR, anchor=CENTER, font=None,
-    angle=0):
+    angle=0, tag=''):
     if color == None: return
     if font == None: font = plt.font
     xp, yp = plot_pos(plt, x, y)
@@ -143,45 +148,45 @@ def plot_text(plt, x, y, text, color=FG_COLOR, anchor=CENTER, font=None,
         angle=angle)
 
 # plot frame and ticks ---------------------------------------------------------
-def plot_frm(plt, color=FG_COLOR):
+def plot_frm(plt, color=FG_COLOR, tag=''):
     if color == None: return
     xs, ys = plot_scale(plt)
     if plt.tick & 1:
         d = TICK_SIZE / ys
         for x in get_ticks(plt.xl, xs, plt.taxis):
-            plot_poly(plt, [x, x], [plt.yl[0], plt.yl[0] + d], color)
-            plot_poly(plt, [x, x], [plt.yl[1], plt.yl[1] - d], color)
+            plot_poly(plt, [x, x], [plt.yl[0], plt.yl[0] + d], color, tag=tag)
+            plot_poly(plt, [x, x], [plt.yl[1], plt.yl[1] - d], color, tag=tag)
     if plt.tick & 2:
         d = TICK_SIZE / xs
         for y in get_ticks(plt.yl, ys):
-            plot_poly(plt, [plt.xl[0], plt.xl[0] + d], [y, y], color)
-            plot_poly(plt, [plt.xl[1], plt.xl[1] - d], [y, y], color)
-    plot_rect(plt, plt.xl[0], plt.yl[0], plt.xl[1], plt.yl[1], color)
+            plot_poly(plt, [plt.xl[0], plt.xl[0] + d], [y, y], color, tag=tag)
+            plot_poly(plt, [plt.xl[1], plt.xl[1] - d], [y, y], color, tag=tag)
+    plot_rect(plt, plt.xl[0], plt.yl[0], plt.xl[1], plt.yl[1], color, tag=tag)
 
 # plot grid --------------------------------------------------------------------
-def plot_grid(plt, color=GR_COLOR):
+def plot_grid(plt, color=GR_COLOR, tag=''):
     if color == None: return
     xs, ys = plot_scale(plt)
     if plt.tick & 1:
         for x in get_ticks(plt.xl, xs, plt.taxis):
-            plot_poly(plt, [x, x], plt.yl, color)
+            plot_poly(plt, [x, x], plt.yl, color, tag=tag)
     if plt.tick & 2:
         for y in get_ticks(plt.yl, ys):
-            plot_poly(plt, plt.xl, [y, y], color)
+            plot_poly(plt, plt.xl, [y, y], color, tag=tag)
 
 # plot tick labels -------------------------------------------------------------
-def plot_tick_labels(plt, color=FG_COLOR):
+def plot_tick_labels(plt, color=FG_COLOR, tag=''):
     if color == None: return
     xs, ys = plot_scale(plt)
     if plt.tick & 4:
         for x in get_ticks(plt.xl, xs, plt.taxis):
             text = '%.9g' % (x) if not plt.taxis else time_label(x)
             plot_text(plt, x, plt.yl[0] - 3 / ys, text=text, color=color,
-                anchor=N)
+                anchor=N, tag=tag)
     if plt.tick & 8:
         for y in get_ticks(plt.yl, ys):
             plot_text(plt, plt.xl[0] - 3 / xs, y, text='%.9g' % (y),
-                color=color, anchor=E)
+                color=color, anchor=E, tag=tag)
 
 # time label -------------------------------------------------------------------
 def time_label(x):
@@ -189,13 +194,13 @@ def time_label(x):
     return '%02d:%02d:%02d' % (x // 3600, x % 3600 // 60, x % 60)
 
 # plot axis --------------------------------------------------------------------
-def plot_axis(plt, fcolor=FG_COLOR, gcolor=GR_COLOR, tcolor=FG_COLOR):
+def plot_axis(plt, fcolor=FG_COLOR, gcolor=GR_COLOR, tcolor=FG_COLOR, tag=''):
     w, h = plt.c.winfo_width(), plt.c.winfo_height()
     plt.c.create_polygon(0, 0, 0, h + 1, plt.m[0], h + 1, plt.m[0], plt.m[2],
-        w + 1, plt.m[2], w + 1, 0, outline=BG_COLOR, fill=BG_COLOR)
+        w + 1, plt.m[2], w + 1, 0, outline=BG_COLOR, fill=BG_COLOR, tag=tag)
     plt.c.create_polygon(0, h - plt.m[3], 0, h + 1, w + 1, h + 1, w + 1, 0,
         w - plt.m[1], 0, w - plt.m[1], h - plt.m[3], outline=BG_COLOR,
-        fill=BG_COLOR)
+        fill=BG_COLOR, tag=tag)
     plot_grid(plt, gcolor)
     plot_frm(plt, fcolor)
     if tcolor == None: return
@@ -203,18 +208,20 @@ def plot_axis(plt, fcolor=FG_COLOR, gcolor=GR_COLOR, tcolor=FG_COLOR):
     xp, yp = plot_pos(plt, (plt.xl[0] + plt.xl[1]) / 2,
         (plt.yl[0] + plt.yl[1]) / 2)
     plt.c.create_text(xp, plt.m[2] - 3, text=plt.title, anchor=S,
-        font=(plt.font[0], plt.font[1] + 1, 'bold'), fill=tcolor)
+        font=(plt.font[0], plt.font[1] + 1, 'bold'), fill=tcolor, tag=tag)
     plt.c.create_text(xp, h - plt.m[3] + 18, text=plt.xlabel, anchor=N,
-        font=plt.font, fill=tcolor)
+        font=plt.font, fill=tcolor, tag=tag)
     plt.c.create_text(plt.m[0] - 28, yp, text=plt.ylabel, anchor=S, angle=90,
-        font=plt.font, fill=tcolor)
+        font=plt.font, fill=tcolor, tag=tag)
 
 # plot skyplot -----------------------------------------------------------------
-def plot_sky(plt, color=FG_COLOR, gcolor=GR_COLOR):
+def plot_sky(plt, color=FG_COLOR, gcolor=GR_COLOR, tag=''):
     for az in np.arange(0, 360, 30):
         x, y = sin(az * pi / 180), cos(az * pi / 180)
-        plot_poly(plt, [0, x], [0, y], gcolor)
+        plot_poly(plt, [0, x], [0, y], gcolor, tag=tag)
         text = ('%.0f' % (az)) if az % 90 else 'NESW'[az//90]
-        plot_text(plt, x * 1.01, y * 1.01, text, color=color, anchor=S, angle=-az)
+        plot_text(plt, x * 1.01, y * 1.01, text, color=color, anchor=S,
+            angle=-az, tag=tag)
     for el in np.arange(0, 90, 30):
-        plot_circle(plt, 0, 0, (90 - el) / 90, color if el < 5 else gcolor)
+        plot_circle(plt, 0, 0, (90 - el) / 90, color if el < 5 else gcolor,
+            tag=tag)
