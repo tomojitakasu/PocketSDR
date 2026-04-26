@@ -88,6 +88,7 @@ sdr_sdev_t *sdr_sdev_open(const char *driver, int fmt, double rate,
     int ok = 0;
     
     if (fmt != SDR_FMT_CS8 && fmt != SDR_FMT_CS16) {
+        fprintf(stderr, "sdev: format error (only supports CS8 or CS16)\n");
         return NULL;
     }
     for (int retry = 0; retry < OPEN_RETRY; retry++) {
@@ -96,7 +97,7 @@ sdr_sdev_t *sdr_sdev_open(const char *driver, int fmt, double rate,
         dev = SoapySDRDevice_make(&args);
         SoapySDRKwargs_clear(&args);
         if (!dev) {
-            fprintf(stderr, "SoapySDRDevice_make error\n");
+            fprintf(stderr, "sdev: SoapySDRDevice_make error\n");
             return NULL;
         }
         SoapySDRDevice_setSampleRate(dev, SOAPY_SDR_RX, ch, rate);
@@ -139,7 +140,7 @@ sdr_sdev_t *sdr_sdev_open(const char *driver, int fmt, double rate,
         &stream_args);
     SoapySDRKwargs_clear(&stream_args);
     if (!str) {
-        fprintf(stderr, "SoapySDRDevice_setupStream error\n");
+        fprintf(stderr, "sdev: SoapySDRDevice_setupStream error\n");
         SoapySDRDevice_unmake(dev);
         return NULL;
     }
@@ -186,20 +187,20 @@ static void rise_pri(void)
 {
 #ifdef WIN32
     if (!SetPriorityClass(GetCurrentProcess(), REALTIME_PRIORITY_CLASS)) {
-        fprintf(stderr, "SetPriorityClass error (%d)\n", (int)GetLastError());
+        fprintf(stderr, "sdev: SetPriorityClass error (%d)\n", (int)GetLastError());
     }
     if (!SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL)) {
-        fprintf(stderr, "SetThreadPriority error (%d)\n", (int)GetLastError());
+        fprintf(stderr, "sdev: SetThreadPriority error (%d)\n", (int)GetLastError());
     }
     DWORD task = 0;
     HANDLE h = AvSetMmThreadCharacteristicsA("DisplayPostProcessing", &task);
-
+    
     if (h == 0) {
-        fprintf(stderr, "AvSetMmThreadCharacteristicsA error (%d)\n",
+        fprintf(stderr, "sdev: AvSetMmThreadCharacteristicsA error (%d)\n",
             (int)GetLastError());
     }
     else if (!AvSetMmThreadPriority(h, AVRT_PRIORITY_CRITICAL)) {
-        fprintf(stderr, "AvSetMmThreadPriority error (%d)\n",
+        fprintf(stderr, "sdev: AvSetMmThreadPriority error (%d)\n",
             (int)GetLastError());
     }
 #endif
@@ -233,7 +234,7 @@ static void *reader_thread(void *arg)
             continue;
         }
         if (ret < 0) {
-            fprintf(stderr, "SoapySDRDevice_readStream error (%s)\n",
+            fprintf(stderr, "sdev: SoapySDRDevice_readStream error (%s)\n",
                 SoapySDR_errToStr(ret));
             sdev->state = -1;
             break;
@@ -243,7 +244,7 @@ static void *reader_thread(void *arg)
         sdr_mutex_unlock(&sdev->mtx);
     }
     if (ovcnt > 0) {
-        fprintf(stderr, "SoapySDRDevice_readStream: overflow=%d\n", ovcnt);
+        fprintf(stderr, "sdev: SoapySDRDevice_readStream overflow=%d\n", ovcnt);
     }
     return NULL;
 }
@@ -328,7 +329,7 @@ int sdr_sdev_read(sdr_sdev_t *sdev, uint8_t *buff, int size)
     bsize = wp - sdev->rp;
     
     if (bsize > BUFF_SIZE * BUFF_CNT) {
-        fprintf(stderr, "buffer overflown\n");
+        fprintf(stderr, "sdev: buffer overflown\n");
         sdev->rp = wp;
         return 0;
     } else if (bsize < size) {
