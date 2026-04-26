@@ -120,6 +120,15 @@ or
 ```
 > pip install numpy scipy matplotlib
 ```
+* (Optional) To use SoapySDR-supported devices (LimeSDR, HackRF, RTL-SDR, etc.)
+  with the python APs, install [**radioconda**](https://github.com/ryanvolz/radioconda/releases).
+  Download the latest `Radioconda-Windows-x86_64.exe` from the releases page and
+  run it with default settings. After install, add radioconda's runtime DLL
+  directory to the Windows PATH so the SoapySDR plug-in DLLs can be loaded:
+```
+<radioconda_install_dir>\Library\bin
+```
+  (typical default: `C:\Users\<user>\radioconda\Library\bin`)
 * Add the Pocket SDR binary programs path (<install_dir>\PocketSDR\bin) to 
   the command search path (Path) of Windows environment variables.
 * Add the Pocket SDR Python scripts path (<install_dir>\PocketSDR\python) to 
@@ -128,17 +137,36 @@ or
 --------------------------------------------------------------------------------
 
 ## **To rebuild binary programs for Windows**
-* If you want to rebuild the binary utilities, APs, or shared libraries for python APs
-for Windows, you need [**minGW-w64**](https://www.mingw-w64.org/) environment. To construct the environment, refer to [**MSYS2**](https://www.msys2.org/) for details.
-In MSYS2, you also need to install fundamental development tools and [**FFTW3**](https://www.fftw.org/) library as follows.
+* If you want to rebuild the binary utilities, APs, or shared libraries for the python APs
+for Windows, you need [**MSYS2**](https://www.msys2.org/) with the **UCRT64** environment.
+The UCRT64 toolchain links against the same C runtime (`ucrtbase.dll`) as
+[**radioconda**](https://github.com/ryanvolz/radioconda)'s SoapySDR DLLs, which
+gives stable high-rate streaming with SDR hardware (e.g., LimeSDR at 64 Msps).
+The legacy **MINGW64** environment also builds, but suffers significant
+performance loss with SoapySDR devices due to msvcrt/UCRT mixing.
+
+* Open the **MSYS2 UCRT64** shell and install the development tools and the
+  Python stack used by the python APs:
 ```
 $ pacman -Syy
-$ pacman -S git
-$ pacman -S make
-$ pacman -S mingw-w64-x86_64-gcc
-$ pacman -S mingw-w64-x86_64-fftw
+$ pacman -S git make
+$ pacman -S mingw-w64-ucrt-x86_64-gcc
+$ pacman -S mingw-w64-ucrt-x86_64-binutils
+$ pacman -S mingw-w64-ucrt-x86_64-python
+$ pacman -S mingw-w64-ucrt-x86_64-python-numpy
+$ pacman -S mingw-w64-ucrt-x86_64-python-scipy
+$ pacman -S mingw-w64-ucrt-x86_64-python-matplotlib
 ```
-* Move to the library directory. The external libraries are for Forward Error Correction (FEC) and Low-Density Parity-Check (LDPC) decoding. Install the external library source trees ([1], [2]) as follows:
+* If you intend to use SoapySDR-supported devices (LimeSDR, HackRF, etc.),
+  install [**radioconda**](https://github.com/ryanvolz/radioconda/releases) and
+  add its `Library/bin` directory to PATH at runtime so the SDR plug-in DLLs
+  can be loaded. The MinGW import library `libSoapySDR.dll.a` is generated
+  automatically from radioconda's `SoapySDR.dll` during the library build
+  (see SOAPY_ROOT below).
+
+* Move to the library directory. The external libraries are for Forward Error
+  Correction (FEC) and Low-Density Parity-Check (LDPC) decoding. Install the
+  external library source trees ([1], [2]) as follows:
 ```
 $ cd <install_dir>/lib
 $ ./clone_lib.sh
@@ -148,6 +176,11 @@ $ ./clone_lib.sh
 $ cd <install_dir>/lib/build
 $ make
 $ make install
+```
+  The default radioconda location is `/c/Users/<user>/radioconda/Library`. If
+  installed elsewhere, override on the command line:
+```
+$ make SOAPY_ROOT=/c/path/to/radioconda/Library
 ```
 * Move to the application program directory and build utilities and APs.
 ```
