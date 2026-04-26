@@ -1,0 +1,10 @@
+*.o
+*.a
+*.so
+*.obj
+*.out
+*.log
+*.sat
+.vscode
+.claude
+__pycache__
