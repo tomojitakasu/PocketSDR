@@ -42,6 +42,7 @@
 #define THRES_LOST 0.002    // threshold for sec-code lost
 #define POS_CORR_N -120.0   // N-correlator position (samples)
 #define ADD_CORR   40       // number of additional correlators
+#define FILT_CN0   0.75     // filter parameter for C/N0
 
 #define DPI        (2.0 * PI)
 #define SQR(x)     ((x) * (x)) 
@@ -419,7 +420,7 @@ static void CN0(sdr_ch_t *ch)
     if (ch->lock % (int)(T_CN0 / ch->T) == 0) {
         if (ch->trk->sumN > 0.0) {
             double cn0 = 10.0 * log10(ch->trk->sumP / ch->trk->sumN / ch->T);
-            ch->cn0 += 0.5 * (cn0 - ch->cn0);
+            ch->cn0 += FILT_CN0 * (cn0 - ch->cn0);
         }
         if (ch->trk->npos >= 6) {
             bump_jump(ch);
