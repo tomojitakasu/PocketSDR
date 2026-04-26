@@ -224,6 +224,7 @@ static void out_log_pos(double time, const sol_t *sol, int nsat)
 //          ...
 //          bias8 hardware bias RFCH 8 (ns)
 //
+#if 0
 static void out_log_att(double time, const sdr_att_t *att)
 {
     double ep[6];
@@ -237,6 +238,7 @@ static void out_log_att(double time, const sdr_att_t *att)
         att->bias[5] * CLIGHT / 1e9, att->bias[6] * CLIGHT / 1e9,
         att->bias[7] * CLIGHT / 1e9);
 }
+#endif
 
 //------------------------------------------------------------------------------
 //  Output log $SAT (satellite information).
@@ -880,121 +882,6 @@ static void update_sol(sdr_pvt_t *pvt)
     }
 }
 
-// LOS vector in local frame ---------------------------------------------------
-static int los_vec(int sat, const ssat_t *ssat, double *e)
-{
-    double cos_el;
-    
-    if (!ssat[sat-1].vs || ssat[sat-1].azel[1] < sdr_el_mask * D2R) return 0;
-    cos_el = cos(ssat[sat-1].azel[1]);
-    e[0] = sin(ssat[sat-1].azel[0]) * cos_el;
-    e[1] = cos(ssat[sat-1].azel[0]) * cos_el;
-    e[2] = sin(ssat[sat-1].azel[1]);
-    return 1;
-}
-
-// rotation matrix and jacobian by Euler angles (Z-Y-X) -------------------------
-static void euler_rot(double roll, double pitch, double yaw, double *R,
-    double *Dr, double *Dp, double *Dy)
-{
-    double cr = cos(roll), sr = sin(roll), cp = cos(pitch), sp = sin(pitch);
-    double cy = cos(yaw), sy = sin(yaw);
-
-    // Body frame: X=right, Y=forward, Z=up. R = Rz(yaw)*Rx(pitch)*Ry(roll)
-    //   roll : rotation about body Y (forward)
-    //   pitch: rotation about body X (right)
-    //   yaw  : rotation about body Z (up)
-    R [0] =  cy*cr - sy*sp*sr; R [3] = -sy*cp; R [6] =  cy*sr + sy*sp*cr;
-    R [1] =  sy*cr + cy*sp*sr; R [4] =  cy*cp; R [7] =  sy*sr - cy*sp*cr;
-    R [2] = -cp*sr;            R [5] =  sp;    R [8] =  cp*cr;
-    Dr[0] = -cy*sr - sy*sp*cr; Dr[3] =  0.0;   Dr[6] =  cy*cr - sy*sp*sr;
-    Dr[1] = -sy*sr + cy*sp*cr; Dr[4] =  0.0;   Dr[7] =  sy*cr + cy*sp*sr;
-    Dr[2] = -cp*cr;            Dr[5] =  0.0;   Dr[8] = -cp*sr;
-    Dp[0] = -sy*cp*sr;         Dp[3] =  sy*sp; Dp[6] =  sy*cp*cr;
-    Dp[1] =  cy*cp*sr;         Dp[4] = -cy*sp; Dp[7] = -cy*cp*cr;
-    Dp[2] =  sp*sr;            Dp[5] =  cp;    Dp[8] = -sp*cr;
-    Dy[0] = -sy*cr - cy*sp*sr; Dy[3] = -cy*cp; Dy[6] = -sy*sr + cy*sp*cr;
-    Dy[1] =  cy*cr - sy*sp*sr; Dy[4] = -sy*cp; Dy[7] =  cy*sr + sy*sp*cr;
-    Dy[2] =  0.0;              Dy[5] =  0.0;   Dy[8] =  0.0;
-}
-
-// baseline vector in local frame ----------------------------------------------
-static void baseline(const sdr_att_t *att, int ant1, int ant2, double *b,
-    double *dbdr, double *dbdp, double *dbdy)
-{
-    double b_body[3], R[9], Dr[9], Dp[9], Dy[9];
-    
-    for (int i = 0; i < 3; i++) { // baseline in body frame
-        b_body[i] = att->ant_pos[ant2-1][i] - att->ant_pos[ant1-1][i];
-    }
-    euler_rot(att->roll, att->pitch, att->yaw, R, Dr, Dp, Dy);
-    matmul("NN", 3, 1, 3, 1.0, R, b_body, 0.0, b);
-    matmul("NN", 3, 1, 3, 1.0, Dr, b_body, 0.0, dbdr);
-    matmul("NN", 3, 1, 3, 1.0, Dp, b_body, 0.0, dbdp);
-    matmul("NN", 3, 1, 3, 1.0, Dy, b_body, 0.0, dbdy);
-}
-
-// attitude estimation ----------------------------------------------------------
-static int est_att(sdr_pvt_t *pvt)
-{
-    sdr_att_t *att = pvt->att;
-    double e[3], b[3], dbdr[3], dbdp[3], dbdy[3];
-    double v[MAXSAT], H[MAXSAT*(3+SDR_MAX_RFCH)] = {0}, dx[3+SDR_MAX_RFCH];
-    double Q[(3+SDR_MAX_RFCH)*(3+SDR_MAX_RFCH)];
-    int m = 0, n = 3 + SDR_MAX_RFCH;
-
-    for (int i = 0; i < pvt->obs->n; ) {
-       int sat = pvt->obs->data[i].sat;
-       int ant1 = pvt->obs->data[i].rcv;
-       if (ant1 > SDR_MAX_RFCH || !los_vec(sat, pvt->ssat, e)) {
-           i++;
-           continue;
-       }
-       for (m = 0, i++; i < pvt->obs->n; i++) {
-          if (pvt->obs->data[i].sat != sat) break;
-          int ant2 = pvt->obs->data[i].rcv;
-          if (ant2 > SDR_MAX_RFCH) continue;
-          baseline(att, ant1, ant2, b, dbdr, dbdp, dbdy);
-          H[n*m  ] = dot(e, dbdr, 3);
-          H[n*m+1] = dot(e, dbdp, 3);
-          H[n*m+2] = dot(e, dbdy, 3);
-          H[n*m+3+ant1-1] = -1.0;
-          H[n*m+3+ant2-1] = 1.0;
-          v[m] = dot(e, b, 3);
-          v[m++] = dot(e, b, 3);
-       }
-    }
-    // constraint to avoid rank-deficient
-    for (int i = 0; i < SDR_MAX_RFCH; i++) {
-        H[n*m+3+i] = 1.0;
-        v[m++] = 1e-12;
-    }
-    if (lsq(H, v, n, m, dx, Q)) return -1;
-    
-    att->time = pvt->time;
-    att->nobs = m;
-    att->roll  += dx[0];
-    att->pitch += dx[1];
-    att->yaw   += dx[2];
-    for (int i = 0; i < SDR_MAX_RFCH; i++) {
-        att->bias[i] += dx[3+i];
-    }
-    return norm(dx, 3 + SDR_MAX_RFCH) <= 1e-3;
-}
-
-// update attitude solution ----------------------------------------------------
-static void update_att(sdr_pvt_t *pvt)
-{
-    int ret = 0;
-    
-    for (int iter = 0; iter < 10 && !ret; iter++) {
-        if ((ret = est_att(pvt)) < 0) return;
-    }
-    if (ret) {
-        out_log_att(pvt->ix * SDR_CYC, pvt->att);
-    }
-}
-
 // resolve msec ambiguity in pseudorange ---------------------------------------
 static void res_obs_amb(obs_t *obs, int sys, uint8_t code, double sec)
 {
@@ -1058,8 +945,9 @@ void sdr_pvt_udsol(sdr_pvt_t *pvt, int64_t ix)
         // update PVT solution
         update_sol(pvt);
         
-        // update attitude solution
-        update_att(pvt);
+        // array calibration step (no-op if not running)
+        sdr_rcv_array_calib_step(pvt->rcv, pvt->obs->data, pvt->obs->n,
+            pvt->nav, pvt->sol->rr);
         
         // solution latency (s)
         pvt->latency = (ix - pvt->ix) * SDR_CYC;
