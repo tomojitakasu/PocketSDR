@@ -12,6 +12,7 @@ import os, re, webbrowser
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
+import sdr_plot as plt
 
 # constants --------------------------------------------------------------------
 MAX_RFCH = 8           # max number of RF channels
@@ -114,13 +115,18 @@ def inp_panel_new(parent, label, var=None, width=10, pwidth=300, justify=RIGHT):
     return panel
 
 # generate option path panel ---------------------------------------------------
-def path_panel_new(parent, label, out=0, var_path=None, var_ena=None, types=[]):
+def path_panel_new(parent, label, out=0, var_path=None, var_ena=None, types=[],
+    var_extra=None, text_extra=''):
     panel = Frame(parent, bg=BG_COLOR)
+    row = Frame(panel, bg=BG_COLOR)
+    row.pack(fill=X, pady=2)
     if var_ena != None:
-        btn1 = ttk.Checkbutton(panel, text=label, variable=var_ena).pack(fill=X,
-            pady=2)
+        ttk.Checkbutton(row, text=label, variable=var_ena).pack(side=LEFT)
     else:
-        ttk.Label(panel, text=label).pack(fill=X, pady=2)
+        ttk.Label(row, text=label).pack(side=LEFT)
+    if var_extra != None:
+        ttk.Checkbutton(row, text=text_extra, variable=var_extra).pack(
+            side=RIGHT, padx=(0, 4))
     panel1 = Frame(panel, bg=BG_COLOR)
     panel1.pack(fill=X, pady=(0, 2))
     p = custom_btn_new(panel1, ' ... ')
@@ -158,7 +164,8 @@ def inp_opt_new(opt_p=None):
     opt = Obj()
     opt.inps = ('RF Frontend', 'IF Data')
     opt.types = ('Pocket SDR FE', 'USRP (uhd)', 'LimeSDR (lime)',
-        'RTL-SDR (rtlsdr)', 'Pluto-SDR (plutosdr)')
+        'LimeSDR (limesuiteng)', 'BladeRF (bladerf)', 'RTL-SDR (rtlsdr)',
+        'Pluto-SDR (plutosdr)')
     opt.fmts = ('INT8', 'INT8X2', 'RAW8', 'RAW16', 'RAW16I', 'RAW32', 'CS8',
         'CS16')
     opt.IQs = ('IQ', 'I')
@@ -172,6 +179,7 @@ def inp_opt_new(opt_p=None):
     opt.fo = [StringVar() for i in range(MAX_RFCH)]
     opt.IQ = [StringVar() for i in range(MAX_RFCH)]
     opt.bits = [StringVar() for i in range(MAX_RFCH)]
+    opt.lpf_bw = [StringVar() for i in range(MAX_RFCH)]
     opt.fs = StringVar()
     opt.str_path = StringVar()
     opt.toff = StringVar()
@@ -189,6 +197,7 @@ def inp_opt_new(opt_p=None):
             opt.fo[i].set(opt_p.fo[i].get())
             opt.IQ[i].set(opt_p.IQ[i].get())
             opt.bits[i].set(opt_p.bits[i].get())
+            opt.lpf_bw[i].set(opt_p.lpf_bw[i].get())
         opt.str_path.set(opt_p.str_path.get())
         opt.toff.set(opt_p.toff.get())
         opt.tscale.set(opt_p.tscale.get())
@@ -201,6 +210,7 @@ def inp_opt_new(opt_p=None):
             opt.fo[i].set(fo_def[i])
             opt.IQ[i].set(opt.IQs[0])
             opt.bits[i].set(opt.bitss[0])
+            opt.lpf_bw[i].set('0.0')
         opt.toff.set('0.0')
         opt.tscale.set('1.0')
     return opt
@@ -208,16 +218,18 @@ def inp_opt_new(opt_p=None):
 # generate output option variables ---------------------------------------------
 def out_opt_new(opt_p=None):
     opt = Obj()
-    opt.log = ('TIME', 'POS', 'OBS', 'NAV', 'SAT', 'CH', 'EPH', 'LOG')
+    opt.log = ('TIME', 'POS', 'ATT', 'OBS', 'NAV', 'SAT', 'CH', 'EPH', 'LOG')
     opt.path_ena = [IntVar() for i in range(4)]
     opt.path = [StringVar() for i in range(4)]
     opt.log_sel = [IntVar() for s in opt.log]
+    opt.array_sep = IntVar()
     if opt_p != None:
         for i in range(4):
             opt.path_ena[i].set(opt_p.path_ena[i].get())
             opt.path[i].set(opt_p.path[i].get())
         for i in range(len(opt.log_sel)):
             opt.log_sel[i].set(opt_p.log_sel[i].get())
+        opt.array_sep.set(opt_p.array_sep.get())
     else:
         for i in range(len(opt.log_sel)):
             opt.log_sel[i].set(0 if i in (5, 6) else 1)
@@ -308,14 +320,39 @@ def sys_opt_new(opt_p=None):
         opt.max_acq.set('4.0')
     return opt
 
+# generate array option variables ----------------------------------------------
+def array_opt_new(opt_p=None):
+    opt = Obj()
+    opt.no_array = StringVar()
+    opt.ena_ele = [IntVar() for i in range(MAX_RFCH)]
+    opt.posx = [StringVar() for i in range(MAX_RFCH)]
+    opt.posy = [StringVar() for i in range(MAX_RFCH)]
+    opt.posz = [StringVar() for i in range(MAX_RFCH)]
+    if opt_p != None:
+        opt.no_array.set(opt_p.no_array.get())
+        for i in range(MAX_RFCH):
+            opt.ena_ele[i].set(opt_p.ena_ele[i].get())
+            opt.posx[i].set(opt_p.posx[i].get())
+            opt.posy[i].set(opt_p.posy[i].get())
+            opt.posz[i].set(opt_p.posz[i].get())
+    else:
+        opt.no_array.set('0')
+        for i in range(MAX_RFCH):
+            opt.ena_ele[i].set(0)
+            opt.posx[i].set('0.000')
+            opt.posy[i].set('0.000')
+            opt.posz[i].set('0.000')
+    return opt
+
 # save options -----------------------------------------------------------------
-def save_opts(file, inp_opt, out_opt, sig_opt, sys_opt):
+def save_opts(file, inp_opt, out_opt, sig_opt, sys_opt, array_opt):
     try:
         f = open(file, 'w')
         save_opt('inp_opt', inp_opt, f)
         save_opt('out_opt', out_opt, f)
         save_opt('sig_opt', sig_opt, f)
         save_opt('sys_opt', sys_opt, f)
+        save_opt('array_opt', array_opt, f)
         f.close()
     except:
         print('options save error: %s' % (file))
@@ -338,7 +375,7 @@ def write_opt(f, key, val):
             write_opt(f, key + '@%d' % (i), val[i])
 
 # load options -----------------------------------------------------------------
-def load_opts(file, inp_opt, out_opt, sig_opt, sys_opt):
+def load_opts(file, inp_opt, out_opt, sig_opt, sys_opt, array_opt):
     try:
         f = open(file, 'r')
         txt = f.readlines()
@@ -346,6 +383,7 @@ def load_opts(file, inp_opt, out_opt, sig_opt, sys_opt):
         load_opt('out_opt', out_opt, txt)
         load_opt('sig_opt', sig_opt, txt)
         load_opt('sys_opt', sys_opt, txt)
+        load_opt('array_opt', array_opt, txt)
         f.close()
     except:
         print('options load error: %s' % (file))
@@ -381,7 +419,7 @@ def read_opt(val, opt):
 # show Input Options dialog ----------------------------------------------------
 def inp_opt_dlg(root, opt):
     opt_new = inp_opt_new(opt)
-    dlg = modal_dlg_new(root, 480, 600, 'Input Options')
+    dlg = modal_dlg_new(root, 500, 600, 'Input Options')
     panel = Frame(dlg.panel, width=450, bg=BG_COLOR)
     panel.pack(fill=X, pady=4)
     ttk.Label(panel, text='Input Source').pack(side=LEFT, padx=4)
@@ -398,29 +436,15 @@ def inp_opt_dlg(root, opt):
     ttk.Label(p4, text=text, anchor=N).pack(fill=X)
     inp_opt_enable_update(opt_new.inp.get(), p1, p2, p3, p4)
     ch_opt_enable_update(opt_new.fmt.get(), p3)
-    dev_opt_enable_update(opt_new.type.get(), p1)
     btn1.bind('<Button-1>', lambda e: on_inp_select(e, 0, p1, p2, p3, p4))
     btn2.bind('<Button-1>', lambda e: on_inp_select(e, 1, p1, p2, p3, p4))
     sel1 = p1.winfo_children()[1].winfo_children()[1]
-    sel1.bind('<<ComboboxSelected>>', lambda e: on_dev_select(e, p1))
     root.wait_window(dlg.win)
     return opt_new if dlg.ok else opt
-
-# device type select callback --------------------------------------------------
-def on_dev_select(e, p1):
-    dev = p1.winfo_children()[1].winfo_children()[1].get()
-    dev_opt_enable_update(dev, p1)
 
 # input source select callback -------------------------------------------------
 def on_inp_select(e, sel, p1, p2, p3, p4):
     inp_opt_enable_update(sel, p1, p2, p3, p4)
-    on_dev_select(e, p1)
-
-# update device options enalbe -------------------------------------------------
-def dev_opt_enable_update(dev, p1):
-    ena = dev == 'Pocket SDR FE'
-    config_panel_state(p1.winfo_children()[2], NORMAL if ena else DISABLED)
-    config_panel_state(p1.winfo_children()[3], NORMAL if ena else DISABLED)
 
 # update input options enable --------------------------------------------------
 def inp_opt_enable_update(sel, p1, p2, p3, p4):
@@ -475,9 +499,9 @@ def ch_opt_panel_new(parent, opt):
         justify=LEFT)
     panel1 = Frame(panel, bg=BG_COLOR)
     panel1.pack(fill=X, pady=(4, 0))
-    label = ' RF   LO Freq (MHz)*  I/IQ*   Bits* '
-    ttk.Label(panel1, text=label).pack(side=LEFT, padx=(10, 0))
-    ttk.Label(panel1, text=label).pack(side=RIGHT, padx=(0, 5))
+    label = ' RF  LO (MHz)*  I/IQ* Bits*  LPF (MHz)'
+    ttk.Label(panel1, text=label).pack(side=LEFT, padx=(4, 0))
+    ttk.Label(panel1, text=label).pack(side=RIGHT, padx=(0, 2))
     panel2 = Frame(panel, bg=BG_COLOR)
     panel2.pack(side=LEFT, pady=2)
     panel3 = Frame(panel, bg=BG_COLOR)
@@ -507,14 +531,16 @@ def ch_opt_enable_update(fmt, p3):
 # generate RF channel options panel --------------------------------------------
 def rfch_opt_panel_new(parent, ch, opt):
     panel = Frame(parent, bg=BG_COLOR)
-    ttk.Label(panel, text='CH%d' % (ch + 1)).pack(side=LEFT, padx=(0, 8))
+    ttk.Label(panel, text='CH%d' % (ch + 1)).pack(side=LEFT, padx=(0, 2))
+    ttk.Entry(panel, width=4, justify=RIGHT, textvariable=opt.lpf_bw[ch],
+        font=FONT).pack(side=RIGHT, padx=1)
     ttk.Combobox(panel, width=2, justify=CENTER, values=opt.bitss,
         textvariable=opt.bits[ch], font=FONT).pack(side=RIGHT, padx=1)
     ttk.Combobox(panel, width=3, justify=CENTER, values=opt.IQs,
         textvariable=opt.IQ[ch], font=FONT).pack(side=RIGHT, padx=1)
-    ttk.Entry(panel, width=10, justify=RIGHT, textvariable=opt.fo[ch],
+    ttk.Entry(panel, width=9, justify=RIGHT, textvariable=opt.fo[ch],
         font=FONT).pack(side=RIGHT, padx=1)
-    panel.pack(fill=X, padx=(10, 4))
+    panel.pack(fill=X, padx=(4, 2))
     return panel
 
 # show Output Options dialog ---------------------------------------------------
@@ -534,7 +560,8 @@ def out_opt_dlg(root, opt):
     path_panel_new(panel1, texts[1], out=1, var_path=opt_new.path[0],
         var_ena=opt_new.path_ena[0], types=[('NMEA File', '*.nmea'), ('All', '*.*')])
     path_panel_new(panel1, texts[2], out=1, var_path=opt_new.path[1],
-       var_ena=opt_new.path_ena[1], types=[('RTCM3 File', '*.rtcm3'), ('All', '*.*')])
+       var_ena=opt_new.path_ena[1], types=[('RTCM3 File', '*.rtcm3'), ('All', '*.*')],
+       var_extra=opt_new.array_sep, text_extra='RF CH Separation')
     path_panel_new(panel1, texts[3], out=1, var_path=opt_new.path[2],
        var_ena=opt_new.path_ena[2], types=[('Log File', '*.log'), ('All', '*.*')])
     path_panel_new(panel1, texts[4], out=1, var_path=opt_new.path[3],
@@ -546,7 +573,7 @@ def out_opt_dlg(root, opt):
     panel3.pack(pady=4)
     for i in range(len(opt.log_sel)):
         ttk.Checkbutton(panel3, text=opt.log[i], variable=opt_new.log_sel[i]
-            ).pack(side=LEFT, padx=2)
+            ).pack(side=LEFT)
     panel4 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     panel4.pack(fill=X, pady=2)
     ttk.Label(panel4, text=texts[6], justify=LEFT).pack(fill=X, padx=10, pady=2)
@@ -652,4 +679,78 @@ def sys_opt_dlg(root, opt):
         padx=(0, 4), pady=(2, 6))
     root.wait_window(dlg.win)
     return opt_new if dlg.ok else opt
+
+# show Array Options dialog ----------------------------------------------------
+def array_opt_dlg(root, opt):
+    opt_new = array_opt_new(opt)
+    dlg = modal_dlg_new(root, 420, 560, 'Array Options')
+    sel_panel_new(dlg.panel, 'Number of Antenna Array CH',
+        sels=['%d' % n for n in range(9)], var=opt_new.no_array, width=8)
+    w, h, r = 380, 220, 0.135
+    plot = plt.plot_new(dlg.panel, w, h, margin=(0, 0, 0, 0),
+        xlim=(-r * w / h, r * w / h), ylim=(-r, r))
+    plot.c.pack(pady=2)
+    panel1 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
+    panel2 = Frame(panel1, bg=BG_COLOR)
+    ttk.Label(panel2, text='RF CH').pack(side=LEFT, pady=2)
+    ttk.Label(panel2, text='POSX            POSY             POSZ      '
+        ).pack(side=RIGHT, pady=2)
+    panel2.pack(fill=X, padx=(10, 4))
+    for ch in range(MAX_RFCH):
+        ant_ele_opt_panel_new(panel1, plot, ch, opt_new).pack(fill=X, pady=2)
+    panel1.pack(fill=X, pady=2, ipady=1)
+    btn1 = ttk.Button(dlg.panel, width=10, padding=(2, 2), text='Update')
+    btn1.place(x=0, y=502)
+    btn1.bind('<Button-1>', lambda e: on_btn_update_push(e, plot, opt_new))
+    plot.c.bind('<Configure>', lambda e: on_show_ant_ele_plot(e, plot, opt_new))
+    root.wait_window(dlg.win)
+    return opt_new if dlg.ok else opt
+
+# generate antenna element options panel ---------------------------------------
+def ant_ele_opt_panel_new(parent, plot, ch, opt):
+    panel = Frame(parent, bg=BG_COLOR)
+    btn = ttk.Checkbutton(panel, text='CH%d' % (ch + 1), variable=opt.ena_ele[ch],
+        command=lambda: plot_ant_ele(plot, opt))
+    btn.pack(side=LEFT)
+    ttk.Label(panel, text='m').pack(side=RIGHT, padx=2)
+    ttk.Entry(panel, width=10, justify=RIGHT, textvariable=opt.posz[ch],
+        font=FONT).pack(side=RIGHT, padx=2)
+    ttk.Entry(panel, width=10, justify=RIGHT, textvariable=opt.posy[ch],
+        font=FONT).pack(side=RIGHT, padx=2)
+    ttk.Entry(panel, width=10, justify=RIGHT, textvariable=opt.posx[ch],
+        font=FONT).pack(side=RIGHT, padx=2)
+    panel.pack(fill=X, padx=(10, 4))
+    return panel
+
+# antenna elements plot show callback ------------------------------------------
+def on_show_ant_ele_plot(e, plot, opt):
+    plot_ant_ele(plot, opt)
+
+# button update push callback --------------------------------------------------
+def on_btn_update_push(e, plot, opt):
+    plot_ant_ele(plot, opt)
+
+# plot antenna elements --------------------------------------------------------
+def plot_ant_ele(plot, opt):
+   dx = 0.05 # grid interval
+   plt.plot_clear(plot)
+   color = plt.GR_COLOR
+   for i in range(-6, 7):
+       plt.plot_poly(plot, [i * dx, i * dx], plot.yl, color if i else '#CCCCCC')
+       plt.plot_poly(plot, plot.xl, [i * dx, i * dx], color if i else '#CCCCCC')
+   plt.plot_circle(plot, 0, 0, 0.13, color='blue')
+   plt.plot_circle(plot, 0, 0, 0.0951, color=color)
+   for ch in range(MAX_RFCH):
+      if opt.ena_ele[ch].get():
+          x = float(opt.posx[ch].get())
+          y = float(opt.posy[ch].get())
+          plt.plot_circle(plot, x, y, 0.022, color='blue')
+          plt.plot_text(plot, x, y, '%d' % (ch + 1), color='blue')
+   plot_ant_mark(plot, 0, plot.yl[1] - 0.01, 'blue')
+
+# plot antenna mark ------------------------------------------------------------
+def plot_ant_mark(plot, x, y, color):
+    dx, dy = (0, 0.005, -0.005, 0), (0.004, -0.004, -0.004, 0.004)
+    plt.plot_poly(plot, [x + d for d in dx], [y + d for d in dy], color=color,
+        fill=1)
 
