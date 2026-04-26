@@ -282,6 +282,8 @@ typedef struct sdr_rcv_tag {    // SDR receiver type
     void *LUT[SDR_MAX_RFCH];    // raw to IF data LUT (256 or 4*256 entries)
     int rtoc[SDR_MAX_RFCH];     // real-to-complex enable flag (auto, per RF CH)
     sdr_lpf_t *lpf[SDR_MAX_RFCH]; // LPF state per RF CH (NULL = disabled)
+    int16_t *array_w[SDR_MAX_RFCH]; // beam-forming weights per array CH (NULL = disabled)
+                                    // each: 2*nrfch int16_t [re_0,im_0,re_1,im_1,...] in Q8
     int64_t ix;                 // IF data cycle count (cyc)
     double tscale;              // time scale to replay IF data file
     double data_std;            // IF data std-dev
@@ -295,6 +297,17 @@ typedef struct sdr_rcv_tag {    // SDR receiver type
     char opt[1024];             // receiver options
     sdr_thread_t thread;        // SDR receiver thread
     sdr_mutex_t mtx;            // lock flag
+    // array calibration state
+    int array_calib_run;        // calibration running flag (0/1)
+    int array_nep;              // calibration epoch count
+    double array_rms;           // current calibration RMS (m)
+    double array_x[3 + SDR_MAX_RFCH]; // EKF state {roll,pitch,yaw,bias_1..bias_n-1}
+    double array_P[(3 + SDR_MAX_RFCH) * (3 + SDR_MAX_RFCH)]; // EKF covariance
+    double array_ant_pos[SDR_MAX_RFCH * 3]; // antenna positions in body frame (m)
+    double array_az[SDR_MAX_RFCH]; // beam azimuth per array CH (rad)
+    double array_el[SDR_MAX_RFCH]; // beam elevation per array CH (rad)
+    double array_scale;         // common beam-forming scale (default 1/nrfch)
+    int array_rfch_ena[SDR_MAX_RFCH]; // per-RF-CH enable flag for array (1=ena)
 } sdr_rcv_t;
 
 // function prototypes -------------------------------------------------------
@@ -455,9 +468,9 @@ void sdr_pvt_udsol(sdr_pvt_t *pvt, int64_t ix);
 void sdr_pvt_solstr(sdr_pvt_t *pvt, char *buff, int size);
 
 // sdr_array.c
-int sdr_array_calib(obsd_t * const *obs, const int *nobs, int nep,
-    const nav_t *nav, const double *ant_pos, int narr, int freq,
-    const double *rr, double *bias, double *rpy, double *rms);
+int sdr_array_calib(const obsd_t *obs, int nobs, const nav_t *nav,
+    const double *ant_pos, int nant, int freq, const double *rr, double *x,
+    double *P, double *rms);
 
 // sdr_rcv.c
 sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
@@ -487,6 +500,20 @@ int sdr_rcv_corr_stat(sdr_rcv_t *rcv, int ch, double *stat, double *pos,
 int sdr_rcv_corr_hist(sdr_rcv_t *rcv, int ch, double tspan, double *stat,
     sdr_cpx_t *P);
 int sdr_rcv_rfch_stat(sdr_rcv_t *rcv, int ch, double *stat);
+int sdr_rcv_set_array_beam(sdr_rcv_t *rcv, int ach, double az, double el,
+    const double *ant_pos, const double *bias, const double *rpy, double scale);
+int sdr_rcv_array_calib_start(sdr_rcv_t *rcv, const double *ant_pos);
+int sdr_rcv_array_calib_stop(sdr_rcv_t *rcv);
+int sdr_rcv_array_calib_stat(sdr_rcv_t *rcv, double *rpy, double *bias,
+    double *rms, int *nep);
+int sdr_rcv_array_calib_set(sdr_rcv_t *rcv, const double *rpy,
+    const double *bias);
+int sdr_rcv_array_calib_clear(sdr_rcv_t *rcv);
+int sdr_rcv_array_set_beam2(sdr_rcv_t *rcv, int ach, double az, double el);
+int sdr_rcv_array_get_beam(sdr_rcv_t *rcv, int ach, double *az, double *el);
+int sdr_rcv_array_set_rfch_ena(sdr_rcv_t *rcv, const int *ena, int n);
+void sdr_rcv_array_calib_step(sdr_rcv_t *rcv, const obsd_t *obs, int nobs,
+    const nav_t *nav, const double *rr);
 int sdr_rcv_rfch_psd(sdr_rcv_t *rcv, int ch, double tave, int N, float *psd);
 int sdr_rcv_rfch_hist(sdr_rcv_t *rcv, int ch, double tave, int *val,
     double *hist1, double *hist2);
