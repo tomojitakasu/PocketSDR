@@ -1,0 +1,92 @@
+#
+#  nmake file for RTKLIB library (librtk.dll, librtk.lib)
+#
+
+SRC = ..\RTKLIB\src
+INSTALL = ..\win32_msvc
+CC = cl
+LD = link
+AR = lib
+
+CFLAGS = /nologo /O2 /W3 /MD /DSVR_REUSEADDR /DTRACE /DWIN32 /DWIN32_LEAN_AND_MEAN /D_CRT_SECURE_NO_WARNINGS /I$(SRC)
+LDLIBS = wsock32.lib winmm.lib
+
+OBJ = rtkcmn.obj tides.obj rtkpos.obj geoid.obj solution.obj lambda.obj sbas.obj \
+      stream.obj rcvraw.obj rtcm.obj rtcm2.obj rtcm3.obj rtcm3e.obj preceph.obj options.obj \
+      pntpos.obj ppp.obj ppp_ar.obj ephemeris.obj rinex.obj ionex.obj convrnx.obj \
+      streamsvr.obj binex.obj ublox.obj novatel.obj septentrio.obj rtklib_wrap.obj
+
+TARGET = librtk.dll librtk.lib
+
+all: $(TARGET)
+
+librtk.dll: $(OBJ)
+	$(LD) /NOLOGO /DLL /OUT:$@ $(OBJ) $(LDLIBS)
+
+librtk.lib: $(OBJ)
+	$(AR) /NOLOGO /OUT:$@ $(OBJ)
+
+rtkcmn.obj: $(SRC)\rtkcmn.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\rtkcmn.c
+tides.obj: $(SRC)\tides.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\tides.c
+rtkpos.obj: $(SRC)\rtkpos.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\rtkpos.c
+geoid.obj: $(SRC)\geoid.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\geoid.c
+solution.obj: $(SRC)\solution.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\solution.c
+lambda.obj: $(SRC)\lambda.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\lambda.c
+sbas.obj: $(SRC)\sbas.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\sbas.c
+stream.obj: $(SRC)\stream.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\stream.c
+rcvraw.obj: $(SRC)\rcvraw.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\rcvraw.c
+rtcm.obj: $(SRC)\rtcm.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\rtcm.c
+rtcm2.obj: $(SRC)\rtcm2.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\rtcm2.c
+rtcm3.obj: $(SRC)\rtcm3.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\rtcm3.c
+rtcm3e.obj: $(SRC)\rtcm3e.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\rtcm3e.c
+preceph.obj: $(SRC)\preceph.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\preceph.c
+options.obj: $(SRC)\options.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\options.c
+pntpos.obj: $(SRC)\pntpos.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\pntpos.c
+ppp.obj: $(SRC)\ppp.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\ppp.c
+ppp_ar.obj: $(SRC)\ppp_ar.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\ppp_ar.c
+ephemeris.obj: $(SRC)\ephemeris.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\ephemeris.c
+rinex.obj: $(SRC)\rinex.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\rinex.c
+ionex.obj: $(SRC)\ionex.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\ionex.c
+convrnx.obj: $(SRC)\convrnx.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\convrnx.c
+streamsvr.obj: $(SRC)\streamsvr.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\streamsvr.c
+binex.obj: $(SRC)\rcv\binex.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\rcv\binex.c
+ublox.obj: $(SRC)\rcv\ublox.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\rcv\ublox.c
+novatel.obj: $(SRC)\rcv\novatel.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\rcv\novatel.c
+septentrio.obj: $(SRC)\rcv\septentrio.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ $(SRC)\rcv\septentrio.c
+rtklib_wrap.obj: rtklib_wrap.c $(SRC)\rtklib.h
+	$(CC) /c $(CFLAGS) /Fo$@ rtklib_wrap.c
+
+clean:
+	-del /Q $(TARGET) *.obj 2>NUL
+
+install:
+	-if not exist $(INSTALL) mkdir $(INSTALL)
+	-for %f in ($(TARGET)) do copy /Y %f $(INSTALL) >NUL
+

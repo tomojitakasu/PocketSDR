@@ -1,0 +1,151 @@
+LIBRARY libsdr.dll
+EXPORTS
+sdr_add_buff
+sdr_buff_free
+sdr_buff_new
+sdr_ch_corr_hist
+sdr_ch_corr_stat
+sdr_ch_free
+sdr_ch_new
+sdr_ch_set_corr
+sdr_ch_update
+sdr_code_cyc
+sdr_code_len
+sdr_conf_read
+sdr_conf_write
+sdr_corr_fft
+sdr_corr_fft_cpx
+sdr_corr_max
+sdr_corr_std
+sdr_corr_std_cpx
+sdr_cpx_abs
+sdr_cpx_fft
+sdr_cpx_free
+sdr_cpx_malloc
+sdr_cpx_mul
+sdr_decode_conv
+sdr_decode_LDPC
+sdr_decode_NB_LDPC
+sdr_decode_rs
+sdr_dev_close
+sdr_dev_get_filt
+sdr_dev_get_gain
+sdr_dev_get_info
+sdr_dev_open
+sdr_dev_read
+sdr_dev_set_filt
+sdr_dev_set_gain
+sdr_dev_start
+sdr_dev_stop
+sdr_dop_bins
+sdr_fine_dop
+sdr_free
+sdr_func_init
+sdr_gen_code
+sdr_gen_code_fft
+sdr_gen_fftw_wisdom
+sdr_get_log
+sdr_get_name
+sdr_get_tick
+sdr_get_time
+sdr_get_ver
+sdr_log
+sdr_log_close
+sdr_log_level
+sdr_log_mask
+sdr_log_open
+sdr_log_stat
+sdr_malloc
+sdr_mix_carr
+sdr_mutex_init
+sdr_mutex_lock
+sdr_mutex_unlock
+sdr_nav_decode
+sdr_nav_free
+sdr_nav_init
+sdr_nav_new
+sdr_pack_bits
+sdr_parse_nums
+sdr_psd_cpx
+sdr_pvt_free
+sdr_pvt_new
+sdr_pvt_solstr
+sdr_pvt_udnav
+sdr_pvt_udobs
+sdr_pvt_udsol
+sdr_rcv_ch_stat
+sdr_rcv_close
+sdr_rcv_corr_hist
+sdr_rcv_corr_stat
+sdr_rcv_free
+sdr_rcv_get_filt
+sdr_rcv_get_gain
+sdr_rcv_new
+sdr_rcv_open_dev
+sdr_rcv_open_file
+sdr_rcv_open_sdev
+sdr_rcv_pvt_sol
+sdr_rcv_rcv_stat
+sdr_rcv_rfch_hist
+sdr_rcv_rfch_psd
+sdr_rcv_rfch_stat
+sdr_rcv_sat_stat
+sdr_rcv_sel_ch
+sdr_rcv_array_calib_clear
+sdr_rcv_array_calib_set
+sdr_rcv_array_calib_start
+sdr_rcv_array_calib_stop
+sdr_rcv_array_calib_stat
+sdr_rcv_array_calib_step
+sdr_rcv_array_get_beam
+sdr_rcv_array_set_beam2
+sdr_rcv_array_set_rfch_ena
+sdr_rcv_set_array_beam
+sdr_rcv_set_filt
+sdr_rcv_set_gain
+sdr_rcv_setopt
+sdr_rcv_start
+sdr_rcv_stop
+sdr_rcv_str_stat
+sdr_read_data
+sdr_res_code
+sdr_sat_id
+sdr_sdev_close
+sdr_sdev_list
+sdr_sdev_open
+sdr_sdev_read
+sdr_sdev_start
+sdr_sdev_stop
+sdr_search_code
+sdr_sec_code
+sdr_shift_freq
+sdr_sig_boc
+sdr_sig_freq
+sdr_sleep_msec
+sdr_str_close
+sdr_str_open
+sdr_str_write
+sdr_tag_read
+sdr_tag_write
+sdr_thread_create
+sdr_thread_join
+sdr_unpack_bits
+sdr_unpack_data
+sdr_usb_close
+sdr_usb_open
+sdr_usb_req
+sdr_xor_bits
+sdr_epoch DATA
+sdr_lag_epoch DATA
+sdr_el_mask DATA
+sdr_sp_corr DATA
+sdr_t_acq DATA
+sdr_t_dll DATA
+sdr_b_dll DATA
+sdr_b_pll DATA
+sdr_b_fll_w DATA
+sdr_b_fll_n DATA
+sdr_max_dop DATA
+sdr_thres_cn0_l DATA
+sdr_thres_cn0_u DATA
+sdr_bump_jump DATA
