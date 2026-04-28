@@ -42,61 +42,61 @@ librtk.a  : $(OBJ)
 	$(AR) r $@ $(OBJ)
 
 rtkcmn.o   : $(SRC)/rtkcmn.c
-	$(CC) -c $(CFLAGS) $(SRC)/rtkcmn.c
+	$(CC) -c $(CFLAGS) $<
 rtkpos.o   : $(SRC)/rtkpos.c
-	$(CC) -c $(CFLAGS) $(SRC)/rtkpos.c
+	$(CC) -c $(CFLAGS) $<
 postpos.o  : $(SRC)/postpos.c
-	$(CC) -c $(CFLAGS) $(SRC)/postpos.c
+	$(CC) -c $(CFLAGS) $<
 geoid.o    : $(SRC)/geoid.c
-	$(CC) -c $(CFLAGS) $(SRC)/geoid.c
+	$(CC) -c $(CFLAGS) $<
 solution.o : $(SRC)/solution.c
-	$(CC) -c $(CFLAGS) $(SRC)/solution.c
+	$(CC) -c $(CFLAGS) $<
 lambda.o   : $(SRC)/lambda.c
-	$(CC) -c $(CFLAGS) $(SRC)/lambda.c
+	$(CC) -c $(CFLAGS) $<
 sbas.o     : $(SRC)/sbas.c
-	$(CC) -c $(CFLAGS) $(SRC)/sbas.c
+	$(CC) -c $(CFLAGS) $<
 stream.o   : $(SRC)/stream.c
-	$(CC) -c $(CFLAGS) $(SRC)/stream.c
+	$(CC) -c $(CFLAGS) $<
 rcvraw.o   : $(SRC)/rcvraw.c
-	$(CC) -c $(CFLAGS) $(SRC)/rcvraw.c
+	$(CC) -c $(CFLAGS) $<
 rtcm.o     : $(SRC)/rtcm.c
-	$(CC) -c $(CFLAGS) $(SRC)/rtcm.c
+	$(CC) -c $(CFLAGS) $<
 rtcm2.o    : $(SRC)/rtcm2.c
-	$(CC) -c $(CFLAGS) $(SRC)/rtcm2.c
+	$(CC) -c $(CFLAGS) $<
 rtcm3.o    : $(SRC)/rtcm3.c
-	$(CC) -c $(CFLAGS) $(SRC)/rtcm3.c
+	$(CC) -c $(CFLAGS) $<
 rtcm3e.o   : $(SRC)/rtcm3e.c
-	$(CC) -c $(CFLAGS) $(SRC)/rtcm3e.c
+	$(CC) -c $(CFLAGS) $<
 preceph.o  : $(SRC)/preceph.c
-	$(CC) -c $(CFLAGS) $(SRC)/preceph.c
+	$(CC) -c $(CFLAGS) $<
 options.o  : $(SRC)/options.c
-	$(CC) -c $(CFLAGS) $(SRC)/options.c
+	$(CC) -c $(CFLAGS) $<
 pntpos.o   : $(SRC)/pntpos.c
-	$(CC) -c $(CFLAGS) $(SRC)/pntpos.c
+	$(CC) -c $(CFLAGS) $<
 ppp.o      : $(SRC)/ppp.c
-	$(CC) -c $(CFLAGS) $(SRC)/ppp.c
+	$(CC) -c $(CFLAGS) $<
 ppp_ar.o   : $(SRC)/ppp_ar.c
-	$(CC) -c $(CFLAGS) $(SRC)/ppp_ar.c
+	$(CC) -c $(CFLAGS) $<
 tides.o    : $(SRC)/tides.c
-	$(CC) -c $(CFLAGS) $(SRC)/tides.c
+	$(CC) -c $(CFLAGS) $<
 ephemeris.o: $(SRC)/ephemeris.c
-	$(CC) -c $(CFLAGS) $(SRC)/ephemeris.c
+	$(CC) -c $(CFLAGS) $<
 rinex.o    : $(SRC)/rinex.c
-	$(CC) -c $(CFLAGS) $(SRC)/rinex.c
+	$(CC) -c $(CFLAGS) $<
 ionex.o    : $(SRC)/ionex.c
-	$(CC) -c $(CFLAGS) $(SRC)/ionex.c
+	$(CC) -c $(CFLAGS) $<
 convrnx.o  : $(SRC)/convrnx.c
-	$(CC) -c $(CFLAGS) $(SRC)/convrnx.c
+	$(CC) -c $(CFLAGS) $<
 streamsvr.o: $(SRC)/streamsvr.c
-	$(CC) -c $(CFLAGS) $(SRC)/streamsvr.c
+	$(CC) -c $(CFLAGS) $<
 binex.o    : $(SRC)/rcv/binex.c
-	$(CC) -c $(CFLAGS) $(SRC)/rcv/binex.c
+	$(CC) -c $(CFLAGS) $<
 novatel.o  : $(SRC)/rcv/novatel.c
-	$(CC) -c $(CFLAGS) $(SRC)/rcv/novatel.c
+	$(CC) -c $(CFLAGS) $<
 ublox.o    : $(SRC)/rcv/ublox.c
-	$(CC) -c $(CFLAGS) $(SRC)/rcv/ublox.c
+	$(CC) -c $(CFLAGS) $<
 septentrio.o: $(SRC)/rcv/septentrio.c
-	$(CC) -c $(CFLAGS) $(SRC)/rcv/septentrio.c
+	$(CC) -c $(CFLAGS) $<
 
 rtkcmn.o   : $(SRC)/rtklib.h
 rtksvr.o   : $(SRC)/rtklib.h

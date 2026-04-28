@@ -38,33 +38,33 @@ libldpc.a : $(OBJ)
 	$(AR) r $@ $(OBJ)
 
 rcode.o   : $(SRC)/rcode.c
-	$(CC) $(CFLAGS) -c $(SRC)/rcode.c
+	$(CC) $(CFLAGS) -c $<
 channel.o : $(SRC)/channel.c
-	$(CC) $(CFLAGS) -c $(SRC)/channel.c
+	$(CC) $(CFLAGS) -c $<
 dec.o     : $(SRC)/dec.c
-	$(CC) $(CFLAGS) -c $(SRC)/dec.c
+	$(CC) $(CFLAGS) -c $<
 enc.o     : $(SRC)/enc.c
-	$(CC) $(CFLAGS) -c $(SRC)/enc.c
+	$(CC) $(CFLAGS) -c $<
 alloc.o   : $(SRC)/alloc.c
-	$(CC) $(CFLAGS) -c $(SRC)/alloc.c
+	$(CC) $(CFLAGS) -c $<
 intio.o   : $(SRC)/intio.c
-	$(CC) $(CFLAGS) -c $(SRC)/intio.c
+	$(CC) $(CFLAGS) -c $<
 blockio.o : $(SRC)/blockio.c
-	$(CC) $(CFLAGS) -c $(SRC)/blockio.c
+	$(CC) $(CFLAGS) -c $<
 check.o   : $(SRC)/check.c
-	$(CC) $(CFLAGS) -c $(SRC)/check.c
+	$(CC) $(CFLAGS) -c $<
 open.o    : $(SRC)/open.c
-	$(CC) $(CFLAGS) -c $(SRC)/open.c
+	$(CC) $(CFLAGS) -c $<
 mod2dense.o: $(SRC)/mod2dense.c
-	$(CC) $(CFLAGS) -c $(SRC)/mod2dense.c
+	$(CC) $(CFLAGS) -c $<
 mod2sparse.o: $(SRC)/mod2sparse.c
-	$(CC) $(CFLAGS) -c $(SRC)/mod2sparse.c
+	$(CC) $(CFLAGS) -c $<
 mod2convert.o: $(SRC)/mod2convert.c
-	$(CC) $(CFLAGS) -c $(SRC)/mod2convert.c
+	$(CC) $(CFLAGS) -c $<
 distrib.o : $(SRC)/distrib.c
-	$(CC) $(CFLAGS) -c $(SRC)/distrib.c
+	$(CC) $(CFLAGS) -c $<
 rand.o    : $(SRC)/rand.c
-	$(CC) $(CFLAGS) -DRAND_FILE=\"./randfile\" -c $(SRC)/rand.c
+	$(CC) $(CFLAGS) -DRAND_FILE=\"./randfile\" -c $<
 
 clean:
 	rm -f $(TARGET) *.o
