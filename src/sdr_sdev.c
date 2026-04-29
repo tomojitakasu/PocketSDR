@@ -25,7 +25,15 @@
 #define OPEN_RETRY    3            // device open retry count
 #define RATE_TOL      100.0        // rate tolerance (sps)
 #define FREQ_TOL      10e3         // freq tolerance (Hz)
+#define GAP_THRES_NS  1000         // silent-drop detection threshold (ns)
+#define GAP_MAX_SEC   0.1          // max zero-fill duration on a single gap (s)
 #define MIN(x, y)     ((x) < (y) ? (x) : (y))
+
+// elapsed time in seconds -----------------------------------------------------
+static double ts_elapsed(uint32_t tick)
+{
+    return (sdr_get_tick() - tick) * 1e-3;
+}
 
 // list SoapySDR devices -------------------------------------------------------
 int sdr_sdev_list(void)
@@ -97,20 +105,21 @@ sdr_sdev_t *sdr_sdev_open(const char *driver, int fmt, double rate,
         dev = SoapySDRDevice_make(&args);
         SoapySDRKwargs_clear(&args);
         if (!dev) {
-            fprintf(stderr, "sdev: SoapySDRDevice_make error\n");
+            fprintf(stderr, "sdev: SoapySDRDevice_make error: %s\n",
+                SoapySDRDevice_lastError());
             return NULL;
+        }
+        if (bw > 0.0) {
+            (void)SoapySDRDevice_setBandwidth(dev, SOAPY_SDR_RX, ch, bw);
         }
         SoapySDRDevice_setSampleRate(dev, SOAPY_SDR_RX, ch, rate);
         SoapySDRDevice_setFrequency(dev, SOAPY_SDR_RX, ch, freq, NULL);
-        
+
         if (gain > 0.0) {
             (void)SoapySDRDevice_setGainMode(dev, SOAPY_SDR_RX, ch, false);
             (void)SoapySDRDevice_setGain(dev, SOAPY_SDR_RX, ch, gain);
         } else {
             (void)SoapySDRDevice_setGainMode(dev, SOAPY_SDR_RX, ch, true);
-        }
-        if (bw > 0.0) {
-            (void)SoapySDRDevice_setBandwidth(dev, SOAPY_SDR_RX, ch, bw);
         }
         (void)SoapySDRDevice_setDCOffsetMode(dev, SOAPY_SDR_RX, ch, true);
         (void)SoapySDRDevice_setIQBalanceMode(dev, SOAPY_SDR_RX, ch, true);
@@ -135,12 +144,20 @@ sdr_sdev_t *sdr_sdev_open(const char *driver, int fmt, double rate,
         fs_act * 1e-6, rate * 1e-6, fo_act * 1e-6, freq * 1e-6);
     str_fmt = fmt == SDR_FMT_CS8 ? SOAPY_SDR_CS8 : SOAPY_SDR_CS16;
     
-    SoapySDRKwargs stream_args = SoapySDRKwargs_fromString("");
+    // Driver-specific stream args:
+    const char *str_args = "";
+    if (!strcmp(driver, "lime")) { // LimeSDR
+        str_args = "linkFormat=CS12,latency=1";
+    } else if (!strcmp(driver, "uhd")) { // USRP
+        str_args = "num_recv_frames=2048,recv_frame_size=16384,wirefmt=sc8";
+    }
+    SoapySDRKwargs stream_args = SoapySDRKwargs_fromString(str_args);
     str = SoapySDRDevice_setupStream(dev, SOAPY_SDR_RX, str_fmt, chs, 1,
         &stream_args);
     SoapySDRKwargs_clear(&stream_args);
     if (!str) {
-        fprintf(stderr, "sdev: SoapySDRDevice_setupStream error\n");
+        fprintf(stderr, "sdev: SoapySDRDevice_setupStream error: %s\n",
+            SoapySDRDevice_lastError());
         SoapySDRDevice_unmake(dev);
         return NULL;
     }
@@ -149,6 +166,7 @@ sdr_sdev_t *sdr_sdev_open(const char *driver, int fmt, double rate,
     sdev->str = (void *)str;
     snprintf(sdev->driver, sizeof(sdev->driver), "%s", driver);
     sdev->ssize = fmt == SDR_FMT_CS8 ? 2 : 4;
+    sdev->rate = fs_act;
     sdev->buff = (uint8_t *)sdr_malloc(BUFF_SIZE * BUFF_CNT);
     sdev->rp = sdev->wp = 0;
     sdr_mutex_init(&sdev->mtx);
@@ -207,6 +225,35 @@ static void rise_pri(void)
 }
 #endif
 
+// zero-fill dropped samples ---------------------------------------------------
+static void fill_gap(sdr_sdev_t *sdev, int pos, int data_samples,
+    int64_t gap_samples, uint8_t *scratch)
+{
+    int64_t gap_bytes = gap_samples * sdev->ssize;
+    int64_t data_bytes = (int64_t)data_samples * sdev->ssize;
+    int64_t buf_size = (int64_t)BUFF_SIZE * BUFF_CNT;
+    
+    if (data_bytes > 0) {
+        memcpy(scratch, sdev->buff + pos, data_bytes);
+    }
+    int64_t fill = pos, rem = gap_bytes;
+    while (rem > 0) {
+        int64_t chunk = MIN(rem, buf_size - fill);
+        memset(sdev->buff + fill, 0, chunk);
+        rem -= chunk;
+        fill = (fill + chunk) % buf_size;
+    }
+    int64_t dst = (pos + gap_bytes) % buf_size, off = 0;
+    rem = data_bytes;
+    while (rem > 0) {
+        int64_t chunk = MIN(rem, buf_size - dst);
+        memcpy(sdev->buff + dst, scratch + off, chunk);
+        rem -= chunk;
+        off += chunk;
+        dst = (dst + chunk) % buf_size;
+    }
+}
+
 // Soapy device reader thread --------------------------------------------------
 #ifdef SOAPYSDR
 static void *reader_thread(void *arg)
@@ -214,9 +261,12 @@ static void *reader_thread(void *arg)
     sdr_sdev_t *sdev = (sdr_sdev_t *)arg;
     SoapySDRDevice *dev = (SoapySDRDevice *)sdev->dev;
     SoapySDRStream *str = (SoapySDRStream *)sdev->str;
+    uint8_t *gap_buf = (uint8_t *)sdr_malloc(BUFF_SIZE);
     void *buffs[1];
-    int ret, flags, ovcnt = 0;
-    long long tns;
+    int tns_ena = !strcmp(sdev->driver,"lime") || !strcmp(sdev->driver,"uhd");
+    int ret, flags, ovcnt = 0, dropcnt = 0, gapcnt = 0, prev_ret = 0;
+    int64_t tns, tns_prev = 0;
+    uint32_t tick = sdr_get_tick();
     
     // rise process/thread priority
     rise_pri();
@@ -234,18 +284,42 @@ static void *reader_thread(void *arg)
             continue;
         }
         if (ret < 0) {
-            fprintf(stderr, "sdev: SoapySDRDevice_readStream error (%s)\n",
-                SoapySDR_errToStr(ret));
+            fprintf(stderr, "sdev: SoapySDRDevice_readStream error (%s) ts=%.3f\n",
+                SoapySDR_errToStr(ret), ts_elapsed(tick));
             sdev->state = -1;
             break;
         }
+        if (flags & SOAPY_SDR_END_ABRUPT) {
+            dropcnt++;
+        }
+        // detect drop via HW timestamp gap and zero-fill
+        int64_t gap_samples = 0;
+        if (tns_ena && tns_prev != 0 && prev_ret > 0) {
+            int64_t gap_ns = (tns - tns_prev) - (int64_t)(prev_ret * 1e9 / sdev->rate);
+            if (gap_ns > GAP_THRES_NS) {
+                gap_samples = (int64_t)(sdev->rate * gap_ns * 1e-9 + 0.5);
+                int64_t max_gap = (int64_t)(sdev->rate * GAP_MAX_SEC);
+                if (gap_samples > max_gap) gap_samples = max_gap;
+                fprintf(stderr, "sdev: samples dropped ts=%.3fs gap=%.3fms (zero-fill)\n",
+                    ts_elapsed(tick), gap_ns * 1e-6);
+                gapcnt++;
+            }
+        }
+        prev_ret = ret;
+        tns_prev = tns;
+        
+        if (gap_samples > 0) {
+            fill_gap(sdev, pos, ret, gap_samples, gap_buf);
+        }
         sdr_mutex_lock(&sdev->mtx);
-        sdev->wp += ret * sdev->ssize;
+        sdev->wp += gap_samples * sdev->ssize + ret * sdev->ssize;
         sdr_mutex_unlock(&sdev->mtx);
     }
-    if (ovcnt > 0) {
-        fprintf(stderr, "sdev: SoapySDRDevice_readStream overflow=%d\n", ovcnt);
+    if (ovcnt > 0 || dropcnt > 0 || gapcnt > 0) {
+        fprintf(stderr, "sdev: total ts=%.3fs overflow=%d dev-drop=%d drop=%d\n",
+            ts_elapsed(tick), ovcnt, dropcnt, gapcnt);
     }
+    sdr_free(gap_buf);
     return NULL;
 }
 #endif
