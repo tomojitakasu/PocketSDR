@@ -145,6 +145,7 @@ typedef struct {                // SoapySDR device type
     int state;                  // state of sampling thread
     int64_t rp, wp;             // read/write pointer of sampling data buffer
     int ssize;                  // sample size (bytes/sample)
+    double rate;                // sample rate (sps)
     sdr_thread_t thread;        // reading sampling thread
     sdr_mutex_t mtx;            // lock flag
 } sdr_sdev_t;

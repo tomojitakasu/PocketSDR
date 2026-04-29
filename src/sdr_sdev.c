@@ -25,7 +25,7 @@
 #define OPEN_RETRY    3            // device open retry count
 #define RATE_TOL      100.0        // rate tolerance (sps)
 #define FREQ_TOL      10e3         // freq tolerance (Hz)
-#define GAP_THRES_NS  1000         // silent-drop detection threshold (ns)
+#define GAP_THRES     10000        // silent-drop detection threshold (ns)
 #define GAP_MAX_SEC   0.1          // max zero-fill duration on a single gap (s)
 #define MIN(x, y)     ((x) < (y) ? (x) : (y))
 
@@ -296,7 +296,7 @@ static void *reader_thread(void *arg)
         int64_t gap_samples = 0;
         if (tns_ena && tns_prev != 0 && prev_ret > 0) {
             int64_t gap_ns = (tns - tns_prev) - (int64_t)(prev_ret * 1e9 / sdev->rate);
-            if (gap_ns > GAP_THRES_NS) {
+            if (gap_ns > GAP_THRES) {
                 gap_samples = (int64_t)(sdev->rate * gap_ns * 1e-9 + 0.5);
                 int64_t max_gap = (int64_t)(sdev->rate * GAP_MAX_SEC);
                 if (gap_samples > max_gap) gap_samples = max_gap;
