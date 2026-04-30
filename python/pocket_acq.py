@@ -105,7 +105,7 @@ def search_sig(sig, prn, data, fs, fi, max_dop, zero_pad):
     # max correlation power and C/N0
     P_max, ix, cn0 = sdr_func.corr_max(P, T)
     
-    coffs = np.arange(0, T, 1.0 / fs, dtype='float32')
+    coffs = np.arange(N, dtype='float32') / fs
     dop = sdr_func.fine_dop(P.T[ix[1]], fds, ix[0])
     
     return P / P_max, fds, coffs, ix, cn0, dop
@@ -220,6 +220,9 @@ def add_text(ax, x, y, text, color='k'):
 #         Disalbe zero-padding for circular colleration to search the signal.
 #         [enabled]
 #
+#     -b step
+#         Doppler search step (Hz) [auto]
+#
 #     -np
 #         Disable plot even with single PRN number. [enabled]
 #
@@ -252,7 +255,7 @@ if __name__ == '__main__':
     size = (9, 6)
     sig, prns = 'L1CA', [1]
     fs, fi, IQ, T, toff = 12e6, 0.0, 2, T_AQC, 0.0
-    max_dop = 5000.0
+    max_dop, step_dop = 5000.0, 0.5
     opt = [0, False, True, False, False]
     fc, bc = 'darkblue', 'w'
     rect0 = [0.08, 0.09, 0.84, 0.85]
@@ -300,6 +303,9 @@ if __name__ == '__main__':
             opt[3] = True
         elif sys.argv[i] == '-s':
             opt[4] = True
+        elif sys.argv[i] == '-b':
+            i += 1
+            step_dop = float(sys.argv[i])
         elif sys.argv[i] == '-h':
             show_usage()
             show_sigid()
@@ -323,6 +329,9 @@ if __name__ == '__main__':
     # integration time (s)
     if T < Tcode or sig[:2] == 'L6':
         T = Tcode
+    
+    # Doppler bin step
+    sdr_func.DOP_STEP = step_dop
     
     if sig == 'G1CA' or sig == 'G2CA':
         label = 'FCN'
