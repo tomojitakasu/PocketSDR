@@ -800,6 +800,8 @@ def sec_code(sig, prn):
         return sec_code_E5AI(prn)
     elif sig == 'E5AQ':
         return sec_code_E5AQ(prn)
+    elif sig == 'E5ABQ':
+        return sec_code_E5AQ(prn)
     elif sig == 'E5BI':
         return sec_code_E5BI(prn)
     elif sig == 'E5BQ':
@@ -875,9 +877,9 @@ def gen_code_fft(code, T, coff, fs, N, Nz=0):
 def code_cyc(sig):
     sig = sig.upper()
     if sig in ('L1CA', 'L1CB', 'L1S', 'L5I', 'L5Q', 'L5SI', 'L5SIV', 'L5SQ',
-       'L5SQV', 'G1CA', 'G2CA', 'G3OCD', 'G3OCP', 'E5AI', 'E5AQ', 'E5BI',
-       'E5BQ', 'E6B', 'E6C', 'B1I', 'B2I', 'B2AD', 'B2AP', 'B2BI', 'B3I', 'I5S',
-       'ISS'):
+       'L5SQV', 'G1CA', 'G2CA', 'G3OCD', 'G3OCP', 'E5AI', 'E5AQ', 'E5ABQ',
+       'E5BI', 'E5BQ', 'E6B', 'E6C', 'B1I', 'B2I', 'B2AD', 'B2AP', 'B2BI',
+       'B3I', 'I5S', 'ISS'):
         return 1e-3
     elif sig == 'G1OCD':
         return 2e-3
@@ -908,8 +910,9 @@ def code_len(sig):
     if sig in ('L1CA', 'L1S', 'L1CB', 'G1OCD', 'I5S', 'ISS'):
         return 1023
     elif sig in ('L1CP', 'L1CD', 'L2CM', 'L5I', 'L5Q', 'L5SI', 'L5SIV', 'L5SQ',
-        'L5SQV', 'L6D', 'L6E', 'G2OCP', 'G3OCD', 'G3OCP', 'E5AI', 'E5AQ', 'E5BI',
-        'E5BQ', 'B1CD', 'B1CP', 'B2AD', 'B2AP', 'B2BI', 'B3I', 'I1SD', 'I1SP'):
+        'L5SQV', 'L6D', 'L6E', 'G2OCP', 'G3OCD', 'G3OCP', 'E5AI', 'E5AQ',
+        'E5ABQ', 'E5BI', 'E5BQ', 'B1CD', 'B1CP', 'B2AD', 'B2AP', 'B2BI',
+        'B3I', 'I1SD', 'I1SP'):
         return 10230
     elif sig == 'L2CL':
         return 767250
@@ -943,6 +946,8 @@ def sig_freq(sig):
     elif sig in ('L5I', 'L5Q', 'L5SI', 'L5SIV', 'L5SQ', 'L5SQV', 'E5AI', 'E5AQ',
         'B2AD', 'B2AP', 'I5S'):
         return 1176.45e6
+    elif sig == 'E5ABQ':
+        return 1191.795e6
     elif sig in ('E5BI', 'E5BQ', 'B2I', 'B2BI'):
         return 1207.14e6
     elif sig in ('L6D', 'L6E', 'E6B' , 'E6C'):
@@ -1867,4 +1872,3 @@ def LFSR(N, R, tap, n):
         code[i] = CHIP[R & 1]
         R = (sdr_func.xor_bits(R & tap) << (n - 1)) | (R >> 1)
     return code
-
