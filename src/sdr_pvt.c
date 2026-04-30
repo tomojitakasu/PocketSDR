@@ -946,7 +946,7 @@ void sdr_pvt_udsol(sdr_pvt_t *pvt, int64_t ix)
         update_sol(pvt);
         
         // array calibration step (no-op if not running)
-        sdr_rcv_array_calib_step(pvt->rcv, pvt->obs->data, pvt->obs->n,
+        sdr_rcv_array_step(pvt->rcv, pvt->obs->data, pvt->obs->n,
             pvt->nav, pvt->sol->rr);
         
         // solution latency (s)
