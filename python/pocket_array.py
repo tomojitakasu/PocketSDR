@@ -103,7 +103,10 @@ def draw_sky(ax, d_az=30, d_el=30, label=0):
             ax.plot(x, y, '-', color=GR_COLOR, lw=0.8, alpha=0.5)
 
 # antenna element gain ---------------------------------------------------------
+ELE_GAIN_ON = False     # apply elevation-dependent element gain
+
 def ant_ele_gain(el):
+    if not ELE_GAIN_ON: return 0.0
     if   el >  pi / 2: el = pi - el
     elif el < -pi / 2: el = -pi - el
     return 1 - 2 ** ((90 - el / D2R) / 30) # (dB)
@@ -129,24 +132,29 @@ def compute_weights(lam, pos, az_s, el_s, slider_amp, jammers, mode='MVDR'):
     a_s = steering_vec(lam, pos, az_s, el_s)
     if not jammers:
         return np.array([slider_amp[i] * np.conj(a_s[i]) for i in range(n)])
-    # R = I + J * sum_k a_jk a_jk^H  (noise power=1, J = jammer-to-noise ratio)
+    # element-gain-weighted covariance: R = I + J sum_k g_v(el_k)^2 a_k a_k^H
+    # (received jammer power scales by element pattern, so low-el jammers get
+    #  proportionally less null-suppression weight)
     J = 1e4
     R = np.eye(n, dtype=complex)
     for az, el in jammers:
         a_j = steering_vec(lam, pos, az, el)
-        R += J * np.outer(a_j, np.conj(a_j))
-    # constraint vector c: MVDR -> signal steering vector, PI -> reference element
+        g_j = 10.0 ** (ant_ele_gain(el) / 20.0) # voltage gain
+        R += J * (g_j * g_j) * np.outer(a_j, np.conj(a_j))
+    # constraint c: MVDR -> effective signal steering (g_s a_s), PI -> ref element
+    g_s = 10.0 ** (ant_ele_gain(el_s) / 20.0)
     if mode == 'PI':
         c = np.zeros(n, dtype=complex)
         c[0] = 1.0
     else:
-        c = a_s
+        c = g_s * a_s
     # w = R^-1 c / (c^H R^-1 c)
     Rinv_c = np.linalg.solve(R, c)
     w = Rinv_c / (np.conj(c) @ Rinv_c)
-    # MVDR: scale by N so peak |sig| at signal dir = N matches the classic
-    # PI  : no scaling, so the reference element weight (CH1) stays at unity
-    scale = 1.0 if mode == 'PI' else n
+    # MVDR: scale = N * g_s so signal-dir array factor = N (matches classic);
+    #       total sky gain at signal dir = 20 log10(N) + ant_ele_gain(el_s).
+    # PI  : no scaling, so the reference element weight (CH1) stays at unity.
+    scale = 1.0 if mode == 'PI' else n * g_s
     return np.conj(w) * scale
 
 # antenna gain ----------------------------------------------------------------
@@ -314,6 +322,10 @@ def array_page_new(parent):
     ttk.Label(p.toolbar, text='MODE').pack(side=LEFT, padx=(10, 4))
     p.box3 = sel_box_new(p.toolbar, vals=['MVDR', 'PI'], val='MVDR', width=5)
     p.box3.pack(side=LEFT)
+    ttk.Label(p.toolbar, text='ELE GAIN').pack(side=LEFT, padx=(10, 4))
+    p.box4 = sel_box_new(p.toolbar, vals=['ON', 'OFF'],
+        val='ON' if ELE_GAIN_ON else 'OFF', width=4)
+    p.box4.pack(side=LEFT)
     p.toolbar2 = tool_bar_new(p.panel, height=48)
     ttk.Label(p.toolbar2, text='RFCH\nWEIGHT', justify=CENTER).pack(side=LEFT, padx=(10, 4))
     p.w_txt = [None] * 8
@@ -345,6 +357,7 @@ def array_page_new(parent):
     p.box1.bind('<<ComboboxSelected>>', lambda e: on_pos_select(e, p))
     p.box2.bind('<<ComboboxSelected>>', lambda e: on_jam_cnt_change(e, p))
     p.box3.bind('<<ComboboxSelected>>', lambda e: update_plt(p))
+    p.box4.bind('<<ComboboxSelected>>', lambda e: on_ele_gain_change(e, p))
     p.panel.bind("<Configure>", lambda e: on_plt_configure(e, p))
     p.plt1.fig.canvas.mpl_connect('button_press_event',   lambda e: on_sky_press  (e, p))
     p.plt1.fig.canvas.mpl_connect('motion_notify_event',  lambda e: on_sky_motion (e, p))
@@ -359,6 +372,12 @@ def array_page_new(parent):
 # antenna position select callback ---------------------------------------------
 def on_pos_select(e, p):
     p.ant_pos = ANT_POSS[int(p.box1.get())-1]
+    update_plt(p)
+
+# element gain ON/OFF change callback -----------------------------------------
+def on_ele_gain_change(e, p):
+    global ELE_GAIN_ON
+    ELE_GAIN_ON = (p.box4.get() == 'ON')
     update_plt(p)
 
 # jammer count change callback ------------------------------------------------
