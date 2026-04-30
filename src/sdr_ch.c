@@ -74,13 +74,20 @@ static void sig_upper(const char *sig, char *Sig)
 }
 
 // new signal acquisition ------------------------------------------------------
-static sdr_acq_t *acq_new(const int8_t *code, int len_code, double T, double fs,
-    int N)
+static sdr_acq_t *acq_new(const char *sig, int prn, const int8_t *code,
+    int len_code, double T, double fs, int N)
 {
     sdr_acq_t *acq = (sdr_acq_t *)sdr_malloc(sizeof(sdr_acq_t));
+    int8_t *code_I, *code_Q;
     
     acq->code_fft = sdr_cpx_malloc(2 * N);
-    sdr_gen_code_fft(code, len_code, T, 0.0, fs, N, N, acq->code_fft);
+    if (sdr_sig_cpx(sig) && sdr_gen_code_cpx(sig, prn, &code_I, &code_Q,
+        &len_code)) {
+        sdr_gen_code_fft_cpx(code_I, code_Q, len_code, T, 0.0, fs, N, N,
+            acq->code_fft);
+    } else {
+        sdr_gen_code_fft(code, len_code, T, 0.0, fs, N, N, acq->code_fft);
+    }
     acq->fd_ext = 0.0;
     acq->fds = sdr_dop_bins(T, 0.0f, (float)sdr_max_dop, &acq->len_fds);
     acq->P_sum = NULL;
@@ -133,13 +140,33 @@ static sdr_trk_t *trk_new(const char *sig, int prn, const int8_t *code,
             sdr_gen_code_fft(code, len_code, T, coff, fs, N, 0,
                 trk->code_fft + i * N);
         }
-    }
-    else {
+    } else {
+        int n_banks = sdr_sig_e5abq(sig) ? 3 : 1;
+
         trk->code = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N *
-            SDR_N_CODES);
-        for (int i = 0; i < SDR_N_CODES; i++) {
-            double coff = -i / fs / SDR_N_CODES;
-            sdr_res_code(code, len_code, T, coff, fs, N, 0, trk->code + i * N);
+            SDR_N_CODES * n_banks);
+        
+        for (int bank = 0; bank < n_banks; bank++) {
+            int8_t *code_I, *code_Q;
+            int stat = 0;
+
+            if (sdr_sig_e5abq(sig) && bank > 0) {
+                stat = sdr_gen_code_cpx_sec(sig, prn, bank == 1 ? 1 : -1,
+                    &code_I, &code_Q, &len_code);
+            } else if (sdr_sig_cpx(sig)) {
+                stat = sdr_gen_code_cpx(sig, prn, &code_I, &code_Q, &len_code);
+            }
+            for (int i = 0; i < SDR_N_CODES; i++) {
+                double coff = -i / fs / SDR_N_CODES;
+                sdr_cpx16_t *p = trk->code + (bank * SDR_N_CODES + i) * N;
+
+                if (stat) {
+                    sdr_res_code_cpx(code_I, code_Q, len_code, T, coff, fs, N,
+                        0, p);
+                } else {
+                    sdr_res_code(code, len_code, T, coff, fs, N, 0, p);
+                }
+            }
         }
     }
     return trk;
@@ -180,6 +207,13 @@ sdr_ch_t *sdr_ch_new(const char *sig, int prn, double fs, double fi)
         sdr_free(ch);
         return NULL;
     }
+    ch->sec_code2 = NULL;
+    ch->len_sec_code2 = 0;
+    if (sdr_sig_e5abq(ch->sig) &&
+        !(ch->sec_code2 = sdr_sec_code("E5BQ", prn, &ch->len_sec_code2))) {
+        sdr_free(ch);
+        return NULL;
+    }
     ch->fc = sdr_shift_freq(sig, prn, sdr_sig_freq(sig));
     ch->fs = fs;
     ch->fi = sdr_shift_freq(sig, prn, fi);
@@ -189,7 +223,8 @@ sdr_ch_t *sdr_ch_new(const char *sig, int prn, double fs, double fi)
     ch->lock = ch->lost = 0;
     ch->costas = strcmp(ch->sig, "L6D") && strcmp(ch->sig, "L6E");
     ch->obs_idx = -1;
-    ch->acq = acq_new(ch->code, ch->len_code, ch->T, fs, ch->N);
+    ch->acq = acq_new(ch->sig, ch->prn, ch->code, ch->len_code, ch->T, fs,
+        ch->N);
     ch->trk = trk_new(ch->sig, ch->prn, ch->code, ch->len_code, ch->T, fs);
     ch->nav = sdr_nav_new();
     ch->data = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * ch->N);
@@ -285,8 +320,7 @@ static void search_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff,
             start_track(ch, time, fd, coff, cn0);
             sdr_log(3, "$LOG,%.3f,%s,%d,SIGNAL FOUND (%.1f,%.1f,%.7f)", ch->time,
                 ch->sig, ch->prn, cn0, fd, coff * 1e3);
-        }
-        else {
+        } else {
             sdr_sleep_msec(100);
             ch->state = SDR_STATE_IDLE;
             sdr_log(4, "$LOG,%.3f,%s,%d,SIGNAL NOT FOUND (%.1f)", time, ch->sig,
@@ -532,9 +566,29 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
         sdr_mix_carr(buff, ix, ch->N, ch->fs, fc, phi, ch->data);
         
         // standard correlator
-        sdr_corr_std(ch->data, ch->trk->code, ch->N, ch->coff * ch->fs,
-            ch->trk->pos, ch->trk->npos + ch->trk->nposx, ch->trk->C, C1);
-        
+        if (sdr_sig_cpx(ch->sig)) {
+            const sdr_cpx16_t *code = ch->trk->code;
+            int nc = ch->trk->npos + ch->trk->nposx;
+
+            if (sdr_sig_e5abq(ch->sig) && ch->trk->sec_sync > 0 &&
+                ch->len_sec_code > 0 && ch->len_sec_code2 > 0) {
+                int idx = (ch->lock - ch->trk->sec_sync) % ch->len_sec_code;
+
+                if (idx < 0) {
+                    idx += ch->len_sec_code;
+                }
+                int rel = ch->sec_code[idx] *
+                    ch->sec_code2[idx % ch->len_sec_code2];
+                int bank = rel > 0 ? 1 : 2;
+
+                code = ch->trk->code + bank * ch->N * SDR_N_CODES;
+            }
+            sdr_corr_std_cpx_code(ch->data, code, ch->N, ch->coff * ch->fs,
+                ch->trk->pos, nc, ch->trk->C, C1);
+        } else {
+            sdr_corr_std(ch->data, ch->trk->code, ch->N, ch->coff * ch->fs,
+                ch->trk->pos, ch->trk->npos + ch->trk->nposx, ch->trk->C, C1);
+        }
         for (int i = 0; i < 2; i++) {
             C1[0][i] = (C1[0][i] + ch->trk->C1[i]) / ch->N;
             ch->trk->C1[i] = C1[1][i];
@@ -551,8 +605,7 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
     // FLL/PLL, DLL and update C/N0 
     if (ch->lock * ch->T <= T_FPULLIN) {
         FLL(ch);
-    }
-    else {
+    } else {
         PLL(ch);
     }
     DLL(ch);
@@ -604,8 +657,7 @@ void sdr_ch_update(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
 {
     if (ch->state == SDR_STATE_SRCH) {
         search_sig(ch, time, buff, ix);
-    }
-    else if (ch->state == SDR_STATE_LOCK) {
+    } else if (ch->state == SDR_STATE_LOCK) {
         sdr_mutex_lock(&ch->mtx);
         track_sig(ch, time, buff, ix);
         sdr_mutex_unlock(&ch->mtx);
