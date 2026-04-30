@@ -393,7 +393,8 @@ static void out_rtcm3_obs(rtcm_t *rtcm, const obs_t *obs, stream_t *str,
     
     if (rcv && strstr(rcv->opt, "-ARRAY")) {
         int staid_save = rtcm->staid;
-        int narch = rcv->narch > 0 ? rcv->narch : rcv->nrfch;
+        int narch = (rcv->array && rcv->array->narch > 0) ?
+            rcv->array->narch : rcv->nrfch;
         for (int k = 1; k <= narch; k++) {
             rtcm->staid = k; // RF CH as RTCM station ID
             out_rtcm3_msm(rtcm, obs, str, k);
@@ -487,7 +488,6 @@ sdr_pvt_t *sdr_pvt_new(sdr_rcv_t *rcv)
     pvt->nav->ns = pvt->nav->nsmax = NSATSBS * 2;
     pvt->sol = (sol_t *)sdr_malloc(sizeof(sol_t));
     pvt->ssat = (ssat_t *)sdr_malloc(sizeof(ssat_t) * MAXSAT);
-    pvt->att = (sdr_att_t *)sdr_malloc(sizeof(sdr_att_t));
     pvt->rtcm = (rtcm_t *)sdr_malloc(sizeof(rtcm_t));
     init_rtcm(pvt->rtcm);
     set_obs_idx(rcv);
@@ -518,7 +518,6 @@ void sdr_pvt_free(sdr_pvt_t *pvt)
     sdr_free(pvt->nav);
     sdr_free(pvt->sol);
     sdr_free(pvt->ssat);
-    sdr_free(pvt->att);
     free_rtcm(pvt->rtcm);
     sdr_free(pvt->rtcm);
     sdr_free(pvt);

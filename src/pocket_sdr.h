@@ -228,6 +228,14 @@ typedef struct {                // IF data buffer type
     int IQ, N;                  // sampling types (1:I,2:IQ) and buffer size
 } sdr_buff_t;
 
+typedef struct {                // SDR IF data statistics
+    double std;                 // IF data std-dev
+    double rate, sum;           // IF data rate (MB/s) and total size (MB)
+    double buff_use;            // IF data buffer usage (%)
+    double sum_sq[2];           // accumulators {sum, sum-of-squares}
+    int cnt;                    // sample count for stats
+} sdr_stats_t;
+
 struct sdr_rcv_tag;
 
 typedef struct {                // SDR receiver channel thread type
@@ -238,15 +246,6 @@ typedef struct {                // SDR receiver channel thread type
     sdr_thread_t thread;        // SDR receiver channel thread
 } sdr_ch_th_t;
 
-typedef struct {                // SDR attitude solution type
-    gtime_t time;               // epoch time
-    int nobs;                   // number of valid obs data
-    double freq;                // frequency
-    double ant_pos[SDR_MAX_RFCH][3]; // ant positions in body frame (m) (X=right,Y=forward,Z=up)
-    double bias[SDR_MAX_RFCH];  // H/W bias of each RF CH (s)
-    double roll, pitch, yaw;    // roll, pitch, yaw (rad)
-} sdr_att_t;
-
 typedef struct {                // SDR PVT type
     gtime_t time;               // epoch time
     int64_t ix;                 // epoch cycle (cyc)
@@ -255,7 +254,6 @@ typedef struct {                // SDR PVT type
     nav_t *nav;                 // navigation data
     sol_t *sol;                 // PVT solution
     ssat_t *ssat;               // satellite status
-    sdr_att_t *att;             // SDR attitude solution
     rtcm_t *rtcm;               // RTCM control
     double latency;             // solution latency (s)
     int count[3];               // solution, OBS and NAV count
@@ -279,13 +277,16 @@ typedef struct {                // SDR array channel type
 } sdr_arch_t;
 
 typedef struct {                // SDR antenna array state
+    struct sdr_rcv_tag *rcv;    // back-pointer to SDR receiver (NULL = standalone)
     int freq;                   // frequency index (0:L1,1:L2,...)
+    int narch;                  // number of array channels
     int ant_ena[SDR_MAX_RFCH];  // element enable flag
     double ant_pos[SDR_MAX_RFCH][3]; // element positions in body-frame (m)
     int calib_run, nep;         // calibration flag (0/1) and epoch count
     double x[3+SDR_MAX_RFCH];   // EKF state {roll,pitch,yaw,bias_1..bias_n-1}
     double P[(3+SDR_MAX_RFCH)*(3+SDR_MAX_RFCH)]; // EKF covariance
     double rms;                 // calibration RMS (m)
+    sdr_arch_t arch[SDR_MAX_ARCH]; // per-array-CH beam state (relative index)
 } sdr_array_t;
 
 typedef struct sdr_rcv_tag {    // SDR receiver type
@@ -295,26 +296,21 @@ typedef struct sdr_rcv_tag {    // SDR receiver type
     int fmt;                    // IF data format (SDR_FMT_???)
     double fs;                  // IF data sampling rate (sps)
     int N;                      // IF data cycle (sample)
-    int nch, nrfch, narch;      // number of BB, RF and array channels
+    int nch, nrfch;             // number of BB and RF channels
     int ich;                    // signal search channel index
+    int64_t ix;                 // IF data cycle count (cyc)
     sdr_rfch_t rfch[SDR_MAX_RFCH]; // RF channels (array CHs derive from rfch[0])
-    sdr_arch_t arch[SDR_MAX_ARCH]; // per-array-CH state (relative index 0..narch-1)
     sdr_buff_t *buff[SDR_MAX_BUFF]; // IF data buffers (RF + array)
     sdr_ch_th_t *th[SDR_MAX_NCH]; // SDR receiver channel threads
-    int64_t ix;                 // IF data cycle count (cyc)
-    double tscale;              // time scale to replay IF data file
-    double data_std;            // IF data std-dev
-    double data_rate, data_sum; // IF data rate (MB/s) and size (MB)
-    double data_stats[2];       // IF data states {sum,sum_square}
-    int data_cnt;               // IF data count for stats
-    double buff_use;            // buffer usage (%)
+    sdr_array_t *array;         // antenna array state (NULL if narch == 0)
     sdr_pvt_t *pvt;             // SDR PVT
+    sdr_stats_t stats;          // IF data statistics
     stream_t *strs[4];          // NMEA, RTCM3 and IF data log streams
     gtime_t start_time;         // receiver start time (UTC)
+    double tscale;              // time scale to replay IF data file
     char opt[1024];             // receiver options
     sdr_thread_t thread;        // SDR receiver thread
     sdr_mutex_t mtx;            // lock flag
-    sdr_array_t *array;         // antenna array state (NULL if narch == 0)
 } sdr_rcv_t;
 
 // function prototypes -------------------------------------------------------
@@ -475,10 +471,15 @@ void sdr_pvt_udsol(sdr_pvt_t *pvt, int64_t ix);
 void sdr_pvt_solstr(sdr_pvt_t *pvt, char *buff, int size);
 
 // sdr_array.c
-sdr_array_t *sdr_array_new(int freq, const int *ant_ena, double ant_pos[][3]);
+sdr_array_t *sdr_array_new(sdr_rcv_t *rcv, int freq, int narch,
+    const int *ant_ena, double ant_pos[][3]);
 void sdr_array_free(sdr_array_t *array);
 int sdr_array_calib(sdr_array_t *array, const obsd_t *obs, int nobs,
     const nav_t *nav, const double *rr);
+int sdr_array_set_beam(sdr_array_t *array, int m, double az, double el,
+    double scale);
+int sdr_array_get_beam(const sdr_array_t *array, int m, double *az, double *el);
+void sdr_array_combine(sdr_array_t *array, int base);
 
 // sdr_rcv.c
 sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,

@@ -51,9 +51,11 @@ static inline int rtoc_of(const sdr_rcv_t *rcv, int i)
     return i < rcv->nrfch && rcv->rfch[i].IQ == 1;
 }
 
-// forward declaration: low-level beam-forming weight setter (defined later)
-static int apply_array_beam(sdr_rcv_t *rcv, int ach, double az, double el,
-    const double *ant_pos, const double *bias, const double *rpy, double scale);
+// number of array channels (NULL-safe via array back-pointer)
+static inline int rcv_narch(const sdr_rcv_t *rcv)
+{
+    return rcv->array ? rcv->array->narch : 0;
+}
 
 // append string ---------------------------------------------------------------
 static int ap_str(char *buff, int size, const char *fmt, ...)
@@ -156,7 +158,7 @@ static int print_head(sdr_rcv_t *rcv, char *buff, int size)
         nch_bb = rcv->nch;
         nch_trk = get_nch_trk(rcv, sys);
         ch_srch = rcv->ich + 1;
-        buff_use = rcv->buff_use;
+        buff_use = rcv->stats.buff_use;
         sdr_pvt_solstr(rcv->pvt, solstr, sizeof(solstr));
     }
     n += ap_str(buff + n, size - n, " %-*s BUFF:%3.0f%% SRCH:%4d LOCK:%4d/%4d\n",
@@ -273,7 +275,7 @@ int sdr_rcv_rcv_stat(sdr_rcv_t *rcv, char *buff, int size)
         }
         n += ap_str(buff + n, size - n, "%.3f %s %s/%d/%d ",
             get_buff_ix(rcv) * SDR_CYC, src, fmt_str[rcv->fmt], rcv->nrfch,
-            rcv->narch);
+            rcv_narch(rcv));
         for (int i = 0; i < 8; i++) {
             double fo = i < num_rfch(rcv->fmt) ? rcv->rfch[i].fo * 1e-6 : 0.0;
             n += ap_str(buff + n, size - n, "%.2f%s", fo, i == 3 || i == 7 ? " " : ",");
@@ -284,10 +286,10 @@ int sdr_rcv_rcv_stat(sdr_rcv_t *rcv, char *buff, int size)
                 i == 7 ? " " : ",");
         }
         n += ap_str(buff + n, size - n, "%.3f %d/%d %.1f %.1f ", rcv->fs * 1e-6,
-            nch_trk, rcv->nch, rcv->data_rate * 1e-6, rcv->buff_use);
+            nch_trk, rcv->nch, rcv->stats.rate * 1e-6, rcv->stats.buff_use);
         n += ap_str(buff + n, size - n, "%.3f %d/%d/%d %.1f", rcv->pvt->latency,
             rcv->pvt->count[0], rcv->pvt->count[1], rcv->pvt->count[2],
-            rcv->data_sum);
+            rcv->stats.sum);
     } else {
         n += ap_str(buff + n, size - n, "%.3f --- ---/-/- ", 0.0);
         for (int i = 0; i < 8; i++) {
@@ -371,7 +373,7 @@ int sdr_rcv_corr_hist(sdr_rcv_t *rcv, int ch, double tspan, double *stat,
 // get RF channel status -------------------------------------------------------
 int sdr_rcv_rfch_stat(sdr_rcv_t *rcv, int ch, double *stat)
 {
-    if (!rcv || !rcv->state || ch < 1 || ch > rcv->nrfch + rcv->narch) return 0;
+    if (!rcv || !rcv->state || ch < 1 || ch > rcv->nrfch + rcv_narch(rcv)) return 0;
     // array CH (ch-1 >= nrfch) inherits fo from rfch[0]; bits = 4 (combine_array out)
     int idx = (ch - 1 < rcv->nrfch) ? ch - 1 : 0;
     int bits = (ch - 1 < rcv->nrfch) ? rcv->rfch[ch-1].bits : 4;
@@ -382,7 +384,7 @@ int sdr_rcv_rfch_stat(sdr_rcv_t *rcv, int ch, double *stat)
         (rtoc_of(rcv, ch-1) ? rcv->fs * 0.25 : 0.0); // rtoc: shift center by +fs/4
     stat[4] = rcv->buff[ch-1]->IQ;
     stat[5] = bits;
-    stat[6] = rcv->data_std;
+    stat[6] = rcv->stats.std;
     stat[7] = rtoc_of(rcv, ch-1); // real-to-complex (fs/4 mix) flag
     return 1;
 }
@@ -390,7 +392,7 @@ int sdr_rcv_rfch_stat(sdr_rcv_t *rcv, int ch, double *stat)
 // get RF channel PSD ----------------------------------------------------------
 int sdr_rcv_rfch_psd(sdr_rcv_t *rcv, int ch, double tave, int N, float *psd)
 {
-    if (!rcv || !rcv->state || ch < 1 || ch > rcv->nrfch + rcv->narch) return 0;
+    if (!rcv || !rcv->state || ch < 1 || ch > rcv->nrfch + rcv_narch(rcv)) return 0;
     int n = (int)(rcv->fs * tave);
     int64_t ix = get_buff_ix(rcv);
     if (N < 0 || n < N || ix * rcv->N < n) return 0;
@@ -410,7 +412,7 @@ int sdr_rcv_rfch_psd(sdr_rcv_t *rcv, int ch, double tave, int N, float *psd)
 int sdr_rcv_rfch_hist(sdr_rcv_t *rcv, int ch, double tave, int *val,
     double *hist1, double *hist2)
 {
-    if (!rcv || !rcv->state || ch < 1 || ch > rcv->nrfch + rcv->narch) return 0;
+    if (!rcv || !rcv->state || ch < 1 || ch > rcv->nrfch + rcv_narch(rcv)) return 0;
     int n = (int)(rcv->fs * tave), cnt[2][256] = {{0}}, sum[2] = {0}, nval = 0;
     int64_t ix = get_buff_ix(rcv);
     if (ix * rcv->N < n) return 0;
@@ -643,8 +645,8 @@ sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
     rcv->fmt = fmt;
     rcv->fs = fs;
     rcv->nrfch = num_rfch(fmt);
-    rcv->narch = MIN(narch, SDR_MAX_ARCH);
-    nrfch = rcv->nrfch + rcv->narch;
+    narch = MIN(narch, SDR_MAX_ARCH); // bounded local; stored in array later
+    nrfch = rcv->nrfch + narch;
     for (int i = 0; i < rcv->nrfch; i++) {
         rcv->rfch[i].fo = fo[i];
         rcv->rfch[i].IQ = IQ[i];
@@ -677,34 +679,21 @@ sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
     set_lpf(rcv, opt);
     set_srch_ch(rcv, opt);
     
-    for (int i = 0; i < rcv->nrfch + rcv->narch; i++) {
+    for (int i = 0; i < nrfch; i++) {
         rcv->buff[i] = sdr_buff_new(rcv->N * MAX_BUFF, 2); // IQ
     }
     rcv->ich = -1;
     snprintf(rcv->opt, sizeof(rcv->opt), "%s", opt);
     sdr_mutex_init(&rcv->mtx);
-    
+
     // initialize array CH beams with default (zenith, no calibration applied):
     // ant_pos = 0, bias = 0, rpy = 0, az = 0, el = 90 deg, scale = 1/nrfch.
     // result: equal-weight (real) sum over all L1 RF CHs.
-    if (rcv->narch > 0 && rcv->nrfch > 0) {
-        // allocate array state: enable first nrfch CHs, zero ant_pos, freq=L1
+    if (narch > 0 && rcv->nrfch > 0) {
         int ant_ena[SDR_MAX_RFCH] = {0};
         double ant_pos[SDR_MAX_RFCH][3] = {{0}};
         for (int i = 0; i < rcv->nrfch; i++) ant_ena[i] = 1;
-        rcv->array = sdr_array_new(0, ant_ena, ant_pos);
-
-        double zero_pos[SDR_MAX_RFCH * 3] = {0};
-        double zero_bias[SDR_MAX_RFCH] = {0};
-        double zero_rpy[3] = {0};
-        for (int m = 0; m < rcv->narch; m++) {
-            int ach = rcv->nrfch + m;
-            rcv->arch[m].az = 0.0;
-            rcv->arch[m].el = PI / 2;
-            rcv->arch[m].scale = 1.0 / rcv->nrfch;
-            apply_array_beam(rcv, ach, 0.0, PI / 2, zero_pos, zero_bias,
-                zero_rpy, rcv->arch[m].scale);
-        }
+        rcv->array = sdr_array_new(rcv, 0, narch, ant_ena, ant_pos);
     }
     return rcv;
 }
@@ -725,14 +714,11 @@ void sdr_rcv_free(sdr_rcv_t *rcv)
     for (int i = 0; i < rcv->nch; i++) {
         ch_th_free(rcv->th[i]);
     }
-    for (int i = 0; i < rcv->nrfch + rcv->narch; i++) {
+    for (int i = 0; i < rcv->nrfch + rcv_narch(rcv); i++) {
         sdr_buff_free(rcv->buff[i]);
     }
     for (int i = 0; i < SDR_MAX_RFCH; i++) {
         sdr_lpf_free(rcv->rfch[i].lpf);
-    }
-    for (int i = 0; i < SDR_MAX_ARCH; i++) {
-        sdr_free(rcv->arch[i].w);
     }
     sdr_array_free(rcv->array);
     sdr_free(rcv);
@@ -831,62 +817,11 @@ static sdr_cpx8_t *gen_LUTC_rtoc(int rfch)
         : LUTC[(k)][(byte)]; \
 } while (0)
 
-// beam-forming weight quantization: w_q = round(w * ARRAY_W_SCALE) -----------
-//   max product magnitude: |int4|*|int16| <= 8 * 32767. nrfch <= 8 -> 8 CHs.
-//   per-sample int32 accumulator margin >> sufficient.
-#define ARRAY_W_SCALE 256       // weight Q-factor (Q8)
-#define ARRAY_W_SHIFT 8         // log2(ARRAY_W_SCALE)
-#define ARRAY_FREQ    1.57542e9 // L1 frequency (Hz)
-#define ARRAY_FREQ_TOL 1e6      // RF CH center freq tolerance for L1 match (Hz)
-
 // combine RF CH IF data into array CH IF data using configured beam weights --
 //   only RAW16/RAW32 paths produce per-RF-CH IF data; called for those.
-//   weights are snapshotted under mutex so set_array_beam() can update live.
 static void combine_array(sdr_rcv_t *rcv, int base)
 {
-    int nrfch = rcv->nrfch, narch = rcv->narch;
-    if (narch <= 0 || nrfch < 2) return;
-    
-    int16_t w_snap[SDR_MAX_ARCH][SDR_MAX_RFCH * 2];
-    int active[SDR_MAX_ARCH] = {0}, any = 0;
-    
-    sdr_mutex_lock(&rcv->mtx);
-    for (int m = 0; m < narch; m++) {
-        int ach = nrfch + m;
-        if (rcv->arch[ach - nrfch].w) {
-            memcpy(w_snap[m], rcv->arch[ach - nrfch].w, sizeof(int16_t) * nrfch * 2);
-            active[m] = 1;
-            any = 1;
-        }
-    }
-    sdr_mutex_unlock(&rcv->mtx);
-    if (!any) return;
-    
-    for (int m = 0; m < narch; m++) {
-        if (!active[m]) continue;
-        const int16_t *w = w_snap[m];
-        sdr_cpx8_t *out = rcv->buff[nrfch + m]->data + base;
-        const sdr_cpx8_t *in[SDR_MAX_RFCH];
-        for (int a = 0; a < nrfch; a++) in[a] = rcv->buff[a]->data + base;
-        
-        for (int i = 0; i < rcv->N; i++) {
-            int32_t sum_re = 0, sum_im = 0;
-            for (int a = 0; a < nrfch; a++) {
-                int8_t I = SDR_CPX8_I(in[a][i]);
-                int8_t Q = SDR_CPX8_Q(in[a][i]);
-                int32_t wr = w[a*2], wi = w[a*2+1];
-                sum_re += (int32_t)I * wr - (int32_t)Q * wi;
-                sum_im += (int32_t)I * wi + (int32_t)Q * wr;
-            }
-            sum_re += (sum_re >= 0 ? ARRAY_W_SCALE/2 : -(ARRAY_W_SCALE/2));
-            sum_im += (sum_im >= 0 ? ARRAY_W_SCALE/2 : -(ARRAY_W_SCALE/2));
-            sum_re /= ARRAY_W_SCALE;
-            sum_im /= ARRAY_W_SCALE;
-            sum_re = CLIP(sum_re * 2, -8, 7);
-            sum_im = CLIP(sum_im * 2, -8, 7);
-            out[i] = SDR_CPX8(sum_re, sum_im);
-        }
-    }
+    sdr_array_combine(rcv->array, base);
 }
 
 // write IF data buffer --------------------------------------------------------
@@ -1003,7 +938,7 @@ static uint32_t update_data_rate(sdr_rcv_t *rcv, uint32_t tick, int sum_size)
 {
     uint32_t tick_a = sdr_get_tick();
     if (tick_a == tick) return tick;
-    rcv->data_rate = (double)sum_size / ((tick_a - tick) * 1e-3);
+    rcv->stats.rate = (double)sum_size / ((tick_a - tick) * 1e-3);
     return tick_a;
 }
 
@@ -1015,16 +950,16 @@ static void update_data_stats(sdr_rcv_t *rcv, const uint8_t *raw)
     for (int i = 0; i < N; i++) {
         if (rcv->fmt == SDR_FMT_INT8 || rcv->fmt == SDR_FMT_INT8X2 ||
             rcv->fmt == SDR_FMT_CS8) {
-            rcv->data_stats[0] += (int8_t)raw[i];
-            rcv->data_stats[1] += SQR((int8_t)raw[i]);
+            rcv->stats.sum_sq[0] += (int8_t)raw[i];
+            rcv->stats.sum_sq[1] += SQR((int8_t)raw[i]);
         } else if (rcv->fmt == SDR_FMT_CS16) {
-            rcv->data_stats[0] += *(int16_t *)(raw + i * 2);
-            rcv->data_stats[1] += SQR(*(int16_t *)(raw + i * 2));
+            rcv->stats.sum_sq[0] += *(int16_t *)(raw + i * 2);
+            rcv->stats.sum_sq[1] += SQR(*(int16_t *)(raw + i * 2));
         } else {
             return;
         }
     }
-    rcv->data_cnt += N;
+    rcv->stats.cnt += N;
 }
 
 // update scale ----------------------------------------------------------------
@@ -1035,14 +970,14 @@ static void update_scale(sdr_rcv_t *rcv)
     
     if ((rcv->fmt != SDR_FMT_INT8  && rcv->fmt != SDR_FMT_INT8X2 &&
         rcv->fmt != SDR_FMT_CS8 && rcv->fmt != SDR_FMT_CS16) ||
-        rcv->data_cnt <= 0) {
+        rcv->stats.cnt <= 0) {
         return;
     }
-    ave = rcv->data_stats[0] / rcv->data_cnt;
-    std = sqrt(rcv->data_stats[1] / rcv->data_cnt - SQR(ave));
-    rcv->data_stats[0] = rcv->data_stats[1] = 0.0;
-    rcv->data_cnt = 0;
-    rcv->data_std = std;
+    ave = rcv->stats.sum_sq[0] / rcv->stats.cnt;
+    std = sqrt(rcv->stats.sum_sq[1] / rcv->stats.cnt - SQR(ave));
+    rcv->stats.sum_sq[0] = rcv->stats.sum_sq[1] = 0.0;
+    rcv->stats.cnt = 0;
+    rcv->stats.std = std;
     
     if ((p = strstr(rcv->opt, "-SCALE"))) {
         sscanf(p, "-SCALE=%lf", &scale);
@@ -1056,18 +991,18 @@ static void update_scale(sdr_rcv_t *rcv)
 // update IF data buffer usage rate --------------------------------------------
 static void update_buff_use(sdr_rcv_t *rcv)
 {
-    rcv->buff_use = 0.0;
+    rcv->stats.buff_use = 0.0;
     int64_t ix = get_buff_ix(rcv);
     for (int i = 0; i < rcv->nch; i++) {
         double use = (ix - rcv->th[i]->ix) * 100.0 / MAX_BUFF;
-        if (use > rcv->buff_use) rcv->buff_use = use;
+        if (use > rcv->stats.buff_use) rcv->stats.buff_use = use;
     }
 }
 
 // update signal search channel ------------------------------------------------
 static void update_srch_ch(sdr_rcv_t *rcv)
 {
-    if (rcv->buff_use > MAX_BUFF_USE) { // IF data buffer full ?
+    if (rcv->stats.buff_use > MAX_BUFF_USE) { // IF data buffer full ?
         return;
     }
     // signal search channel busy ?
@@ -1105,7 +1040,7 @@ static void *rcv_thread(void *arg)
     } else if (rcv->dev == SDR_DEV_SOAPY) {
         sdr_sdev_start((sdr_sdev_t *)rcv->dp);
     }
-    rcv->data_sum = 0.0;
+    rcv->stats.sum = 0.0;
     
     for (int64_t ix = 0; rcv->state; ix++) {
         if (ix % LOG_CYC == 0) {
@@ -1126,7 +1061,7 @@ static void *rcv_thread(void *arg)
         write_buff(rcv, raw, ix);
         
         // write IF data log stream
-        rcv->data_sum += sdr_str_write(rcv->strs[3], raw, size) * 1e-6;
+        rcv->stats.sum += sdr_str_write(rcv->strs[3], raw, size) * 1e-6;
         
         // update signal search channel
         update_srch_ch(rcv);
@@ -1317,121 +1252,6 @@ int sdr_rcv_set_filt(sdr_rcv_t *rcv, int ch, double bw, double freq, int order)
     return sdr_dev_set_filt((sdr_dev_t *)rcv->dp, ch, bw, freq, order);
 }
 
-// body-to-ENU rotation matrix R from RPY (Z-X-Y: yaw, pitch, roll), column-major
-// Body frame: X=right, Y=forward, Z=up. Yaw is CCW positive looking from +Z
-// (right-hand rule). At yaw=0 body Y aligns with ENU north. Increasing yaw
-// rotates body Y from north toward west.
-// Note: this is OPPOSITE sign of compass heading (CW positive from north).
-// compass_heading_of_body_Y = -yaw (mod 360 deg).
-// (Beam azimuth `az` taken by sdr_rcv_set_array_beam is in compass convention.)
-static void rpy2R(const double *rpy, double *R)
-{
-    double cr = cos(rpy[0]), sr = sin(rpy[0]), cp = cos(rpy[1]);
-    double sp = sin(rpy[1]), cy = cos(rpy[2]), sy = sin(rpy[2]);
-    R[0] =  cy*cr - sy*sp*sr; R[3] = -sy*cp; R[6] =  cy*sr + sy*sp*cr;
-    R[1] =  sy*cr + cy*sp*sr; R[4] =  cy*cp; R[7] =  sy*sr - cy*sp*cr;
-    R[2] = -cp*sr;            R[5] =  sp;    R[8] =  cp*cr;
-}
-
-//------------------------------------------------------------------------------
-//  Set beam-forming weights for an antenna array channel.
-//
-//  Computes complex weights w_a = scale * exp(j*2*pi*(e_body.b_body - bias[a])/lambda)
-//  for each RF CH a, where e_body = R^T * e_enu is the beam unit vector in body
-//  frame, b_body = ant_pos[a] - ant_pos[0] is element a position relative to
-//  CH1 (reference), R is body->ENU rotation from rpy, and lambda is the GPS L1
-//  wavelength. RF CHs whose center frequency does not match GPS L1 (within
-//  +-1 MHz) are excluded (weight set to 0). Weights are stored as int16 in
-//  Q8 fixed point and applied during IF data combining (RAW16/RAW32 only).
-//
-//  args:
-//      rcv      (I)   SDR receiver
-//      ach      (I)   array CH index (must satisfy nrfch <= ach < nrfch+narch)
-//      az       (I)   beam azimuth in local ENU (rad, from N, CW positive)
-//      el       (I)   beam elevation (rad, above horizon)
-//      ant_pos  (I)   per-RF-CH body-frame position (nrfch * 3 doubles, m)
-//                     (X=right, Y=forward, Z=up; ant_pos[0..2] = CH1 reference)
-//      bias     (I)   per-RF-CH H/W delay wrt CH1 (nrfch doubles, m; bias[0]=0)
-//      rpy      (I)   body->ENU attitude {roll, pitch, yaw} (rad)
-//      scale    (I)   per-CH weight magnitude. scale <= 0 disables array CH.
-//
-//  returns: status (1:OK, 0:error)
-//
-static int apply_array_beam(sdr_rcv_t *rcv, int ach, double az, double el,
-    const double *ant_pos, const double *bias, const double *rpy, double scale)
-{
-    if (!rcv) return 0;
-    int nrfch = rcv->nrfch;
-    if (ach < nrfch || ach >= nrfch + rcv->narch) return 0;
-    
-    // disable: free weight buffer
-    if (scale <= 0.0 || !ant_pos || !bias || !rpy) {
-        sdr_mutex_lock(&rcv->mtx);
-        sdr_free(rcv->arch[ach - nrfch].w);
-        rcv->arch[ach - nrfch].w = NULL;
-        sdr_mutex_unlock(&rcv->mtx);
-        return 1;
-    }
-    // body->ENU rotation, then beam direction in body frame: e_body = R^T * e_enu
-    double R[9], e_enu[3], e_body[3];
-    rpy2R(rpy, R);
-    e_enu[0] = sin(az) * cos(el);
-#if 0
-    e_enu[1] = cos(az) * cos(el);
-#else
-    e_enu[1] = -cos(az) * cos(el);
-#endif
-    e_enu[2] = sin(el);
-    matmul("TN", 3, 1, 3, 1.0, R, e_enu, 0.0, e_body);
-    
-    // bit-range expansion gain: map narrow input range to int4 output range.
-    // input value max = 2^bits - 1; int4 output max = 7. gain = 7 / (2^bits-1).
-    // takes the smallest bits among participating L1 RF CHs (most aggressive).
-    // effective center freq accounts for rtoc fs/4 mix when applicable.
-    int bits_min = 4;
-    for (int a = 0; a < nrfch; a++) {
-        double f_eff = rcv->rfch[a].fo + (rtoc_of(rcv, a) ? rcv->fs * 0.25 : 0.0);
-        if (fabs(f_eff - ARRAY_FREQ) > ARRAY_FREQ_TOL) continue;
-        if (!rcv->array->ant_ena[a]) continue;
-        if (rcv->rfch[a].bits > 0 && rcv->rfch[a].bits < bits_min) {
-            bits_min = rcv->rfch[a].bits;
-        }
-    }
-    double bit_gain = (bits_min < 4) ? 7.0 / (double)((1 << bits_min) - 1) : 1.0;
-    
-    // compute and quantize weights
-    double lam = CLIGHT / ARRAY_FREQ;
-    int16_t *w = (int16_t *)sdr_malloc(sizeof(int16_t) * nrfch * 2);
-    for (int a = 0; a < nrfch; a++) {
-        double f_eff = rcv->rfch[a].fo + (rtoc_of(rcv, a) ? rcv->fs * 0.25 : 0.0);
-        if (fabs(f_eff - ARRAY_FREQ) > ARRAY_FREQ_TOL ||
-            !rcv->array->ant_ena[a]) {
-            w[a*2] = 0; w[a*2+1] = 0; // not on L1 or CH disabled -> exclude
-            continue;
-        }
-        double b_body[3];
-        for (int k = 0; k < 3; k++) b_body[k] = ant_pos[a*3+k] - ant_pos[k];
-        double proj = e_body[0]*b_body[0] + e_body[1]*b_body[1] +
-            e_body[2]*b_body[2];
-        double phi = 2.0 * PI * (proj - bias[a]) / lam;
-        double wr = scale * bit_gain * cos(phi) * ARRAY_W_SCALE;
-        double wi = scale * bit_gain * sin(phi) * ARRAY_W_SCALE;
-        if (wr >  32767.0) wr =  32767.0;
-        else if (wr < -32768.0) wr = -32768.0;
-        if (wi >  32767.0) wi =  32767.0;
-        else if (wi < -32768.0) wi = -32768.0;
-        w[a*2  ] = (int16_t)floor(wr + 0.5);
-        w[a*2+1] = (int16_t)floor(wi + 0.5);
-    }
-    // atomic swap under mutex
-    sdr_mutex_lock(&rcv->mtx);
-    int16_t *old = rcv->arch[ach - nrfch].w;
-    rcv->arch[ach - nrfch].w = w;
-    sdr_mutex_unlock(&rcv->mtx);
-    sdr_free(old);
-    return 1;
-}
-
 //------------------------------------------------------------------------------
 //  Configure array calibration state (unified setter).
 //
@@ -1549,25 +1369,13 @@ int sdr_rcv_array_stat(sdr_rcv_t *rcv, double *rpy, double *bias, double *rms,
 //
 int sdr_rcv_array_set_beam(sdr_rcv_t *rcv, int ach, double az, double el)
 {
-    if (!rcv) return 0;
+    if (!rcv || !rcv->array) return 0;
     int nrfch = rcv->nrfch;
-    if (ach < nrfch || ach >= nrfch + rcv->narch) return 0;
-
-    double rpy[3], bias[SDR_MAX_RFCH] = {0}, ant_pos[SDR_MAX_RFCH * 3];
-    double scale;
-    sdr_mutex_lock(&rcv->mtx);
-    rpy[0] = rcv->array->x[0];
-    rpy[1] = rcv->array->x[1];
-    rpy[2] = rcv->array->x[2];
-    for (int i = 1; i < nrfch; i++) bias[i] = rcv->array->x[3 + i];
-    memcpy(ant_pos, rcv->array->ant_pos, sizeof(double) * nrfch * 3);
-    scale = (rcv->arch[ach - nrfch].scale > 0.0) ? rcv->arch[ach - nrfch].scale :
-        1.0 / nrfch;
-    rcv->arch[ach - nrfch].az = az;
-    rcv->arch[ach - nrfch].el = el;
-    sdr_mutex_unlock(&rcv->mtx);
-
-    return apply_array_beam(rcv, ach, az, el, ant_pos, bias, rpy, scale);
+    if (ach < nrfch || ach >= nrfch + rcv_narch(rcv)) return 0;
+    int m = ach - nrfch;
+    double scale = (rcv->array->arch[m].scale > 0.0) ?
+        rcv->array->arch[m].scale : 1.0 / nrfch;
+    return sdr_array_set_beam(rcv->array, m, az, el, scale);
 }
 
 //------------------------------------------------------------------------------
@@ -1577,12 +1385,11 @@ int sdr_rcv_array_get_beam(sdr_rcv_t *rcv, int ach, double *az, double *el)
 {
     if (!rcv || !az || !el) return 0;
     int nrfch = rcv->nrfch;
-    if (ach < nrfch || ach >= nrfch + rcv->narch) return 0;
+    if (ach < nrfch || ach >= nrfch + rcv_narch(rcv)) return 0;
     sdr_mutex_lock(&rcv->mtx);
-    *az = rcv->arch[ach - nrfch].az;
-    *el = rcv->arch[ach - nrfch].el;
+    int ret = sdr_array_get_beam(rcv->array, ach - nrfch, az, el);
     sdr_mutex_unlock(&rcv->mtx);
-    return 1;
+    return ret;
 }
 
 //------------------------------------------------------------------------------
