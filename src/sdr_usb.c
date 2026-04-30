@@ -97,6 +97,17 @@ sdr_usb_t *sdr_usb_open(int bus, int port, const uint16_t *vid,
         return NULL;
     }
     libusb_free_device_list(devs, 1);
+    
+    for (int i = 0; i < SDR_MAX_BUFF; i++) {
+        if (!(dev->usb->transfer[i] = libusb_alloc_transfer(0))) {
+            fprintf(stderr, "libusb_alloc_transfer(%d) error\n", i);
+            for (i--; i >= 0; i--) libusb_free_transfer(dev->usb->transfer[i]);
+            libusb_close(usb->h);
+            libusb_exit(usb->ctx);
+            sdr_free(usb);
+            return NULL;
+        }
+    }
     libusb_claim_interface(usb->h, SDR_DEV_IF);
     return usb;
 #endif // WIN32
@@ -121,6 +132,9 @@ void sdr_usb_close(sdr_usb_t *usb)
 #else
     libusb_release_interface(usb->h, SDR_DEV_IF);
     libusb_close(usb->h);
+    for (int i = 0; i < SDR_MAX_BUFF; i++) {
+        libusb_free_transfer(usb->transfer[i]);
+    }
     libusb_exit(usb->ctx);
 #endif // WIN32
     sdr_free(usb);
