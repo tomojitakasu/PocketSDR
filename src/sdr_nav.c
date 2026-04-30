@@ -2074,7 +2074,7 @@ void sdr_nav_decode(sdr_ch_t *ch)
         decode_E1C(ch);
     } else if (!strcmp(ch->sig, "E5AI")) {
         decode_E5AI(ch);
-    } else if (!strcmp(ch->sig, "E5AQ")) {
+    } else if (!strcmp(ch->sig, "E5AQ") || !strcmp(ch->sig, "E5ABQ")) {
         decode_E5AQ(ch);
     } else if (!strcmp(ch->sig, "E5BI")) {
         decode_E5BI(ch);
@@ -2110,4 +2110,3 @@ void sdr_nav_decode(sdr_ch_t *ch)
         decode_ISS(ch);
     }
 }
-
