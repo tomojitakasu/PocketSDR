@@ -907,6 +907,50 @@ static void dot_IQ_code(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
     (*c)[1] *= s * SDR_CSCALE;
 }
 
+// inner product of IQ data and complex code -----------------------------------
+static void dot_IQ_cpx_code(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code,
+    int N, float s, sdr_cpx_t *c)
+{
+    int i = 0;
+    (*c)[0] = (*c)[1] = 0.0f;
+#if defined(AVX2)
+    __m256i ysumR = _mm256_setzero_si256();
+    __m256i ysumI = _mm256_setzero_si256();
+    __m256i yones8 = _mm256_set1_epi8(1);
+    __m256i yones16 = _mm256_set1_epi16(1);
+    __m256i yswap = _mm256_setr_epi8(
+        1,0, 3,2, 5,4, 7,6, 9,8,11,10,13,12,15,14,
+        1,0, 3,2, 5,4, 7,6, 9,8,11,10,13,12,15,14);
+    __m256i ymaskI = _mm256_setr_epi8(
+        1,-1, 1,-1, 1,-1, 1,-1, 1,-1, 1,-1, 1,-1, 1,-1,
+        1,-1, 1,-1, 1,-1, 1,-1, 1,-1, 1,-1, 1,-1, 1,-1);
+
+    for ( ; i < N - 15; i += 16) {
+        __m256i ydata = _mm256_loadu_si256((__m256i *)(IQ + i));
+        __m256i ycode = _mm256_loadu_si256((__m256i *)(code + i));
+        __m256i ycorrR = _mm256_sign_epi8(ydata, ycode);
+        __m256i ycodeI = _mm256_sign_epi8(ycode, ymaskI);
+        __m256i ydataI = _mm256_shuffle_epi8(ydata, yswap);
+        __m256i ycorrI = _mm256_sign_epi8(ydataI, ycodeI);
+        __m256i yprodR = _mm256_maddubs_epi16(yones8, ycorrR);
+        __m256i yprodI = _mm256_maddubs_epi16(yones8, ycorrI);
+        ysumR = _mm256_add_epi32(ysumR, _mm256_madd_epi16(yprodR, yones16));
+        ysumI = _mm256_add_epi32(ysumI, _mm256_madd_epi16(yprodI, yones16));
+    }
+    int32_t sR[8], sI[8];
+    _mm256_storeu_si256((__m256i *)sR, ysumR);
+    _mm256_storeu_si256((__m256i *)sI, ysumI);
+    (*c)[0] = sR[0] + sR[1] + sR[2] + sR[3] + sR[4] + sR[5] + sR[6] + sR[7];
+    (*c)[1] = sI[0] + sI[1] + sI[2] + sI[3] + sI[4] + sI[5] + sI[6] + sI[7];
+#endif
+    for ( ; i < N; i++) {
+        (*c)[0] += IQ[i].I * code[i].I + IQ[i].Q * code[i].Q;
+        (*c)[1] += IQ[i].Q * code[i].I - IQ[i].I * code[i].Q;
+    }
+    (*c)[0] *= s * SDR_CSCALE;
+    (*c)[1] *= s * SDR_CSCALE;
+}
+
 //------------------------------------------------------------------------------
 //  Standard correlator. Make multiple correlations between IF-carrier-mixed IF
 //  data and resampled spreading codes. The shifts of the spreading codes are
@@ -949,6 +993,55 @@ void sdr_corr_std(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
     }
     sign = dot_EPL < 0.0f ? -1.0f : 1.0f;
     
+    for (int i = 0; i < n; i++) {
+        corr[i][0] = (corr1[i][0] + sign * corr2[i][0]) / N;
+        corr[i][1] = (corr1[i][1] + sign * corr2[i][1]) / N;
+    }
+    for (int i = 0; i < 2; i++) {
+        C[0][i] = corr1[0][i];
+        C[1][i] = corr2[0][i];
+    }
+}
+
+//------------------------------------------------------------------------------
+//  Standard correlator with complex spreading codes.
+//
+//  args:
+//      IQ       (I) IF-carrier-mixed IF data as sdr_cpx_16_t array (N x 1)
+//      code     (I) resampled complex code bank (N x SDR_N_CODES)
+//      N        (I) size of IQ and code
+//      coff     (I) code offset (samples)
+//      pos      (I) correlator shift positions (n x 1) (samples)
+//      n        (I) size of pos (number of correlators)
+//      corr     (O) correlations as sdr_cpx_t array (n x 1)
+//      C        (O) correlations before and after bit transition
+//
+//  return:
+//      none
+//
+//  notes:
+//      The value of spreading codes shall be -1, 0 or 1.
+//
+void sdr_corr_std_cpx_code(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code,
+    int N, double coff, const double *pos, int n, sdr_cpx_t *corr,
+    sdr_cpx_t *C)
+{
+    sdr_cpx_t corr1[SDR_MAX_CORR], corr2[SDR_MAX_CORR];
+    float dot_EPL = 0.0, sign;
+
+    for (int i = 0; i < n; i++) {
+        double p = coff + pos[i];
+        int j = (int)floor(p), k = (int)((p - j) * SDR_N_CODES);
+        if (j < 0) j += N; else if (j >= N) j -= N;
+        dot_IQ_cpx_code(IQ, code + k * N + N - j, j, 1.0, corr1 + i);
+        dot_IQ_cpx_code(IQ + j, code + k * N, N - j, 1.0, corr2 + i);
+    }
+    // detect polarity flip
+    for (int i = 0; i < 3; i++) {
+        dot_EPL += corr1[i][0] * corr2[i][0] + corr1[i][1] * corr2[i][1];
+    }
+    sign = dot_EPL < 0.0f ? -1.0f : 1.0f;
+
     for (int i = 0; i < n; i++) {
         corr[i][0] = (corr1[i][0] + sign * corr2[i][0]) / N;
         corr[i][1] = (corr1[i][1] + sign * corr2[i][1]) / N;
