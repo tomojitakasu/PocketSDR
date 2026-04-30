@@ -26,7 +26,7 @@
 #endif
 
 // constants and macros --------------------------------------------------------
-#define BUFF_SIZE       (SDR_SIZE_BUFF * SDR_MAX_BUFF)
+#define BUFF_SIZE       (SDR_SIZE_UBUFF * SDR_MAX_UBUFF)
 #define TO_TRANSFER     3000    // USB transfer timeout (ms)
 
 // read MAX2771 status ---------------------------------------------------------
@@ -154,9 +154,9 @@ static void *event_handler(void *arg)
 {
     sdr_dev_t *dev = (sdr_dev_t *)arg;
     CCyBulkEndPoint *ep;
-    uint8_t *ctx[SDR_MAX_BUFF] = {0};
-    OVERLAPPED ov[SDR_MAX_BUFF] = {{0,0,0,0,0}};
-    long len = SDR_SIZE_BUFF;
+    uint8_t *ctx[SDR_MAX_UBUFF] = {0};
+    OVERLAPPED ov[SDR_MAX_UBUFF] = {{0,0,0,0,0}};
+    long len = SDR_SIZE_UBUFF;
     
     // rise process/thread priority
     rise_pri();
@@ -165,8 +165,8 @@ static void *event_handler(void *arg)
         fprintf(stderr, "bulk endpoint get error ep=0x%02X\n", SDR_DEV_EP);
         return 0;
     }
-    ep->SetXferSize(SDR_SIZE_BUFF);
-    for (int i = 0; i < SDR_MAX_BUFF; i++) {
+    ep->SetXferSize(SDR_SIZE_UBUFF);
+    for (int i = 0; i < SDR_MAX_UBUFF; i++) {
         ov[i].hEvent = CreateEvent(NULL, false, false, NULL);
         ctx[i] = ep->BeginDataXfer(dev->buff + len * i, len, &ov[i]); 
     }
@@ -182,9 +182,9 @@ static void *event_handler(void *arg)
         sdr_mutex_lock(&dev->mtx);
         dev->wp += len;
         sdr_mutex_unlock(&dev->mtx);
-        i = (i + 1) % SDR_MAX_BUFF;
+        i = (i + 1) % SDR_MAX_UBUFF;
     }
-    for (int i = 0; i < SDR_MAX_BUFF; i++) {
+    for (int i = 0; i < SDR_MAX_UBUFF; i++) {
         ep->FinishDataXfer(dev->buff + len * i, len, &ov[i], ctx[i]);
         CloseHandle(ov[i].hEvent);
     }
@@ -203,7 +203,7 @@ static void transfer_cb(struct libusb_transfer *transfer)
         return;
     }
     sdr_mutex_lock(&dev->mtx);
-    dev->wp += SDR_SIZE_BUFF;
+    dev->wp += SDR_SIZE_UBUFF;
     sdr_mutex_unlock(&dev->mtx);
     
     libusb_submit_transfer(transfer);
@@ -287,10 +287,10 @@ int sdr_dev_start(sdr_dev_t *dev)
     if (dev->state) return 0;
     
 #ifndef WIN32
-    for (int i = 0; i < SDR_MAX_BUFF; i++) {
+    for (int i = 0; i < SDR_MAX_UBUFF; i++) {
         int ret;
         libusb_fill_bulk_transfer(dev->transfer[i], dev->usb->h, SDR_DEV_EP,
-            dev->buff + SDR_SIZE_BUFF * i, SDR_SIZE_BUFF, transfer_cb, dev,
+            dev->buff + SDR_SIZE_UBUFF * i, SDR_SIZE_UBUFF, transfer_cb, dev,
             TO_TRANSFER);
         if ((ret = libusb_submit_transfer(dev->transfer[i]))) {
             fprintf(stderr, "libusb_submit_transfer(%d) error (%d)\n", i, ret);
@@ -306,7 +306,7 @@ int sdr_dev_start(sdr_dev_t *dev)
         dev->state = 0;
         sdr_usb_req(dev->usb, 0, SDR_VR_STOP, 0, NULL, 0);
 #ifndef WIN32
-        for (int i = 0; i < SDR_MAX_BUFF; i++) {
+        for (int i = 0; i < SDR_MAX_UBUFF; i++) {
             libusb_cancel_transfer(dev->transfer[i]);
         }
 #endif
@@ -333,7 +333,7 @@ int sdr_dev_stop(sdr_dev_t *dev)
     dev->state = 0;
     sdr_thread_join(dev->thread);
 #ifndef WIN32
-    for (int i = 0; i < SDR_MAX_BUFF; i++) {
+    for (int i = 0; i < SDR_MAX_UBUFF; i++) {
         libusb_cancel_transfer(dev->transfer[i]);
     }
 #endif
