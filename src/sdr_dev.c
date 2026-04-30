@@ -253,19 +253,6 @@ sdr_dev_t *sdr_dev_open(int bus, int port)
         return NULL;
     }
     dev->buff = (uint8_t *)sdr_malloc(BUFF_SIZE);
-    
-#ifndef WIN32
-    for (int i = 0; i < SDR_MAX_BUFF; i++) {
-        if (!(dev->transfer[i] = libusb_alloc_transfer(0))) {
-            fprintf(stderr, "libusb_alloc_transfer(%d) error\n", i);
-            sdr_usb_close(dev->usb);
-            for (i--; i >= 0; i--) libusb_free_transfer(dev->transfer[i]);
-            sdr_free(dev->buff);
-            sdr_free(dev);
-            return NULL;
-        }
-    }
-#endif
     sdr_mutex_init(&dev->mtx);
     return dev;
 }
@@ -282,11 +269,6 @@ sdr_dev_t *sdr_dev_open(int bus, int port)
 void sdr_dev_close(sdr_dev_t *dev)
 {
     sdr_usb_close(dev->usb);
-#ifndef WIN32
-    for (int i = 0; i < SDR_MAX_BUFF; i++) {
-        libusb_free_transfer(dev->transfer[i]);
-    }
-#endif
     sdr_free(dev->buff);
     sdr_free(dev);
 }
