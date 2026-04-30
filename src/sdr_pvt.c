@@ -64,17 +64,19 @@ static uint8_t sig2code(const char *sig)
         "L1CA" , "L1S"  , "L1CB" , "L1CP" , "L1CD" , "L2CM" , "L2CL" ,
         "L5I"  , "L5Q"  , "L5SI" , "L5SQ" , "L5SIV", "L5SQV", "L6D"  ,
         "L6E"  , "G1CA" , "G2CA" , "G1OCD", "G1OCP", "G2OCP", "G3OCD",
-        "G3OCP", "E1B"  , "E1C"  , "E5AI" , "E5AQ" , "E5BI" , "E5BQ" ,
-        "E6B"  , "E6C"  , "B1I"  , "B1CD" , "B1CP" , "B2I"  , "B2AD" ,
-        "B2AP" , "B2BI" , "B3I"  , "I1SD" , "I1SP" , "I5S"  , "ISS"  , NULL
+        "G3OCP", "E1B"  , "E1C"  , "E5AI" , "E5AQ" , "E5ABQ", "E5BI" ,
+        "E5BQ" , "E6B"  , "E6C"  , "B1I"  , "B1CD" , "B1CP" , "B2I"  ,
+        "B2AD" , "B2AP" , "B2BI" , "B3I"  , "I1SD" , "I1SP" , "I5S"  ,
+        "ISS"  , NULL
     };
     static const uint8_t codes[] = {
         CODE_L1C, CODE_L1Z, CODE_L1E, CODE_L1L, CODE_L1S, CODE_L2S, CODE_L2L,
         CODE_L5I, CODE_L5Q, CODE_L5D, CODE_L5P, CODE_L5D, CODE_L5P, CODE_L6S,
         CODE_L6E, CODE_L1C, CODE_L2C, CODE_L4A, CODE_L4B, CODE_L6B, CODE_L3I,
-        CODE_L3Q, CODE_L1B, CODE_L1C, CODE_L5I, CODE_L5Q, CODE_L7I, CODE_L7Q,
-        CODE_L6B, CODE_L6C, CODE_L2I, CODE_L1D, CODE_L1P, CODE_L7I, CODE_L5D,
-        CODE_L5P, CODE_L7D, CODE_L6I, CODE_L1D, CODE_L1P, CODE_L5A, CODE_L9A
+        CODE_L3Q, CODE_L1B, CODE_L1C, CODE_L5I, CODE_L5Q, CODE_L8Q, CODE_L7I,
+        CODE_L7Q, CODE_L6B, CODE_L6C, CODE_L2I, CODE_L1D, CODE_L1P, CODE_L7I,
+        CODE_L5D, CODE_L5P, CODE_L7D, CODE_L6I, CODE_L1D, CODE_L1P, CODE_L5A,
+        CODE_L9A
     };
     for (int i = 0; sigs[i]; i++) {
         if (!strcmp(sig, sigs[i])) return codes[i];
@@ -566,7 +568,8 @@ static double gen_cphas(const sdr_ch_t *ch, double P)
         !strcmp(ch->sig, "L5SQV")) {
         L -= 0.25; // - 1/4 cyc
     } else if (!strcmp(ch->sig, "G3OCP") || !strcmp(ch->sig, "E5AQ") ||
-        !strcmp(ch->sig, "E5BQ") || !strcmp(ch->sig, "B1CP") ||
+        !strcmp(ch->sig, "E5ABQ") || !strcmp(ch->sig, "E5BQ") ||
+        !strcmp(ch->sig, "B1CP") ||
         !strcmp(ch->sig, "B2AP")) {
         L += 0.25; // + 1/4 cyc
     } else if (!strcmp(ch->sig, "L2CM")) {
