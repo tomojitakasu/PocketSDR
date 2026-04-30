@@ -8,7 +8,7 @@
 #  History:
 #  2024-06-29  1.0  ver.0.13
 #  2025-03-19  1.1  ver.0.14
-#  2025-11-30  1.2  ver.0.15
+#  2026-04-26  1.2  ver.0.15
 #
 import sys, os, platform, time, re
 from collections import deque
@@ -27,8 +27,9 @@ import sdr_plot as plt
 TITLE      = 'An Open Source GNSS SDR\n(Software Defined Receiver)'
 AP_URL     = 'https://github.com/tomojitakasu/PocketSDR'
 AP_DIR     = os.path.dirname(__file__)
-COPYRIGHT  = 'Copyright (C) 2021-2025 T.Takasu\nAll rights reserved.'
+COPYRIGHT  = 'Copyright (C) 2021-2026 T.Takasu\nAll rights reserved.'
 OPTS_FILE  = AP_DIR + '/pocket_sdr.ini' # options file
+CALIB_FILE = AP_DIR + '/array_calib.txt' # array calibration save file
 HELP_LINK  = 'file://' + AP_DIR + '/../doc/pocket_sdr_help.pdf'
 WIDTH      = 800             # root window width
 HEIGHT     = 600             # root window height
@@ -44,20 +45,28 @@ SDR_N_PSD  = 2048            # number FFT points for PSD
 MAX_RCVLOG = 2000            # max receiver logs
 MAX_SOLLOG = 3600            # max solution logs
 UD_CYCLE1  = 50              # update cycle (ms) RF channels/Correlator pages
-UD_CYCLE2  = 200             # update cycle (ms) other pages
+UD_CYCLE2  = 100             # update cycle (ms) other pages
 UD_CYCLE3  = 1000            # update cycle (ms) receiver stopped
+LOG_BUFF_SIZE = 262144       # receiver log buffer size
 D2R = np.pi / 180
 SYSTEMS = ('ALL', 'GPS', 'GLONASS', 'Galileo', 'QZSS', 'BeiDou', 'NavIC', 'SBAS')
 
 # platform dependent settings --------------------------------------------------
 env = platform.platform()
 if 'Windows' in env:
-    LIBSDR = AP_DIR + '/../lib/win32/libsdr.so'
+    #LIBSDR = AP_DIR + '/../lib/win32_msvc/libsdr.dll' # MSVC DLL
+    LIBSDR = AP_DIR + '/../lib/win32/libsdr.so' # UCRT64 DLL
     FONT = ('Tahoma', 'Consolas')
     FONT_SIZE = (9, 9)
     BG_COLOR1 = '#F8F8F8'
     BG_COLOR2 = BG_COLOR1
     ROW_HEIGHT = 15
+    
+    # setup SoapySDR paths (radioconda)
+    soapy_dir = os.path.expandvars(r'%USERPROFILE%\radioconda\Library')
+    os.add_dll_directory(soapy_dir + r'\bin')
+    os.environ['SOAPY_SDR_PLUGIN_PATH'] = soapy_dir + r'\lib\SoapySDR\modules0.8'
+
 elif 'macOS' in env:
     LIBSDR = AP_DIR + '/../lib/macos/libsdr.so'
     #FONT = ('Arial Narrow', 'Monaco')
@@ -79,17 +88,18 @@ else: # Linux or Raspberry Pi OS
 # load external library
 try:
     libsdr = cdll.LoadLibrary(LIBSDR)
-except:
+except OSError as e:
     print('libsdr load error: ' + LIBSDR)
+    print(str(e))
     exit(-1)
 
 # global variables -------------------------------------------------------------
 rcv_body = None
+array_page = None
 sol_log = deque(maxlen=MAX_SOLLOG)
 rcv_log = deque(maxlen=MAX_RCVLOG)
 rcv_log_filt = ''
-_RCV_LOG_BUFF_SIZE = 262144
-_rcv_log_buff = create_string_buffer(_RCV_LOG_BUFF_SIZE)
+rcv_log_buff = create_string_buffer(LOG_BUFF_SIZE)
 root_resize = 0
 
 # general object class ---------------------------------------------------------
@@ -121,12 +131,34 @@ def str2time(str):
 def rcv_open(sys_opt, inp_opt, out_opt, sig_opt):
     set_rcv_opts(sys_opt)
     set_log_mask(out_opt)
+    libsdr.sdr_func_init.argtypes = (c_char_p,)
+    libsdr.sdr_func_init(sys_opt.fftw_wisdom_path.get().encode())
     if inp_opt.inp.get() == 1:
         return rcv_open_file(sys_opt, inp_opt, out_opt, sig_opt)
     elif inp_opt.type.get() == 'Pocket SDR FE':
         return rcv_open_dev(sys_opt, inp_opt, out_opt, sig_opt)
     else:
         return rcv_open_sdev(sys_opt, inp_opt, out_opt, sig_opt)
+
+# build -LPF=... option string -------------------------------------------------
+def lpf_opt_str(inp_opt):
+    parts = []
+    for i in range(len(inp_opt.lpf_bw)):
+        bw = to_float(inp_opt.lpf_bw[i].get())
+        if bw > 0.0:
+            parts.append('%d:%.4f' % (i + 1, bw / 2.0))
+    return '-LPF=' + ','.join(parts) if parts else ''
+
+# build receiver option string -------------------------------------------------
+def rcv_opt_str(sys_opt, inp_opt, sig_opt):
+    opt = ''
+    opt += ' ' + sys_opt.rcv_options.get()
+    opt += ' ' + inp_opt.dev_opt.get()
+    opt += ' ' + lpf_opt_str(inp_opt)
+    opt += ' ' + '-RFCH ' + sig_opt.sig_rfch.get()
+    if out_opt.array_sep.get():
+        opt += ' -ARRAY'
+    return opt
 
 # start receiver by Pocket SDR FE ----------------------------------------------
 def rcv_open_dev(sys_opt, inp_opt, out_opt, sig_opt):
@@ -137,9 +169,6 @@ def rcv_open_dev(sys_opt, inp_opt, out_opt, sig_opt):
     conf_file = inp_opt.conf_path.get() if inp_opt.conf_ena.get() else ''
     paths = [out_opt.path[i].get() if out_opt.path_ena[i].get() else ''
         for i in range(4)]
-    opt = ''
-    opt += ' -RFCH ' + sig_opt.sig_rfch.get() + ' ' + sys_opt.rcv_options.get()
-    opt += ' ' + inp_opt.dev_opt.get()
     c_sigs = (c_char_p * len(sigs))(*[s.encode() for s in sigs])
     c_prns = (c_int32 * len(sigs))(*prns)
     c_paths = (c_char_p * 4)(*[s.encode() for s in paths])
@@ -147,6 +176,7 @@ def rcv_open_dev(sys_opt, inp_opt, out_opt, sig_opt):
         c_int32, c_int32, c_int32, c_char_p, POINTER(c_char_p), c_char_p]
     libsdr.sdr_rcv_open_dev.restype = c_void_p
     info = '(bus/port=%d/%d, conf=%s)' % (bus, port, conf_file)
+    opt = rcv_opt_str(sys_opt, inp_opt, sig_opt)
     return libsdr.sdr_rcv_open_dev(c_sigs, c_prns, len(sigs), bus, port,
         conf_file.encode(), c_paths, opt.encode()), info
 
@@ -159,9 +189,6 @@ def rcv_open_sdev(sys_opt, inp_opt, out_opt, sig_opt):
     freq = to_float(inp_opt.fo[0].get()) * 1e6
     paths = [out_opt.path[i].get() if out_opt.path_ena[i].get() else ''
         for i in range(4)]
-    opt = ''
-    opt += ' -RFCH ' + sig_opt.sig_rfch.get() + ' ' + sys_opt.rcv_options.get()
-    opt += ' ' + inp_opt.dev_opt.get()
     c_sigs = (c_char_p * len(sigs))(*[s.encode() for s in sigs])
     c_prns = (c_int32 * len(sigs))(*prns)
     c_paths = (c_char_p * 4)(*[s.encode() for s in paths])
@@ -171,6 +198,7 @@ def rcv_open_sdev(sys_opt, inp_opt, out_opt, sig_opt):
     libsdr.sdr_rcv_open_sdev.restype = c_void_p
     info = '(driver=%s, rate=%.3fMsps, freq=%.3fMHz)' % (
         driver, rate * 1e-6, freq * 1e-6)
+    opt = rcv_opt_str(sys_opt, inp_opt, sig_opt)
     return libsdr.sdr_rcv_open_sdev(c_sigs, c_prns, len(sigs), driver.encode(),
         fmt, rate, freq, c_paths, opt.encode()), info
 
@@ -193,11 +221,6 @@ def rcv_open_file(sys_opt, inp_opt, out_opt, sig_opt):
     c_IQ = (c_int32 * 8)(*IQ)
     c_bits = (c_int32 * 8)(*bits)
     c_paths = (c_char_p * 4)(*[s.encode() for s in paths])
-    opt = ''
-    opt += ' -RFCH ' + sig_opt.sig_rfch.get() + ' ' + sys_opt.rcv_options.get()
-    opt += ' ' + inp_opt.dev_opt.get()
-    libsdr.sdr_func_init.argtypes = (c_char_p,)
-    libsdr.sdr_func_init(sys_opt.fftw_wisdom_path.get().encode())
     libsdr.sdr_rcv_open_file.argtypes = (POINTER(c_char_p), POINTER(c_int32),
         c_int32, c_int32, c_double, POINTER(c_double), POINTER(c_int32),
         POINTER(c_int32), c_double, c_double, c_char_p, POINTER(c_char_p),
@@ -205,6 +228,7 @@ def rcv_open_file(sys_opt, inp_opt, out_opt, sig_opt):
     libsdr.sdr_rcv_open_file.restype = c_void_p
     info = '(path=%s, toff=%s, tscale=%s)' % (inp_opt.str_path.get(),
         inp_opt.toff.get(), inp_opt.tscale.get())
+    opt = rcv_opt_str(sys_opt, inp_opt, sig_opt)
     return libsdr.sdr_rcv_open_file(c_sigs, c_prns, len(sigs), fmt, fs, c_fo,
         c_IQ, c_bits, toff, tscale, path.encode(), c_paths, opt.encode()), info
 
@@ -297,9 +321,11 @@ def get_name_ver():
 
 # get receiver status ----------------------------------------------------------
 def get_rcv_stat(rcv):
-    libsdr.sdr_rcv_rcv_stat.argtypes = (c_void_p,)
-    libsdr.sdr_rcv_rcv_stat.restype = c_char_p
-    return libsdr.sdr_rcv_rcv_stat(rcv).decode()
+    size = 2048
+    buff = create_string_buffer(size)
+    libsdr.sdr_rcv_rcv_stat.argtypes = (c_void_p, c_char_p, c_int32)
+    libsdr.sdr_rcv_rcv_stat(rcv, buff, size)
+    return buff.value.decode()
 
 # get receiver stream status ---------------------------------------------------
 def get_str_stat(rcv):
@@ -310,21 +336,30 @@ def get_str_stat(rcv):
 
 # get receiver channel status --------------------------------------------------
 def get_ch_stat(rcv, sys, chno=0, min_lock=2.0, rfch=0, opt=0):
+    size = 128 * 1500
+    buff = create_string_buffer(size)
     libsdr.sdr_rcv_ch_stat.argtypes = (c_void_p, c_char_p, c_int32, c_double,
-        c_int32, c_int32)
-    libsdr.sdr_rcv_ch_stat.restype = c_char_p
-    stat = libsdr.sdr_rcv_ch_stat(rcv, sys.encode(), chno, min_lock, rfch, opt)
-    return stat.decode().splitlines()
+        c_int32, c_int32, c_char_p, c_int32)
+    libsdr.sdr_rcv_ch_stat(rcv, sys.encode(), chno, min_lock, rfch, opt, buff,
+        size)
+    return buff.value.decode().splitlines()
+
+# sat id to number -------------------------------------------------------------
+def sat2no(sat):
+    sys = 'GREJCIS'.find(sat[0])
+    return sys * 100 + int(sat[1:]) if sys >= 0 else -1
 
 # get signal status ------------------------------------------------------------
-def get_sig_stat(rcv, sys, sort=0):
-    stat = get_ch_stat(rcv, sys)[2:]
+def get_sig_stat(rcv, sys, sort=0, rfch=0):
+    stat = get_ch_stat(rcv, sys, rfch=rfch)[2:]
     sig_stat = []
     for i, s in enumerate(stat):
         ss = s.split()
-        no = 'GREJCIS'.find(ss[2][0]) * 100 + int(ss[2][1:])
-        sig_stat.append([no, -float(ss[6]) if sort else i, ss[2], ss[3],
-            float(ss[6]), int(ss[4])])
+        try:
+            sig_stat.append([sat2no(ss[2]), -float(ss[6]) if sort else i, ss[2],
+                ss[3], float(ss[6]), int(ss[4])])
+        except:
+            continue
     sig_stat = sorted(sig_stat)
     sat = [s[2] for s in sig_stat]
     sig = [s[3] for s in sig_stat]
@@ -334,11 +369,14 @@ def get_sig_stat(rcv, sys, sort=0):
 
 # get satellite status ---------------------------------------------------------
 def get_sat_stat(rcv, sats):
-    libsdr.sdr_rcv_sat_stat.argtypes = (c_void_p, c_char_p)
-    libsdr.sdr_rcv_sat_stat.restype = c_char_p
+    size = 1024
+    libsdr.sdr_rcv_sat_stat.argtypes = (c_void_p, c_char_p, c_char_p, c_int32)
+    libsdr.sdr_rcv_sat_stat.restype = c_int32
+    buff = create_string_buffer(size)
     az, el, pvt, obs, eph, svh, fcn = [], [], [], [], [], [], []
     for sat in sats:
-        stat = libsdr.sdr_rcv_sat_stat(rcv, sat.encode()).decode().split()
+        libsdr.sdr_rcv_sat_stat(rcv, sat.encode(), buff, size)
+        stat = buff.value.decode().split()
         az.append(float(stat[1]) if len(stat) >=2 else 0.0)
         el.append(float(stat[2]) if len(stat) >=3 else 0.0)
         pvt.append(int(stat[3]) if len(stat) >=4 else 0)
@@ -350,14 +388,14 @@ def get_sat_stat(rcv, sats):
 
 # get RF channel status -------------------------------------------------------
 def get_rfch_stat(rcv, ch):
-    stat = np.zeros(7, dtype='float64')
+    stat = np.zeros(8, dtype='float64')
     libsdr.sdr_rcv_rfch_stat.argtypes = (c_void_p, c_int32,
         ctypeslib.ndpointer('float64'))
     if not libsdr.sdr_rcv_rfch_stat(rcv, ch, stat):
-        return 0, 0, 24.0, 0.0, 0, 0, 0.0
+        return 0, 0, 24.0, 0.0, 0, 0, 0.0, 0
     return int(stat[0]), int(stat[1]), stat[2] / 1e6, stat[3] / 1e6, \
-        int(stat[4]), int(stat[5]), stat[6]
-    # dev, fmt, fs (MHz), fo (MHz), IQ, bits, std-dev
+        int(stat[4]), int(stat[5]), stat[6], int(stat[7])
+    # dev, fmt, fs (MHz), fo (MHz), IQ, bits, std-dev, rtoc
 
 # get RF channel PSD -----------------------------------------------------------
 def get_rfch_psd(rcv, ch, tave):
@@ -435,11 +473,114 @@ def get_corr_hist(rcv, ch, tspan):
     n = libsdr.sdr_rcv_corr_hist(rcv, ch, tspan, stat, P)
     return stat[0], stat[1], P[:n] if n > 0 else P[:2] # time, T, P
 
+# unified array calibration control --------------------------------------------
+#   ant_pos: None or nrfch*3 list (set geometry; with run=1, starts fresh)
+#   rpy, bias: None or values to inject (rpy = 3 floats; bias = nrfch floats)
+#   run: -1 = no change, 0 = stop, 1 = start, 2 = clear (zero state, stop)
+def _array_calib(rcv, ant_pos, rpy, bias, run):
+    libsdr.sdr_rcv_array_calib.argtypes = (c_void_p, POINTER(c_double),
+        POINTER(c_double), POINTER(c_double), c_int32)
+    c_pos = (c_double * len(ant_pos))(*ant_pos) if ant_pos is not None else None
+    c_rpy = (c_double * 3)(*rpy) if rpy is not None else None
+    c_bias = (c_double * len(bias))(*bias) if bias is not None else None
+    return libsdr.sdr_rcv_array_calib(rcv, c_pos, c_rpy, c_bias, run)
+
+# start array calibration ------------------------------------------------------
+def array_calib_start(rcv, ant_pos):
+    return _array_calib(rcv, ant_pos, None, None, 1)
+
+# stop array calibration -------------------------------------------------------
+def array_calib_stop(rcv):
+    return _array_calib(rcv, None, None, None, 0)
+
+# inject calibration values (rpy in rad, bias[nrfch] in m) ---------------------
+def array_calib_set(rcv, rpy, bias):
+    return _array_calib(rcv, None, rpy, bias, -1)
+
+# clear calibration state ------------------------------------------------------
+def array_calib_clear(rcv):
+    return _array_calib(rcv, None, None, None, 2)
+
+# get array calibration state --------------------------------------------------
+def array_calib_stat(rcv):
+    rpy = np.zeros(3, dtype='float64')
+    bias = np.zeros(8, dtype='float64')    # SDR_MAX_RFCH
+    rms = c_double(0.0)
+    nep = c_int32(0)
+    libsdr.sdr_rcv_array_stat.argtypes = (c_void_p,
+        ctypeslib.ndpointer('float64'), ctypeslib.ndpointer('float64'),
+        POINTER(c_double), POINTER(c_int32))
+    if not libsdr.sdr_rcv_array_stat(rcv, rpy, bias, byref(rms), byref(nep)):
+        return None
+    return rpy, bias, rms.value, nep.value
+
+# set array CH beam direction (uses current calibration) -----------------------
+def array_set_beam(rcv, ach, az, el):
+    libsdr.sdr_rcv_array_set_beam.argtypes = (c_void_p, c_int32, c_double,
+        c_double)
+    return libsdr.sdr_rcv_array_set_beam(rcv, ach, az, el)
+
+# get array CH beam direction (rad) -------------------------------------------
+def array_get_beam(rcv, ach):
+    az = c_double(0.0)
+    el = c_double(0.0)
+    libsdr.sdr_rcv_array_get_beam.argtypes = (c_void_p, c_int32,
+        POINTER(c_double), POINTER(c_double))
+    if not libsdr.sdr_rcv_array_get_beam(rcv, ach, byref(az), byref(el)):
+        return None
+    return az.value, el.value
+
+# set per-RF-CH enable mask for array (combine + calibration) ------------------
+def array_set_rfch_ena(rcv, ena):
+    n = len(ena)
+    c_ena = (c_int32 * n)(*[int(x) for x in ena])
+    libsdr.sdr_rcv_array_set_ena.argtypes = (c_void_p, POINTER(c_int32),
+        c_int32)
+    return libsdr.sdr_rcv_array_set_ena(rcv, c_ena, n)
+
+# save current calibration state to file (rpy in rad, bias in m) --------------
+def array_calib_save_file(rcv, file=CALIB_FILE):
+    if not rcv: return False
+    stat = array_calib_stat(rcv)
+    if not stat: return False
+    rpy, bias, rms, nep = stat
+    # only save if calibration produced data
+    if nep <= 0 and abs(rpy[0]) + abs(rpy[1]) + abs(rpy[2]) < 1e-9:
+        return False
+    try:
+        with open(file, 'w') as f:
+            f.write('# Pocket SDR Array Calibration\n')
+            f.write('# epochs=%d, rms=%.4fm\n' % (nep, rms))
+            f.write('# Roll Pitch Yaw (rad)\n')
+            f.write('%.9f %.9f %.9f\n' % (rpy[0], rpy[1], rpy[2]))
+            f.write('# Bias CH1..CHn (m)\n')
+            f.write(' '.join('%.9f' % b for b in bias) + '\n')
+        return True
+    except OSError:
+        return False
+
+# load calibration state from file and inject into receiver -------------------
+def array_calib_load_file(rcv, file=CALIB_FILE):
+    if not rcv or not os.path.isfile(file):
+        return False
+    try:
+        with open(file) as f:
+            lines = [l.split('#')[0].strip() for l in f]
+            lines = [l for l in lines if l]
+        if len(lines) < 2: return False
+        rpy = [float(x) for x in lines[0].split()][:3]
+        bias = [float(x) for x in lines[1].split()]
+        if len(rpy) < 3 or len(bias) < 1: return False
+        return bool(array_calib_set(rcv, rpy, bias))
+    except (OSError, ValueError):
+        return False
+
 # get PVT solution -------------------------------------------------------------
 def get_rcv_pvt_sol(rcv):
-    buff = create_string_buffer(128)
-    libsdr.sdr_rcv_pvt_sol.argtypes = (c_void_p, c_char_p)
-    if not libsdr.sdr_rcv_pvt_sol(rcv, buff):
+    size = 128
+    buff = create_string_buffer(size)
+    libsdr.sdr_rcv_pvt_sol.argtypes = (c_void_p, c_char_p, c_int32)
+    if not libsdr.sdr_rcv_pvt_sol(rcv, buff, size):
         return '1970-01-01 00:00:00.0 0.00000000 0.00000000 0.000 0/0 ---'
     return buff.value.decode() 
 
@@ -455,17 +596,15 @@ def sat_color(sat, sel=0):
 
 # update receiver log ---------------------------------------------------------
 def update_rcv_log():
-    global rcv_log, rcv_log_filt, _rcv_log_buff, _RCV_LOG_BUFF_SIZE
+    global rcv_log, rcv_log_filt, rcv_log_buff, LOG_BUFF_SIZE
     libsdr.sdr_get_log.argtypes = (POINTER(c_char), c_int32)
-    size = libsdr.sdr_get_log(_rcv_log_buff, _RCV_LOG_BUFF_SIZE)
+    size = libsdr.sdr_get_log(rcv_log_buff, LOG_BUFF_SIZE)
     if size <= 0:
         return
-    # decode only the valid bytes returned to avoid scanning large buffers
-    data = _rcv_log_buff.raw[:size].decode(errors='ignore')
+    data = rcv_log_buff.raw[:size].decode(errors='ignore')
     for log in data.splitlines():
         if len(log) > 0 and filt_log(rcv_log_filt, log):
             rcv_log.append(log)
-    return 
 
 # update solution log ----------------------------------------------------------
 def update_sol_log():
@@ -572,10 +711,14 @@ def rcv_page_new(parent):
         ind = Frame(frm, width=6, height=10)
         ind.pack(fill=BOTH, padx=1, pady=1)
         p.ind.append(ind)
-    ttk.Label(p.toolbar, text='Output').pack(side=RIGHT, padx=(8, 4))
+    ttk.Label(p.toolbar, text='Output').pack(side=RIGHT, padx=1)
     p.box1 = sel_box_new(p.toolbar, SYSTEMS, 'ALL', width=8)
-    p.box1.pack(side=RIGHT, padx=4)
-    ttk.Label(p.toolbar, text='System').pack(side=RIGHT)
+    p.box1.pack(side=RIGHT, padx=(1, 4))
+    ttk.Label(p.toolbar, text='System').pack(side=RIGHT, padx=1)
+    p.box2 = sel_box_new(p.toolbar, ['ALL'] + [str(i + 1) for i in range(16)],
+        'ALL', 5)
+    p.box2.pack(side=RIGHT, padx=(1, 4))
+    ttk.Label(p.toolbar, text='RF CH').pack(side=RIGHT, padx=1)
     panel1 = Frame(p.panel)
     panel1.pack(expand=1, fill=BOTH)
     p.plt1 = plt.plot_new(panel1, 257, 257, margin=(25, 25, 25, 25),
@@ -586,36 +729,83 @@ def rcv_page_new(parent):
     p.plt2 = plt.plot_new(p.panel, 800, 245, title='Signal C/N0 (dB-Hz)', tick=10)
     p.plt2.c.pack(expand=1, fill=BOTH)
     p.box1.bind('<<ComboboxSelected>>', lambda e: on_sys_select(e, p))
+    p.box2.bind('<<ComboboxSelected>>', lambda e: on_sys_select(e, p))
+    p.plt1.c.bind('<Button-1>', lambda e: on_skyplot_click(e, p))
+    p.plt1.c.bind('<B1-Motion>', lambda e: on_skyplot_click(e, p))
     update_rcv_page(p)
     return p
 
 # system select callback -------------------------------------------------------
 def on_sys_select(e, p):
     sys = p.box1.get()
-    update_sky_plot(p.plt1, sys)
-    update_sig_plot(p.plt2, sys)
+    rfch = p.box2.get()
+    update_sky_plot(p.plt1, sys, rfch)
+    update_sig_plot(p.plt2, sys, rfch)
+
+# get cursol az/el in skyplot --------------------------------------------------
+def get_azel(e, p):
+    xs, ys = plt.plot_scale(p)
+    if xs <= 0 or ys <= 0: return -1, -1
+    xc = p.m[0] + (p.c.winfo_width()  - p.m[0] - p.m[1]) / 2
+    yc = p.m[2] + (p.c.winfo_height() - p.m[2] - p.m[3]) / 2
+    x = (e.x - xc) / xs + (p.xl[0] + p.xl[1]) / 2
+    y = (p.yl[0] + p.yl[1]) / 2 - (e.y - yc) / ys
+    r = sqrt(x * x + y * y)
+    if r > 1.0:
+        return -1, -1
+    el = (1.0 - r) * pi / 2
+    az = atan2(x, y)
+    if az < 0: az += 2 * pi
+    return az, el
+
+# skyplot click/drag callback (only for array CH) ------------------------------
+def on_skyplot_click(e, p):
+    if not rcv_body: return
+    rfch = p.box2.get()
+    try:
+        ach1 = int(rfch)  # 1-indexed CH number
+    except ValueError:
+        return
+    if ach1 < 9:  # only array CHs (>=9) handled
+        return
+    az, el = get_azel(e, p.plt1)
+    if az < 0.0:
+        return
+    array_set_beam(rcv_body, ach1 - 1, az, el)
+
+    # sync Array tab entries if accessible
+    if array_page is not None:
+        idx = ach1 - 9 # CH9..CH16 -> 0..7
+        if 0 <= idx < len(array_page.beam_az):
+            array_page.beam_az[idx].delete(0, END)
+            array_page.beam_az[idx].insert(0, '%.1f' % (az / D2R))
+            array_page.beam_el[idx].delete(0, END)
+            array_page.beam_el[idx].insert(0, '%.1f' % (el / D2R))
+    update_sky_plot(p.plt1, p.box1.get(), rfch)
 
 # update Receiver page ---------------------------------------------------------
 def update_rcv_page(p):
     sys = p.box1.get()
+    rfch = p.box2.get()
     update_rcv_stat(p.stat)
     update_str_stat(p.ind)
-    update_sky_plot(p.plt1, sys)
-    update_sig_plot(p.plt2, sys)
+    update_sky_plot(p.plt1, sys, rfch)
+    update_sig_plot(p.plt2, sys, rfch)
 
 # update receiver status panel -------------------------------------------------
 def update_rcv_stat(p):
-    labels = ('Receiver Time (s)', 'Input Source', 'IF Data Fmt/# RF CH',
-        'LO Frequencies (MHz)', '', '', 'Sampling',
+    labels = ('Receiver Time (s)', 'Input Source',
+        'Fmt/# RF CH/# Array CH', 'LO Frequencies (MHz)', '', '', 'Sampling',
         'Sampling Rate (Msps)', '# BB CH Locked/All',
         'IF Data Rate (MB/s)', 'IF Data Buffer Usage (%)', 'Time (GPST)',
         'Solution Status', 'Latitude (\xb0)', 'Longitude (\xb0)',
-        'Altitude (m)', '# Sats Used/All', 'Solution Latency (s)',
-        'Output', '# PVT Solutions', '# OBS/NAV Data', 'IF Data Log (MB)')
+        'Altitude (m)', 'Roll/Pitch/Yaw (\xb0)', '# Sats Used/All',
+        'Solution Latency (s)', 'Output', '# PVT/# OBS/NAV Data',
+        'IF Data Log (MB)')
     stat = get_rcv_stat(rcv_body).split()
     sol = get_rcv_pvt_sol(rcv_body).split()
     val = stat[0:3] + [''] + stat[3:10] + [sol[0] + ' ' + sol[1], sol[6]] + \
-        sol[2:6] + [stat[10], ''] + stat[11:]
+        sol[2:5] + ['0.0/0.0/0.0'] + sol[5:6] + [stat[10], ''] + stat[11:]
     plt.plot_clear(p)
     xs, ys = plt.plot_scale(p)
     for i in range(len(labels)):
@@ -636,8 +826,9 @@ def update_str_stat(p):
         ind.configure(bg=col[stat[3-i]+1])
 
 # update skyplot ---------------------------------------------------------------
-def update_sky_plot(p, sys):
-    sats, sat, sig, cn0, prn = get_sig_stat(rcv_body, sys, 1)
+def update_sky_plot(p, sys, rfch):
+    sats, sat, sig, cn0, prn = get_sig_stat(rcv_body, sys, 1,
+        rfch=(0 if rfch == 'ALL' else int(rfch)))
     az, el, pvt, obs, eph, svh, fcn = get_sat_stat(rcv_body, sats)
     plt.plot_clear(p)
     plt.plot_sky(p, color=None)
@@ -652,10 +843,34 @@ def update_sky_plot(p, sys):
         plt.plot_circle(p, x, y, 12 / xs, fill=color1)
         plt.plot_text(p, x, y, sats[i], color=color2, font=get_font(-1))
     plt.plot_sky(p, gcolor=None)
+    
+    # draw beam direction X mark for array CH (CH >= 9)
+    if rcv_body and rfch != 'ALL':
+        try:
+            ach1 = int(rfch)
+        except ValueError:
+            ach1 = 0
+        if ach1 >= 9:
+            beam = array_get_beam(rcv_body, ach1 - 1)
+            if beam is not None:
+                az_b, el_b = beam
+                az_d = az_b * 180.0 / pi
+                el_d = el_b * 180.0 / pi
+                if 0 <= el_d <= 90:
+                    bx = (90 - el_d) / 90 * sin(az_d * pi / 180)
+                    by = (90 - el_d) / 90 * cos(az_d * pi / 180)
+                    d = 14 / xs
+                    plt.plot_poly(p, [bx - d, bx + d], [by - d, by + d],
+                        color='#FF0000', width=2)
+                    plt.plot_poly(p, [bx - d, bx + d], [by + d, by - d],
+                        color='#FF0000', width=2)
+                    plt.plot_text(p, bx, by - 18 / ys, 'CH%d' % ach1,
+                        color='#FF0000', font=get_font(-1, 'bold'))
 
 # update signal plot -----------------------------------------------------------
-def update_sig_plot(p, sys):
-    sats, sat, sig, cn0, prn = get_sig_stat(rcv_body, sys, 1)
+def update_sig_plot(p, sys, rfch):
+    sats, sat, sig, cn0, prn = get_sig_stat(rcv_body, sys, 1,
+        rfch=(0 if rfch == 'ALL' else int(rfch)))
     az, el, pvt, obs, eph, svh, fcn = get_sat_stat(rcv_body, sats)
     sigs = sorted(set(sig))
     plt.plot_clear(p)
@@ -698,7 +913,7 @@ def update_sig_plot(p, sys):
 def rfch_page_new(parent):
     ti = ['Power Spectral Density (dB/Hz)', 'Histogram I', 'Histogram Q']
     labels = ['Frequency (MHz)', 'Quantized Value']
-    chs = ['ALL'] + [str(i + 1) for i in range(8)] + ['1-4', '5-8']
+    chs = ['ALL'] + [str(i + 1) for i in range(16)] + ['1-4', '5-8']
     margin = (35, 25, 25, 40)
     p = Obj()
     p.parent = parent
@@ -772,7 +987,7 @@ def on_filt_select(e, p):
     ch = p.box1.get()
     val1 = p.box4.get()
     val2 = p.box5.get()
-    dev, fmt, fs, fo, IQ, bits, std = get_rfch_stat(rcv_body, int(ch))
+    dev, fmt, fs, fo, IQ, bits, std, rtoc = get_rfch_stat(rcv_body, int(ch))
     if ch == '1-4' or ch == '5-8' or val1 == '-' or val2 == '-' or IQ != 2:
         return
     set_rfch_filt(rcv_body, int(ch), float(val2), 0.0, val1 == '3rd')
@@ -814,12 +1029,12 @@ def update_rfch_page(p):
         bw, freq, order = get_rfch_filt(rcv_body, int(ch))
         p.box4.set('-' if bw < 0 else '3rd' if order else '5th')
         p.box5.set('-' if bw < 0 else '%.1f' % (bw))
-    dev, fmt, fs, fo, IQ, bits, std = get_rfch_stat(rcv_body, 1)
+    dev, fmt, fs, fo, IQ, bits, std, rtoc = get_rfch_stat(rcv_body, 1)
     p.txt1.configure(text='F_S: %.6f MHz' % (fs))
 
 # update PSD plot --------------------------------------------------------------
 def update_psd_plot(p, ch, tave):
-    dev, fmt, fs, fo, IQ, bits, std = get_rfch_stat(rcv_body, ch)
+    dev, fmt, fs, fo, IQ, bits, std, rtoc = get_rfch_stat(rcv_body, ch)
     psd = get_rfch_psd(rcv_body, ch, tave)
     f = np.linspace(fo, fo + fs / 2, len(psd)) if IQ == 1 else \
         np.linspace(fo - fs / 2, fo + fs / 2, len(psd))
@@ -829,7 +1044,7 @@ def update_psd_plot(p, ch, tave):
     plt.plot_axis(p, fcolor=None, tcolor=None)
     plt.plot_poly(p, [fo, fo], p.yl, color=plt.GR_COLOR)
     plt.plot_poly(p, f, psd, color=P1_COLOR)
-    plot_filt(p, ch, fo)
+    plot_filt(p, ch, fo, fs, rtoc)
     plt.plot_axis(p, gcolor=None)
     xs, ys = plt.plot_scale(p)
     plt.plot_poly(p, [fo, fo], [p.yl[0], p.yl[0] + 6 / ys], color=plt.FG_COLOR)
@@ -838,8 +1053,9 @@ def update_psd_plot(p, ch, tave):
     plot_sig_freq(p, p.xl, 16)
     plt.plot_text(p, p.xl[0] + 10 / xs, p.yl[1] - 8 / ys, 'CH%d' % (ch),
         font=get_font(1, 'bold'), anchor=NW)
-    plt.plot_text(p, fo - 12 / xs, p.yl[0] + 16 / ys, '%.6f MHz' % (fo),
-        anchor=E)
+    x = fo - 12 / xs if fo > p.xl[0] else fo + 12 / xs
+    align = E if fo > p.xl[0] else W
+    plt.plot_text(p, x, p.yl[0] + 16 / ys, '%.6f MHz' % (fo), anchor=align)
     text = '%s (%d bits, Std %.1f)' % ('I' if IQ == 1 else 'IQ', bits, std)
     plt.plot_text(p, p.xl[1] - 10 / xs, p.yl[0] + 16 / ys, text, anchor=E)
 
@@ -849,13 +1065,13 @@ def update_freq_plot(p):
         plt.plot_clear(p[i])
         plt.plot_axis(p[i])
         for ch in range(1, 9):
-            dev, fmt, fs, fo, IQ, bits, std = get_rfch_stat(rcv_body, ch)
+            dev, fmt, fs, fo, IQ, bits, std, rtoc = get_rfch_stat(rcv_body, ch)
             xs, ys = plt.plot_scale(p[i])
             xl = [fo, fo + fs / 2] if IQ == 1 else [fo - fs / 2, fo + fs / 2]
             yl = [p[i].yl[0] + 5 / ys, p[i].yl[1] - 20 / ys]
             plt.plot_rect(p[i], xl[0], yl[0], xl[1], yl[1], fill='#F8F8F8')
         for ch in range(1, 9):
-            dev, fmt, fs, fo, IQ, bits, std = get_rfch_stat(rcv_body, ch)
+            dev, fmt, fs, fo, IQ, bits, std, rtoc = get_rfch_stat(rcv_body, ch)
             xs, ys = plt.plot_scale(p[i])
             xl = [fo, fo + fs / 2] if IQ == 1 else [fo - fs / 2, fo + fs / 2]
             yl = [p[i].yl[0] + 5 / ys, p[i].yl[1] - 20 / ys]
@@ -875,11 +1091,14 @@ def update_freq_plot(p):
         plt.plot_text(p[0], x + 10 / xs, y, sys, color=color, anchor=W)
 
 # plot filter ------------------------------------------------------------------
-def plot_filt(p, ch, fo):
+def plot_filt(p, ch, fo, fs, rtoc):
     bw, freq, order = get_rfch_filt(rcv_body, ch)
     if bw < 0: return
     xs, ys = plt.plot_scale(p)
-    x1, x2 = fo + freq - bw * 0.5, fo + freq + bw * 0.5
+    # rtoc shifts the displayed fo by +fs/4; the analog filter centered at
+    # chip IF "freq" sits at (chip_LO + freq) = (fo - fs/4 + freq) in display.
+    fc = fo - fs * 0.25 + freq if rtoc else fo + freq
+    x1, x2 = fc - bw * 0.5, fc + bw * 0.5
     y1, y2 = p.yl[0] + 15 / ys, p.yl[0] + 15 / ys + 3
     dx = bw * (0.15 if order else 0.1)
     plt.plot_poly(p, [x1, x1 + dx, x2 - dx, x2], [y1, y2, y2, y1],
@@ -917,16 +1136,16 @@ def plot_mark(p, x, y, color):
 
 # update histograms plot -------------------------------------------------------
 def update_hist_plot(p1, p2, ch, tave):
-    dev, fmt, fs, fo, IQ, bits, std = get_rfch_stat(rcv_body, ch)
+    dev, fmt, fs, fo, IQ, bits, std, rtoc = get_rfch_stat(rcv_body, ch)
     val, hist1, hist2 = get_rfch_hist(rcv_body, ch, tave)
     plot_hist(p1, bits, val, hist1)
     plot_hist(p2, bits, val, hist2)
 
 # plot histogram ---------------------------------------------------------------
 def plot_hist(p, bits, val, hist):
-    bits = bits if bits <= 3 else 3
-    xl = (5, 3, 5, 9)
-    yl = (0.4, 0.4, 0.4, 0.2)
+    bits = bits if bits <= 4 else 4
+    xl = (5, 3, 5, 9, 9)
+    yl = (0.4, 0.4, 0.4, 0.25, 0.2)
     xs, ys = plt.plot_scale(p)
     plt.plot_clear(p)
     plt.plot_axis(p, fcolor=None, tcolor=None)
@@ -950,7 +1169,7 @@ def bbch_page_new(parent):
     p.panel = Frame(parent)
     p.toolbar = tool_bar_new(p.panel)
     ttk.Label(p.toolbar, text='RF CH').pack(side=LEFT, padx=(8, 4))
-    p.box1 = sel_box_new(p.toolbar, ['ALL'] + [str(i + 1) for i in range(8)],
+    p.box1 = sel_box_new(p.toolbar, ['ALL'] + [str(i + 1) for i in range(16)],
         'ALL', 5)
     p.box1.pack(side=LEFT)
     ttk.Label(p.toolbar, text='System').pack(side=LEFT, padx=(8, 4))
@@ -1010,38 +1229,22 @@ def update_bbch_page(p):
     buff_use = int(re.split('[:%]', buff)[1])
     srch_ch = int(re.split('[:]', srch)[1])
     p.txt1.configure(foreground='green' if buff_use < 90 else WARN_COLOR)
+    for c in p.tbl1.get_children():
+       p.tbl1.delete(c)
     cols = stat[1].split()
-    need_reconf_cols = tuple(cols) != tuple(p.tbl1_cols)
-    cur_width = p.tbl1.winfo_width()
-    ws = (cur_width - 8) / sum(w) if sum(w) else 1
-    if need_reconf_cols:
-        p.tbl1.configure(columns=cols)
-        for i in range(len(cols)):
-            p.tbl1.heading(cols[i], text=cols[i])
-            p.tbl1.column(cols[i], width=int(ws * w[i]), anchor=a[i], stretch=0)
-        p.tbl1_cols = tuple(cols)
-        p.tbl1_last_width = cur_width
-    elif cur_width != p.tbl1_last_width:
-        for i in range(len(cols)):
-            p.tbl1.column(cols[i], width=int(ws * w[i]))
-        p.tbl1_last_width = cur_width
-
-    new_ids = set()
+    p.tbl1.configure(columns=cols)
+    ws = (p.tbl1.winfo_width() - 8) / sum(w)
+    for i in range(len(cols)):
+        p.tbl1.heading(cols[i], text=cols[i])
+        p.tbl1.column(cols[i], width=int(ws * w[i]), anchor=a[i], stretch=0)
     for s in stat[2:]:
         vals = s.split()
         vals[7] = bar_cn0(float(vals[6]), int(ws * w[7]))
         tag = 'idle' if float(vals[5]) == 0.0 else ''
         tag = 'srch' if int(vals[0]) == srch_ch else tag
-        iid = vals[0]
-        new_ids.add(iid)
-        if p.tbl1.exists(iid):
-            p.tbl1.item(iid, values=vals, tags=tag)
-        else:
-            p.tbl1.insert('', END, iid=iid, values=vals, tags=tag)
-    
-    for iid in list(p.tbl1.get_children()):
-        if iid not in new_ids:
-            p.tbl1.delete(iid)
+        p.tbl1.insert('', END, iid=vals[0], values=vals, tags=tag)
+    p.tbl1.tag_configure('idle', foreground=P2_COLOR)
+    p.tbl1.tag_configure('srch', foreground='blue')
 
 # C/N0 bar ---------------------------------------------------------------------
 def bar_cn0(cn0, width):
@@ -1146,8 +1349,8 @@ def update_corr_text(p, ch, time):
     s = get_ch_stat(rcv_body, 'ALL', chno=int(ch), opt=1)[2:]
     if not s: return
     ss = s[0].split()
-    text = 'SAT: %s  SIG: %s  PRN: %s  LOCK: %s s' % (ss[2], ss[3], ss[4],
-        ss[5])
+    text = 'RF: %s SAT: %s  SIG: %s  PRN: %s  LOCK: %s s' % (ss[1], ss[2],
+        ss[3], ss[4], ss[5])
     p.txt1.configure(text=text)
     xs, ys = plt.plot_scale(p.plt3)
     text = ('C/N0: %s dB-Hz  COFF: %s ms  DOP: %s Hz  ADR: %s cyc  SYNC: %s' +
@@ -1458,9 +1661,153 @@ def pos2enu(log, ref):
     pos = sdr_rtk.ecef2pos(ref)
     return np.transpose([sdr_rtk.ecef2enu(pos, r - ref) for r in ecef]), ref
 
+# generate Array page ----------------------------------------------------------
+def array_page_new(parent):
+    p = Obj()
+    p.parent = parent
+    p.panel = Frame(parent)
+    p.toolbar = tool_bar_new(p.panel)
+    ttk.Label(p.toolbar, text='RF CH').pack(side=LEFT, padx=(8, 4))
+    p.box1 = sel_box_new(p.toolbar, [str(i) for i in range(9, 17)], '9', 4)
+    p.box1.pack(side=LEFT)
+    p.txt_stat = ttk.Label(p.toolbar, foreground='blue')
+    p.txt_stat.pack(side=LEFT, padx=20)
+    p.btn_clear = ttk.Button(p.toolbar, width=8, text='Clear')
+    p.btn_clear.pack(side=RIGHT, padx=(1, 10))
+    p.btn_calib = ttk.Button(p.toolbar, width=8, text='Calibrate')
+    p.btn_calib.pack(side=RIGHT, padx=1)
+    
+    panel1 = Frame(p.panel, width=400, bg=BG_COLOR1)
+    panel1.pack(side=RIGHT, fill=Y)
+    panel2 = Frame(p.panel, bg=BG_COLOR1)
+    panel2.pack(side=LEFT, expand=1, fill=BOTH, padx=4, pady=4)
+    p.plt1 = plt.plot_new(panel2, 300, 300, margin=(25, 25, 25, 25),
+        xlim=(-1, 1), ylim=(-1, 1), aspect=1, font=get_font(-1))
+    p.plt1.c.pack(expand=1, fill=BOTH)
+    
+    panel3 = Frame(panel1, relief=SOLID, bd=1, bg=BG_COLOR1)
+    panel3.pack(fill=X, padx=10, pady=4)
+    ttk.Label(panel3, text='ARRAY ATTITUDE (\xb0)', font=get_font(1, 'bold')).pack(pady=4)
+    p.txt_att = ttk.Label(panel3, text='ROLL:  0.0000  PITCH:  0.0000  YAW:  0.0000\n')
+    p.txt_att.pack(padx=10, pady=(4, 0))
+    panel4 = Frame(panel1, relief=SOLID, bd=1, bg=BG_COLOR1)
+    panel4.pack(fill=X, padx=10, pady=4)
+    ttk.Label(panel4, text='RF CH DELAY (m)', font=get_font(1, 'bold')).pack(pady=4)
+    text = ''
+    for i in range(8):
+        text += ' CH%d:%7.4f ' % (i + 1, 0.0) + ('\n' if i % 4 == 3 else '')
+    p.txt_bias = ttk.Label(panel4, text=text)
+    p.txt_bias.pack(padx=10, pady=(4, 0))
+    panel5 = Frame(panel1, relief=SOLID, bd=1, bg=BG_COLOR1)
+    panel5.pack(expand=1, fill=BOTH, padx=10, pady=4)
+    p.beam_az, p.beam_el, p.beam_btn = gen_beam_dirs(panel5)
+    p.btn_calib.bind('<Button-1>', lambda e: on_array_calib_toggle(e, p))
+    p.btn_clear.bind('<Button-1>', lambda e: on_array_calib_clear(e, p))
+    for i in range(8):
+        p.beam_btn[i].bind('<Button-1>', lambda e: on_array_beam_update(e, p, i))
+    return p
+
+# generate beam directions -----------------------------------------------------
+def gen_beam_dirs(panel):
+    ttk.Label(panel, text='BEAM DIRECTION (\xb0)', font=get_font(1, 'bold')).pack(pady=4)
+    azs, els, btns = [], [], []
+    for i in range(8):
+        p = Frame(panel, bg=BG_COLOR1)
+        p.pack(pady=1)
+        ttk.Label(p, text=' ARRAY CH%d:   AZ' % (i + 9)).pack(side=LEFT, padx=2)
+        az = ttk.Entry(p, width=10, justify='right', text='0.000')
+        az.pack(side=LEFT, padx=2)
+        ttk.Label(p, text='EL').pack(side=LEFT, padx=2)
+        el = ttk.Entry(p, width=10, justify='right', text='0.000')
+        el.pack(side=LEFT, padx=2)
+        btn = ttk.Button(p, width=6, text='Update')
+        btn.pack(side=LEFT, padx=2)
+        azs.append(az)
+        els.append(el)
+        btns.append(btn)
+    return azs, els, btns
+
+# Array page clear button callback ---------------------------------------------
+def on_array_calib_clear(e, p):
+    if not rcv_body: return
+    array_calib_clear(rcv_body)
+    # also remove saved file so next Start does not reload
+    try:
+        if os.path.isfile(CALIB_FILE):
+            os.remove(CALIB_FILE)
+    except OSError:
+        pass
+    p.btn_calib.configure(text='Calibrate')
+    p.lbl_status.configure(text='Cleared')
+
+# read antenna geometry and enable mask from array_opt -------------------------
+def array_read_opt():
+    global array_opt
+    nrfch = 8 # MAX_RFCH for Pocket SDR FE 8CH
+    ant_pos = []
+    ena = []
+    for i in range(nrfch):
+        try:
+            x = float(array_opt.posx[i].get())
+            y = float(array_opt.posy[i].get())
+            z = float(array_opt.posz[i].get())
+        except (ValueError, IndexError):
+            x = y = z = 0.0
+        ant_pos.extend([x, y, z])
+        ena.append(1 if array_opt.ena_ele[i].get() else 0)
+    return ant_pos, ena
+
+# Array page calibrate toggle callback -----------------------------------------
+def on_array_calib_toggle(e, p):
+    if not rcv_body:
+        return
+    if p.btn_calib['text'] == 'Calibrate':
+        ant_pos, ena = array_read_opt()
+        if sum(ena) < 2:
+            return
+        array_set_rfch_ena(rcv_body, ena)
+        if not array_calib_start(rcv_body, ant_pos):
+            return
+        p.btn_calib.configure(text='Stop')
+    else:
+        array_calib_stop(rcv_body)
+        p.btn_calib.configure(text='Calibrate')
+
+# Array page beam update callback ----------------------------------------------
+def on_array_beam_update(e, p, idx):
+    if not rcv_body: return
+    try:
+        az = float(p.beam_az[idx].get()) * D2R
+        el = float(p.beam_el[idx].get()) * D2R
+    except ValueError:
+        return
+    # sync enable mask from array_opt in case user changed it
+    _, ena = array_read_opt()
+    array_set_rfch_ena(rcv_body, ena)
+    array_set_beam(rcv_body, idx, az, el)
+
+# update Array page ------------------------------------------------------------
+def update_array_page(p):
+    plt.plot_clear(p.plt1)
+    plt.plot_sky(p.plt1)
+    if not rcv_body: return
+    stat = array_calib_stat(rcv_body)
+    if not stat: return
+    rpy, bias, rms, nep = stat
+    text1 = 'EPOCHS: %3d RMS: %6.4f' % (nep, rms)
+    text2 = 'ROLL:%8.4f  PITCH:%8.4f  YAW:%8.4f\n' % (rpy[0] / D2R, rpy[1] / D2R,
+        rpy[2] / D2R)
+    text3 = ''
+    for i in range(8):
+        text3 += ' RFCH%d:%7.4f ' % (i + 1, bias[i]) + ('\n' if i % 4 == 3 else '')
+    p.txt_stat.configure(text=text1)
+    p.txt_att.configure(text=text2)
+    p.txt_bias.configure(text=text3)
+
 # generate Log page ------------------------------------------------------------
 def log_page_new(parent):
-    filts = ('', '$TIME', '$POS', '$OBS', '$NAV', '$SAT', '$CH', '$EPH', '$LOG')
+    filts = ('', '$TIME', '$POS', '$ATT', '$OBS', '$NAV', '$SAT', '$CH', '$EPH',
+        '$LOG')
     p = Obj()
     p.parent = parent
     p.panel = Frame(parent)
@@ -1525,14 +1872,19 @@ def on_btn_start_push(bar):
         if rcv_body == None:
             status_bar_show('Receiver start error. ' + info)
             return
+        # apply enable mask from array_opt
+        _, ena = array_read_opt()
+        array_set_rfch_ena(rcv_body, ena)
         status_bar_show('Receiver started. ' + info)
         for i, btn in enumerate(bar.panel.winfo_children()):
-            btn.configure(state=NORMAL if i in (1, 6) else DISABLED)
+            btn.configure(state=NORMAL if i in (1, 7) else DISABLED)
 
 # Stop button push callback ----------------------------------------------------
 def on_btn_stop_push(bar):
     global rcv_body
     if rcv_body:
+        # save current array calibration before close (no-op if uncalibrated)
+        array_calib_save_file(rcv_body)
         rcv_close(rcv_body)
         rcv_body = None
         for i, btn in enumerate(bar.panel.winfo_children()):
@@ -1563,6 +1915,12 @@ def on_btn_system_push(bar):
     if not rcv_body:
         sys_opt = sdr_opt.sys_opt_dlg(root, sys_opt)
 
+# Array button push callback ---------------------------------------------------
+def on_btn_array_push(bar):
+    global array_opt
+    if not rcv_body:
+        array_opt = sdr_opt.array_opt_dlg(root, array_opt)
+
 # Help button push callback ----------------------------------------------------
 def on_btn_help_push(bar):
     help_dlg(root)
@@ -1570,7 +1928,8 @@ def on_btn_help_push(bar):
 # Exit button push callback ----------------------------------------------------
 def on_btn_exit_push(bar):
     if not rcv_body:
-        sdr_opt.save_opts(OPTS_FILE, inp_opt, out_opt, sig_opt, sys_opt)
+        sdr_opt.save_opts(OPTS_FILE, inp_opt, out_opt, sig_opt, sys_opt,
+            array_opt)
         exit()
 
 # root Window close callback ---------------------------------------------------
@@ -1592,10 +1951,7 @@ def on_pages_timer(note, pages):
     ti = pages_update(note, pages)
     if not rcv_body: ti = UD_CYCLE3
     ts = (int)((time.time() - tt) * 1e3)
-    # Apply backpressure: if processing took longer than the target interval,
-    # schedule the next update after the full interval to avoid event backlog.
     delay = ti - ts if ti > ts else ti
-    # enforce a small minimum delay to keep UI responsive
     note.after(max(10, delay), lambda: on_pages_timer(note, pages))
 
 # root resize callback ---------------------------------------------------------
@@ -1613,7 +1969,8 @@ def on_root_end_resize():
 # update page ------------------------------------------------------------------
 def update_page(i, page):
     funcs = (update_rcv_page, update_rfch_page, update_bbch_page,
-        update_corr_page, update_sats_page, update_sol_page, update_log_page)
+        update_corr_page, update_sats_page, update_sol_page, update_array_page,
+        update_log_page)
     funcs[i](page)
 
 # update pages -----------------------------------------------------------------
@@ -1648,6 +2005,64 @@ def set_styles():
     style.configure('TCombobox', font=get_font(), background=BG_COLOR1)
     style.configure('link.TLabel', font=get_font(1), foreground='blue')
 
+# main -------------------------------------------------------------------------
+def main():
+    global sdr_opt, inp_opt, out_opt, sig_opt, sys_opt, array_opt
+    global root, stat_bar
+
+    # generate root window
+    root = Tk()
+    root.geometry('%dx%d' % (WIDTH, HEIGHT))
+    root.minsize(WIDTH * 3 // 4, HEIGHT * 3 // 4)
+    name, ver = get_name_ver()
+    root.title(name + ' ver.' + ver)
+    root.protocol("WM_DELETE_WINDOW", on_root_close)
+    root.bind("<Configure>", on_root_resize)
+    
+    # set styles
+    set_styles()
+    
+    # load options
+    plt.set_font(get_font())
+    sdr_opt.set_bgcolor(BG_COLOR2)
+    sdr_opt.set_font(get_font())
+    inp_opt = sdr_opt.inp_opt_new()
+    out_opt = sdr_opt.out_opt_new()
+    sig_opt = sdr_opt.sig_opt_new()
+    sys_opt = sdr_opt.sys_opt_new()
+    array_opt = sdr_opt.array_opt_new()
+    sdr_opt.load_opts(OPTS_FILE, inp_opt, out_opt, sig_opt, sys_opt, array_opt)
+    
+    # generate button bar
+    labels = ('Start', 'Stop', 'Input ...', 'Output ...', 'Signal ...',
+        'System ...', 'Array ...', 'Help ...', 'Exit')
+    callbacks = (on_btn_start_push, on_btn_stop_push, on_btn_input_push,
+        on_btn_output_push, on_btn_signal_push, on_btn_system_push,
+        on_btn_array_push, on_btn_help_push, on_btn_exit_push)
+    btn_bar = btn_bar_new(root, labels, callbacks)
+    btn_bar.panel.winfo_children()[1].configure(state=DISABLED)
+    
+    # generate status bar
+    stat_bar = status_bar_new(root)
+    
+    # generate receiver pages
+    labels = ('Receiver', 'RF CH', 'BB CH', 'Correlator', 'Satellites',
+        'Solution', 'Array', 'Log')
+    note = ttk.Notebook(root, padding=0)
+    note.pack(fill=BOTH)
+    global array_page
+    pages = (rcv_page_new(note), rfch_page_new(note),  bbch_page_new(note),
+        corr_page_new(note), sats_page_new(note), sol_page_new(note),
+        array_page_new(note), log_page_new(note))
+    array_page = pages[6]  # used by skyplot click handler
+    for i, page in enumerate(pages):
+        note.add(page.panel, text=labels[i])
+    note.after(100, lambda: on_pages_timer(note, pages))
+    note.bind('<<NotebookTabChanged>>', lambda e: on_pages_change(e, pages))
+    
+    # main loop of Tk
+    root.mainloop()
+
 #-------------------------------------------------------------------------------
 #
 #   Synopsis
@@ -1671,53 +2086,5 @@ def set_styles():
 #     No option.
 #
 if __name__ == '__main__':
-    
-    # generate root window
-    root = Tk()
-    root.geometry('%dx%d' % (WIDTH, HEIGHT))
-    root.minsize(WIDTH * 3 // 4, HEIGHT * 3 // 4)
-    name, ver = get_name_ver()
-    root.title(name + ' ver.' + ver)
-    root.protocol("WM_DELETE_WINDOW", on_root_close)
-    root.bind("<Configure>", on_root_resize)
-    
-    # set styles
-    set_styles()
-    
-    # load options
-    plt.set_font(get_font())
-    sdr_opt.set_bgcolor(BG_COLOR2)
-    sdr_opt.set_font(get_font())
-    inp_opt = sdr_opt.inp_opt_new()
-    out_opt = sdr_opt.out_opt_new()
-    sig_opt = sdr_opt.sig_opt_new()
-    sys_opt = sdr_opt.sys_opt_new()
-    sdr_opt.load_opts(OPTS_FILE, inp_opt, out_opt, sig_opt, sys_opt)
-    
-    # generate button bar
-    labels = ('Start', 'Stop', 'Input ...', 'Output ...', 'Signal ...',
-        'System ...', 'Help ...', 'Exit')
-    callbacks = (on_btn_start_push, on_btn_stop_push, on_btn_input_push,
-        on_btn_output_push, on_btn_signal_push, on_btn_system_push,
-        on_btn_help_push, on_btn_exit_push)
-    btn_bar = btn_bar_new(root, labels, callbacks)
-    btn_bar.panel.winfo_children()[1].configure(state=DISABLED)
-    
-    # generate status bar
-    stat_bar = status_bar_new(root)
-    
-    # generate receiver pages
-    labels = ('Receiver', 'RF CH', 'BB CH', 'Correlator', 'Satellites',
-        'Solution', 'Log')
-    note = ttk.Notebook(root, padding=0)
-    note.pack(fill=BOTH)
-    pages = (rcv_page_new(note), rfch_page_new(note),  bbch_page_new(note),
-        corr_page_new(note), sats_page_new(note), sol_page_new(note),
-        log_page_new(note))
-    for i, page in enumerate(pages):
-        note.add(page.panel, text=labels[i])
-    note.after(100, lambda: on_pages_timer(note, pages))
-    note.bind('<<NotebookTabChanged>>', lambda e: on_pages_change(e, pages))
-    
-    # main loop of Tk
-    root.mainloop()
+    main()
+
