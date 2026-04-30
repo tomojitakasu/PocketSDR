@@ -234,7 +234,6 @@ sdr_array_t *sdr_array_new(sdr_rcv_t *rcv, int freq, int narch,
     if (narch < 0 || narch > SDR_MAX_ARCH) return NULL;
     
     sdr_array_t *array = (sdr_array_t *)sdr_malloc(sizeof(sdr_array_t));
-    
     array->rcv = rcv;
     array->freq = freq;
     array->narch = narch;
@@ -268,7 +267,7 @@ void sdr_array_free(sdr_array_t *array)
     sdr_free(array);
 }
 
-// install precomputed weights atomically; frees previous w. Caller-locked.
+// install precomputed weights atomically; frees previous w. Caller-locked.-----
 static int install_beam(sdr_array_t *array, int m, double az, double el,
     int16_t *w)
 {
@@ -326,8 +325,9 @@ int sdr_array_set_beam(sdr_array_t *array, int m, double az, double el,
     // body->ENU rotation, beam direction in body frame: e_body = R^T * e_enu
     double R[9], Dr[9], Dp[9], Dy[9], e_enu[3], e_body[3];
     euler_rot(rpy, R, Dr, Dp, Dy); // partials unused
+    // compass az (CW from N) -> ENU: E = sin(az)*cos(el), N = cos(az)*cos(el)
     e_enu[0] = sin(az) * cos(el);
-    e_enu[1] = -cos(az) * cos(el);
+    e_enu[1] = cos(az) * cos(el);
     e_enu[2] = sin(el);
     matmul("TN", 3, 1, 3, 1.0, R, e_enu, 0.0, e_body);
     
@@ -358,7 +358,9 @@ int sdr_array_set_beam(sdr_array_t *array, int m, double az, double el,
         for (int k = 0; k < 3; k++) b_body[k] = ant_pos[a][k] - ant_pos[0][k];
         double proj = e_body[0]*b_body[0] + e_body[1]*b_body[1] +
             e_body[2]*b_body[2];
-        double phi = 2.0 * PI * (proj - bias[a]) / lam;
+        // coherent weight w_a = exp(-j*2π/λ*proj_a) cancels the arrival phase
+        // 2π/λ*proj_a; bias compensates per-CH H/W delay (calibrated value).
+        double phi = -2.0 * PI * (proj - bias[a]) / lam;
         double wr = scale * bit_gain * cos(phi) * ARRAY_W_SCALE;
         double wi = scale * bit_gain * sin(phi) * ARRAY_W_SCALE;
         if (wr >  32767.0) wr =  32767.0;

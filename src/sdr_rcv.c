@@ -45,10 +45,12 @@
 double sdr_max_acq = MAX_ACQ;
 
 // rtoc state (real-to-complex fs/4 mix) for CH i. RF CH with IQ=1 implies rtoc
-// on; array CH always emits complex (IQ=2), no fs/4 mix.
+// on. Array CH (i >= nrfch) inherits rtoc from RF CH 0: combine_array operates
+// on RF CH data that has already been fs/4 mixed when RF CH 0 had IQ=1, so the
+// array CH data carries the same fs/4 frequency shift.
 static inline int rtoc_of(const sdr_rcv_t *rcv, int i)
 {
-    return i < rcv->nrfch && rcv->rfch[i].IQ == 1;
+    return rcv->rfch[(i < rcv->nrfch) ? i : 0].IQ == 1;
 }
 
 // number of array channels (NULL-safe via array back-pointer)
@@ -900,8 +902,9 @@ static void write_buff(sdr_rcv_t *rcv, const uint8_t *raw, int64_t ix)
             sdr_lpf_apply(rcv->rfch[k].lpf, rcv->buff[k]->data + base, rcv->N);
         }
     }
-    // combine RF CH IF data into array CH IF data (RAW16/RAW32 only)
-    if (rcv->fmt == SDR_FMT_RAW16 || rcv->fmt == SDR_FMT_RAW32) {
+    // combine RF CH IF data into array CH IF data (multi-CH RAW formats)
+    if (rcv->fmt == SDR_FMT_RAW8  || rcv->fmt == SDR_FMT_RAW16 ||
+        rcv->fmt == SDR_FMT_RAW16I || rcv->fmt == SDR_FMT_RAW32) {
         combine_array(rcv, base);
     }
     set_buff_ix(rcv, ix); // update IF data buffer write pointer
