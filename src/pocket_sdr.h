@@ -200,7 +200,8 @@ typedef struct {                // SDR receiver channel type
     int prn;                    // PRN number 
     const int8_t *code;         // primary code 
     const int8_t *sec_code;     // secondary code
-    int len_code, len_sec_code;
+    const int8_t *sec_code2;    // secondary code 2
+    int len_code, len_sec_code, len_sec_code2;
     double fc;                  // carrier frequency (Hz) 
     double fs;                  // sampling rate (sps) 
     double fi;                  // IF frequency (Hz) 
@@ -389,6 +390,9 @@ double sdr_shift_freq(const char *sig, int fcn, double fi);
 float *sdr_dop_bins(double T, float dop, float max_dop, int *len_fds);
 void sdr_corr_std(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N,
     double coff, const double *pos, int n, sdr_cpx_t *corr, sdr_cpx_t *C);
+void sdr_corr_std_cpx_code(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code,
+    int N, double coff, const double *pos, int n, sdr_cpx_t *corr,
+    sdr_cpx_t *C);
 void sdr_corr_std_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N,
     double fs, double fc, double phi, const float *code, const double *pos,
     int n, sdr_cpx_t *corr);
@@ -424,16 +428,27 @@ void sdr_lpf_apply(sdr_lpf_t *lpf, sdr_cpx8_t *data, int N);
 
 // sdr_code.c
 int8_t *sdr_gen_code(const char *sig, int prn, int *N);
+int sdr_gen_code_cpx(const char *sig, int prn, int8_t **code_I,
+    int8_t **code_Q, int *N);
+int sdr_gen_code_cpx_sec(const char *sig, int prn, int sec,
+    int8_t **code_I, int8_t **code_Q, int *N);
 int8_t *sdr_sec_code(const char *sig, int prn, int *N);
 double sdr_code_cyc(const char *sig);
 int sdr_code_len(const char *sig);
 double sdr_sig_freq(const char *sig);
 void sdr_sat_id(const char *sig, int prn, char *sat);
 int sdr_sig_boc(const char *sig);
+int sdr_sig_cpx(const char *sig);
+int sdr_sig_e5abq(const char *sig);
 void sdr_res_code(const int8_t *code, int len_code, double T, double coff,
     double fs, int N, int Nz, sdr_cpx16_t *code_res);
+void sdr_res_code_cpx(const int8_t *code_I, const int8_t *code_Q, int len_code,
+    double T, double coff, double fs, int N, int Nz, sdr_cpx16_t *code_res);
 void sdr_gen_code_fft(const int8_t *code, int len_code, double T, double coff,
     double fs, int N, int Nz, sdr_cpx_t *code_fft);
+void sdr_gen_code_fft_cpx(const int8_t *code_I, const int8_t *code_Q,
+    int len_code, double T, double coff, double fs, int N, int Nz,
+    sdr_cpx_t *code_fft);
 
 // sdr_ch.c
 sdr_ch_t *sdr_ch_new(const char *sig, int prn, double fs, double fi);
