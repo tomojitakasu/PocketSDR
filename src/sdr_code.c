@@ -114,6 +114,10 @@ static int8_t *E1CS       = NULL;
 static int8_t *E5AI [ 50] = {0};
 static int8_t *E5AQ [ 50] = {0};
 static int8_t *E5AQP[ 40] = {0};
+static int8_t *E5AQAI[ 50] = {0};
+static int8_t *E5AQAQ[ 50] = {0};
+static int8_t *E5ABQI[100] = {0};
+static int8_t *E5ABQQ[100] = {0};
 static int8_t *E5AIS      = NULL;
 static int8_t *E5AQS[ 50] = {0};
 static int8_t *E5BI [ 50] = {0};
@@ -713,6 +717,12 @@ static int8_t G2OCP_OC2[] = { // GLONASS L2OCP OC2
 };
 
 static int8_t BOC[] = {1, -1}; // BOC(k,k) sub-carrier
+static int8_t ALTBOC_E5A_I[] = { 1, -1,  1, -1, -1,  1, -1,  1};
+static int8_t ALTBOC_E5A_Q[] = {-1,  1,  1, -1,  1, -1, -1,  1};
+static int8_t ALTBOC_E5B_I[] = { 1, -1,  1, -1, -1,  1, -1,  1};
+static int8_t ALTBOC_E5B_Q[] = { 1, -1, -1,  1, -1,  1,  1, -1};
+
+static int8_t *gen_code_E5BQ(int prn, int *N);
 
 // upper cases of signal string ------------------------------------------------
 static void sig_upper(const char *sig, char *Sig)
@@ -737,6 +747,51 @@ static int8_t *mod_code(const int8_t *code, int N, const int8_t *sub_carr,
         }
     }
     return code_mod;
+}
+
+// complex modulation of code by periodic sub-carriers -------------------------
+static void mod_code_cpx_periodic(const int8_t *code, int N,
+    const int8_t *sub_carr_I, const int8_t *sub_carr_Q, int n, int period,
+    int8_t **code_I, int8_t **code_Q)
+{
+    *code_I = (int8_t *)sdr_malloc(N * n);
+    *code_Q = (int8_t *)sdr_malloc(N * n);
+
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < n; j++) {
+            int k = (i * n + j) % period;
+            (*code_I)[i*n+j] = code[i] * sub_carr_I[k];
+            (*code_Q)[i*n+j] = code[i] * sub_carr_Q[k];
+        }
+    }
+}
+
+// sign of integer -------------------------------------------------------------
+static int8_t sign_int(int x)
+{
+    return (x > 0) - (x < 0);
+}
+
+// combined complex modulation of two codes by periodic sub-carriers -----------
+static void mod_code_cpx2_periodic(const int8_t *code1, const int8_t *code2,
+    int N, int rel, const int8_t *sub_carr1_I, const int8_t *sub_carr1_Q,
+    const int8_t *sub_carr2_I, const int8_t *sub_carr2_Q, int n, int period,
+    int8_t **code_I, int8_t **code_Q)
+{
+    *code_I = (int8_t *)sdr_malloc(N * n);
+    *code_Q = (int8_t *)sdr_malloc(N * n);
+
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < n; j++) {
+            int k = (i * n + j) % period;
+            int I = code1[i] * sub_carr1_I[k] + rel * code2[i] *
+                sub_carr2_I[k];
+            int Q = code1[i] * sub_carr1_Q[k] + rel * code2[i] *
+                sub_carr2_Q[k];
+            (*code_I)[i*n+j] = sign_int(I);
+            (*code_Q)[i*n+j] = sign_int(Q);
+        }
+    }
 }
 
 // read code HEX strings -------------------------------------------------------
@@ -1506,13 +1561,70 @@ static int8_t *gen_code_E5AQ(int prn, int *N)
 static int8_t *sec_code_E5AQ(int prn, int *N)
 {
     if (prn < 1 || prn > 50) {
-       return NULL;
+        return NULL;
     }
     *N = 100;
     if (!E5AQS[prn-1]) {
         E5AQS[prn-1] = read_code_hex(code_gal_CS100[prn-1], *N);
     }
     return E5AQS[prn-1];
+}
+
+// generate E5aQ AltBOC complex code ------------------------------------------
+static int gen_code_E5AQ_altboc_cpx(int prn, int8_t **code_I, int8_t **code_Q,
+    int *N)
+{
+    if (prn < 1 || prn > 50) {
+        return 0;
+    }
+    int n;
+    int8_t *code = gen_code_E5AQ(prn, &n);
+
+    *N = n * 4;
+    if (!code) {
+        return 0;
+    }
+    if (!E5AQAI[prn-1] || !E5AQAQ[prn-1]) {
+        mod_code_cpx_periodic(code, n, ALTBOC_E5A_I, ALTBOC_E5A_Q, 4, 8,
+            E5AQAI + prn - 1, E5AQAQ + prn - 1);
+    }
+    *code_I = E5AQAI[prn-1];
+    *code_Q = E5AQAQ[prn-1];
+    return 1;
+}
+
+// generate E5ABQ complex code -------------------------------------------------
+static int gen_code_E5ABQ_cpx(int prn, int rel, int8_t **code_I,
+    int8_t **code_Q, int *N)
+{
+    if (prn < 1 || prn > 50 || (rel != 1 && rel != -1)) {
+        return 0;
+    }
+    int n1, n2;
+    int8_t *code1 = gen_code_E5AQ(prn, &n1);
+    int8_t *code2 = gen_code_E5BQ(prn, &n2);
+    int idx = (rel > 0 ? 0 : 50) + prn - 1;
+
+    *N = n1 * 4;
+    if (!code1 || !code2 || n1 != n2) {
+        return 0;
+    }
+    if (!E5ABQI[idx] || !E5ABQQ[idx]) {
+        mod_code_cpx2_periodic(code1, code2, n1, rel, ALTBOC_E5A_I,
+            ALTBOC_E5A_Q, ALTBOC_E5B_I, ALTBOC_E5B_Q, 4, 8, E5ABQI + idx,
+            E5ABQQ + idx);
+    }
+    *code_I = E5ABQI[idx];
+    *code_Q = E5ABQQ[idx];
+    return 1;
+}
+
+// generate E5ABQ I-code for real-code fallback paths --------------------------
+static int8_t *gen_code_E5ABQ(int prn, int *N)
+{
+    int8_t *code_I, *code_Q;
+
+    return gen_code_E5ABQ_cpx(prn, 1, &code_I, &code_Q, N) ? code_I : NULL;
 }
 
 // generate E5AQP code ([22]) ----------------------------------------------------
@@ -2139,6 +2251,8 @@ static int8_t *gen_code(const char *sig, int prn, int *N)
         return gen_code_E5AI(prn, N);
     } else if (!strcmp(Sig, "E5AQ")) {
         return gen_code_E5AQ(prn, N);
+    } else if (!strcmp(Sig, "E5ABQ")) {
+        return gen_code_E5ABQ(prn, N);
     } else if (!strcmp(Sig, "E5AQP")) {
         return gen_code_E5AQP(prn, N);
     } else if (!strcmp(Sig, "E5BI")) {
@@ -2200,6 +2314,67 @@ int8_t *sdr_gen_code(const char *sig, int prn, int *N)
     return code;
 }
 
+//------------------------------------------------------------------------------
+//  Generate complex primary code.
+//
+//  args:
+//      sig      (I) Signal type as string ('E5ABQ', ....)
+//      prn      (I) PRN number
+//      code_I   (O) I part of primary code
+//      code_Q   (O) Q part of primary code
+//      N        (O) Length of primary code
+//
+//  return:
+//      Status (1: OK, 0: error)
+//
+int sdr_gen_code_cpx(const char *sig, int prn, int8_t **code_I,
+    int8_t **code_Q, int *N)
+{
+    static sdr_mutex_t mtx = SDR_MUTEX_INIT;
+    char Sig[16];
+    int stat = 0;
+
+    sig_upper(sig, Sig);
+    sdr_mutex_lock(&mtx);
+    if (!strcmp(Sig, "E5ABQ")) {
+        stat = gen_code_E5AQ_altboc_cpx(prn, code_I, code_Q, N);
+    }
+    sdr_mutex_unlock(&mtx);
+
+    return stat;
+}
+
+//------------------------------------------------------------------------------
+//  Generate secondary-aware complex primary code.
+//
+//  args:
+//      sig      (I) Signal type as string ('E5ABQ', ....)
+//      prn      (I) PRN number
+//      sec      (I) Relative secondary code sign (-1 or +1)
+//      code_I   (O) I part of primary code
+//      code_Q   (O) Q part of primary code
+//      N        (O) Length of primary code
+//
+//  return:
+//      Status (1: OK, 0: error)
+//
+int sdr_gen_code_cpx_sec(const char *sig, int prn, int sec,
+    int8_t **code_I, int8_t **code_Q, int *N)
+{
+    static sdr_mutex_t mtx = SDR_MUTEX_INIT;
+    char Sig[16];
+    int stat = 0;
+
+    sig_upper(sig, Sig);
+    sdr_mutex_lock(&mtx);
+    if (!strcmp(Sig, "E5ABQ")) {
+        stat = gen_code_E5ABQ_cpx(prn, sec >= 0 ? 1 : -1, code_I, code_Q, N);
+    }
+    sdr_mutex_unlock(&mtx);
+
+    return stat;
+}
+
 // generate secondary (overlay) code -------------------------------------------
 static int8_t *sec_code(const char *sig, int prn, int *N)
 {
@@ -2255,6 +2430,8 @@ static int8_t *sec_code(const char *sig, int prn, int *N)
     } else if (!strcmp(Sig, "E5AI")) {
         return sec_code_E5AI(prn, N);
     } else if (!strcmp(Sig, "E5AQ")) {
+        return sec_code_E5AQ(prn, N);
+    } else if (!strcmp(Sig, "E5ABQ")) {
         return sec_code_E5AQ(prn, N);
     } else if (!strcmp(Sig, "E5BI")) {
         return sec_code_E5BI(prn, N);
@@ -2323,10 +2500,11 @@ double sdr_code_cyc(const char *sig)
         !strcmp(Sig, "L5SIV") || !strcmp(Sig, "L5SQ") || !strcmp(Sig, "L5SQV") ||
         !strcmp(Sig, "G1CA") || !strcmp(Sig, "G2CA") || !strcmp(Sig, "G3OCD") ||
         !strcmp(Sig, "G3OCP") || !strcmp(Sig, "E5AI") || !strcmp(Sig, "E5AQ") ||
-        !strcmp(Sig, "E5BI") || !strcmp(Sig, "E5BQ") || !strcmp(Sig, "E6B" ) ||
-        !strcmp(Sig, "E6C" ) || !strcmp(Sig, "B1I" ) || !strcmp(Sig, "B2I" ) ||
-        !strcmp(Sig, "B2AD") || !strcmp(Sig, "B2AP") || !strcmp(Sig, "B2BI") ||
-        !strcmp(Sig, "B3I" ) || !strcmp(Sig, "I5S" ) || !strcmp(Sig, "ISS" )) {
+        !strcmp(Sig, "E5ABQ") || !strcmp(Sig, "E5BI") || !strcmp(Sig, "E5BQ") ||
+        !strcmp(Sig, "E6B" ) || !strcmp(Sig, "E6C" ) || !strcmp(Sig, "B1I" ) ||
+        !strcmp(Sig, "B2I" ) || !strcmp(Sig, "B2AD") || !strcmp(Sig, "B2AP") ||
+        !strcmp(Sig, "B2BI") || !strcmp(Sig, "B3I" ) || !strcmp(Sig, "I5S" ) ||
+        !strcmp(Sig, "ISS" )) {
         return 1e-3;
     } else if (!strcmp(Sig, "E5AQP")) {
         return 330.0 / 5.115e6;
@@ -2373,9 +2551,10 @@ int sdr_code_len(const char *sig)
         !strcmp(Sig, "L5SQV") || !strcmp(Sig, "L6D" ) || !strcmp(Sig, "L6E" ) ||
         !strcmp(Sig, "G2OCP") || !strcmp(Sig, "G3OCD") || !strcmp(Sig, "G3OCP") ||
         !strcmp(Sig, "E5AI") || !strcmp(Sig, "E5AQ") || !strcmp(Sig, "E5BI") ||
-        !strcmp(Sig, "E5BQ") || !strcmp(Sig, "B1CD") || !strcmp(Sig, "B1CP") ||
-        !strcmp(Sig, "B2AD") || !strcmp(Sig, "B2AP") || !strcmp(Sig, "B2BI") ||
-        !strcmp(Sig, "B3I" ) || !strcmp(Sig, "I1SD") || !strcmp(Sig, "I1SP")) {
+        !strcmp(Sig, "E5BQ") || !strcmp(Sig, "E5ABQ") || !strcmp(Sig, "B1CD") ||
+        !strcmp(Sig, "B1CP") || !strcmp(Sig, "B2AD") || !strcmp(Sig, "B2AP") ||
+        !strcmp(Sig, "B2BI") || !strcmp(Sig, "B3I" ) || !strcmp(Sig, "I1SD") ||
+        !strcmp(Sig, "I1SP")) {
         return 10230;
     } else if (!strcmp(Sig, "L2CL")) {
         return 767250;
@@ -2422,6 +2601,8 @@ double sdr_sig_freq(const char *sig)
         !strcmp(Sig, "E5AQP") || !strcmp(Sig, "B2AD") || !strcmp(Sig, "B2AP") ||
         !strcmp(Sig, "I5S")) {
         return 1176.45e6;
+    } else if (!strcmp(Sig, "E5ABQ")) {
+        return 1191.795e6;
     } else if (!strcmp(Sig, "E5BI") || !strcmp(Sig, "E5BQ") ||
              !strcmp(Sig, "B2I" ) || !strcmp(Sig, "B2BI")) {
         return 1207.14e6;
@@ -2547,7 +2728,44 @@ int sdr_sig_boc(const char *sig)
     return !strcmp(Sig, "L1CD") || !strcmp(Sig, "L1CP") ||
         !strcmp(Sig, "G1OCP") || !strcmp(Sig, "G2OCP") || !strcmp(Sig, "E1B") ||
         !strcmp(Sig, "E1C") || !strcmp(Sig, "L1CB") || !strcmp(Sig, "B1CD") ||
-        !strcmp(Sig, "B1CP") || !strcmp(Sig, "I1SP") || !strcmp(Sig, "I1SD");
+        !strcmp(Sig, "B1CP") || !strcmp(Sig, "I1SP") || !strcmp(Sig, "I1SD") ||
+        !strcmp(Sig, "E5ABQ");
+}
+
+//------------------------------------------------------------------------------
+//  Get signal with complex spreading code.
+//
+//  args:
+//      sig      (I) Signal type as string ('L1CA', 'L1CB', 'L1CP', ....)
+//
+//  return:
+//      Signal with complex spreading code (0:no, 1:yes)
+//
+int sdr_sig_cpx(const char *sig)
+{
+    char Sig[16];
+
+    sig_upper(sig, Sig);
+
+    return !strcmp(Sig, "E5ABQ");
+}
+
+//------------------------------------------------------------------------------
+//  Get Galileo E5 AltBOC E5aQ/E5bQ combined pilot signal.
+//
+//  args:
+//      sig      (I) Signal type as string ('L1CA', 'L1CB', 'L1CP', ....)
+//
+//  return:
+//      E5ABQ signal (0:no, 1:yes)
+//
+int sdr_sig_e5abq(const char *sig)
+{
+    char Sig[16];
+
+    sig_upper(sig, Sig);
+
+    return !strcmp(Sig, "E5ABQ");
 }
 
 //------------------------------------------------------------------------------
@@ -2571,12 +2789,44 @@ void sdr_res_code(const int8_t *code, int len_code, double T, double coff,
     double fs, int N, int Nz, sdr_cpx16_t *code_res)
 {
     double dx = len_code / T / fs;
-    
+
     memset(code_res, 0, sizeof(sdr_cpx16_t) * (N + Nz));
-    
+
     for (int i = 0; i < N; i++) {
         int8_t c = code[(int)((coff * fs + i) * dx) % len_code];
         code_res[i].I = code_res[i].Q = c;
+    }
+}
+
+//------------------------------------------------------------------------------
+//  Generate resampled and zero-padded complex code.
+//
+//  args:
+//      code_I   (I) I part of code as int8_t array (-1 or 1)
+//      code_Q   (I) Q part of code as int8_t array (-1 or 1)
+//      len_code (I) Length of code
+//      T        (I) Code cycle (period) (s)
+//      coff     (I) Code offset (s)
+//      fs       (I) Sampling frequency (Hz)
+//      N        (I) Number of samples
+//      Nz       (I) Number of zero-padding
+//      code_res (O) Resampled and zero-padded code as sdr_cpx16_t array
+//                   (N + Nz)
+//
+//  return:
+//      none
+//
+void sdr_res_code_cpx(const int8_t *code_I, const int8_t *code_Q, int len_code,
+    double T, double coff, double fs, int N, int Nz, sdr_cpx16_t *code_res)
+{
+    double dx = len_code / T / fs;
+
+    memset(code_res, 0, sizeof(sdr_cpx16_t) * (N + Nz));
+
+    for (int i = 0; i < N; i++) {
+        int j = (int)((coff * fs + i) * dx) % len_code;
+        code_res[i].I = code_I[j];
+        code_res[i].Q = code_Q[j];
     }
 }
 
@@ -2602,13 +2852,13 @@ void sdr_gen_code_fft(const int8_t *code, int len_code, double T, double coff,
 {
     double dx = len_code / T / fs;
     sdr_cpx_t *code_res = sdr_cpx_malloc(N + Nz);
-    
+
     memset(code_res, 0, sizeof(sdr_cpx_t) * (N + Nz));
     for (int i = 0; i < N; i++) {
         code_res[i][0] = code[(int)((coff * fs + i) * dx) % len_code];
     }
     sdr_cpx_fft(code_res, N + Nz, SDR_FFT_FORWARD, code_fft);
-    
+
     // complex conjugate
     for (int i = 0; i < N + Nz; i++) {
         code_fft[i][1] = -code_fft[i][1];
@@ -2616,3 +2866,42 @@ void sdr_gen_code_fft(const int8_t *code, int len_code, double T, double coff,
     sdr_cpx_free(code_res);
 }
 
+//------------------------------------------------------------------------------
+//  Generate resampled and zero-padded complex code FFT (DFT).
+//
+//  args:
+//      code_I   (I) I part of code as int8_t array (-1 or 1)
+//      code_Q   (I) Q part of code as int8_t array (-1 or 1)
+//      len_code (I) Length of code
+//      T        (I) Code cycle (period) (s)
+//      coff     (I) Code offset (s)
+//      fs       (I) Sampling frequency (Hz)
+//      N        (I) Number of samples
+//      Nz       (I) Number of zero-padding
+//      code_fft (O) Resampled and zero-padded code DFT with conjugate as
+//                   complex array (N + Nz)
+//
+//  return:
+//      none
+//
+void sdr_gen_code_fft_cpx(const int8_t *code_I, const int8_t *code_Q,
+    int len_code, double T, double coff, double fs, int N, int Nz,
+    sdr_cpx_t *code_fft)
+{
+    double dx = len_code / T / fs;
+    sdr_cpx_t *code_res = sdr_cpx_malloc(N + Nz);
+
+    memset(code_res, 0, sizeof(sdr_cpx_t) * (N + Nz));
+    for (int i = 0; i < N; i++) {
+        int j = (int)((coff * fs + i) * dx) % len_code;
+        code_res[i][0] = code_I[j];
+        code_res[i][1] = code_Q[j];
+    }
+    sdr_cpx_fft(code_res, N + Nz, SDR_FFT_FORWARD, code_fft);
+
+    // complex conjugate
+    for (int i = 0; i < N + Nz; i++) {
+        code_fft[i][1] = -code_fft[i][1];
+    }
+    sdr_cpx_free(code_res);
+}
