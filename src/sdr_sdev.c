@@ -265,7 +265,7 @@ static void *reader_thread(void *arg)
     void *buffs[1];
     int tns_ena = !strcmp(sdev->driver,"lime") || !strcmp(sdev->driver,"uhd");
     int ret, flags, ovcnt = 0, dropcnt = 0, gapcnt = 0, prev_ret = 0;
-    int64_t tns, tns_prev = 0;
+    long long tns, tns_prev = 0;
     uint32_t tick = sdr_get_tick();
     
     // rise process/thread priority
