@@ -99,9 +99,9 @@ sdr_usb_t *sdr_usb_open(int bus, int port, const uint16_t *vid,
     libusb_free_device_list(devs, 1);
     
     for (int i = 0; i < SDR_MAX_UBUFF; i++) {
-        if (!(dev->usb->transfer[i] = libusb_alloc_transfer(0))) {
+        if (!(usb->transfer[i] = libusb_alloc_transfer(0))) {
             fprintf(stderr, "libusb_alloc_transfer(%d) error\n", i);
-            for (i--; i >= 0; i--) libusb_free_transfer(dev->usb->transfer[i]);
+            for (i--; i >= 0; i--) libusb_free_transfer(usb->transfer[i]);
             libusb_close(usb->h);
             libusb_exit(usb->ctx);
             sdr_free(usb);
