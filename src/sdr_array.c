@@ -439,8 +439,8 @@ void sdr_array_combine(sdr_array_t *array, int base)
             sum_im += (sum_im >= 0 ? ARRAY_W_SCALE/2 : -(ARRAY_W_SCALE/2));
             sum_re /= ARRAY_W_SCALE;
             sum_im /= ARRAY_W_SCALE;
-            sum_re = CLIP(sum_re * 2, -8, 7);
-            sum_im = CLIP(sum_im * 2, -8, 7);
+            sum_re = CLIP(sum_re, -8, 7);
+            sum_im = CLIP(sum_im, -8, 7);
             out[i] = SDR_CPX8(sum_re, sum_im);
         }
     }
