@@ -34,6 +34,7 @@
 #define MAX_BAR    12           // C/N0 bar width
 #define SAMPLES_STATS 100       // samples for stats
 #define AGC_LEVEL  2.3          // target std-dev for auto gain control
+#define LPF_AUTO_BW 0.9         // auto LPF bandwidth ratio (* fs/2) for IQ=1
 #define TRACE_FILE "./pocket_sdr.trace" // debug trace file
 #define TRACE_LEVEL 3           // default debug trace level
 
@@ -44,16 +45,13 @@
 // global variables ------------------------------------------------------------
 double sdr_max_acq = MAX_ACQ;
 
-// rtoc state (real-to-complex fs/4 mix) for CH i. RF CH with IQ=1 implies rtoc
-// on. Array CH (i >= nrfch) inherits rtoc from RF CH 0: combine_array operates
-// on RF CH data that has already been fs/4 mixed when RF CH 0 had IQ=1, so the
-// array CH data carries the same fs/4 frequency shift.
+// real-to-complex state -------------------------------------------------------
 static inline int rtoc_of(const sdr_rcv_t *rcv, int i)
 {
     return rcv->rfch[(i < rcv->nrfch) ? i : 0].IQ == 1;
 }
 
-// number of array channels (NULL-safe via array back-pointer)
+// number of array channels ----------------------------------------------------
 static inline int rcv_narch(const sdr_rcv_t *rcv)
 {
     return rcv->array ? rcv->array->narch : 0;
@@ -533,28 +531,31 @@ static void ch_th_stop(sdr_ch_th_t *th)
     th->state = 0;
 }
 
-// set low-pass filter for RF CH by option -------------------------------------
+// set LPF (option: -LPF=<rfch>:<MHz>[,<rfch>:<MHz> ...]) ----------------------
 static void set_lpf(sdr_rcv_t *rcv, const char *opt)
 {
+    // auto LPF for real-sampling CH
+    double bw = LPF_AUTO_BW * 0.5 * rcv->fs;
+    for (int i = 0; i < rcv->nrfch; i++) {
+        if (rcv->rfch[i].IQ == 1 && !rcv->rfch[i].lpf) {
+            rcv->rfch[i].lpf = sdr_lpf_new(bw * 0.5, rcv->fs);
+        }
+    }
     const char *p;
-    int rfch_no, n = 0;
-    double fc;
-
-    // option: -LPF=<rfch>:<MHz>[,<rfch>:<MHz>...])
+    int ch, n = 0;
     if (!(p = strstr(opt, "-LPF="))) return;
-
     for (p += 5; ; p++) {
-        if (sscanf(p, "%d:%lf%n", &rfch_no, &fc, &n) < 2) break;
-        if (rfch_no >= 1 && rfch_no <= rcv->nrfch && fc > 0.0) {
-            sdr_lpf_free(rcv->rfch[rfch_no-1].lpf);
-            rcv->rfch[rfch_no-1].lpf = sdr_lpf_new(fc * 1e6, rcv->fs);
+        double bw;
+        if (sscanf(p, "%d:%lf%n", &ch, &bw, &n) < 2) break;
+        if (ch >= 1 && ch <= rcv->nrfch && bw > 0.0) {
+            rcv->rfch[ch-1].lpf = sdr_lpf_new(bw * 0.5e6, rcv->fs);
         }
         p += n;
         if (*p != ',') break;
     }
 }
 
-// assign RF CH by option ------------------------------------------------------
+// assign RF CH by option (option: -RFCH <sig>:<rfchs>) ------------------------
 static int assign_rfch(int nrfch, const char *sig, const char *opt, int *ch)
 {
     const char *p;
@@ -643,11 +644,10 @@ sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
     int nrfch, narch = 0;
     
     if ((p = strstr(opt, "-ARCH="))) sscanf(p, "-ARCH=%d", &narch);
-    
     rcv->fmt = fmt;
     rcv->fs = fs;
     rcv->nrfch = num_rfch(fmt);
-    narch = MIN(narch, SDR_MAX_ARCH); // bounded local; stored in array later
+    narch = MIN(narch, SDR_MAX_ARCH);
     nrfch = rcv->nrfch + narch;
     for (int i = 0; i < rcv->nrfch; i++) {
         rcv->rfch[i].fo = fo[i];
@@ -688,9 +688,7 @@ sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
     snprintf(rcv->opt, sizeof(rcv->opt), "%s", opt);
     sdr_mutex_init(&rcv->mtx);
 
-    // initialize array CH beams with default (zenith, no calibration applied):
-    // ant_pos = 0, bias = 0, rpy = 0, az = 0, el = 90 deg, scale = 1/nrfch.
-    // result: equal-weight (real) sum over all L1 RF CHs.
+    // initialize array CH
     if (narch > 0 && rcv->nrfch > 0) {
         int ant_ena[SDR_MAX_RFCH] = {0};
         double ant_pos[SDR_MAX_RFCH][3] = {{0}};
@@ -812,30 +810,21 @@ static sdr_cpx8_t *gen_LUTC_rtoc(int rfch)
     return LUT;
 }
 
-// per-CH write macro: rtoc (fs/4 mix LUT) only; LPF is applied in batch later
+// write CH --------------------------------------------------------------------
 #define WR_CH(k, byte, ph) do { \
-    rcv->buff[(k)]->data[i] = rtoc_of(rcv, (k)) \
-        ? LUTC[(k)][((ph) << 8) | (byte)] \
-        : LUTC[(k)][(byte)]; \
+    rcv->buff[(k)]->data[i] = rtoc_of(rcv, (k)) ? \
+        LUTC[(k)][((ph)<<8) | (byte)] : LUTC[(k)][(byte)]; \
 } while (0)
-
-// combine RF CH IF data into array CH IF data using configured beam weights --
-//   only RAW16/RAW32 paths produce per-RF-CH IF data; called for those.
-static void combine_array(sdr_rcv_t *rcv, int base)
-{
-    sdr_array_combine(rcv->array, base);
-}
 
 // write IF data buffer --------------------------------------------------------
 static void write_buff(sdr_rcv_t *rcv, const uint8_t *raw, int64_t ix)
 {
-    int base = rcv->N * (int)(ix % MAX_BUFF);
-    int i = base;
+    int base = rcv->N * (int)(ix % MAX_BUFF), i = base;
     int8_t *LUT8 = (int8_t *)rcv->rfch[0].LUT;
     sdr_cpx8_t *LUTC[8];
     for (int j = 0; j < 8; j++) LUTC[j] = (sdr_cpx8_t *)rcv->rfch[j].LUT;
-    int ph0 = (int)((ix * rcv->N) & 3); // rtoc phase at start of this cycle
-    int nch_lpf = 0; // number of channels eligible for LPF (WR_CH paths only)
+    int ph0 = (int)((ix * rcv->N) & 3);
+    int nch_lpf = 0;
     
     if (rcv->fmt == SDR_FMT_INT8) { // int8
         for (int j = 0; j < rcv->N; i++, j++) {
@@ -905,7 +894,7 @@ static void write_buff(sdr_rcv_t *rcv, const uint8_t *raw, int64_t ix)
     // combine RF CH IF data into array CH IF data (multi-CH RAW formats)
     if (rcv->fmt == SDR_FMT_RAW8  || rcv->fmt == SDR_FMT_RAW16 ||
         rcv->fmt == SDR_FMT_RAW16I || rcv->fmt == SDR_FMT_RAW32) {
-        combine_array(rcv, base);
+        sdr_array_combine(rcv->array, base);
     }
     set_buff_ix(rcv, ix); // update IF data buffer write pointer
 }
@@ -1467,7 +1456,7 @@ void sdr_rcv_array_step(sdr_rcv_t *rcv, const obsd_t *obs, int nobs,
 //                     -RFCH <sig>:<ch>[{,|-}<ch>...]
 //                        assign signal to specific RF CH(s)
 //                     -LPF=<rfch>:<MHz>[,<rfch>:<MHz>...]
-//                        enable digital LPF on RF CH(s) (cutoff in MHz)
+//                        enable digital LPF on RF CH(s) (two-sided BW in MHz)
 //                     -ARCH=<nch>
 //                        number of antenna array channels
 //                     -ARRAY
@@ -1531,7 +1520,7 @@ sdr_rcv_t *sdr_rcv_open_dev(const char **sigs, int *prns, int n, int bus,
 //                     -RFCH <sig>:<ch>[{,|-}<ch>...]
 //                        assign signal to specific RF CH(s)
 //                     -LPF=<rfch>:<MHz>[,<rfch>:<MHz>...]
-//                        enable digital LPF on RF CH(s) (cutoff in MHz)
+//                        enable digital LPF on RF CH(s) (two-sided BW in MHz)
 //                     -SCALE=<scale>
 //                        raw-to-IF LUT scale for INT8/CS8/CS16 formats
 //                        (0: enable AGC, >0: fixed scale, default: 1.0)
