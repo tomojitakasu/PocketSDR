@@ -289,12 +289,12 @@ int sdr_dev_start(sdr_dev_t *dev)
 #ifndef WIN32
     for (int i = 0; i < SDR_MAX_UBUFF; i++) {
         int ret;
-        libusb_fill_bulk_transfer(dev->transfer[i], dev->usb->h, SDR_DEV_EP,
+        libusb_fill_bulk_transfer(dev->usb->transfer[i], dev->usb->h, SDR_DEV_EP,
             dev->buff + SDR_SIZE_UBUFF * i, SDR_SIZE_UBUFF, transfer_cb, dev,
             TO_TRANSFER);
-        if ((ret = libusb_submit_transfer(dev->transfer[i]))) {
+        if ((ret = libusb_submit_transfer(dev->usb->transfer[i]))) {
             fprintf(stderr, "libusb_submit_transfer(%d) error (%d)\n", i, ret);
-            for ( ; i >= 0; i--) libusb_cancel_transfer(dev->transfer[i]);
+            for ( ; i >= 0; i--) libusb_cancel_transfer(dev->usb->transfer[i]);
             return 0;
         }
     }
@@ -307,7 +307,7 @@ int sdr_dev_start(sdr_dev_t *dev)
         sdr_usb_req(dev->usb, 0, SDR_VR_STOP, 0, NULL, 0);
 #ifndef WIN32
         for (int i = 0; i < SDR_MAX_UBUFF; i++) {
-            libusb_cancel_transfer(dev->transfer[i]);
+            libusb_cancel_transfer(dev->usb->transfer[i]);
         }
 #endif
         return 0;
@@ -334,7 +334,7 @@ int sdr_dev_stop(sdr_dev_t *dev)
     sdr_thread_join(dev->thread);
 #ifndef WIN32
     for (int i = 0; i < SDR_MAX_UBUFF; i++) {
-        libusb_cancel_transfer(dev->transfer[i]);
+        libusb_cancel_transfer(dev->usb->transfer[i]);
     }
 #endif
     return 1;
