@@ -480,14 +480,22 @@ def get_corr_hist(rcv, ch, tspan):
     n = libsdr.sdr_rcv_corr_hist(rcv, ch, tspan, stat, P)
     return stat[0], stat[1], P[:n] if n > 0 else P[:2] # time, T, P
 
-# array calibration run control (1:start, 0:stop, 2:clear) -------------------
-def array_calib(rcv, run):
-    libsdr.sdr_rcv_array_calib.argtypes = (c_void_p, c_int32)
-    return libsdr.sdr_rcv_array_calib(rcv, run)
+# array calibration run control ------------------------------------------------
+def array_run(rcv, run):
+    libsdr.sdr_rcv_array_run.argtypes = (c_void_p, c_int32)
+    return libsdr.sdr_rcv_array_run(rcv, run)
 
-def array_calib_start(rcv): return array_calib(rcv, 1)
-def array_calib_stop(rcv):  return array_calib(rcv, 0)
-def array_calib_clear(rcv): return array_calib(rcv, 2)
+# start array calibration ------------------------------------------------------
+def array_calib_start(rcv):
+    return array_run(rcv, 1)
+
+# stop array calibration -------------------------------------------------------
+def array_calib_stop(rcv):
+    return array_run(rcv, 0)
+
+# clear array calibration ------------------------------------------------------
+def array_calib_clear(rcv):
+    return array_run(rcv, 2)
 
 # get array calibration status -------------------------------------------------
 def array_calib_stat(rcv):
@@ -503,13 +511,13 @@ def array_calib_stat(rcv):
         return None
     return run, rpy, bias, rms.value, nep.value
 
-# set array CH beam direction (uses current calibration) -----------------------
+# set array CH beam direction --------------------------------------------------
 def array_set_beam(rcv, ach, az, el):
     libsdr.sdr_rcv_array_set_beam.argtypes = (c_void_p, c_int32, c_double,
         c_double)
     return libsdr.sdr_rcv_array_set_beam(rcv, ach, az, el)
 
-# get array CH beam direction (rad) -------------------------------------------
+# get array CH beam direction --------------------------------------------------
 def array_get_beam(rcv, ach):
     az = c_double(0.0)
     el = c_double(0.0)
@@ -517,7 +525,7 @@ def array_get_beam(rcv, ach):
         POINTER(c_double), POINTER(c_double))
     if not libsdr.sdr_rcv_array_get_beam(rcv, ach, byref(az), byref(el)):
         return None
-    return az.value, el.value
+    return az.value, el.value # (rad)
 
 # set array element positions and enable flags ---------------------------------
 def array_ant_pos(rcv, ant_pos, ena):
@@ -530,12 +538,12 @@ def array_ant_pos(rcv, ant_pos, ena):
 
 # save / load array calibration state to / from file -------------------------
 def array_calib_save_file(rcv, file=CALIB_FILE):
-    libsdr.sdr_rcv_array_save_calib.argtypes = (c_void_p, c_char_p)
-    return bool(libsdr.sdr_rcv_array_save_calib(rcv, file.encode()))
+    libsdr.sdr_rcv_array_save.argtypes = (c_void_p, c_char_p)
+    return bool(libsdr.sdr_rcv_array_save(rcv, file.encode()))
 
 def array_calib_load_file(rcv, file=CALIB_FILE):
-    libsdr.sdr_rcv_array_load_calib.argtypes = (c_void_p, c_char_p)
-    return bool(libsdr.sdr_rcv_array_load_calib(rcv, file.encode()))
+    libsdr.sdr_rcv_array_load.argtypes = (c_void_p, c_char_p)
+    return bool(libsdr.sdr_rcv_array_load(rcv, file.encode()))
 
 # get PVT solution -------------------------------------------------------------
 def get_rcv_pvt_sol(rcv):

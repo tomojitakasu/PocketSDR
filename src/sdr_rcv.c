@@ -692,6 +692,11 @@ sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
     rcv->narch = narch;
     if (narch > 0 && rcv->nrfch > 0) {
         rcv->array = sdr_array_new(rcv, 0);
+        for (int m = 0; m < narch; m++) {
+            rcv->arch[m].scale = 1.0 / rcv->nrfch;
+            sdr_arch_set_beam(rcv->arch + m, rcv->array, 0.0, PI / 2,
+                rcv->arch[m].scale);
+        }
     }
     return rcv;
 }
@@ -1282,7 +1287,7 @@ int sdr_rcv_array_ant_pos(sdr_rcv_t *rcv, const double *ant_pos,
 }
 
 // configure receiver array calibration ----------------------------------------
-int sdr_rcv_array_calib(sdr_rcv_t *rcv, int run)
+int sdr_rcv_array_run(sdr_rcv_t *rcv, int run)
 {
     sdr_array_t *array = rcv ? rcv->array : NULL;
     if (!array) return 0;
@@ -1308,24 +1313,24 @@ int sdr_rcv_array_stat(sdr_rcv_t *rcv, double *rpy, double *bias, double *rms,
 }
 
 // save / load receiver array calibration --------------------------------------
-int sdr_rcv_array_save_calib(sdr_rcv_t *rcv, const char *file)
+int sdr_rcv_array_save(sdr_rcv_t *rcv, const char *file)
 {
     sdr_array_t *array = rcv ? rcv->array : NULL;
     if (!array) return 0;
 
     sdr_mutex_lock(&rcv->mtx);
-    int ret = sdr_array_save_calib(array, file);
+    int ret = sdr_array_save(array, file);
     sdr_mutex_unlock(&rcv->mtx);
     return ret;
 }
 
-int sdr_rcv_array_load_calib(sdr_rcv_t *rcv, const char *file)
+int sdr_rcv_array_load(sdr_rcv_t *rcv, const char *file)
 {
     sdr_array_t *array = rcv ? rcv->array : NULL;
     if (!array) return 0;
 
     sdr_mutex_lock(&rcv->mtx);
-    int ret = sdr_array_load_calib(array, file);
+    int ret = sdr_array_load(array, file);
     if (ret) refresh_arch_beams(rcv);
     sdr_mutex_unlock(&rcv->mtx);
     return ret;
@@ -1362,13 +1367,13 @@ int sdr_rcv_array_get_beam(sdr_rcv_t *rcv, int ach, double *az, double *el)
 }
 
 // run one receiver array calibration epoch -------------------------------------
-void sdr_rcv_array_step(sdr_rcv_t *rcv, const obsd_t *obs, int nobs,
+void sdr_rcv_array_calib(sdr_rcv_t *rcv, const obsd_t *obs, int nobs,
     const nav_t *nav, const double *rr)
 {
     if (!rcv || !rcv->array) return;
 
     sdr_mutex_lock(&rcv->mtx);
-    sdr_array_step(rcv->array, obs, nobs, nav, rr);
+    sdr_array_calib(rcv->array, obs, nobs, nav, rr);
     sdr_mutex_unlock(&rcv->mtx);
 }
 

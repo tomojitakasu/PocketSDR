@@ -1109,7 +1109,7 @@ Single-point positioning and observation aggregation built on RTKLIB. The receiv
 
 **`void sdr_pvt_udsol(sdr_pvt_t *pvt, int64_t ix)`**
 <br>
-- **Description**: Run the per-epoch PVT solution: ambiguity check, sort obs, write logs/streams, call `pntpos()`, update `sol`/`ssat`, trigger array calibration step (`sdr_rcv_array_step()`), and advance the next epoch time.
+- **Description**: Run the per-epoch PVT solution: ambiguity check, sort obs, write logs/streams, call `pntpos()`, update `sol`/`ssat`, trigger array calibration step (`sdr_rcv_array_calib()`), and advance the next epoch time.
 <br><br>
 
 **`void sdr_pvt_solstr(sdr_pvt_t *pvt, char *buff, int size)`**
@@ -1166,21 +1166,6 @@ Antenna-array calibration and beam-forming. Calibration uses a per-epoch EKF ove
 - **Return**: 1 on success, 0 when `ant_ena[0] == 0`
 <br><br>
 
-**`int sdr_array_calib(sdr_array_t *array, const obsd_t *obs, int nobs, const nav_t *nav, const double *rr)`**
-<br>
-- **Description**: Apply one epoch of single-difference carrier-phase observations to the EKF (or initialize the state if this is the first epoch).
-- **Arguments**:
-  - array: array state (updated in place)
-  - obs: observation array; `obs[i].rcv` is the 1-indexed RF CH number
-  - nobs: number of observations
-  - nav: navigation data
-  - rr: receiver ECEF position (m)
-- **Return**: 1 on success, 0 if convergence/initialization failed
-- **Notes**:
-  - Requires `ant_pos` already populated via `sdr_array_ant_pos()` (or the receiver wrapper).
-  - The first call (when `P[0] == 0`) does a yaw grid search and LSQ; later calls run the EKF.
-<br><br>
-
 **`int sdr_array_run(sdr_array_t *array, int run)`**
 <br>
 - **Description**: Drive the EKF run flag.
@@ -1190,9 +1175,9 @@ Antenna-array calibration and beam-forming. Calibration uses a per-epoch EKF ove
 - **Return**: 1 on success, 0 on error
 <br><br>
 
-**`int sdr_array_inject(sdr_array_t *array, const double *rpy, const double *bias)`**
+**`int sdr_array_set(sdr_array_t *array, const double *rpy, const double *bias)`**
 <br>
-- **Description**: Inject saved calibration values into the EKF state and re-seed the covariance.
+- **Description**: Set calibration values into the EKF state and re-seed the covariance.
 - **Arguments**:
   - array: array state (must satisfy `array->nrfch >= 2`)
   - rpy: attitude {roll, pitch, yaw} (3 doubles)
@@ -1206,9 +1191,9 @@ Antenna-array calibration and beam-forming. Calibration uses a per-epoch EKF ove
 - **Return**: current calibration run flag (1 = running, 0 = stopped); 0 also on error.
 <br><br>
 
-**`void sdr_array_step(sdr_array_t *array, const obsd_t *obs, int nobs, const nav_t *nav, const double *rr)`**
+**`void sdr_array_calib(sdr_array_t *array, const obsd_t *obs, int nobs, const nav_t *nav, const double *rr)`**
 <br>
-- **Description**: Per-epoch driver. When the run flag is set and `obs`/`rr` are valid, calls `sdr_array_calib()` and increments the epoch counter on success.
+- **Description**: Per-epoch calibration driver. When the run flag is set and `obs`/`rr` are valid, runs one EKF init or update step and increments the epoch counter on success.
 <br><br>
 
 **`void sdr_arch_free(sdr_arch_t *arch)`**
@@ -1452,7 +1437,7 @@ Top-level receiver lifecycle and state queries. A receiver wraps a front-end (US
 - **Return**: 1 on success, 0 on error or when `ant_ena[0] == 0`
 <br><br>
 
-**`int sdr_rcv_array_calib(sdr_rcv_t *rcv, int run)`**
+**`int sdr_rcv_array_run(sdr_rcv_t *rcv, int run)`**
 <br>
 - **Description**: Drive the calibration EKF run flag. After the update, all active array CH beams are atomically refreshed with the latest state.
 - **Arguments**:
@@ -1460,18 +1445,18 @@ Top-level receiver lifecycle and state queries. A receiver wraps a front-end (US
   - run: 0 stop, 1 start fresh (resets EKF state), 2 clear
 - **Return**: 1 on success, 0 on error
 - **Notes**:
-  - To inject saved calibration values, use `sdr_rcv_array_load_calib()`.
+  - To inject saved calibration values, use `sdr_rcv_array_load()`.
 <br><br>
 
-**`int sdr_rcv_array_save_calib(sdr_rcv_t *rcv, const char *file)`**
+**`int sdr_rcv_array_save(sdr_rcv_t *rcv, const char *file)`**
 <br>
 - **Description**: Snapshot the current calibration state and write it to `file`. Returns 0 (no write) when the EKF has not produced any data yet.
 - **Return**: 1 on success, 0 on error / nothing to save
 <br><br>
 
-**`int sdr_rcv_array_load_calib(sdr_rcv_t *rcv, const char *file)`**
+**`int sdr_rcv_array_load(sdr_rcv_t *rcv, const char *file)`**
 <br>
-- **Description**: Load attitude and per-CH biases from `file` (format produced by `sdr_rcv_array_save_calib()`) and inject them into the EKF state. Refreshes all active beams afterwards.
+- **Description**: Load attitude and per-CH biases from `file` (format produced by `sdr_rcv_array_save()`) and inject them into the EKF state. Refreshes all active beams afterwards.
 - **Return**: 1 on success, 0 on error
 <br><br>
 
@@ -1493,7 +1478,7 @@ Top-level receiver lifecycle and state queries. A receiver wraps a front-end (US
 - **Return**: 1 on success, 0 on error
 <br><br>
 
-**`void sdr_rcv_array_step(sdr_rcv_t *rcv, const obsd_t *obs, int nobs, const nav_t *nav, const double *rr)`**
+**`void sdr_rcv_array_calib(sdr_rcv_t *rcv, const obsd_t *obs, int nobs, const nav_t *nav, const double *rr)`**
 <br>
-- **Description**: Per-epoch driver invoked by `sdr_pvt_udsol()` after each PVT update. Holds `rcv->mtx` while calling `sdr_array_step()`.
+- **Description**: Per-epoch driver invoked by `sdr_pvt_udsol()` after each PVT update. Holds `rcv->mtx` while calling `sdr_array_calib()`.
 <br><br>

@@ -99,7 +99,7 @@ static int build_meas(const sdr_array_t *array, const obsd_t *obs, int nobs,
         const obsd_t *p = obs + i;
         double freq, lam, e[3];
         
-        // search CH1
+        // search reference (CH1)
         if (p->rcv != 1 || p->L[f] == 0.0 || !array->ant_ena[0]) continue;
         if (!los_vec(p->time, p->sat, nav, pos, rr, e)) continue;
         if ((freq = sat2freq(p->sat, p->code[f], nav)) == 0.0) continue;
@@ -126,7 +126,7 @@ static int build_meas(const sdr_array_t *array, const obsd_t *obs, int nobs,
     return nv;
 }
 
-// LSQ for attitude/bias ------------------------------------------------------
+// initialize attitude and biases by LSQ ---------------------------------------
 static int lsq_init(const sdr_array_t *array, const obsd_t *obs, int nobs,
     const nav_t *nav, const double *rr, double *x, double *rms)
 {
@@ -153,8 +153,8 @@ static int lsq_init(const sdr_array_t *array, const obsd_t *obs, int nobs,
     return 0;
 }
 
-// initialize state by yaw grid search + LSQ -----------------------------------
-static int kf_init(sdr_array_t *array, const obsd_t *obs, int nobs,
+// initialize KF states --------------------------------------------------------
+static void kf_init(sdr_array_t *array, const obsd_t *obs, int nobs,
     const nav_t *nav, const double *rr)
 {
     array->rms = 1e3;
@@ -169,17 +169,16 @@ static int kf_init(sdr_array_t *array, const obsd_t *obs, int nobs,
             array->rms = rms;
         }
     }
-    if (array->rms > MAX_RMS) return 0;
+    if (array->rms > MAX_RMS) return;
     
     memset(array->P, 0, sizeof(double) * NX * NX);
     for (int i = 0; i < NX; i++) {
         array->P[i+i*NX] = (i < 3) ? VAR_INIT_RPY : VAR_INIT_BIAS;
     }
-    return 1;
 }
 
-// KF predict and update -------------------------------------------------------
-static int kf_update(sdr_array_t *array, const obsd_t *obs, int nobs,
+// predict and update KF states ------------------------------------------------
+static void kf_update(sdr_array_t *array, const obsd_t *obs, int nobs,
     const nav_t *nav, const double *rr)
 {
     double v[MAX_NV], H[NX*MAX_NV] = {0};
@@ -188,26 +187,26 @@ static int kf_update(sdr_array_t *array, const obsd_t *obs, int nobs,
     for (int i = 0; i < NX; i++) {
         array->P[i+i*NX] += (i < 3) ? VAR_PROC_RPY : VAR_PROC_BIAS;
     }
-    // build measurements
     int nv = build_meas(array, obs, nobs, nav, rr, array->x, v, H);
-    if (nv < 1) return 0;
+    if (nv < 1) return;
     
     // KF measurement update
     double *R = (double *)sdr_malloc(sizeof(double) * nv * nv);
     for (int i = 0; i < nv; i++) R[i+i*nv] = VAR_MEAS;
     int info = filter(array->x, array->P, H, v, R, NX, nv);
     sdr_free(R);
-    if (info) return 0;
+    if (info) return;
     
     array->x[2] -= DPI * floor(array->x[2] / DPI + 0.5); // -PI <= yaw < PI
     
     // post-fit residual RMS
     nv = build_meas(array, obs, nobs, nav, rr, array->x, v, H);
     array->rms = nv > 0 ? sqrt(dot(v, v, nv) / nv) : 0.0;
-    return 1;
+    
+    array->nep++;
 }
 
-// allocate and initialize antenna array ---------------------------------------
+// generate new antenna array --------------------------------------------------
 sdr_array_t *sdr_array_new(sdr_rcv_t *rcv, int freq)
 {
     sdr_array_t *array = (sdr_array_t *)sdr_malloc(sizeof(sdr_array_t));
@@ -217,14 +216,16 @@ sdr_array_t *sdr_array_new(sdr_rcv_t *rcv, int freq)
     for (int i = 0; i < SDR_MAX_RFCH; i++) {
         array->ant_ena[i] = (i < array->nrfch);
     }
-    for (int m = 0; m < rcv->narch; m++) {
-        rcv->arch[m].scale = 1.0 / array->nrfch;
-        sdr_arch_set_beam(rcv->arch + m, array, 0.0, PI / 2, rcv->arch[m].scale);
-    }
     return array;
 }
 
-// set antenna element positions and enable flags ------------------------------
+// free antenna array ----------------------------------------------------------
+void sdr_array_free(sdr_array_t *array)
+{
+    sdr_free(array);
+}
+
+// set element positions and enables for antenna array -------------------------
 int sdr_array_ant_pos(sdr_array_t *array, const double *ant_pos,
     const int *ant_ena)
 {
@@ -237,26 +238,8 @@ int sdr_array_ant_pos(sdr_array_t *array, const double *ant_pos,
     return 1;
 }
 
-// free antenna array -----------------------------------------------------------
-void sdr_array_free(sdr_array_t *array)
-{
-    sdr_free(array);
-}
-
-// calibrate antenna array ------------------------------------------------------
-int sdr_array_calib(sdr_array_t *array, const obsd_t *obs, int nobs,
-    const nav_t *nav, const double *rr)
-{
-    if (nobs <= 0) return 0;
-
-    if (array->P[0] == 0.0) {
-        return kf_init(array, obs, nobs, nav, rr);
-    }
-    return kf_update(array, obs, nobs, nav, rr);
-}
-
-// reset calibration state ------------------------------------------------------
-static void reset_calib(sdr_array_t *array)
+// reset antenna array states --------------------------------------------------
+static void reset_state(sdr_array_t *array)
 {
     memset(array->x, 0, sizeof(array->x));
     memset(array->P, 0, sizeof(array->P));
@@ -264,23 +247,36 @@ static void reset_calib(sdr_array_t *array)
     array->rms = 0.0;
 }
 
-// drive array calibration run flag --------------------------------------------
+// run control of antenna array calibration ------------------------------------
 int sdr_array_run(sdr_array_t *array, int run)
 {
     if (array->nrfch < 2) return 0;
 
-    if (run == 1 || run == 2) reset_calib(array);
+    if (run == 1 || run == 2) reset_state(array);
     if (run == 0 || run == 1) array->calib_run = run;
     if (run == 2) array->calib_run = 0;
     return 1;
 }
 
-// inject calibration state ----------------------------------------------------
-int sdr_array_inject(sdr_array_t *array, const double *rpy, const double *bias)
+// calibrate antenna array -----------------------------------------------------
+void sdr_array_calib(sdr_array_t *array, const obsd_t *obs, int nobs,
+    const nav_t *nav, const double *rr)
+{
+    if (!array->calib_run || nobs <= 0 || norm(rr, 3) < 1e-6) return;
+
+    if (array->P[0] == 0.0) {
+        kf_init(array, obs, nobs, nav, rr);
+    } else {
+        kf_update(array, obs, nobs, nav, rr);
+    }
+}
+
+// set antenna array states ----------------------------------------------------
+int sdr_array_set(sdr_array_t *array, const double *rpy, const double *bias)
 {
     if (array->nrfch < 2) return 0;
-
-    reset_calib(array);
+    
+    reset_state(array);
     matcpy(array->x, rpy, 3, 1);
     matcpy(array->x + 3, bias, array->nrfch, 1);
     for (int i = 0; i < NX; i++) {
@@ -289,7 +285,7 @@ int sdr_array_inject(sdr_array_t *array, const double *rpy, const double *bias)
     return 1;
 }
 
-// get array calibration state --------------------------------------------------
+// get antenna array states ----------------------------------------------------
 int sdr_array_stat(sdr_array_t *array, double *rpy, double *bias, double *rms,
     int *nep)
 {
@@ -301,18 +297,8 @@ int sdr_array_stat(sdr_array_t *array, double *rpy, double *bias, double *rms,
     return array->calib_run;
 }
 
-// run one receiver array calibration epoch -------------------------------------
-void sdr_array_step(sdr_array_t *array, const obsd_t *obs, int nobs,
-    const nav_t *nav, const double *rr)
-{
-    if (!array->calib_run || nobs <= 0) return;
-    if (norm(rr, 3) < 1e-6) return;
-
-    if (sdr_array_calib(array, obs, nobs, nav, rr)) array->nep++;
-}
-
 // save calibration state to file ----------------------------------------------
-int sdr_array_save_calib(sdr_array_t *array, const char *file)
+int sdr_array_save(sdr_array_t *array, const char *file)
 {
     double rpy[3], bias[SDR_MAX_RFCH], rms;
     int nep;
@@ -336,7 +322,7 @@ int sdr_array_save_calib(sdr_array_t *array, const char *file)
 }
 
 // load calibration state from file --------------------------------------------
-int sdr_array_load_calib(sdr_array_t *array, const char *file)
+int sdr_array_load(sdr_array_t *array, const char *file)
 {
     FILE *fp = fopen(file, "r");
     if (!fp) return 0;
@@ -367,7 +353,7 @@ int sdr_array_load_calib(sdr_array_t *array, const char *file)
     }
     fclose(fp);
     if (line < 2) return 0;
-    return sdr_array_inject(array, rpy, bias);
+    return sdr_array_set(array, rpy, bias);
 }
 
 // install beam weights. caller locked. ----------------------------------------
