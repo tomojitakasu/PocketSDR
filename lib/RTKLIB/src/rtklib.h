@@ -1791,6 +1791,21 @@ extern int showmsg(const char *format,...);
 extern void settspan(gtime_t ts, gtime_t te);
 extern void settime(gtime_t time);
 
+/* wrapper library functions -------------------------------------------------*/
+extern int get_const_int(const char *name);
+extern obs_t *obsnew(void);
+extern void obsfree(obs_t *obs);
+extern obsd_t *obsget(obs_t *obs, int idx);
+extern nav_t *navnew(void);
+extern void navfree(nav_t *nav);
+extern double ionmodel_nav(gtime_t time, nav_t *nav, const double *pos,
+    const double *azel);
+extern eph_t *navgeteph(nav_t *nav, int idx);
+extern geph_t *navgetgeph(nav_t *nav, int idx);
+extern double navgettgd(int sat, const nav_t *nav);
+extern stream_t *strnew(void);
+extern void strfree(stream_t *str);
+
 #ifdef __cplusplus
 }
 #endif

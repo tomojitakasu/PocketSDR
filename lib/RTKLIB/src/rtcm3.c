@@ -2569,6 +2569,13 @@ extern int decode_rtcm3(rtcm_t *rtcm)
         tow=time2gpst(utc2gpst(timeget()),&week);
         rtcm->time=gpst2time(week,floor(tow));
     }
+    /* -STA=<id>: silently skip MSM messages for non-matching staid */
+    if (1071<=type&&type<=1137) {
+        char *p; int id;
+        if ((p=strstr(rtcm->opt,"-STA="))&&sscanf(p,"-STA=%d",&id)==1) {
+            if (getbitu(rtcm->buff,24+12,12)!=id) return 0;
+        }
+    }
     switch (type) {
         case 1001: ret=decode_type1001(rtcm); break; /* not supported */
         case 1002: ret=decode_type1002(rtcm); break;
