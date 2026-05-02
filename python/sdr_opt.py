@@ -243,7 +243,7 @@ def sig_opt_new(opt_p=None):
     opt.sig = (
         ('L1CA', 'L1CD', 'L1CP', 'L2CM', 'L5I', 'L5Q'),
         ('G1CA', 'G1OCD', 'G1OCP', 'G2CA', 'G2OCP', 'G3OCD', 'G3OCP'),
-        ('E1B', 'E1C', 'E5AI', 'E5AQ', 'E5BI', 'E5BQ', 'E6B', 'E6C'),
+        ('E1B', 'E1C', 'E5AI', 'E5AQ', 'E5ABQ', 'E5BI', 'E5BQ', 'E6B', 'E6C'),
         ('L1CA', 'L1CB', 'L1CD', 'L1CP', 'L1S', 'L2CM', 'L5I', 'L5Q', 'L5SI',
          'L5SIV', 'L5SQ', 'L5SQV', 'L6D', 'L6E'),
         ('B1I', 'B1CD', 'B1CP', 'B2AD', 'B2AP', 'B2I', 'B2BI', 'B3I'),
@@ -585,7 +585,7 @@ def out_opt_dlg(root, opt):
 # show Signal Options dialog ---------------------------------------------------
 def sig_opt_dlg(root, opt):
     opt_new = sig_opt_new(opt)
-    dlg = modal_dlg_new(root, 480, 560, 'Signal Options')
+    dlg = modal_dlg_new(root, 480, 600, 'Signal Options')
     panel1 = Frame(dlg.panel, width=450, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     panel1.pack(pady=2)
     labels_panel(panel1, ('System', 'Satellite No'), (20, 90)).pack(fill=X, pady=(4, 2))
@@ -684,7 +684,7 @@ def sys_opt_dlg(root, opt):
 def array_opt_dlg(root, opt):
     opt_new = array_opt_new(opt)
     dlg = modal_dlg_new(root, 420, 560, 'Array Options')
-    sel_panel_new(dlg.panel, 'Number of Antenna Array CH',
+    sel_panel_new(dlg.panel, 'Number of Array CH',
         sels=['%d' % n for n in range(9)], var=opt_new.no_array, width=8)
     w, h, r = 380, 220, 0.135
     plot = plt.plot_new(dlg.panel, w, h, margin=(0, 0, 0, 0),
@@ -753,4 +753,3 @@ def plot_ant_mark(plot, x, y, color):
     dx, dy = (0, 0.005, -0.005, 0), (0.004, -0.004, -0.004, 0.004)
     plt.plot_poly(plot, [x + d for d in dx], [y + d for d in dy], color=color,
         fill=1)
-
