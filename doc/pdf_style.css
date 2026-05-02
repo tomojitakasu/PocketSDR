@@ -1,0 +1,111 @@
+body {
+    background: white;
+    color: black;
+    /* Prefer Yu Gothic for Japanese glyphs on Windows; keep Calibri for Latin */
+    font-family: "Calibri", "Yu Gothic Medium", "Yu Gothic", "YuGothic", "Yu Gothic UI", "Meiryo", "Noto Sans CJK JP", "Noto Sans JP", "Noto Sans", "Liberation Sans", "Helvetica", "Arial", sans-serif;
+    /*font-family: "Palatino Linotype", "Noto Sans", "Liberation Sans", "Helvetica", "Arial", sans;*/
+    font-size: 11pt;
+    line-height: 1.5;
+}
+
+html, body {
+    margin: 0;
+    padding: 0 2mm;
+}
+
+h1, h2, h3, h4 {
+    /* Match body font strategy so headings use Yu Gothic for Japanese */
+    font-family: "Calibri", "Yu Gothic Medium", "Yu Gothic", "YuGothic", "Yu Gothic UI", "Meiryo", "Noto Sans CJK JP", "Noto Sans JP", "Noto Sans", "Liberation Sans", "Helvetica", "Arial", sans-serif;
+    font-weight: bold;
+    border: none;
+    page-break-after: avoid;
+}
+
+hr {
+    height: 1px;
+    border: none;
+    background: #cccccc
+}
+
+ul, ol {
+    margin: 6pt 0;
+    padding: 0 1.5em;
+}
+
+ul ul, ul ul ul, ul li p, ol li p {
+    margin: 3pt 0;
+}
+
+pre, code, pre code {
+    font-family: "Consolas", "Noto Sans Mono", "Menlo", "Monaco", "Courier New", monospace;
+    font-weight: bold;
+    font-size: 10pt;
+    color: #660000;
+    background: #eeeeee;
+    white-space: pre-wrap;
+    padding: 0 3px;
+    border: none;
+}
+
+a {
+    font-weight: bold;
+    color: #0000FF;
+    overflow-wrap: anywhere;
+}
+
+table {
+    table-layout: auto;
+    width: auto;
+    margin: auto;
+    margin-top: 12pt;
+    margin-bottom: 12pt;
+    max-width: 100%;
+}
+
+th, td {
+    font-size: 10pt;
+    text-align: center;
+    vertical-align: middle;
+    overflow-wrap: anywhere;
+    padding: 4px 6px;
+    line-height: 1;
+    border-top: 1px solid;
+    border-bottom: 1px solid;
+}
+
+img {
+    max-width: 100%;
+}
+
+.mjx-container[display="true"], .katex-display {
+    font-size: 100%;
+    padding: 0;
+    margin: 6pt 0;
+}
+
+.mjx-inline, .mjx-container:not([display="true"]), .katex:not(.katex-display) {
+    font-size: 95%;
+}
+
+.pagebreak {
+    page-break-before: always;
+    break-before: page;
+}
+
+@page {
+    size: A4 portrait;
+    margin: 20mm 18mm;
+}
+
+/* Language-specific font override: when lang="ja" is present, force Yu Gothic stack */
+:lang(ja), html:lang(ja) body, body:lang(ja) {
+    font-family: "Yu Gothic Medium", "Yu Gothic", "YuGothic", "Yu Gothic UI", "Meiryo", "Noto Sans CJK JP", "Noto Sans JP", "Noto Sans", "Liberation Sans", "Helvetica", "Arial", sans-serif;
+}
+
+:lang(ja) h1, :lang(ja) h2, :lang(ja) h3, :lang(ja) h4,
+html:lang(ja) h1, html:lang(ja) h2, html:lang(ja) h3, html:lang(ja) h4,
+body:lang(ja) h1, body:lang(ja) h2, body:lang(ja) h3, body:lang(ja) h4 {
+    font-family: "Yu Gothic Medium", "Yu Gothic", "YuGothic", "Yu Gothic UI", "Meiryo", "Noto Sans CJK JP", "Noto Sans JP", "Noto Sans", "Liberation Sans", "Helvetica", "Arial", sans-serif;
+}
+
+
