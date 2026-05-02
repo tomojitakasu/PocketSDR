@@ -37,7 +37,7 @@ def plot_psd(fig, rect, IQ, fs, fc, bc):
     plt.xticks(xt, ("%.0f" % (x * 1e-6) for x in xt))
     plt.yticks(yt)
     ax.set_xlim(xl)
-    ax.set_ylim(yl)
+    #ax.set_ylim(yl)
     ax.grid(True, lw=0.4)
     p = ax.text(0.97, 0.97, '', ha='right', va='top', color=fc, transform=ax.transAxes)
     return ax, p
@@ -56,9 +56,11 @@ def update_psd(ax, p, data, IQ, fs, time, N, fc):
 # plot histgram ----------------------------------------------------------------
 def plot_hist_d(fig, rect, text, fc, bc):
     ax = fig.add_axes(rect, facecolor=bc)
-    ax.set_xticks(np.arange(-5, 6, 1))
-    ax.set_xlim([-5, 5])
-    ax.set_ylim([0, 0.5])
+    #ax.set_xticks(np.arange(-5, 6, 1))
+    #ax.set_xlim([-5, 5])
+    #ax.set_ylim([0, 0.5])
+    ax.set_xlim([-130, 130])
+    ax.set_ylim([0, 0.02])
     ax.tick_params(labelleft=False)
     if text == 'I':
         ax.tick_params(labelbottom=False)
@@ -84,7 +86,8 @@ def update_hist_d(ax, p, data, fc):
     for q in ax.patches:
         q.remove()
     if len(data) > 0:
-        bins = np.arange(-5.5, 6.5, 1)
+        #bins = np.arange(-5.5, 6.5, 1)
+        bins = np.arange(-130, 135, 5)
         plt.sca(ax)
         plt.hist(data, bins=bins, density=True, rwidth=0.7, color=fc)
         p.set_text('OFFSET = %.3f\nSIGMA = %.3f' % (np.mean(data), np.std(data)))
