@@ -208,130 +208,182 @@ static int kf_update(sdr_array_t *array, const obsd_t *obs, int nobs,
     return 1;
 }
 
-//------------------------------------------------------------------------------
-//  Allocate and initialize antenna array. Beam-forming requires rcv != NULL
-//  and narch > 0 (uses rcv->nrfch, rcv->fs, rcv->rfch[], rcv->mtx).
-//  Calibration alone works with rcv == NULL and narch == 0 (e.g., pocket_calib).
-//
-//  args:
-//      rcv      (I)   back-pointer to SDR receiver (NULL = standalone, no
-//                     beam-forming)
-//      freq     (I)   frequency index (0:L1, 1:L2, ...)
-//      narch    (I)   number of array channels (0..SDR_MAX_ARCH; 0 = no
-//                     beam-forming)
-//      ant_ena  (I)   antenna enable flags (SDR_MAX_RFCH ints; ant_ena[0]=1
-//                     required for reference CH)
-//      ant_pos  (I)   antenna positions in body frame (m), or NULL for zeros
-//
-//  returns: allocated sdr_array_t (NULL: error). When rcv is provided and
-//      narch > 0, all array CH beams are initialized to default zenith
-//      (equal-weight L1 sum, scale=1/rcv->nrfch).
-//
-sdr_array_t *sdr_array_new(sdr_rcv_t *rcv, int freq, int narch,
-    const int *ant_ena, double ant_pos[][3])
+// allocate and initialize antenna array ---------------------------------------
+sdr_array_t *sdr_array_new(sdr_rcv_t *rcv, int freq)
 {
-    if (!ant_ena || !ant_ena[0]) return NULL; // CH1 must be enabled
-    if (narch < 0 || narch > SDR_MAX_ARCH) return NULL;
-    
     sdr_array_t *array = (sdr_array_t *)sdr_malloc(sizeof(sdr_array_t));
     array->rcv = rcv;
     array->freq = freq;
-    array->narch = narch;
     for (int i = 0; i < SDR_MAX_RFCH; i++) {
-        array->ant_ena[i] = ant_ena[i];
-        if (ant_pos) matcpy(array->ant_pos[i], ant_pos[i], 3, 1);
+        array->ant_ena[i] = (rcv && i < rcv->nrfch);
     }
-    // initialize all array CH beams to default zenith (equal-weight L1 sum)
-    if (rcv && narch > 0) {
-        for (int m = 0; m < narch; m++) {
-            array->arch[m].scale = 1.0 / rcv->nrfch;
-            sdr_array_set_beam(array, m, 0.0, PI / 2, array->arch[m].scale);
+    if (rcv && rcv->narch > 0) {
+        for (int m = 0; m < rcv->narch; m++) {
+            rcv->arch[m].scale = 1.0 / rcv->nrfch;
+            sdr_arch_set_beam(rcv->arch + m, array, 0.0, PI / 2,
+                rcv->arch[m].scale);
         }
     }
     return array;
 }
 
-//------------------------------------------------------------------------------
-//  Free antenna array.
-//
-//  args:
-//      array    (I)   antenna array
-//
-//  returns:
-//      none
-//
-void sdr_array_free(sdr_array_t *array)
+// set antenna element positions and enable flags ------------------------------
+int sdr_array_ant_pos(sdr_array_t *array, int nrfch, const double *ant_pos,
+    const int *ant_ena)
 {
-    if (!array) return;
-    for (int m = 0; m < SDR_MAX_ARCH; m++) sdr_free(array->arch[m].w);
-    sdr_free(array);
-}
+    if (!array || nrfch < 1 || nrfch > SDR_MAX_RFCH) return 0;
+    if (ant_ena && !ant_ena[0]) return 0;
 
-// install precomputed weights atomically; frees previous w. Caller-locked.-----
-static int install_beam(sdr_array_t *array, int m, double az, double el,
-    int16_t *w)
-{
-    if (!array || m < 0 || m >= SDR_MAX_ARCH) {
-        sdr_free(w);
-        return 0;
+    if (ant_pos) matcpy(&array->ant_pos[0][0], ant_pos, nrfch * 3, 1);
+    if (ant_ena) {
+        for (int i = 0; i < nrfch; i++) array->ant_ena[i] = ant_ena[i] ? 1 : 0;
     }
-    int16_t *old = array->arch[m].w;
-    array->arch[m].az = az;
-    array->arch[m].el = el;
-    array->arch[m].w = w;
-    sdr_free(old);
     return 1;
 }
 
-//------------------------------------------------------------------------------
-//  Set beam direction for an array CH. Computes beam-forming weights from the
-//  current array state (rpy/bias from EKF state, ant_pos from geometry) and
-//  the RF CH info accessed via array->rcv. Atomically installs under
-//  array->rcv->mtx.
-//
-//  args:
-//      array    (IO)  antenna array
-//      m        (I)   array CH index (0..narch-1)
-//      az       (I)   beam azimuth in local ENU (rad, from N CW positive)
-//      el       (I)   beam elevation (rad, above horizon)
-//      scale    (I)   per-CH weight magnitude. <=0 to disable (frees w).
-//
-//  returns: 1:OK, 0:error
-//
-int sdr_array_set_beam(sdr_array_t *array, int m, double az, double el,
-    double scale)
+// free antenna array -----------------------------------------------------------
+void sdr_array_free(sdr_array_t *array)
 {
-    if (!array || !array->rcv || m < 0 || m >= SDR_MAX_ARCH) return 0;
-    sdr_rcv_t *rcv = array->rcv;
-    int nrfch = rcv->nrfch;
-    sdr_mutex_t *mtx = &rcv->mtx;
-    
-    // disable: free weight buffer
-    if (scale <= 0.0) {
-        sdr_mutex_lock(mtx);
-        int ok = install_beam(array, m, az, el, NULL);
-        sdr_mutex_unlock(mtx);
-        return ok;
+    if (!array) return;
+    sdr_free(array);
+}
+
+// calibrate antenna array ------------------------------------------------------
+int sdr_array_calib(sdr_array_t *array, const obsd_t *obs, int nobs,
+    const nav_t *nav, const double *rr)
+{
+    if (!array || nobs <= 0) return 0;
+
+    int nrfch = array->rcv ? array->rcv->nrfch : SDR_MAX_RFCH, nant = 0;
+    for (int i = 0; i < nrfch; i++) {
+        if (array->ant_ena[i]) nant = i + 1;
     }
-    // snapshot rpy/bias/ant_pos under lock
-    double rpy[3], bias[SDR_MAX_RFCH], ant_pos[SDR_MAX_RFCH][3];
-    sdr_mutex_lock(mtx);
+    if (nant < 2) return 0;
+
+    obsd_t *obs_f = (obsd_t *)sdr_malloc(sizeof(obsd_t) * nobs);
+    int nf = 0;
+    for (int i = 0; i < nobs; i++) {
+        int a = obs[i].rcv - 1;
+        if (a >= 0 && a < nrfch && array->ant_ena[a]) obs_f[nf++] = obs[i];
+    }
+    if (nf <= 0) {
+        sdr_free(obs_f);
+        return 0;
+    }
+
+    int ret;
+    if (array->P[0] == 0.0) {
+        ret = kf_init(array, obs_f, nf, nav, rr);
+    } else {
+        ret = kf_update(array, obs_f, nf, nav, rr);
+    }
+    sdr_free(obs_f);
+    return ret;
+}
+
+// reset calibration state ------------------------------------------------------
+static void reset_calib(sdr_array_t *array)
+{
+    memset(array->x, 0, sizeof(array->x));
+    memset(array->P, 0, sizeof(array->P));
+    array->nep = 0;
+    array->rms = 0.0;
+}
+
+// configure array calibration --------------------------------------------------
+int sdr_array_config(sdr_array_t *array, int nrfch, const double *rpy,
+    const double *bias, int run)
+{
+    if (!array || nrfch < 2) return 0;
+
+    if (run == 2) {
+        reset_calib(array);
+        array->calib_run = 0;
+    }
+    if (run == 1) reset_calib(array);
+    if (rpy && bias) {
+        reset_calib(array);
+        matcpy(array->x, rpy, 3, 1);
+        matcpy(array->x + 3, bias, nrfch, 1);
+        for (int i = 0; i < NX; i++) {
+            array->P[i + i*NX] = (i < 3) ? 1e-2 : 1e-4;
+        }
+    }
+    if (run == 0 || run == 1) array->calib_run = run;
+    return 1;
+}
+
+// get array calibration state --------------------------------------------------
+int sdr_array_stat(sdr_array_t *array, double *rpy, double *bias, double *rms,
+    int *nep)
+{
+    if (!array || !array->rcv) return 0;
+    int nrfch = array->rcv->nrfch;
+
     matcpy(rpy, array->x, 3, 1);
-    bias[0] = 0.0; // reference CH (always 0)
+    bias[0] = 0.0;
+    matcpy(bias + 1, array->x + 4, nrfch - 1, 1);
+    *rms = array->rms;
+    *nep = array->nep;
+    return array->calib_run;
+}
+
+// run one receiver array calibration epoch -------------------------------------
+void sdr_array_step(sdr_array_t *array, const obsd_t *obs, int nobs,
+    const nav_t *nav, const double *rr)
+{
+    if (!array || !array->calib_run || nobs <= 0) return;
+    if (norm(rr, 3) < 1e-6) return;
+
+    if (sdr_array_calib(array, obs, nobs, nav, rr)) array->nep++;
+}
+
+// install beam weights. caller locked. ----------------------------------------
+static int install_beam(sdr_arch_t *arch, double az, double el, double scale,
+    const int16_t *w, int nrfch)
+{
+    if (!arch) return 0;
+    arch->az = az;
+    arch->el = el;
+    arch->scale = scale;
+    memset(arch->w, 0, sizeof(arch->w));
+    if (w && nrfch > 0) {
+        memcpy(arch->w, w, sizeof(int16_t) * nrfch * 2);
+    }
+    return 1;
+}
+
+// free array CH beam state -----------------------------------------------------
+void sdr_arch_free(sdr_arch_t *arch)
+{
+    if (!arch) return;
+    arch->az = arch->el = arch->scale = 0.0;
+    memset(arch->w, 0, sizeof(arch->w));
+}
+
+// set array CH beam ------------------------------------------------------------
+int sdr_arch_set_beam(sdr_arch_t *arch, const sdr_array_t *array, double az,
+    double el, double scale)
+{
+    if (!arch || !array || !array->rcv) return 0;
+    const sdr_rcv_t *rcv = array->rcv;
+    int nrfch = rcv->nrfch;
+
+    if (scale <= 0.0) return install_beam(arch, az, el, 0.0, NULL, 0);
+
+    double rpy[3], bias[SDR_MAX_RFCH], ant_pos[SDR_MAX_RFCH][3];
+    matcpy(rpy, array->x, 3, 1);
+    bias[0] = 0.0;
     matcpy(bias + 1, array->x + 4, nrfch - 1, 1);
     matcpy(&ant_pos[0][0], &array->ant_pos[0][0], nrfch * 3, 1);
-    sdr_mutex_unlock(mtx);
-    
-    // body->ENU rotation, beam direction in body frame: e_body = R^T * e_enu
+
     double R[9], Dr[9], Dp[9], Dy[9], e_enu[3], e_body[3];
-    euler_rot(rpy, R, Dr, Dp, Dy); // partials unused
-    // compass az (CW from N) -> ENU: E = sin(az)*cos(el), N = cos(az)*cos(el)
+    euler_rot(rpy, R, Dr, Dp, Dy);
     e_enu[0] = sin(az) * cos(el);
     e_enu[1] = cos(az) * cos(el);
     e_enu[2] = sin(el);
     matmul("TN", 3, 1, 3, 1.0, R, e_enu, 0.0, e_body);
-    
-    // bit-range expansion gain: smallest bits among participating L1 RF CHs
+
     int bits_min = 4;
     for (int a = 0; a < nrfch; a++) {
         int rtoc = (rcv->rfch[a].IQ == 1);
@@ -343,138 +395,68 @@ int sdr_array_set_beam(sdr_array_t *array, int m, double az, double el,
         }
     }
     double bit_gain = (bits_min < 4) ? 7.0 / (double)((1 << bits_min) - 1) : 1.0;
-    
-    // compute and quantize weights
+
     double lam = CLIGHT / ARRAY_FREQ;
-    int16_t *w = (int16_t *)sdr_malloc(sizeof(int16_t) * nrfch * 2);
+    int16_t w[SDR_MAX_RFCH * 2] = {0};
     for (int a = 0; a < nrfch; a++) {
         int rtoc = (rcv->rfch[a].IQ == 1);
         double f_eff = rcv->rfch[a].fo + (rtoc ? rcv->fs * 0.25 : 0.0);
         if (fabs(f_eff - ARRAY_FREQ) > ARRAY_FREQ_TOL || !array->ant_ena[a]) {
-            w[a*2] = 0; w[a*2+1] = 0; // not on L1 or CH disabled
+            w[a*2] = 0; w[a*2+1] = 0;
             continue;
         }
         double b_body[3];
         for (int k = 0; k < 3; k++) b_body[k] = ant_pos[a][k] - ant_pos[0][k];
         double proj = e_body[0]*b_body[0] + e_body[1]*b_body[1] +
             e_body[2]*b_body[2];
-        // coherent weight w_a = exp(-j*2π/λ*proj_a) cancels the arrival phase
-        // 2π/λ*proj_a; bias compensates per-CH H/W delay (calibrated value).
-        double phi = -2.0 * PI * (proj - bias[a]) / lam;
+        double phi = -2.0 * PI * (proj + bias[a]) / lam;
         double wr = scale * bit_gain * cos(phi) * ARRAY_W_SCALE;
         double wi = scale * bit_gain * sin(phi) * ARRAY_W_SCALE;
-        if (wr >  32767.0) wr =  32767.0;
-        else if (wr < -32768.0) wr = -32768.0;
-        if (wi >  32767.0) wi =  32767.0;
-        else if (wi < -32768.0) wi = -32768.0;
+        wr = CLIP(wr, -32768.0, 32767.0);
+        wi = CLIP(wi, -32768.0, 32767.0);
         w[a*2  ] = (int16_t)floor(wr + 0.5);
         w[a*2+1] = (int16_t)floor(wi + 0.5);
     }
-    // atomic install (frees old w)
-    sdr_mutex_lock(mtx);
-    int ok = install_beam(array, m, az, el, w);
-    sdr_mutex_unlock(mtx);
-    return ok;
+    return install_beam(arch, az, el, scale, w, nrfch);
 }
 
-//------------------------------------------------------------------------------
-//  Get current beam direction for an array CH.
-//
-int sdr_array_get_beam(const sdr_array_t *array, int m, double *az, double *el)
+// get array CH beam ------------------------------------------------------------
+int sdr_arch_get_beam(const sdr_arch_t *arch, double *az, double *el)
 {
-    if (!array || m < 0 || m >= SDR_MAX_ARCH) return 0;
-    if (az) *az = array->arch[m].az;
-    if (el) *el = array->arch[m].el;
+    if (!arch) return 0;
+    *az = arch->az;
+    *el = arch->el;
     return 1;
 }
 
-//------------------------------------------------------------------------------
-//  Combine RF CH IF data into array CH IF data using current beam weights.
-//  Reads rcv->buff, rcv->N via array->rcv. Snapshots weights atomically
-//  (under rcv->mtx) then performs combination without lock.
-//
-//  args:
-//      array    (I)   antenna array (must have rcv != NULL)
-//      base     (I)   starting offset in each buffer
-//
-void sdr_array_combine(sdr_array_t *array, int base)
+// combine RF CHs into array CH -------------------------------------------------
+void sdr_arch_combine(const sdr_arch_t *arch, const sdr_array_t *array, int base)
 {
-    if (!array || !array->rcv) return;
+    if (!arch || !array || !array->rcv || arch->scale <= 0.0) return;
     sdr_rcv_t *rcv = array->rcv;
-    int nrfch = rcv->nrfch, narch = array->narch, N = rcv->N;
-    if (narch <= 0 || nrfch < 2) return;
-    sdr_buff_t **buff = rcv->buff;
-    int16_t w_snap[SDR_MAX_ARCH][SDR_MAX_RFCH * 2];
-    int active[SDR_MAX_ARCH] = {0}, any = 0;
-    
-    sdr_mutex_lock(&rcv->mtx);
-    for (int m = 0; m < narch; m++) {
-        if (array->arch[m].w) {
-            memcpy(w_snap[m], array->arch[m].w,
-                sizeof(int16_t) * nrfch * 2);
-            active[m] = 1;
-            any = 1;
-        }
-    }
-    sdr_mutex_unlock(&rcv->mtx);
-    if (!any) return;
-    
-    for (int m = 0; m < narch; m++) {
-        if (!active[m]) continue;
-        const int16_t *w = w_snap[m];
-        sdr_cpx8_t *out = buff[nrfch + m]->data + base;
-        const sdr_cpx8_t *in[SDR_MAX_RFCH];
-        for (int a = 0; a < nrfch; a++) in[a] = buff[a]->data + base;
-        
-        for (int i = 0; i < N; i++) {
-            int32_t sum_re = 0, sum_im = 0;
-            for (int a = 0; a < nrfch; a++) {
-                int8_t I = SDR_CPX8_I(in[a][i]);
-                int8_t Q = SDR_CPX8_Q(in[a][i]);
-                int32_t wr = w[a*2], wi = w[a*2+1];
-                sum_re += (int32_t)I * wr - (int32_t)Q * wi;
-                sum_im += (int32_t)I * wi + (int32_t)Q * wr;
-            }
-            sum_re += (sum_re >= 0 ? ARRAY_W_SCALE/2 : -(ARRAY_W_SCALE/2));
-            sum_im += (sum_im >= 0 ? ARRAY_W_SCALE/2 : -(ARRAY_W_SCALE/2));
-            sum_re /= ARRAY_W_SCALE;
-            sum_im /= ARRAY_W_SCALE;
-            sum_re = CLIP(sum_re, -8, 7);
-            sum_im = CLIP(sum_im, -8, 7);
-            out[i] = SDR_CPX8(sum_re, sum_im);
-        }
-    }
-}
+    int nrfch = rcv->nrfch, N = rcv->N;
+    int m = (int)(arch - rcv->arch);
+    if (m < 0 || m >= rcv->narch || nrfch < 2) return;
 
-//------------------------------------------------------------------------------
-//  Calibrate antenna array hardware delays and attitude (per-epoch EKF).
-//
-//  Maintains an EKF state across calls. The first call (P all zero) initializes
-//  the attitude by a yaw grid search with NLSQ on this epoch's data and selects
-//  the yaw with the smallest residual RMS. Subsequent calls run a standard
-//  EKF predict (random walk) + update on the new epoch's measurements.
-//
-//  args:
-//      array    (IO)  antenna array state. ant_pos is input (element positions
-//                     in body frame, m; X=right, Y=forward, Z=up). x, P, rms
-//                     are updated. Pass with x and P zero-initialized on the
-//                     first call to trigger initialization. Number of array
-//                     elements is derived as max enabled index in ant_ena[]+1.
-//      obs      (I)   single-epoch obs data (length nobs); .rcv = element no
-//      nobs     (I)   number of obs data in the epoch
-//      nav      (I)   navigation data
-//      rr       (I)   receiver ECEF position {x,y,z} (m)
-//
-//  returns: status (1:ok, 0:error)
-//
-int sdr_array_calib(sdr_array_t *array, const obsd_t *obs, int nobs,
-    const nav_t *nav, const double *rr)
-{
-    if (!array || nobs <= 0) return 0;
-    
-    if (array->P[0] == 0.0) {
-        return kf_init(array, obs, nobs, nav, rr);
-    } else {
-        return kf_update(array, obs, nobs, nav, rr);
+    sdr_cpx8_t *out = rcv->buff[nrfch + m]->data + base;
+    const sdr_cpx8_t *in[SDR_MAX_RFCH];
+    for (int a = 0; a < nrfch; a++) in[a] = rcv->buff[a]->data + base;
+
+    for (int i = 0; i < N; i++) {
+        int32_t sum_re = 0, sum_im = 0;
+        for (int a = 0; a < nrfch; a++) {
+            int8_t I = SDR_CPX8_I(in[a][i]);
+            int8_t Q = SDR_CPX8_Q(in[a][i]);
+            int32_t wr = arch->w[a*2], wi = arch->w[a*2+1];
+            sum_re += (int32_t)I * wr - (int32_t)Q * wi;
+            sum_im += (int32_t)I * wi + (int32_t)Q * wr;
+        }
+        sum_re += (sum_re >= 0 ? ARRAY_W_SCALE/2 : -(ARRAY_W_SCALE/2));
+        sum_im += (sum_im >= 0 ? ARRAY_W_SCALE/2 : -(ARRAY_W_SCALE/2));
+        sum_re /= ARRAY_W_SCALE;
+        sum_im /= ARRAY_W_SCALE;
+        sum_re = CLIP(sum_re, -8, 7);
+        sum_im = CLIP(sum_im, -8, 7);
+        out[i] = SDR_CPX8(sum_re, sum_im);
     }
 }

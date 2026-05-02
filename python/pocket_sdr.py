@@ -481,45 +481,42 @@ def get_corr_hist(rcv, ch, tspan):
     return stat[0], stat[1], P[:n] if n > 0 else P[:2] # time, T, P
 
 # array calibration ------------------------------------------------------------
-def array_calib(rcv, ant_pos, rpy, bias, rr, run):
+def array_calib(rcv, rpy, bias, run):
     libsdr.sdr_rcv_array_calib.argtypes = (c_void_p, POINTER(c_double),
-        POINTER(c_double), POINTER(c_double), POINTER(c_double), c_int32)
-    c_pos = (c_double * len(ant_pos))(*ant_pos) if ant_pos is not None else None
+        POINTER(c_double), c_int32)
     c_rpy = (c_double * 3)(*rpy) if rpy is not None else None
     c_bias = (c_double * len(bias))(*bias) if bias is not None else None
-    c_rr = (c_double * 3)(*rr) if rr is not None else None
-    return libsdr.sdr_rcv_array_calib(rcv, c_pos, c_rpy, c_bias, c_rr, run)
+    return libsdr.sdr_rcv_array_calib(rcv, c_rpy, c_bias, run)
 
 # start array calibration ------------------------------------------------------
-def array_calib_start(rcv, ant_pos):
-    return array_calib(rcv, ant_pos, None, None, None, 1)
+def array_calib_start(rcv):
+    return array_calib(rcv, None, None, 1)
 
 # stop array calibration -------------------------------------------------------
 def array_calib_stop(rcv):
-    return array_calib(rcv, None, None, None, None, 0)
+    return array_calib(rcv, None, None, 0)
 
 # inject calibration values ----------------------------------------------------
-def array_calib_set(rcv, rpy, bias, rr=None):
-    return array_calib(rcv, None, rpy, bias, rr, -1)
+def array_calib_set(rcv, rpy, bias):
+    return array_calib(rcv, rpy, bias, -1)
 
 # clear calibration state ------------------------------------------------------
 def array_calib_clear(rcv):
-    return array_calib(rcv, None, None, None, None, 2)
+    return array_calib(rcv, None, None, 2)
 
 # get array calibration status -------------------------------------------------
 def array_calib_stat(rcv):
     rpy = np.zeros(3, dtype='float64')
     bias = np.zeros(MAX_RFCH, dtype='float64')
-    rr = np.zeros(3, dtype='float64')
     rms = c_double(0.0)
     nep = c_int32(0)
     libsdr.sdr_rcv_array_stat.argtypes = (c_void_p,
         ctypeslib.ndpointer('float64'), ctypeslib.ndpointer('float64'),
-        ctypeslib.ndpointer('float64'), POINTER(c_double), POINTER(c_int32))
-    run = libsdr.sdr_rcv_array_stat(rcv, rpy, bias, rr, byref(rms), byref(nep))
+        POINTER(c_double), POINTER(c_int32))
+    run = libsdr.sdr_rcv_array_stat(rcv, rpy, bias, byref(rms), byref(nep))
     if run < 0:
         return None
-    return run, rpy, bias, rr, rms.value, nep.value
+    return run, rpy, bias, rms.value, nep.value
 
 # set array CH beam direction (uses current calibration) -----------------------
 def array_set_beam(rcv, ach, az, el):
@@ -537,19 +534,20 @@ def array_get_beam(rcv, ach):
         return None
     return az.value, el.value
 
-# set per-RF-CH enable mask for array (combine + calibration) ------------------
-def array_set_rfch_ena(rcv, ena):
+# set array element positions and enable flags ---------------------------------
+def array_ant_pos(rcv, ant_pos, ena):
     n = len(ena)
+    c_pos = (c_double * len(ant_pos))(*ant_pos)
     c_ena = (c_int32 * n)(*[int(x) for x in ena])
-    libsdr.sdr_rcv_array_set_ena.argtypes = (c_void_p, POINTER(c_int32),
-        c_int32)
-    return libsdr.sdr_rcv_array_set_ena(rcv, c_ena, n)
+    libsdr.sdr_rcv_array_ant_pos.argtypes = (c_void_p, POINTER(c_double),
+        POINTER(c_int32))
+    return libsdr.sdr_rcv_array_ant_pos(rcv, c_pos, c_ena)
 
-# save current calibration state to file (rpy in rad, bias in m, rr ECEF m) --
+# save current calibration state to file (rpy in rad, bias in m) --------------
 def array_calib_save_file(rcv, file=CALIB_FILE):
     stat = array_calib_stat(rcv)
     if not stat: return False
-    run, rpy, bias, rr, rms, nep = stat
+    run, rpy, bias, rms, nep = stat
     
     # only save if calibration produced data
     if nep <= 0 and abs(rpy[0]) + abs(rpy[1]) + abs(rpy[2]) < 1e-9:
@@ -562,8 +560,6 @@ def array_calib_save_file(rcv, file=CALIB_FILE):
             f.write('%.9f %.9f %.9f\n' % (rpy[0], rpy[1], rpy[2]))
             f.write('# Bias CH1..CHn (m)\n')
             f.write(' '.join('%.9f' % b for b in bias) + '\n')
-            f.write('# Receiver ECEF X Y Z (m)\n')
-            f.write('%.4f %.4f %.4f\n' % (rr[0], rr[1], rr[2]))
         return True
     except OSError:
         return False
@@ -579,12 +575,8 @@ def array_calib_load_file(rcv, file=CALIB_FILE):
         if len(lines) < 2: return False
         rpy = [float(x) for x in lines[0].split()][:3]
         bias = [float(x) for x in lines[1].split()]
-        rr = None
-        if len(lines) >= 3:
-            v = [float(x) for x in lines[2].split()][:3]
-            if len(v) == 3: rr = v
         if len(rpy) < 3 or len(bias) < 1: return False
-        return bool(array_calib_set(rcv, rpy, bias, rr))
+        return bool(array_calib_set(rcv, rpy, bias))
     except (OSError, ValueError):
         return False
 
@@ -1812,8 +1804,8 @@ def on_array_calib_toggle(e, p):
         ant_pos, ena = array_read_opt()
         if sum(ena) < 2:
             return
-        array_set_rfch_ena(rcv_body, ena)
-        if not array_calib_start(rcv_body, ant_pos):
+        array_ant_pos(rcv_body, ant_pos, ena)
+        if not array_calib_start(rcv_body):
             return
         p.btn_calib.configure(text='Stop')
     else:
@@ -1826,14 +1818,14 @@ def on_beam_update(e, p, idx):
     az = to_float(p.beam_az[idx].get()) * D2R
     el = to_float(p.beam_el[idx].get()) * D2R
     ant_pos, ena = array_read_opt()
-    array_set_rfch_ena(rcv_body, ena)
+    array_ant_pos(rcv_body, ant_pos, ena)
     array_set_beam(rcv_body, idx, az, el)
 
 # update Array page ------------------------------------------------------------
 def update_array_page(p):
     stat = array_calib_stat(rcv_body)
     if not stat: return
-    run, rpy, bias, rr, rms, nep = stat
+    run, rpy, bias, rms, nep = stat
     text1 = 'CALIB: %s  EPOCHS: %3d  RMS: %6.4f m' % (
         'RUN...' if run else 'STOP', nep, rms)
     text2 = 'ROLL:%8.3f\xb0  PITCH:%8.3f\xb0  YAW:%8.3f\xb0\n' % (rpy[0] / D2R,
@@ -1915,10 +1907,10 @@ def on_btn_start_push(bar):
             return
         # apply enable mask and antenna geometry from array_opt
         ant_pos, ena = array_read_opt()
-        array_set_rfch_ena(rcv_body, ena)
-        
+        array_ant_pos(rcv_body, ant_pos, ena)
+
         # restore array calibration
-        array_calib(rcv_body, ant_pos, None, None, None, -1)
+        array_calib(rcv_body, None, None, -1)
         array_calib_load_file(rcv_body)
         
         status_bar_show('Receiver started. ' + info)
@@ -2135,4 +2127,3 @@ def main():
 #
 if __name__ == '__main__':
     main()
-

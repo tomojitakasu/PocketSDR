@@ -54,7 +54,7 @@ static inline int rtoc_of(const sdr_rcv_t *rcv, int i)
 // number of array channels ----------------------------------------------------
 static inline int rcv_narch(const sdr_rcv_t *rcv)
 {
-    return rcv->array ? rcv->array->narch : 0;
+    return rcv ? rcv->narch : 0;
 }
 
 // append string ---------------------------------------------------------------
@@ -648,6 +648,7 @@ sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
     rcv->fs = fs;
     rcv->nrfch = num_rfch(fmt);
     narch = MIN(narch, SDR_MAX_ARCH);
+    rcv->narch = 0;
     nrfch = rcv->nrfch + narch;
     for (int i = 0; i < rcv->nrfch; i++) {
         rcv->rfch[i].fo = fo[i];
@@ -688,12 +689,9 @@ sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
     snprintf(rcv->opt, sizeof(rcv->opt), "%s", opt);
     sdr_mutex_init(&rcv->mtx);
 
-    // initialize array CH
+    rcv->narch = narch;
     if (narch > 0 && rcv->nrfch > 0) {
-        int ant_ena[SDR_MAX_RFCH] = {0};
-        double ant_pos[SDR_MAX_RFCH][3] = {{0}};
-        for (int i = 0; i < rcv->nrfch; i++) ant_ena[i] = 1;
-        rcv->array = sdr_array_new(rcv, 0, narch, ant_ena, ant_pos);
+        rcv->array = sdr_array_new(rcv, 0);
     }
     return rcv;
 }
@@ -720,6 +718,10 @@ void sdr_rcv_free(sdr_rcv_t *rcv)
     for (int i = 0; i < SDR_MAX_RFCH; i++) {
         sdr_lpf_free(rcv->rfch[i].lpf);
     }
+    for (int m = 0; m < SDR_MAX_ARCH; m++) {
+        sdr_arch_free(rcv->arch + m);
+    }
+    rcv->narch = 0;
     sdr_array_free(rcv->array);
     sdr_free(rcv);
 }
@@ -894,7 +896,11 @@ static void write_buff(sdr_rcv_t *rcv, const uint8_t *raw, int64_t ix)
     // combine RF CH IF data into array CH IF data (multi-CH RAW formats)
     if (rcv->fmt == SDR_FMT_RAW8  || rcv->fmt == SDR_FMT_RAW16 ||
         rcv->fmt == SDR_FMT_RAW16I || rcv->fmt == SDR_FMT_RAW32) {
-        sdr_array_combine(rcv->array, base);
+        sdr_mutex_lock(&rcv->mtx);
+        for (int m = 0; m < rcv->narch; m++) {
+            sdr_arch_combine(rcv->arch + m, rcv->array, base);
+        }
+        sdr_mutex_unlock(&rcv->mtx);
     }
     set_buff_ix(rcv, ix); // update IF data buffer write pointer
 }
@@ -1244,201 +1250,104 @@ int sdr_rcv_set_filt(sdr_rcv_t *rcv, int ch, double bw, double freq, int order)
     return sdr_dev_set_filt((sdr_dev_t *)rcv->dp, ch, bw, freq, order);
 }
 
-//------------------------------------------------------------------------------
-//  Configure array calibration state (unified setter).
-//
-//  Each parameter is independently applied if non-default:
-//    ant_pos != NULL: copy nrfch*3 doubles to array geometry. If run == 1
-//                     concurrently, x/P/nep/rms are reset (start fresh).
-//    rpy && bias != NULL: inject calibration values into state vector with
-//                         small initial covariance. Useful for restoring a
-//                         previously saved calibration.
-//    run: -1 = no change, 0 = stop (keep state), 1 = start, 2 = clear (zero
-//         state and stop).
-//
-//  Common usage:
-//    sdr_rcv_array_calib(rcv, ant_pos, NULL, NULL, 1)  // start fresh
-//    sdr_rcv_array_calib(rcv, NULL, NULL, NULL, 0)     // pause
-//    sdr_rcv_array_calib(rcv, NULL, NULL, NULL, 2)     // clear
-//    sdr_rcv_array_calib(rcv, NULL, rpy, bias, -1)     // inject values
-//
-//  args:
-//      rcv      (I)   SDR receiver
-//      ant_pos  (I)   antenna positions in body frame (nrfch*3 doubles), or NULL
-//      rpy      (I)   attitude {roll, pitch, yaw} (3 doubles), or NULL
-//      bias     (I)   per-RF-CH H/W delay (nrfch doubles), or NULL
-//      run      (I)   run flag control (-1, 0, 1, or 2)
-//
-//  returns: 1:OK, 0:error
-//
-int sdr_rcv_array_calib(sdr_rcv_t *rcv, const double *ant_pos,
-    const double *rpy, const double *bias, int run)
+// convert absolute array CH index to relative index ----------------------------
+static int ach_to_m(const sdr_rcv_t *rcv, int ach)
 {
-    if (!rcv || !rcv->array || rcv->nrfch < 2) return 0;
-    const int nx = 3 + SDR_MAX_RFCH; // fixed state size
-    sdr_mutex_lock(&rcv->mtx);
-    if (run == 2) { // clear
-        memset(rcv->array->x, 0, sizeof(rcv->array->x));
-        memset(rcv->array->P, 0, sizeof(rcv->array->P));
-        rcv->array->nep = 0;
-        rcv->array->rms = 0.0;
-        rcv->array->calib_run = 0;
-    }
-    if (ant_pos) {
-        memcpy(rcv->array->ant_pos, ant_pos, sizeof(double) * rcv->nrfch * 3);
-        if (run == 1) { // start fresh: reset state
-            memset(rcv->array->x, 0, sizeof(rcv->array->x));
-            memset(rcv->array->P, 0, sizeof(rcv->array->P));
-            rcv->array->nep = 0;
-            rcv->array->rms = 0.0;
-        }
-    }
-    if (rpy && bias) {
-        rcv->array->x[0] = rpy[0];
-        rcv->array->x[1] = rpy[1];
-        rcv->array->x[2] = rpy[2];
-        // bias[0] is reference (always 0), bias[1..nrfch-1] for non-reference
-        for (int i = 0; i < rcv->nrfch; i++) {
-            rcv->array->x[3 + i] = bias[i];
-        }
-        memset(rcv->array->P, 0, sizeof(rcv->array->P));
-        for (int i = 0; i < 3; i++) rcv->array->P[i + i*nx] = 1e-2;
-        for (int i = 3; i < nx; i++) rcv->array->P[i + i*nx] = 1e-4;
-        rcv->array->nep = 0;
-        rcv->array->rms = 0.0;
-    }
-    if (run == 0 || run == 1) {
-        rcv->array->calib_run = run;
-    }
-    sdr_mutex_unlock(&rcv->mtx);
-    return 1;
+    int m = ach - rcv->nrfch;
+    return (m >= 0 && m < rcv->narch) ? m : -1;
 }
 
-//------------------------------------------------------------------------------
-//  Get current array calibration state. Pass NULL to skip a field.
-//
-//  args:
-//      rcv      (I)   SDR receiver
-//      rpy      (O)   attitude {roll, pitch, yaw} (rad) (3 doubles), or NULL.
-//                     Yaw is CCW positive looking from +Z (right-hand rule);
-//                     opposite sign of compass heading.
-//      bias     (O)   per-RF-CH H/W delay wrt CH1 (nrfch doubles, m), or NULL
-//      rms      (O)   latest residual RMS (m), or NULL
-//      nep      (O)   epochs processed, or NULL
-//
-//  returns: 1:OK, 0:error
-//
-int sdr_rcv_array_stat(sdr_rcv_t *rcv, double *rpy, double *bias, double *rms,
-    int *nep)
+// refresh all array CH beam weights with current array state. caller-locked. -
+static void refresh_arch_beams(sdr_rcv_t *rcv)
 {
-    if (!rcv || !rcv->array) return 0;
-    sdr_mutex_lock(&rcv->mtx);
-    if (rpy) {
-        rpy[0] = rcv->array->x[0];
-        rpy[1] = rcv->array->x[1];
-        rpy[2] = rcv->array->x[2];
+    if (!rcv || !rcv->array) return;
+    for (int m = 0; m < rcv->narch; m++) {
+        sdr_arch_t *arch = rcv->arch + m;
+        if (arch->scale <= 0.0) continue;
+        sdr_arch_set_beam(arch, rcv->array, arch->az, arch->el, arch->scale);
     }
-    if (bias) {
-        bias[0] = 0.0;
-        for (int i = 1; i < rcv->nrfch; i++) bias[i] = rcv->array->x[3 + i];
-    }
-    if (rms) *rms = rcv->array->rms;
-    if (nep) *nep = rcv->array->nep;
-    sdr_mutex_unlock(&rcv->mtx);
-    return 1;
 }
 
-//------------------------------------------------------------------------------
-//  Set array CH beam direction using current calibration state.
-//
-//  args:
-//      rcv      (I)   SDR receiver
-//      ach      (I)   absolute CH index (nrfch <= ach < nrfch+narch)
-//      az       (I)   beam azimuth in local ENU (rad, from N, CW positive)
-//      el       (I)   beam elevation (rad)
-//
-//  returns: 1:OK, 0:error
-//
-int sdr_rcv_array_set_beam(sdr_rcv_t *rcv, int ach, double az, double el)
+// set receiver array element positions and enable flags ------------------------
+int sdr_rcv_array_ant_pos(sdr_rcv_t *rcv, const double *ant_pos,
+    const int *ant_ena)
 {
-    if (!rcv || !rcv->array) return 0;
-    int nrfch = rcv->nrfch;
-    if (ach < nrfch || ach >= nrfch + rcv_narch(rcv)) return 0;
-    int m = ach - nrfch;
-    double scale = (rcv->array->arch[m].scale > 0.0) ?
-        rcv->array->arch[m].scale : 1.0 / nrfch;
-    return sdr_array_set_beam(rcv->array, m, az, el, scale);
-}
+    sdr_array_t *array = rcv ? rcv->array : NULL;
+    if (!array) return 0;
 
-//------------------------------------------------------------------------------
-//  Get current beam direction for an array CH (last set via set_beam).
-//
-int sdr_rcv_array_get_beam(sdr_rcv_t *rcv, int ach, double *az, double *el)
-{
-    if (!rcv || !az || !el) return 0;
-    int nrfch = rcv->nrfch;
-    if (ach < nrfch || ach >= nrfch + rcv_narch(rcv)) return 0;
     sdr_mutex_lock(&rcv->mtx);
-    int ret = sdr_array_get_beam(rcv->array, ach - nrfch, az, el);
+    int ret = sdr_array_ant_pos(array, rcv->nrfch, ant_pos, ant_ena);
+    if (ret) refresh_arch_beams(rcv);
     sdr_mutex_unlock(&rcv->mtx);
     return ret;
 }
 
-//------------------------------------------------------------------------------
-//  Set per-RF-CH enable mask for array operations (calibration + combining).
-//  Disabled CHs are excluded from calibration input and have weight=0 in
-//  beam-forming. Default is all enabled.
-//
-int sdr_rcv_array_set_ena(sdr_rcv_t *rcv, const int *ena, int n)
+// configure receiver array calibration ----------------------------------------
+int sdr_rcv_array_calib(sdr_rcv_t *rcv, const double *rpy, const double *bias,
+    int run)
 {
-    if (!rcv || !rcv->array || !ena || n < 0) return 0;
-    if (n > SDR_MAX_RFCH) n = SDR_MAX_RFCH;
+    sdr_array_t *array = rcv ? rcv->array : NULL;
+    if (!array) return 0;
+
     sdr_mutex_lock(&rcv->mtx);
-    for (int i = 0; i < n; i++) rcv->array->ant_ena[i] = ena[i] ? 1 : 0;
+    int ret = sdr_array_config(array, rcv->nrfch, rpy, bias, run);
+    if (ret) refresh_arch_beams(rcv);
     sdr_mutex_unlock(&rcv->mtx);
-    return 1;
+    return ret;
 }
 
-//------------------------------------------------------------------------------
-//  Per-epoch array calibration step. Called by sdr_pvt_udsol() when a new
-//  epoch's obs data and PVT solution are ready and calibration is running.
-//  Disabled RF CHs (per rfch_ena[]) are filtered out before calibration.
-//
+// get receiver array calibration state ----------------------------------------
+int sdr_rcv_array_stat(sdr_rcv_t *rcv, double *rpy, double *bias, double *rms,
+    int *nep)
+{
+    sdr_array_t *array = rcv ? rcv->array : NULL;
+    if (!array) return 0;
+
+    sdr_mutex_lock(&rcv->mtx);
+    int ret = sdr_array_stat(array, rpy, bias, rms, nep);
+    sdr_mutex_unlock(&rcv->mtx);
+    return ret;
+}
+
+// set receiver array CH beam ---------------------------------------------------
+int sdr_rcv_array_set_beam(sdr_rcv_t *rcv, int ach, double az, double el)
+{
+    sdr_array_t *array = rcv ? rcv->array : NULL;
+    if (!array) return 0;
+    int m = ach_to_m(rcv, ach);
+    if (m < 0) return 0;
+    double scale = rcv->arch[m].scale > 0.0 ? rcv->arch[m].scale :
+        1.0 / rcv->nrfch;
+
+    sdr_mutex_lock(&rcv->mtx);
+    int ret = sdr_arch_set_beam(rcv->arch + m, array, az, el, scale);
+    sdr_mutex_unlock(&rcv->mtx);
+    return ret;
+}
+
+// get receiver array CH beam ---------------------------------------------------
+int sdr_rcv_array_get_beam(sdr_rcv_t *rcv, int ach, double *az, double *el)
+{
+    sdr_array_t *array = rcv ? rcv->array : NULL;
+    if (!array) return 0;
+    int m = ach_to_m(rcv, ach);
+    if (m < 0) return 0;
+
+    sdr_mutex_lock(&rcv->mtx);
+    int ret = sdr_arch_get_beam(rcv->arch + m, az, el);
+    sdr_mutex_unlock(&rcv->mtx);
+    return ret;
+}
+
+// run one receiver array calibration epoch -------------------------------------
 void sdr_rcv_array_step(sdr_rcv_t *rcv, const obsd_t *obs, int nobs,
     const nav_t *nav, const double *rr)
 {
-    if (!rcv || !rcv->array || !rcv->array->calib_run || !obs || nobs <= 0 ||
-        !nav || !rr) {
-        return;
-    }
-    if (norm(rr, 3) < 1e-6) return; // need a valid PVT position
-    
-    // determine effective nant: max enabled RF CH (1-indexed). passing
-    // rcv->nrfch when some trailing CHs are disabled would create zero columns
-    // in the LSQ design matrix and make it singular.
-    int nant_eff = 0;
-    for (int i = 0; i < rcv->nrfch; i++) {
-        if (rcv->array->ant_ena[i]) nant_eff = i + 1;
-    }
-    if (nant_eff < 2) return; // need >= 2 enabled CHs
-    
-    // filter obs: only keep entries from enabled RF CHs (1-indexed rcv field)
-    obsd_t *obs_f = (obsd_t *)sdr_malloc(sizeof(obsd_t) * nobs);
-    int n_f = 0;
-    for (int i = 0; i < nobs; i++) {
-        int a = obs[i].rcv - 1;
-        if (a < 0 || a >= rcv->nrfch) continue;
-        if (!rcv->array->ant_ena[a]) continue;
-        obs_f[n_f++] = obs[i];
-    }
-    if (n_f > 0) {
-        sdr_mutex_lock(&rcv->mtx);
-        if (sdr_array_calib(rcv->array, obs_f, n_f, nav, rr)) {
-            rcv->array->nep++;
-        }
-        sdr_mutex_unlock(&rcv->mtx);
-    }
-    sdr_free(obs_f);
+    if (!rcv || !rcv->array) return;
+
+    sdr_mutex_lock(&rcv->mtx);
+    sdr_array_step(rcv->array, obs, nobs, nav, rr);
+    sdr_mutex_unlock(&rcv->mtx);
 }
 
 //------------------------------------------------------------------------------

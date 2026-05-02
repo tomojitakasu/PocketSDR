@@ -395,8 +395,7 @@ static void out_rtcm3_obs(rtcm_t *rtcm, const obs_t *obs, stream_t *str,
     
     if (rcv && strstr(rcv->opt, "-ARRAY")) {
         int staid_save = rtcm->staid;
-        int narch = (rcv->array && rcv->array->narch > 0) ?
-            rcv->array->narch : rcv->nrfch;
+        int narch = (rcv->narch > 0) ? rcv->narch : rcv->nrfch;
         for (int k = 1; k <= narch; k++) {
             rtcm->staid = k; // RF CH as RTCM station ID
             out_rtcm3_msm(rtcm, obs, str, k);
@@ -947,7 +946,6 @@ void sdr_pvt_udsol(sdr_pvt_t *pvt, int64_t ix)
         // update PVT solution
         update_sol(pvt);
         
-        // array calibration step (no-op if not running)
         sdr_rcv_array_step(pvt->rcv, pvt->obs->data, pvt->obs->n,
             pvt->nav, pvt->sol->rr);
         
