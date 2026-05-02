@@ -32,7 +32,6 @@
 *                            update help text
 *-----------------------------------------------------------------------------*/
 #include <signal.h>
-#include <unistd.h>
 #include "rtklib.h"
 
 #define PRGNAME     "str2str"          /* program name */
@@ -360,3 +359,5 @@ int main(int argc, char **argv)
     fprintf(stderr,"stream server stop\n");
     return 0;
 }
+
+

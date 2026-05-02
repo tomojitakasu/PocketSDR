@@ -65,6 +65,7 @@
 #define PRGNAME   "CONVBIN"
 #define TRACEFILE "convbin.trace"
 #define NOUTFILE        9       /* number of output files */
+#define MAX_ARRAY_CH    16      /* max number of array RF channels (staids) */
 
 #ifdef WIN32
 int _CRT_glob = 0; /* disable globbing */
@@ -173,6 +174,9 @@ static const char *help[]={
 "     -i ifile     Output NavIC NAV file path (RINEX ver.3)",
 "     -s sfile     Output SBAS message file path",
 "     -trace level Output debug trace level [off]",
+"     -array       Split RTCM3 input by station ID (RF CH) and produce",
+"                  per-CH RINEX files (\"_CHn\" inserted before extension).",
+"                  Requires RTCM3 input. [off]",
 "     -ver         Print version",
 "",
 " If the input file path contains wild-card(s) (*), multiple files matching to",
@@ -230,19 +234,71 @@ static void strcpy_n(char *dst, const char *src, int max_len)
 {
     sprintf(dst,"%.*s",max_len,src);
 }
+/* insert "_CHn" before extension in file path -------------------------------*/
+static void insert_ch_suffix(char *dst, const char *src, int ch, int max_len)
+{
+    const char *ext=strrchr(src,'.');
+    const char *sep1=strrchr(src,'/'),*sep2=strrchr(src,'\\');
+    const char *sep=sep1>sep2?sep1:sep2;
+    if (ext&&(!sep||ext>sep)) {
+        snprintf(dst,max_len,"%.*s_CH%d%s",(int)(ext-src),src,ch,ext);
+    }
+    else {
+        snprintf(dst,max_len,"%s_CH%d",src,ch);
+    }
+}
+/* read one RTCM3 frame into buff[] (returns frame length incl. 6-byte wrap) -*/
+static int read_rtcm3_frame(FILE *fp, uint8_t *buff, int max_len)
+{
+    int c,len;
+    while ((c=fgetc(fp))!=EOF) {
+        if (c!=0xD3) continue;
+        buff[0]=0xD3;
+        if (fread(buff+1,1,2,fp)!=2) return 0;
+        len=((buff[1]&0x03)<<8)|buff[2];
+        if (len<3||len+6>max_len) continue;
+        if (fread(buff+3,1,len+3,fp)!=(size_t)(len+3)) return 0;
+        return len+6;
+    }
+    return 0;
+}
+/* scan RTCM3 file and collect distinct staids from MSM messages -------------*/
+static int scan_rtcm3_staids(const char *ifile, int *staids, int max)
+{
+    FILE *fp;
+    uint8_t buff[1030];
+    int n=0,flen,msg,staid,i;
+    if (!(fp=fopen(ifile,"rb"))) return 0;
+    while (n<max&&(flen=read_rtcm3_frame(fp,buff,sizeof(buff)))>0) {
+        msg=(buff[3]<<4)|(buff[4]>>4);
+        if (msg<1071||msg>1137) continue;    /* only MSM carries staid here */
+        staid=((buff[4]&0x0F)<<8)|buff[5];
+        for (i=0;i<n;i++) if (staids[i]==staid) break;
+        if (i>=n) staids[n++]=staid;
+    }
+    fclose(fp);
+    return n;
+}
 /* convert main --------------------------------------------------------------*/
+/* array_ch: if >0, insert "_CH<array_ch>" before extension of all output files
+   base_ifile: if non-NULL, used instead of ifile for default output path
+               derivation (for -array mode when reading from a split temp file)
+   nav_out:    if 0, suppress NAV/SBAS outputs (OBS only) */
 static int convbin(int format, rnxopt_t *opt, const char *ifile, char **file,
-                   char *dir)
+                   char *dir, int array_ch, const char *base_ifile, int nav_out)
 {
     int i,def;
     static char work[256],ofile_[NOUTFILE][1024]={"","","","","","","","",""};
     char ifile_[1024],*ofile[NOUTFILE],*p;
     char *extnav=(opt->rnxver<=299||opt->navsys==SYS_GPS)?"N":"P";
     
+    /* reset static output file buffers (for multi-CH invocations) */
+    for (i=0;i<NOUTFILE;i++) ofile_[i][0]='\0';
+    
     /* replace wild-card (*) in input file by 0 */
-    strcpy_n(ifile_,ifile,1023);
+    strcpy_n(ifile_,base_ifile?base_ifile:ifile,1023);
     for (p=ifile_;*p;p++) if (*p=='*') *p='0';
-
+    
     def=!file[0]&&!file[1]&&!file[2]&&!file[3]&&!file[4]&&!file[5]&&!file[6]&&
         !file[7]&&!file[8];
     
@@ -332,6 +388,19 @@ static int convbin(int format, rnxopt_t *opt, const char *ifile, char **file,
         else strcpy_n(work,ofile[i],255);
         sprintf(ofile[i],"%.767s%c%.255s",dir,FILEPATHSEP,work);
     }
+    /* suppress NAV/SBAS outputs if requested (output only once per -array run) */
+    if (!nav_out) {
+        for (i=1;i<NOUTFILE;i++) ofile[i][0]='\0';
+    }
+    /* insert "_CH<array_ch>" before extension for array mode (OBS only;
+       NAV/SBAS outputs are common to all RF CHs) */
+    if (array_ch>0) {
+        char tmp[1024];
+        if (*ofile[0]) {
+            insert_ch_suffix(tmp,ofile[0],array_ch,sizeof(tmp));
+            strcpy_n(ofile[0],tmp,1023);
+        }
+    }
     fprintf(stderr,"input file  : %s (%s)\n",ifile,formatstrs[format]);
     
     if (*ofile[0]) fprintf(stderr,"->rinex obs : %s\n",ofile[0]);
@@ -383,7 +452,7 @@ static int get_filetime(const char *file, gtime_t *time)
     uint8_t buff[64];
     double ep[6];
     char path[1024],*paths[1],path_tag[1024];
-
+    
     paths[0]=path;
     
     if (!expath(file,paths,1)) return 0;
@@ -415,7 +484,7 @@ static int get_filetime(const char *file, gtime_t *time)
 }
 /* parse command line options ------------------------------------------------*/
 static int cmdopts(int argc, char **argv, rnxopt_t *opt, char **ifile,
-                   char **ofile, char **dir, int *trace)
+                   char **ofile, char **dir, int *trace, int *array)
 {
     double eps[]={1980,1,1,0,0,0},epe[]={2037,12,31,0,0,0};
     double epr[]={2010,1,1,0,0,0},span=0.0;
@@ -578,6 +647,9 @@ static int cmdopts(int argc, char **argv, rnxopt_t *opt, char **ifile,
         else if (!strcmp(argv[i],"-trace" )&&i+1<argc) {
             *trace=atoi(argv[++i]);
         }
+        else if (!strcmp(argv[i],"-array")) {
+            *array=1;
+        }
         else if (!strcmp(argv[i],"-ver")) printver();
         else if (!strncmp(argv[i],"-",1)) printhelp();
         
@@ -640,11 +712,11 @@ static int cmdopts(int argc, char **argv, rnxopt_t *opt, char **ifile,
 int main(int argc, char **argv)
 {
     rnxopt_t opt={{0}};
-    int format,trace=0,stat;
+    int format,trace=0,stat=0,array=0;
     char *ifile="",*ofile[NOUTFILE]={0},*dir="";
     
     /* parse command line options */
-    format=cmdopts(argc,argv,&opt,&ifile,ofile,&dir,&trace);
+    format=cmdopts(argc,argv,&opt,&ifile,ofile,&dir,&trace,&array);
     
     if (!*ifile) {
         fprintf(stderr,"no input file\n");
@@ -660,8 +732,42 @@ int main(int argc, char **argv)
         traceopen(TRACEFILE);
         tracelevel(trace);
     }
-    stat=convbin(format,&opt,ifile,ofile,dir);
-    
+    if (array) {
+        int staids[MAX_ARRAY_CH],nch,i,j,t,r;
+        char saved_rcvopt[256];
+        if (format!=STRFMT_RTCM3) {
+            fprintf(stderr,"-array requires RTCM3 input\n");
+            traceclose();
+            return -1;
+        }
+        if ((nch=scan_rtcm3_staids(ifile,staids,MAX_ARRAY_CH))<=0) {
+            fprintf(stderr,"-array: no MSM staid found in %s\n",ifile);
+            traceclose();
+            return -1;
+        }
+        /* sort ascending */
+        for (i=0;i<nch;i++) for (j=i+1;j<nch;j++) {
+            if (staids[i]>staids[j]) {
+                t=staids[i]; staids[i]=staids[j]; staids[j]=t;
+            }
+        }
+        fprintf(stderr,"-array: %d CH(s) found (staid:",nch);
+        for (i=0;i<nch;i++) fprintf(stderr," %d",staids[i]);
+        fprintf(stderr,")\n");
+        strcpy_n(saved_rcvopt,opt.rcvopt,sizeof(saved_rcvopt)-1);
+        for (i=0;i<nch;i++) {
+            /* pass -STA=<n> to RTKLIB RTCM3 decoder to filter MSM by staid;
+               non-MSM (NAV, etc.) is not filtered and passes through */
+            snprintf(opt.rcvopt,sizeof(opt.rcvopt),"%s%s-STA=%d",saved_rcvopt,
+                *saved_rcvopt?" ":"",staids[i]);
+            r=convbin(format,&opt,ifile,ofile,dir,staids[i],NULL,i==0);
+            if (r<0) stat=-1;
+        }
+        strcpy_n(opt.rcvopt,saved_rcvopt,sizeof(opt.rcvopt)-1);
+    }
+    else {
+        stat=convbin(format,&opt,ifile,ofile,dir,0,NULL,1);
+    }
     traceclose();
     
     return stat;

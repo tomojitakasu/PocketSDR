@@ -22,6 +22,7 @@
 #include <signal.h>
 #ifdef WIN32
 #include <fcntl.h>
+#include <io.h>
 #endif
 #include "pocket_sdr.h"
 
@@ -52,7 +53,7 @@ static void print_ver(void)
 static void print_usage(void)
 {
     printf("Usage: %s [-t tsec] [-r] [-p bus[,port]] [-c conf_file] [-q]\n"
-        "    [file [file ...]]\n", PROG_NAME);
+        "    [path [path ...]]\n", PROG_NAME);
     exit(0);
 }
 
@@ -162,7 +163,7 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int raw, int fmt,
     double time = 0.0, time_p = 0.0, sample = 0.0, sample_p = 0.0;
     double rate = 0.0, byte[SDR_MAX_RFCH] = {0};
     int ns = sample_byte(fmt);
-    uint8_t *buff = (uint8_t *)sdr_malloc(SDR_SIZE_BUFF * ns);
+    uint8_t *buff = (uint8_t *)sdr_malloc(SDR_SIZE_UBUFF * ns);
     
     if (!quiet) {
         print_head(raw, fmt, nfile, IQ, fp);
@@ -175,18 +176,18 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int raw, int fmt,
         if (!quiet) {
             time = (sdr_get_tick() - tick) * 1e-3;
         }
-        while (sdr_dev_read(dev, buff, SDR_SIZE_BUFF * ns) && !intr) {
+        while (sdr_dev_read(dev, buff, SDR_SIZE_UBUFF * ns) && !intr) {
             for (int j = 0; j < nfile; j++) {
                 if (!fp[j]) continue;
                 if (raw) {
-                    byte[j] += fwrite(buff, 1, SDR_SIZE_BUFF * ns, fp[j]);
+                    byte[j] += fwrite(buff, 1, SDR_SIZE_UBUFF * ns, fp[j]);
                 }
                 else {
-                    byte[j] += write_file(fmt, buff, SDR_SIZE_BUFF, j, IQ[j],
+                    byte[j] += write_file(fmt, buff, SDR_SIZE_UBUFF, j, IQ[j],
                         bits[j], fp[j]);
                 }
             }
-            sample += SDR_SIZE_BUFF;
+            sample += SDR_SIZE_UBUFF;
         }
         if (!quiet && time - time_p > RATE_CYC * 1e-3) {
             rate = (sample - sample_p) / (time - time_p);
@@ -362,3 +363,5 @@ int main(int argc, char **argv)
     
     return 0;
 }
+
+

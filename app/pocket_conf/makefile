@@ -35,7 +35,7 @@ pocket_conf: pocket_conf.o
 pocket_conf.o: $(SRC)/pocket_sdr.h
 
 clean:
-	rm -f $(TARGET) *.exe *.o *.stackdump
+	rm -f $(TARGET) *.exe *.o *.obj *.stackdump
 
 install:
 	cp $(TARGET) $(BIN)

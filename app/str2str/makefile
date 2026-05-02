@@ -37,5 +37,5 @@ install:
 	cp $(TARGET) $(BIN)
 
 clean:
-	rm -f $(TARGET) *.exe *.o *.stackdump
+	rm -f $(TARGET) *.exe *.o *.obj *.stackdump
 

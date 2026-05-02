@@ -33,7 +33,7 @@ all: $(TARGET)
 pocket_scan: pocket_scan.o
 
 clean:
-	rm -f $(TARGET) *.exe *.o *.stackdump
+	rm -f $(TARGET) *.exe *.o *.obj *.stackdump
 
 install:
 	cp $(TARGET) $(BIN)

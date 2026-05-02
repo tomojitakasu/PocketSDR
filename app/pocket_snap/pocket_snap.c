@@ -27,8 +27,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-double ionmodel_nav(gtime_t time, const nav_t *nav, const double *pos,
-    const double *azel);
+double ionmodel_nav(gtime_t time, nav_t *nav, const double *pos, const double *azel);
 double navgettgd(int sat, const nav_t *nav);
 #ifdef __cplusplus
 }
@@ -43,7 +42,7 @@ typedef struct {           // satellite data type
 
 // global variables -------------------------------------------------------------
 static sdr_cpx_t *code_fft[MAX_SAT] = {NULL}; // code FFT caches
-static int VERP = 0;       // verpose display flag
+static int VERB = 0;       // verbose display flag
 
 // print version ---------------------------------------------------------------
 static void print_ver(void)
@@ -132,7 +131,19 @@ static int search_sig(data_t *data, const char *sig, int sys, int prn,
     if (!code_fft[sat-1]) {
         int8_t *code = sdr_gen_code(sig, prn, &len_code);
         code_fft[sat-1] = sdr_cpx_malloc(2 * N);
-        sdr_gen_code_fft(code, len_code, T, 0.0, fs, N, N, code_fft[sat-1]);
+        if (sdr_sig_cpx(sig)) {
+            int8_t *code_I, *code_Q;
+
+            if (!sdr_gen_code_cpx(sig, prn, &code_I, &code_Q, &len_code)) {
+                return 0;
+            }
+            sdr_gen_code_fft_cpx(code_I, code_Q, len_code, T, 0.0, fs, N, N,
+                code_fft[sat-1]);
+        }
+        else {
+            sdr_gen_code_fft(code, len_code, T, 0.0, fs, N, N,
+                code_fft[sat-1]);
+        }
     }
     // doppler search bins
     float *fds;
@@ -141,7 +152,7 @@ static int search_sig(data_t *data, const char *sig, int sys, int prn,
         fds = sdr_dop_bins(T, 0.0, MAX_DOP, &len_fds);
     }
     else {
-        float dop = -rrate / CLIGHT * sdr_sig_freq(sig);
+        float dop = (float)(-rrate / CLIGHT * sdr_sig_freq(sig));
         fds = sdr_dop_bins(T, dop, MAX_DFREQ, &len_fds);
     }
     // parallel code search
@@ -159,7 +170,7 @@ static int search_sig(data_t *data, const char *sig, int sys, int prn,
         dop = sdr_fine_dop(P, 2 * N, fds, len_fds, ix);
         rrate = -dop * CLIGHT / sdr_sig_freq(sig);
         coff = fine_coff(sig, fs, P + ix[0] * 2 * N, N, ix[1] / fs, ix[1]);
-        if (VERP) {
+        if (VERB) {
             char str[32];
             satno2id(sat, str);
             printf("%s : SIG=%-5s C/N0=%5.1f dB-Hz DOP=%9.3f Hz COFF=%12.9f ms\n",
@@ -179,7 +190,7 @@ static int search_sig(data_t *data, const char *sig, int sys, int prn,
 static int search_sigs(gtime_t time, int ssys, const sdr_buff_t *dif, double fs,
     double fi, const double *rr, const nav_t *nav, data_t *data)
 {
-    if (VERP) {
+    if (VERB) {
         printf("search_sigs\n");
     }
     int n = 0;
@@ -251,7 +262,7 @@ static void drdot_dx(const double *rs, const double *vs, const double *x,
 // position by Doppler ----------------------------------------------------------
 static int pos_dop(const data_t *data, int N, double spos[][8], double *rr)
 {
-    if (VERP) {
+    if (VERB) {
         printf("pos_dop N=%d\n", N);
     }
     double x[4] = {0};
@@ -271,7 +282,7 @@ static int pos_dop(const data_t *data, int N, double spos[][8], double *rr)
         if (n < 4 || lsq(H, v, 4, n, dx, Q)) {
             return 0;
         }
-        if (VERP) {
+        if (VERB) {
             char str[64];
             pos_str(x, str);
             printf("(%d) N=%2d  POS=%s  RES=%10.3f m/s\n", i, n, str,
@@ -291,7 +302,7 @@ static int pos_dop(const data_t *data, int N, double spos[][8], double *rr)
 // resolve ms ambiguity in code offset -----------------------------------------
 static void res_coff_amb(data_t *data, int N, double spos[][8], const double *rr)
 {
-    if (VERP) {
+    if (VERB) {
         printf("res_coff_amb\n");
     }
     double e[3], r, tau[MAX_SAT], tau_min = 1e9;
@@ -312,7 +323,7 @@ static void res_coff_amb(data_t *data, int N, double spos[][8], const double *rr
         if (norm(spos[i], 3) > 1e-3) {
             double off = (tau[i] - tau_ref) - (data[i].coff - coff_ref);
             data[i].coff += ROUND(off * 1e3) * 1e-3;
-            if (VERP) {
+            if (VERB) {
                 char sat1[16], sat2[16];
                 satno2id(data[i].sat, sat1);
                 satno2id(data[idx].sat, sat2);
@@ -325,9 +336,9 @@ static void res_coff_amb(data_t *data, int N, double spos[][8], const double *rr
 
 // estimate position by code offsets ------------------------------------------
 static int pos_coff(gtime_t time, const data_t *data, int N, double *rr,
-    const nav_t *nav, double *dtr)
+    nav_t *nav, double *dtr)
 {
-    if (VERP) {
+    if (VERB) {
         printf("pos_coff\n");
     }
     double x[5] = {0};
@@ -360,7 +371,7 @@ static int pos_coff(gtime_t time, const data_t *data, int N, double *rr,
         if (n < 5 || lsq(H, v, 5, n, dx, Q)) {
             break;
         }
-        if (VERP) {
+        if (VERB) {
             char str[64];
             pos_str(x, str);
             printf("(%d) N=%2d  POS=%s  CLK=%9.6f  DT=%9.6f  RES=%10.3f \n",
@@ -493,8 +504,8 @@ static const char *conv_path(const char *path)
 //     -sys sys[,...]
 //         Select navigation system(s) (G=GPS,E=Galileo,J=QZSS,C=BDS). [G]
 //
-//     -verp
-//         Enable verpose status display.
+//     -verb
+//         Enable verbose status display.
 //
 //     -w file
 //         Specify FFTW wisdowm file. [../python/fftw_wisdom.txt]
@@ -553,8 +564,8 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "-out") && i + 1 < argc) {
             ofile = argv[++i];
         }
-        else if (!strcmp(argv[i], "-verp")) {
-            VERP = 1;
+        else if (!strcmp(argv[i], "-verb")) {
+            VERB = 1;
         }
         else if (!strcmp(argv[i], "-w") && i + 1 < argc) {
             fftw_wisdom = argv[++i];
@@ -644,4 +655,3 @@ int main(int argc, char **argv)
     fclose(fp);
     return 0;
 }
-

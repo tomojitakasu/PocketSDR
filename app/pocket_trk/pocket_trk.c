@@ -27,6 +27,7 @@
 //
 #include <math.h>
 #include <signal.h>
+#include <ctype.h>
 #include "pocket_sdr.h"
 
 // constants and macros ---------------------------------------------------------
@@ -45,36 +46,57 @@
 // usage text ------------------------------------------------------------------
 static const char *usage_text[] = {
     "Usage: pocket_trk [-sig sig -prn prn[,...] [-rfch ch[,...]] ...]",
-    "       [-fmt {INT8|INT8X2|RAW8|RAW16|RAW32}] [-f freq] [-fo freq[,...]]",
-    "       [-IQ {1|2}[,...]] [-bits {2|3}[,...] [-toff toff] [-ti tint]",
-    "       [-p bus,[,port] [-c conf_file] [-log path] [-nmea path] [-rtcm path]",
-    "       [-raw path] [-opt file] [file]", NULL
+    "       [-fmt {INT8|INT8X2|RAW8|RAW16|RAW32|CS8|CS16}] [-f freq]",
+    "       [-fo freq[,...]] [-IQ {1|2}[,...]] [-bits {2|3}[,...]",
+    "       [-toff toff] [-ti tint] [-p bus,[,port] [-c conf_file]",
+    "       [-driver name] [-gain gain] [-bw bw]",
+    "       [-log path] [-nmea path] [-rtcm path] [-raw path] [-opt file] [file]",
+    NULL
 };
 
-// system options table ---------------------------------------------------------
+// system options --------------------------------------------------------------
 static char fftw_wisdom[1024] = "";
-extern double sdr_epoch, sdr_lag_epoch, sdr_el_mask, sdr_sp_corr, sdr_t_acq;
-extern double sdr_t_dll, sdr_b_dll, sdr_b_pll, sdr_b_fll_w, sdr_b_fll_n;
-extern double sdr_max_dop, sdr_thres_cn0_l, sdr_thres_cn0_u;
-extern int sdr_bump_jump;
-static opt_t sys_opt[] = {
-    {"epoch"      , 1, (void *)&sdr_epoch       , ""},
-    {"lag_epoch"  , 1, (void *)&sdr_lag_epoch   , ""},
-    {"el_mask"    , 1, (void *)&sdr_el_mask     , ""},
-    {"sp_corr"    , 1, (void *)&sdr_sp_corr     , ""},
-    {"t_acq"      , 1, (void *)&sdr_t_acq       , ""},
-    {"t_dll"      , 1, (void *)&sdr_t_dll       , ""},
-    {"b_dll"      , 1, (void *)&sdr_b_dll       , ""},
-    {"b_pll"      , 1, (void *)&sdr_b_pll       , ""},
-    {"b_fll_w"    , 1, (void *)&sdr_b_fll_w     , ""},
-    {"b_fll_n"    , 1, (void *)&sdr_b_fll_n     , ""},
-    {"max_dop"    , 1, (void *)&sdr_max_dop     , ""},
-    {"thres_cn0_l", 1, (void *)&sdr_thres_cn0_l , ""},
-    {"thres_cn0_u", 1, (void *)&sdr_thres_cn0_u , ""},
-    {"bump_jump"  , 0, (void *)&sdr_bump_jump   , ""},
-    {"fftw_wisdom", 2, (void *)&fftw_wisdom     , ""},
-    {"", 0, NULL, ""}
-};
+
+static char *trim(char *s)
+{
+    while (*s && isspace((unsigned char)*s)) s++;
+    if (!*s) return s;
+    char *e = s + strlen(s) - 1;
+    while (e > s && isspace((unsigned char)*e)) *e-- = '\0';
+    return s;
+}
+
+static int load_opt_file(const char *file)
+{
+    FILE *fp = fopen(file, "r");
+    char buff[2048];
+    int n = 0;
+    
+    if (!fp) return 0;
+    
+    while (fgets(buff, sizeof(buff), fp)) {
+        n++;
+        char *line = trim(buff), *eq, *sharp;
+        if (!*line || *line == '#') continue;
+        if ((sharp = strchr(line, '#'))) *sharp = '\0';
+        line = trim(line);
+        if (!*line) continue;
+        if (!(eq = strchr(line, '='))) {
+            fprintf(stderr, "invalid option %s (%s:%d)\n", line, file, n);
+            continue;
+        }
+        *eq++ = '\0';
+        char *key = trim(line);
+        char *val = trim(eq);
+        if (!strcmp(key, "fftw_wisdom")) {
+            snprintf(fftw_wisdom, sizeof(fftw_wisdom), "%s", val);
+        } else {
+            sdr_rcv_setopt(key, atof(val));
+        }
+    }
+    fclose(fp);
+    return 1;
+}
 
 // interrupt flag --------------------------------------------------------------
 static volatile uint8_t intr = 0;
@@ -105,14 +127,15 @@ static void show_usage(void)
 // print receiver status -------------------------------------------------------
 static int print_rcv_stat(sdr_rcv_t *rcv, int nrow, int max_row)
 {
-    char *stat, *p, *q;
+    static char stat[(NUM_COL+10)*MAX_ROW];
+    char *p, *q;
     int n = 0;
     
     for (int i = 0; i < nrow; i++) {
         printf("%s", ESC_UCUR);
     }
     // get SDR receiver channel status
-    stat = sdr_rcv_ch_stat(rcv, "ALL", 0, MIN_LOCK, 0);
+    (void)sdr_rcv_ch_stat(rcv, "ALL", 0, MIN_LOCK, 0, 0, stat, sizeof(stat));
     
     for (p = q = stat; (q = strchr(p, '\n')); p = q + 1) {
         if (n < max_row) {
@@ -264,6 +287,8 @@ int main(int argc, char **argv)
     const char *file = "", *conf_file = "";
     const char *paths[4] = {"", "", "", ""}, *opt_file = "";
     const char *debug_file = "";
+    const char *driver = "";
+    double gain = 0.0, bw = 0.0;
     char rfch_opt[1024] = "-RFCH";
     
     for (int i = 1; i < argc; i++) {
@@ -295,6 +320,8 @@ int main(int argc, char **argv)
             else if (!strcmp(str, "RAW16" )) fmt = SDR_FMT_RAW16;
             else if (!strcmp(str, "RAW16I")) fmt = SDR_FMT_RAW16I;
             else if (!strcmp(str, "RAW32" )) fmt = SDR_FMT_RAW32;
+            else if (!strcmp(str, "CS8"   )) fmt = SDR_FMT_CS8;
+            else if (!strcmp(str, "CS16"  )) fmt = SDR_FMT_CS16;
             else {
                 fprintf(stderr, "unrecognized format: %s\n", str);
                 exit(-1);
@@ -346,6 +373,15 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "-debug") && i + 1 < argc) {
             debug_file = argv[++i];
         }
+        else if (!strcmp(argv[i], "-driver") && i + 1 < argc) {
+            driver = argv[++i];
+        }
+        else if (!strcmp(argv[i], "-gain") && i + 1 < argc) {
+            gain = atof(argv[++i]);
+        }
+        else if (!strcmp(argv[i], "-bw") && i + 1 < argc) {
+            bw = atof(argv[++i]);
+        }
         else if (!strcmp(argv[i], "-v")) {
             print_ver();
         }
@@ -360,7 +396,7 @@ int main(int argc, char **argv)
         traceopen(debug_file);
         tracelevel(TRACE_LEVEL);
     }
-    if (*opt_file && !loadopts(opt_file, sys_opt)) {
+    if (*opt_file && !load_opt_file(opt_file)) {
         fprintf(stderr, "options file read error: %s\n", opt_file);
     }
     sdr_func_init(fftw_wisdom);
@@ -372,9 +408,19 @@ int main(int argc, char **argv)
 #endif
     uint32_t tt = sdr_get_tick();
 
+    if (gain > 0.0) {
+        sprintf(rfch_opt + strlen(rfch_opt), " -GAIN=%.1f", gain);
+    }
+    if (bw > 0.0) {
+        sprintf(rfch_opt + strlen(rfch_opt), " -BW=%.3f", bw);
+    }
     if (*file) {
         rcv = sdr_rcv_open_file(sigs, prns, nch, fmt, fs, fo, IQ, bits, toff,
             tscale, file, paths, rfch_opt);
+    }
+    else if (*driver) {
+        rcv = sdr_rcv_open_sdev(sigs, prns, nch, driver, fmt, fs, fo[0], paths,
+            rfch_opt);
     }
     else {
         rcv = sdr_rcv_open_dev(sigs, prns, nch, bus, port, conf_file, paths,
