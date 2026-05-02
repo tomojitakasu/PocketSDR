@@ -451,7 +451,7 @@ static eph_t *seleph(gtime_t time, int sat, int iode, const nav_t *nav)
         if (t<=tmin) {j=i; tmin=t;} /* toe closest to time */
     }
     if (iode>=0||j<0) {
-        trace(3,"no broadcast ephemeris: %s sat=%2d iode=%3d\n",
+        trace(4,"no broadcast ephemeris: %s sat=%2d iode=%3d\n",
               time_str(time,0),sat,iode);
         return NULL;
     }
@@ -473,7 +473,7 @@ static geph_t *selgeph(gtime_t time, int sat, int iode, const nav_t *nav)
         if (t<=tmin) {j=i; tmin=t;} /* toe closest to time */
     }
     if (iode>=0||j<0) {
-        trace(3,"no glonass ephemeris  : %s sat=%2d iode=%2d\n",time_str(time,0),
+        trace(4,"no glonass ephemeris  : %s sat=%2d iode=%2d\n",time_str(time,0),
               sat,iode);
         return NULL;
     }
@@ -493,7 +493,7 @@ static seph_t *selseph(gtime_t time, int sat, const nav_t *nav)
         if (t<=tmin) {j=i; tmin=t;} /* toe closest to time */
     }
     if (j<0) {
-        trace(3,"no sbas ephemeris     : %s sat=%2d\n",time_str(time,0),sat);
+        trace(4,"no sbas ephemeris     : %s sat=%2d\n",time_str(time,0),sat);
         return NULL;
     }
     return nav->seph+j;
@@ -783,7 +783,7 @@ extern void satposs(gtime_t teph, const obsd_t *obs, int n, const nav_t *nav,
         
         /* satellite clock bias by broadcast ephemeris */
         if (!ephclk(time[i],teph,obs[i].sat,nav,&dt)) {
-            trace(3,"no broadcast clock %s sat=%2d\n",time_str(time[i],3),obs[i].sat);
+            trace(4,"no broadcast clock %s sat=%2d\n",time_str(time[i],3),obs[i].sat);
             continue;
         }
         time[i]=timeadd(time[i],-dt);
@@ -791,7 +791,7 @@ extern void satposs(gtime_t teph, const obsd_t *obs, int n, const nav_t *nav,
         /* satellite position and clock at transmission time */
         if (!satpos(time[i],teph,obs[i].sat,ephopt,nav,rs+i*6,dts+i*2,var+i,
                     svh+i)) {
-            trace(3,"no ephemeris %s sat=%2d\n",time_str(time[i],3),obs[i].sat);
+            trace(4,"no ephemeris %s sat=%2d\n",time_str(time[i],3),obs[i].sat);
             continue;
         }
         /* if no precise clock available, use broadcast clock instead */
