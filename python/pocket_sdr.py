@@ -480,29 +480,14 @@ def get_corr_hist(rcv, ch, tspan):
     n = libsdr.sdr_rcv_corr_hist(rcv, ch, tspan, stat, P)
     return stat[0], stat[1], P[:n] if n > 0 else P[:2] # time, T, P
 
-# array calibration ------------------------------------------------------------
-def array_calib(rcv, rpy, bias, run):
-    libsdr.sdr_rcv_array_calib.argtypes = (c_void_p, POINTER(c_double),
-        POINTER(c_double), c_int32)
-    c_rpy = (c_double * 3)(*rpy) if rpy is not None else None
-    c_bias = (c_double * len(bias))(*bias) if bias is not None else None
-    return libsdr.sdr_rcv_array_calib(rcv, c_rpy, c_bias, run)
+# array calibration run control (1:start, 0:stop, 2:clear) -------------------
+def array_calib(rcv, run):
+    libsdr.sdr_rcv_array_calib.argtypes = (c_void_p, c_int32)
+    return libsdr.sdr_rcv_array_calib(rcv, run)
 
-# start array calibration ------------------------------------------------------
-def array_calib_start(rcv):
-    return array_calib(rcv, None, None, 1)
-
-# stop array calibration -------------------------------------------------------
-def array_calib_stop(rcv):
-    return array_calib(rcv, None, None, 0)
-
-# inject calibration values ----------------------------------------------------
-def array_calib_set(rcv, rpy, bias):
-    return array_calib(rcv, rpy, bias, -1)
-
-# clear calibration state ------------------------------------------------------
-def array_calib_clear(rcv):
-    return array_calib(rcv, None, None, 2)
+def array_calib_start(rcv): return array_calib(rcv, 1)
+def array_calib_stop(rcv):  return array_calib(rcv, 0)
+def array_calib_clear(rcv): return array_calib(rcv, 2)
 
 # get array calibration status -------------------------------------------------
 def array_calib_stat(rcv):
@@ -543,42 +528,14 @@ def array_ant_pos(rcv, ant_pos, ena):
         POINTER(c_int32))
     return libsdr.sdr_rcv_array_ant_pos(rcv, c_pos, c_ena)
 
-# save current calibration state to file (rpy in rad, bias in m) --------------
+# save / load array calibration state to / from file -------------------------
 def array_calib_save_file(rcv, file=CALIB_FILE):
-    stat = array_calib_stat(rcv)
-    if not stat: return False
-    run, rpy, bias, rms, nep = stat
-    
-    # only save if calibration produced data
-    if nep <= 0 and abs(rpy[0]) + abs(rpy[1]) + abs(rpy[2]) < 1e-9:
-        return False
-    try:
-        with open(file, 'w') as f:
-            f.write('# Pocket SDR Array Calibration\n')
-            f.write('# epochs=%d, rms=%.4fm\n' % (nep, rms))
-            f.write('# Roll Pitch Yaw (rad)\n')
-            f.write('%.9f %.9f %.9f\n' % (rpy[0], rpy[1], rpy[2]))
-            f.write('# Bias CH1..CHn (m)\n')
-            f.write(' '.join('%.9f' % b for b in bias) + '\n')
-        return True
-    except OSError:
-        return False
+    libsdr.sdr_rcv_array_save_calib.argtypes = (c_void_p, c_char_p)
+    return bool(libsdr.sdr_rcv_array_save_calib(rcv, file.encode()))
 
-# load calibration state from file and inject into receiver -------------------
 def array_calib_load_file(rcv, file=CALIB_FILE):
-    if not rcv or not os.path.isfile(file):
-        return False
-    try:
-        with open(file) as f:
-            lines = [l.split('#')[0].strip() for l in f]
-            lines = [l for l in lines if l]
-        if len(lines) < 2: return False
-        rpy = [float(x) for x in lines[0].split()][:3]
-        bias = [float(x) for x in lines[1].split()]
-        if len(rpy) < 3 or len(bias) < 1: return False
-        return bool(array_calib_set(rcv, rpy, bias))
-    except (OSError, ValueError):
-        return False
+    libsdr.sdr_rcv_array_load_calib.argtypes = (c_void_p, c_char_p)
+    return bool(libsdr.sdr_rcv_array_load_calib(rcv, file.encode()))
 
 # get PVT solution -------------------------------------------------------------
 def get_rcv_pvt_sol(rcv):
@@ -1908,9 +1865,6 @@ def on_btn_start_push(bar):
         # apply enable mask and antenna geometry from array_opt
         ant_pos, ena = array_read_opt()
         array_ant_pos(rcv_body, ant_pos, ena)
-
-        # restore array calibration
-        array_calib(rcv_body, None, None, -1)
         array_calib_load_file(rcv_body)
         
         status_bar_show('Receiver started. ' + info)

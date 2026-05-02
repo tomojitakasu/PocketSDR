@@ -279,6 +279,7 @@ typedef struct {                // SDR array channel type
 typedef struct {                // SDR antenna array state
     struct sdr_rcv_tag *rcv;    // back-pointer to SDR receiver (NULL = standalone)
     int freq;                   // frequency index (0:L1,1:L2,...)
+    int nrfch;                  // number of RF channels
     int ant_ena[SDR_MAX_RFCH];  // element enable flag
     double ant_pos[SDR_MAX_RFCH][3]; // element positions in body-frame (m)
     int calib_run, nep;         // calibration flag (0/1) and epoch count
@@ -487,16 +488,18 @@ void sdr_pvt_solstr(sdr_pvt_t *pvt, char *buff, int size);
 // sdr_array.c
 sdr_array_t *sdr_array_new(sdr_rcv_t *rcv, int freq);
 void sdr_array_free(sdr_array_t *array);
-int sdr_array_ant_pos(sdr_array_t *array, int nrfch, const double *ant_pos,
+int sdr_array_ant_pos(sdr_array_t *array, const double *ant_pos,
     const int *ant_ena);
 int sdr_array_calib(sdr_array_t *array, const obsd_t *obs, int nobs,
     const nav_t *nav, const double *rr);
-int sdr_array_config(sdr_array_t *array, int nrfch, const double *rpy,
-    const double *bias, int run);
+int sdr_array_run(sdr_array_t *array, int run);
+int sdr_array_inject(sdr_array_t *array, const double *rpy, const double *bias);
 int sdr_array_stat(sdr_array_t *array, double *rpy, double *bias, double *rms,
     int *nep);
 void sdr_array_step(sdr_array_t *array, const obsd_t *obs, int nobs,
     const nav_t *nav, const double *rr);
+int sdr_array_save_calib(sdr_array_t *array, const char *file);
+int sdr_array_load_calib(sdr_array_t *array, const char *file);
 void sdr_arch_free(sdr_arch_t *arch);
 int sdr_arch_set_beam(sdr_arch_t *arch, const sdr_array_t *array, double az,
     double el, double scale);
@@ -507,12 +510,13 @@ void sdr_arch_combine(const sdr_arch_t *arch, const sdr_array_t *array,
 // receiver array wrappers
 int sdr_rcv_array_ant_pos(sdr_rcv_t *rcv, const double *ant_pos,
     const int *ant_ena);
-int sdr_rcv_array_calib(sdr_rcv_t *rcv, const double *rpy, const double *bias,
-    int run);
+int sdr_rcv_array_calib(sdr_rcv_t *rcv, int run);
 int sdr_rcv_array_stat(sdr_rcv_t *rcv, double *rpy, double *bias, double *rms,
     int *nep);
 int sdr_rcv_array_set_beam(sdr_rcv_t *rcv, int ach, double az, double el);
 int sdr_rcv_array_get_beam(sdr_rcv_t *rcv, int ach, double *az, double *el);
+int sdr_rcv_array_save_calib(sdr_rcv_t *rcv, const char *file);
+int sdr_rcv_array_load_calib(sdr_rcv_t *rcv, const char *file);
 void sdr_rcv_array_step(sdr_rcv_t *rcv, const obsd_t *obs, int nobs,
     const nav_t *nav, const double *rr);
 

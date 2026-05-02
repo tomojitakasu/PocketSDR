@@ -722,7 +722,7 @@ void sdr_rcv_free(sdr_rcv_t *rcv)
         sdr_arch_free(rcv->arch + m);
     }
     rcv->narch = 0;
-    sdr_array_free(rcv->array);
+    if (rcv->array) sdr_array_free(rcv->array);
     sdr_free(rcv);
 }
 
@@ -1260,7 +1260,6 @@ static int ach_to_m(const sdr_rcv_t *rcv, int ach)
 // refresh all array CH beam weights with current array state. caller-locked. -
 static void refresh_arch_beams(sdr_rcv_t *rcv)
 {
-    if (!rcv || !rcv->array) return;
     for (int m = 0; m < rcv->narch; m++) {
         sdr_arch_t *arch = rcv->arch + m;
         if (arch->scale <= 0.0) continue;
@@ -1276,21 +1275,20 @@ int sdr_rcv_array_ant_pos(sdr_rcv_t *rcv, const double *ant_pos,
     if (!array) return 0;
 
     sdr_mutex_lock(&rcv->mtx);
-    int ret = sdr_array_ant_pos(array, rcv->nrfch, ant_pos, ant_ena);
+    int ret = sdr_array_ant_pos(array, ant_pos, ant_ena);
     if (ret) refresh_arch_beams(rcv);
     sdr_mutex_unlock(&rcv->mtx);
     return ret;
 }
 
 // configure receiver array calibration ----------------------------------------
-int sdr_rcv_array_calib(sdr_rcv_t *rcv, const double *rpy, const double *bias,
-    int run)
+int sdr_rcv_array_calib(sdr_rcv_t *rcv, int run)
 {
     sdr_array_t *array = rcv ? rcv->array : NULL;
     if (!array) return 0;
 
     sdr_mutex_lock(&rcv->mtx);
-    int ret = sdr_array_config(array, rcv->nrfch, rpy, bias, run);
+    int ret = sdr_array_run(array, run);
     if (ret) refresh_arch_beams(rcv);
     sdr_mutex_unlock(&rcv->mtx);
     return ret;
@@ -1305,6 +1303,30 @@ int sdr_rcv_array_stat(sdr_rcv_t *rcv, double *rpy, double *bias, double *rms,
 
     sdr_mutex_lock(&rcv->mtx);
     int ret = sdr_array_stat(array, rpy, bias, rms, nep);
+    sdr_mutex_unlock(&rcv->mtx);
+    return ret;
+}
+
+// save / load receiver array calibration --------------------------------------
+int sdr_rcv_array_save_calib(sdr_rcv_t *rcv, const char *file)
+{
+    sdr_array_t *array = rcv ? rcv->array : NULL;
+    if (!array) return 0;
+
+    sdr_mutex_lock(&rcv->mtx);
+    int ret = sdr_array_save_calib(array, file);
+    sdr_mutex_unlock(&rcv->mtx);
+    return ret;
+}
+
+int sdr_rcv_array_load_calib(sdr_rcv_t *rcv, const char *file)
+{
+    sdr_array_t *array = rcv ? rcv->array : NULL;
+    if (!array) return 0;
+
+    sdr_mutex_lock(&rcv->mtx);
+    int ret = sdr_array_load_calib(array, file);
+    if (ret) refresh_arch_beams(rcv);
     sdr_mutex_unlock(&rcv->mtx);
     return ret;
 }
@@ -1421,20 +1443,7 @@ sdr_rcv_t *sdr_rcv_open_dev(const char **sigs, int *prns, int n, int bus,
 //      rate      (I)  Sampling rate (sps)
 //      freq      (I)  Carrier center frequency (Hz)
 //      paths     (I)  output stream paths as same as sdr_rcv_start()
-//      opt       (I)  receiver options (string separated by spaces)
-//                     -GAIN=<gain>
-//                        SoapySDR front-end gain (dB)
-//                     -BW=<bw>
-//                        SoapySDR analog bandwidth (MHz)
-//                     -RFCH <sig>:<ch>[{,|-}<ch>...]
-//                        assign signal to specific RF CH(s)
-//                     -LPF=<rfch>:<MHz>[,<rfch>:<MHz>...]
-//                        enable digital LPF on RF CH(s) (two-sided BW in MHz)
-//                     -SCALE=<scale>
-//                        raw-to-IF LUT scale for INT8/CS8/CS16 formats
-//                        (0: enable AGC, >0: fixed scale, default: 1.0)
-//                     -TRACE<=level>
-//                        enable debug trace level <level>
+//      opt       (I)  receiver options (same as sdr_rcv_open_dev())
 //
 //  returns:
 //      SDR receiver (NULL: error)
