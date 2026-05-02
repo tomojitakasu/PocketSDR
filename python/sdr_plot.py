@@ -225,3 +225,79 @@ def plot_sky(plt, color=FG_COLOR, gcolor=GR_COLOR, tag=''):
     for el in np.arange(0, 90, 30):
         plot_circle(plt, 0, 0, (90 - el) / 90, color if el < 5 else gcolor,
             tag=tag)
+
+# generate jet-style colormap LUT (list of '#RRGGBB' hex strings) -------------
+_JET_LUT_CACHE = {}
+def jet_lut(n=64):
+    if n in _JET_LUT_CACHE: return _JET_LUT_CACHE[n]
+    keys = np.array([
+        [  0,   0, 143],   # 0.000 dark blue
+        [  0,   0, 255],   # 0.125 blue
+        [  0, 255, 255],   # 0.375 cyan
+        [255, 255,   0],   # 0.625 yellow
+        [255,   0,   0],   # 0.875 red
+        [128,   0,   0],   # 1.000 dark red
+    ], dtype=float)
+    pos = np.array([0.0, 0.125, 0.375, 0.625, 0.875, 1.0])
+    t = np.linspace(0, 1, n)
+    rgb = np.empty((n, 3), dtype=int)
+    for c in range(3):
+        rgb[:, c] = np.clip(np.interp(t, pos, keys[:, c]), 0, 255).astype(int)
+    lut = ['#%02x%02x%02x' % (r, g, b) for r, g, b in rgb]
+    _JET_LUT_CACHE[n] = lut
+    return lut
+
+# render a 2D float array as a heatmap PhotoImage centered at (xc, yc) -------
+#   data    (M, M) array; data[0] is the TOP row in plot (row index increases
+#           downward in canvas).
+#   half    image spans plot range [xc-half, xc+half] in both axes (the actual
+#           rendered extent may be slightly larger due to integer zoom; the
+#           function returns the actual half-extent so callers can place
+#           accompanying overlays/masks correctly).
+#   vmin/vmax   color-scale range. Values are clipped to [vmin, vmax].
+#   lut     list of '#RRGGBB' hex strings; defaults to jet_lut().
+def plot_image(plt, xc, yc, half, data, vmin, vmax, lut=None, tag=''):
+    if lut is None: lut = jet_lut()
+    nlev = len(lut)
+    norm = (data - vmin) / (vmax - vmin)
+    idx = np.clip((norm * (nlev - 1)).astype(int), 0, nlev - 1)
+    color_arr = np.array(lut, dtype=object)[idx]
+    M = data.shape[0]
+    rows = [' '.join(color_arr[j]) for j in range(M)]
+    pdata = '{' + '} {'.join(rows) + '}'
+    img = getattr(plt, '_img_cache', None)
+    if img is None or img.width() != M:
+        img = PhotoImage(width=M, height=M)
+        plt._img_cache = img
+    img.put(pdata, to=(0, 0))
+    xs, _ = plot_scale(plt)
+    if xs <= 0: return half
+    z = max(1, int(np.ceil(2.0 * half * xs / M)))
+    img_disp = img if z == 1 else img.zoom(z, z)
+    plt._img_disp_ref = img_disp                  # hold ref to prevent GC
+    xp, yp = plot_pos(plt, xc, yc)
+    plt.c.create_image(xp, yp, image=img_disp, anchor=CENTER, tag=tag)
+    return (M * z) / (2.0 * xs)                   # actual half-extent (plot)
+
+# mask the area outside the unit circle in a sky plot (between the unit circle
+# and a bounding square at ±half plot units). Useful for hiding overflow from
+# plot_image overlays. ------------------------------------------------------
+def plot_sky_mask(plt, half, color=BG_COLOR, n_arc=24, tag=''):
+    xs, _ = plot_scale(plt)
+    if xs <= 0: return
+    xc, yc = plot_pos(plt, 0, 0)
+    h_px = half * xs
+    ts = np.linspace(0, pi / 2, n_arc + 1)
+    card = [(1, 0), (0, -1), (-1, 0), (0, 1)]      # E, N, W, S (canvas frame)
+    for q in range(4):
+        ang = ts + q * pi / 2
+        ax = xc + xs * np.cos(ang)
+        ay = yc - xs * np.sin(ang)
+        cs, ce = card[q], card[(q + 1) % 4]
+        pts = []
+        for k in range(len(ang)):
+            pts.append(float(ax[k])); pts.append(float(ay[k]))
+        pts += [xc + ce[0]*h_px, yc + ce[1]*h_px,
+                xc + (cs[0]+ce[0])*h_px, yc + (cs[1]+ce[1])*h_px,
+                xc + cs[0]*h_px, yc + cs[1]*h_px]
+        plt.c.create_polygon(*pts, fill=color, outline='', tag=tag)
