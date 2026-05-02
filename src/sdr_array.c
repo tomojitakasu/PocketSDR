@@ -207,14 +207,13 @@ static void kf_update(sdr_array_t *array, const obsd_t *obs, int nobs,
 }
 
 // generate new antenna array --------------------------------------------------
-sdr_array_t *sdr_array_new(sdr_rcv_t *rcv, int freq)
+sdr_array_t *sdr_array_new(int nrfch, int freq)
 {
     sdr_array_t *array = (sdr_array_t *)sdr_malloc(sizeof(sdr_array_t));
-    array->rcv = rcv;
     array->freq = freq;
-    array->nrfch = rcv->nrfch;
+    array->nrfch = nrfch;
     for (int i = 0; i < SDR_MAX_RFCH; i++) {
-        array->ant_ena[i] = (i < array->nrfch);
+        array->ant_ena[i] = (i < nrfch);
     }
     return array;
 }
@@ -356,18 +355,6 @@ int sdr_array_load(sdr_array_t *array, const char *file)
     return sdr_array_set(array, rpy, bias);
 }
 
-// install beam weights. caller locked. ----------------------------------------
-static int install_beam(sdr_arch_t *arch, double az, double el, double scale,
-    const int16_t *w, int nrfch)
-{
-    arch->az = az;
-    arch->el = el;
-    arch->scale = scale;
-    memset(arch->w, 0, sizeof(arch->w));
-    memcpy(arch->w, w, sizeof(int16_t) * nrfch * 2);
-    return 1;
-}
-
 // free array CH beam state -----------------------------------------------------
 void sdr_arch_free(sdr_arch_t *arch)
 {
@@ -375,82 +362,101 @@ void sdr_arch_free(sdr_arch_t *arch)
     memset(arch->w, 0, sizeof(arch->w));
 }
 
-// set array CH beam ------------------------------------------------------------
-int sdr_arch_set_beam(sdr_arch_t *arch, const sdr_array_t *array, double az,
-    double el, double scale)
+// check if RF CH is tunable to L1 ---------------------------------------------
+static int is_l1_ch(const sdr_rcv_t *rcv, int i)
 {
-    const sdr_rcv_t *rcv = array->rcv;
-    int nrfch = rcv->nrfch;
+    double f_eff = rcv->rfch[i].fo;
+    if (rcv->rfch[i].IQ == 1) f_eff += rcv->fs * 0.25;
+    return fabs(f_eff - ARRAY_FREQ) <= ARRAY_FREQ_TOL;
+}
 
-    if (scale <= 0.0) {
-        arch->az = az;
-        arch->el = el;
-        arch->scale = 0.0;
-        memset(arch->w, 0, sizeof(arch->w));
-        return 1;
+// bit-range expansion gain ----------------------------------------------------
+static double bit_gain(const sdr_rcv_t *rcv, const int *ant_ena)
+{
+    int bits_min = 4;
+    
+    for (int i = 0; i < rcv->nrfch; i++) {
+        if (!is_l1_ch(rcv, i) || !ant_ena[i]) continue;
+        if (rcv->rfch[i].bits > 0 && rcv->rfch[i].bits < bits_min) {
+            bits_min = rcv->rfch[i].bits;
+        }
     }
-    double rpy[3], bias[SDR_MAX_RFCH], ant_pos[SDR_MAX_RFCH][3];
-    matcpy(rpy, array->x, 3, 1);
-    bias[0] = 0.0;
-    matcpy(bias + 1, array->x + 4, nrfch - 1, 1);
-    matcpy(&ant_pos[0][0], &array->ant_pos[0][0], nrfch * 3, 1);
+    return (bits_min < 4) ? 7.0 / (double)((1 << bits_min) - 1) : 1.0;
+}
 
-    double R[9], Dr[9], Dp[9], Dy[9], e_enu[3], e_body[3];
+// beam steering vector in body frame ------------------------------------------
+static void steer_body(const double *rpy, double az, double el, double *e_body)
+{
+    double R[9], Dr[9], Dp[9], Dy[9], e_enu[3];
     euler_rot(rpy, R, Dr, Dp, Dy);
     e_enu[0] = sin(az) * cos(el);
     e_enu[1] = cos(az) * cos(el);
     e_enu[2] = sin(el);
     matmul("TN", 3, 1, 3, 1.0, R, e_enu, 0.0, e_body);
+}
 
-    int bits_min = 4;
-    for (int a = 0; a < nrfch; a++) {
-        int rtoc = (rcv->rfch[a].IQ == 1);
-        double f_eff = rcv->rfch[a].fo + (rtoc ? rcv->fs * 0.25 : 0.0);
-        if (fabs(f_eff - ARRAY_FREQ) > ARRAY_FREQ_TOL) continue;
-        if (!array->ant_ena[a]) continue;
-        if (rcv->rfch[a].bits > 0 && rcv->rfch[a].bits < bits_min) {
-            bits_min = rcv->rfch[a].bits;
+// build per-CH lookup table from current weights ------------------------------
+static void build_lut(sdr_arch_t *arch, int nrfch)
+{
+    for (int j = 0; j < nrfch; j++) {
+        int32_t wr = arch->w[j*2], wi = arch->w[j*2+1];
+        for (int b = 0; b < 256; b++) {
+            int32_t I = SDR_CPX8_I((sdr_cpx8_t)b);
+            int32_t Q = SDR_CPX8_Q((sdr_cpx8_t)b);
+            arch->lut[j][b].re = I * wr - Q * wi;
+            arch->lut[j][b].im = I * wi + Q * wr;
         }
     }
-    double bit_gain = (bits_min < 4) ? 7.0 / (double)((1 << bits_min) - 1) : 1.0;
+}
+
+// set array CH beam -----------------------------------------------------------
+void sdr_arch_set_beam(sdr_arch_t *arch, const sdr_rcv_t *rcv, double az,
+    double el, double scale)
+{
+    arch->az = az;
+    arch->el = el;
+    arch->scale = (scale > 0.0) ? scale : 0.0;
+    memset(arch->w, 0, sizeof(arch->w));
+    if (scale <= 0.0) {
+        build_lut(arch, rcv->nrfch); // zero LUT (all weights are 0)
+        return;
+    }
+    const sdr_array_t *array = rcv->array;
 
     double lam = CLIGHT / ARRAY_FREQ;
-    int16_t w[SDR_MAX_RFCH * 2] = {0};
-    for (int a = 0; a < nrfch; a++) {
-        int rtoc = (rcv->rfch[a].IQ == 1);
-        double f_eff = rcv->rfch[a].fo + (rtoc ? rcv->fs * 0.25 : 0.0);
-        if (fabs(f_eff - ARRAY_FREQ) > ARRAY_FREQ_TOL || !array->ant_ena[a]) {
-            w[a*2] = 0; w[a*2+1] = 0;
-            continue;
+    double amp = scale * bit_gain(rcv, array->ant_ena) * ARRAY_W_SCALE;
+    double e_body[3], b_body[3];
+
+    // beam steering vector in body frame
+    steer_body(array->x, az, el, e_body);
+
+    for (int i = 0; i < rcv->nrfch; i++) {
+        if (!is_l1_ch(rcv, i) || !array->ant_ena[i]) continue;
+
+        for (int j = 0; j < 3; j++) {
+            b_body[j] = array->ant_pos[i][j] - array->ant_pos[0][j];
         }
-        double b_body[3];
-        for (int k = 0; k < 3; k++) b_body[k] = ant_pos[a][k] - ant_pos[0][k];
-        double proj = e_body[0]*b_body[0] + e_body[1]*b_body[1] +
-            e_body[2]*b_body[2];
-        double phi = -DPI * (proj + bias[a]) / lam;
-        double wr = scale * bit_gain * cos(phi) * ARRAY_W_SCALE;
-        double wi = scale * bit_gain * sin(phi) * ARRAY_W_SCALE;
-        wr = CLIP(wr, -32768.0, 32767.0);
-        wi = CLIP(wi, -32768.0, 32767.0);
-        w[a*2  ] = (int16_t)floor(wr + 0.5);
-        w[a*2+1] = (int16_t)floor(wi + 0.5);
+        double proj = dot(e_body, b_body, 3);
+        double phi = -DPI * (proj + array->x[3+i]) / lam;
+        double wr = amp * cos(phi), wi = amp * sin(phi);
+
+        arch->w[i*2  ] = (int16_t)floor(CLIP(wr, -32768.0, 32767.0) + 0.5);
+        arch->w[i*2+1] = (int16_t)floor(CLIP(wi, -32768.0, 32767.0) + 0.5);
     }
-    return install_beam(arch, az, el, scale, w, nrfch);
+    build_lut(arch, rcv->nrfch);
 }
 
 // get array CH beam ------------------------------------------------------------
-int sdr_arch_get_beam(const sdr_arch_t *arch, double *az, double *el)
+void sdr_arch_get_beam(const sdr_arch_t *arch, double *az, double *el)
 {
     *az = arch->az;
     *el = arch->el;
-    return 1;
 }
 
 // combine RF CHs into array CH -------------------------------------------------
-void sdr_arch_combine(const sdr_arch_t *arch, const sdr_array_t *array, int base)
+void sdr_arch_combine(const sdr_arch_t *arch, const sdr_rcv_t *rcv, int base)
 {
     if (arch->scale <= 0.0) return;
-    sdr_rcv_t *rcv = array->rcv;
     int nrfch = rcv->nrfch, N = rcv->N;
     int m = (int)(arch - rcv->arch);
     if (m < 0 || m >= rcv->narch || nrfch < 2) return;
@@ -462,11 +468,9 @@ void sdr_arch_combine(const sdr_arch_t *arch, const sdr_array_t *array, int base
     for (int i = 0; i < N; i++) {
         int32_t sum_re = 0, sum_im = 0;
         for (int j = 0; j < nrfch; j++) {
-            int32_t I = SDR_CPX8_I(in[j][i]);
-            int32_t Q = SDR_CPX8_Q(in[j][i]);
-            int32_t wr = arch->w[j*2], wi = arch->w[j*2+1];
-            sum_re += I * wr - Q * wi;
-            sum_im += I * wi + Q * wr;
+            const sdr_lut_t *e = &arch->lut[j][in[j][i]];
+            sum_re += e->re;
+            sum_im += e->im;
         }
         sum_re += (sum_re >= 0) ? ARRAY_W_SCALE / 2 : -ARRAY_W_SCALE / 2;
         sum_im += (sum_im >= 0) ? ARRAY_W_SCALE / 2 : -ARRAY_W_SCALE / 2;

@@ -222,7 +222,7 @@ This API reference describes the **Pocket SDR** C library (`libsdr`). The librar
 <br><br>
 
 - `sdr_array_t`
-  - Antenna array state: back-pointer to receiver, frequency index, RF-CH count (`nrfch`, snapshotted from `rcv->nrfch` at construction so calibration entry points do not need to re-thread it), per-element enable flags and body-frame positions, calibration run flag and epoch count, EKF state `x[3+SDR_MAX_RFCH]` = {roll, pitch, yaw, bias_1..bias_n} and covariance `P`, RMS. The number of array channels (`narch`) and per-array-CH beam states (`arch[]`) live in `sdr_rcv_t`.
+  - Antenna array state: frequency index, RF-CH count (`nrfch`), per-element enable flags and body-frame positions, calibration run flag and epoch count, EKF state `x[3+SDR_MAX_RFCH]` = {roll, pitch, yaw, bias_1..bias_n} and covariance `P`, RMS. Self-contained — no back-pointer to receiver. The number of array channels (`narch`) and per-array-CH beam states (`arch[]`) live in `sdr_rcv_t`.
 <br><br>
 
 - `sdr_rcv_t`
@@ -1140,15 +1140,15 @@ Antenna-array calibration and beam-forming. Calibration uses a per-epoch EKF ove
 
 ### API Functions
 
-**`sdr_array_t *sdr_array_new(sdr_rcv_t *rcv, int freq)`**
+**`sdr_array_t *sdr_array_new(int nrfch, int freq)`**
 <br>
-- **Description**: Allocate and initialize an antenna array. When `rcv != NULL` and `rcv->narch > 0`, all per-CH beams in `rcv->arch[]` are initialized to a default zenith equal-weight sum (scale `1/rcv->nrfch`). Initial `ant_pos` is all-zero and `ant_ena[0..nrfch-1]` is 1.
+- **Description**: Allocate and initialize an antenna array. Initial `ant_pos` is all-zero and `ant_ena[0..nrfch-1]` is 1. The struct is self-contained — no back-pointer to a receiver — so the same constructor serves both the receiver-internal use (`sdr_rcv.c`) and standalone batch calibration (`pocket_calib`).
 - **Arguments**:
-  - rcv: back-pointer to receiver (NULL allowed for standalone calibration only)
+  - nrfch: number of RF channels (1..`SDR_MAX_RFCH`)
   - freq: frequency index (0=L1, 1=L2, ...)
 - **Return**: array pointer (never NULL — `sdr_malloc` aborts on failure)
 - **Notes**:
-  - Antenna geometry, attitude/bias, and beam directions are configured by the wrapper functions in `sdr_rcv.c` after construction.
+  - Antenna geometry and calibration state are configured via `sdr_array_ant_pos()` / `sdr_array_set()` / `sdr_array_run()` after construction.
 <br><br>
 
 **`void sdr_array_free(sdr_array_t *array)`**
@@ -1201,33 +1201,31 @@ Antenna-array calibration and beam-forming. Calibration uses a per-epoch EKF ove
 - **Description**: Reset a per-array-CH beam state in place (zero az/el/scale and clear weights). NULL-safe.
 <br><br>
 
-**`int sdr_arch_set_beam(sdr_arch_t *arch, const sdr_array_t *array, double az, double el, double scale)`**
+**`void sdr_arch_set_beam(sdr_arch_t *arch, const sdr_rcv_t *rcv, double az, double el, double scale)`**
 <br>
 - **Description**: Compute beam-forming weights for one array CH pointing in ENU direction (`az`, `el`) and install them into `arch`.
 - **Arguments**:
   - arch: per-array-CH beam state to update
-  - array: array state (must have `array->rcv != NULL`)
+  - rcv: receiver (must have `rcv->array != NULL`)
   - az: beam azimuth (rad, from N CW)
   - el: beam elevation (rad, above horizon)
   - scale: per-CH weight magnitude (`<= 0` disables this beam — installs zero weights)
-- **Return**: 1 on success, 0 on error
 - **Notes**:
-  - Reads the current rpy/bias and ant_pos from `array`. Caller is responsible for holding `rcv->mtx` when calling concurrently with `sdr_arch_combine()`.
+  - Reads the current rpy/bias and ant_pos from `rcv->array`. Caller is responsible for holding `rcv->mtx` when calling concurrently with `sdr_arch_combine()`.
   - Bit-range expansion gain is applied automatically based on the smallest `bits` among participating L1 RF CHs.
 <br><br>
 
-**`int sdr_arch_get_beam(const sdr_arch_t *arch, double *az, double *el)`**
+**`void sdr_arch_get_beam(const sdr_arch_t *arch, double *az, double *el)`**
 <br>
-- **Description**: Read the most recently set beam direction.
-- **Return**: 1 on success, 0 on NULL `arch`
+- **Description**: Read the most recently set beam direction into `*az` / `*el`.
 <br><br>
 
-**`void sdr_arch_combine(const sdr_arch_t *arch, const sdr_array_t *array, int base)`**
+**`void sdr_arch_combine(const sdr_arch_t *arch, const sdr_rcv_t *rcv, int base)`**
 <br>
 - **Description**: Combine RF CH IF data into one array CH IF data buffer using the current weights. Reads `rcv->buff[0..nrfch-1]` and writes `rcv->buff[nrfch + m]` (where `m = arch - rcv->arch`), each starting at sample offset `base`. No-op when `arch->scale <= 0`.
 - **Arguments**:
   - arch: per-array-CH beam state (selects the destination buffer by its offset within `rcv->arch[]`)
-  - array: array state (must have `array->rcv != NULL`)
+  - rcv: receiver
   - base: starting sample offset in each buffer
 - **Return**: none
 - **Notes**:

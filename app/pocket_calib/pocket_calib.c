@@ -33,7 +33,7 @@ static gtime_t parse_time(const char *str)
 {
     double ep[6] = {0};
     char buff[64];
-
+    
     snprintf(buff, sizeof(buff), "%.63s", str);
     for (char *p = buff; *p; p++) {
         if (strchr("/:_-", *p)) *p = ' ';
@@ -90,7 +90,7 @@ static int est_pos(const obs_t *obs, const nav_t *nav, double *rr)
     sol_t sol;
     double azel[2*MAXSAT];
     char msg[128];
-
+    
     for (int i = 0, j = 0; i < obs->n; i = j) {
         gtime_t ti = obs->data[i].time;
         int n = 0;
@@ -119,7 +119,7 @@ static void write_result(FILE *fp, const char *geom_file, const char *nav_file,
     fprintf(fp, "# ARRAY CALIBRATION by %s\n", PROG_NAME);
     fprintf(fp, "# GEOMETRY FILE   : %s\n", geom_file);
     for (int i = 0; i < nant; i++) {
-        fprintf(fp, "# OBS FILE    CH%d : %s\n", i + 1, obs_files[i]);
+        fprintf(fp, "# OBS FILE CH%d    : %s\n", i + 1, obs_files[i]);
     }
     fprintf(fp, "# NAV FILE        : %s\n", nav_file);
     fprintf(fp, "# POSTION LLH     : %.9f %.9f %.3f\n", pos[0] * R2D,
@@ -129,7 +129,8 @@ static void write_result(FILE *fp, const char *geom_file, const char *nav_file,
     fprintf(fp, "# RESIDUALS RMS   : %9.4f m\n", rms);
     fprintf(fp, "# ATTITUDE ROLL   : %9.4f deg\n", rpy[0] * R2D);
     fprintf(fp, "# ATTITUDE PITCH  : %9.4f deg\n", rpy[1] * R2D);
-    fprintf(fp, "# ATTITUDE YAW    : %9.4f deg\n", rpy[2] * R2D);
+    fprintf(fp, "# ATTITUDE YAW    : %9.4f deg (CCW+ from N; compass = -yaw)\n",
+        rpy[2] * R2D);
     fprintf(fp, "# H/W DELAY       :\n");
     fprintf(fp, "#  %-4s %12s %12s\n", "CH", "DELAY(ns)", "DELAY(m)");
     for (int i = 0; i < nant; i++) {
@@ -162,8 +163,8 @@ static void write_result(FILE *fp, const char *geom_file, const char *nav_file,
 //
 //     -g file
 //         Array geometry file: one "x y z" per line in body frame (m). The
-//         i-th line is the position of element CH(i). First line is CH1
-//         (reference).
+//         body frame is X=right, Y=forward, Z=up. The i-th line is the
+//         position of element CH(i). First line is CH1 (reference).
 //
 //     -n file
 //         RINEX navigation data file.
@@ -184,7 +185,7 @@ int main(int argc, char **argv)
     const char *obs_files[SDR_MAX_RFCH];
     double ant_pos[SDR_MAX_RFCH*3] = {0}, rr[3] = {0};
     int nant = 0, nobs = 0, freq = 0;
-
+    
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-ts") && i + 1 < argc) {
             ts = parse_time(argv[++i]);
@@ -227,7 +228,9 @@ int main(int argc, char **argv)
         }
     }
     sortobs(&obs);
-
+    
+    uint32_t tick = sdr_get_tick();
+    
     // estimate receiver position
     if (!est_pos(&obs, &nav, rr)) {
         fprintf(stderr, "receiver position not available\n");
@@ -245,28 +248,40 @@ int main(int argc, char **argv)
         return -1;
     }
     int nep = group_epochs(&obs, obs_ep, nobs_ep);
-    
-    // calibration
+
+    // per-epoch EKF calibration
+    int ant_ena[SDR_MAX_RFCH] = {0};
+    for (int i = 0; i < nant; i++) ant_ena[i] = 1;
+    sdr_array_t *array = sdr_array_new(nant, freq);
+    sdr_array_ant_pos(array, ant_pos, ant_ena);
+    sdr_array_run(array, 1);
+
     double bias[SDR_MAX_RFCH] = {0}, rpy[3] = {0}, rms = 0.0;
-    int ret = array_calib(obs_ep, nobs_ep, nep, &nav, ant_pos, nant, freq, rr,
-        bias, rpy, &rms);
-    
+    int n_ok = 0;
+    for (int k = 0; k < nep; k++) {
+        sdr_array_calib(array, obs_ep[k], nobs_ep[k], &nav, rr);
+    }
+    sdr_array_stat(array, rpy, bias, &rms, &n_ok);
+
+    sdr_array_free(array);
     free(obs_ep); free(nobs_ep);
     freeobs(&obs); freenav(&nav, NAV_MASK);
 
-    if (!ret) {
+    if (n_ok <= 0) {
         fprintf(stderr, "array_calib() error\n");
         return -1;
     }
+    printf("TIME = %.3f s\n", (sdr_get_tick() - tick) * 1e-3);
+
     // write output
     if (*out_file && !(fp = fopen(out_file, "w"))) {
         fprintf(stderr, "output file open error %s\n", out_file);
         return -1;
     }
-    write_result(fp, geom_file, nav_file, obs_files, nant, freq, rr, nep, bias,
+    write_result(fp, geom_file, nav_file, obs_files, nant, freq, rr, n_ok, bias,
         rpy, rms);
     
     if (fp != stdout) fclose(fp);
-
+    
     return 0;
 }

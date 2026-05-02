@@ -772,8 +772,11 @@ def update_rcv_stat(p):
         'IF Data Log (MB)')
     stat = get_rcv_stat(rcv_body).split()
     sol = get_rcv_pvt_sol(rcv_body).split()
+    arr = array_calib_stat(rcv_body)
+    rpy = arr[1] if arr else np.zeros(3)
+    rpy_str = '%.2f/%.2f/%.2f' % (rpy[0]/D2R, rpy[1]/D2R, rpy[2]/D2R)
     val = stat[0:3] + [''] + stat[3:10] + [sol[0] + ' ' + sol[1], sol[6]] + \
-        sol[2:5] + ['0.0/0.0/0.0'] + sol[5:6] + [stat[10], ''] + stat[11:]
+        sol[2:5] + [rpy_str] + sol[5:6] + [stat[10], ''] + stat[11:]
     plt.plot_clear(p)
     xs, ys = plt.plot_scale(p)
     for i in range(len(labels)):

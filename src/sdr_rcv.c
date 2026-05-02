@@ -691,10 +691,10 @@ sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
 
     rcv->narch = narch;
     if (narch > 0 && rcv->nrfch > 0) {
-        rcv->array = sdr_array_new(rcv, 0);
+        rcv->array = sdr_array_new(rcv->nrfch, 0);
         for (int m = 0; m < narch; m++) {
             rcv->arch[m].scale = 1.0 / rcv->nrfch;
-            sdr_arch_set_beam(rcv->arch + m, rcv->array, 0.0, PI / 2,
+            sdr_arch_set_beam(rcv->arch + m, rcv, 0.0, PI / 2,
                 rcv->arch[m].scale);
         }
     }
@@ -903,7 +903,7 @@ static void write_buff(sdr_rcv_t *rcv, const uint8_t *raw, int64_t ix)
         rcv->fmt == SDR_FMT_RAW16I || rcv->fmt == SDR_FMT_RAW32) {
         sdr_mutex_lock(&rcv->mtx);
         for (int m = 0; m < rcv->narch; m++) {
-            sdr_arch_combine(rcv->arch + m, rcv->array, base);
+            sdr_arch_combine(rcv->arch + m, rcv, base);
         }
         sdr_mutex_unlock(&rcv->mtx);
     }
@@ -1268,7 +1268,7 @@ static void refresh_arch_beams(sdr_rcv_t *rcv)
     for (int m = 0; m < rcv->narch; m++) {
         sdr_arch_t *arch = rcv->arch + m;
         if (arch->scale <= 0.0) continue;
-        sdr_arch_set_beam(arch, rcv->array, arch->az, arch->el, arch->scale);
+        sdr_arch_set_beam(arch, rcv, arch->az, arch->el, arch->scale);
     }
 }
 
@@ -1347,9 +1347,9 @@ int sdr_rcv_array_set_beam(sdr_rcv_t *rcv, int ach, double az, double el)
         1.0 / rcv->nrfch;
 
     sdr_mutex_lock(&rcv->mtx);
-    int ret = sdr_arch_set_beam(rcv->arch + m, array, az, el, scale);
+    sdr_arch_set_beam(rcv->arch + m, rcv, az, el, scale);
     sdr_mutex_unlock(&rcv->mtx);
-    return ret;
+    return 1;
 }
 
 // get receiver array CH beam ---------------------------------------------------
@@ -1361,9 +1361,9 @@ int sdr_rcv_array_get_beam(sdr_rcv_t *rcv, int ach, double *az, double *el)
     if (m < 0) return 0;
 
     sdr_mutex_lock(&rcv->mtx);
-    int ret = sdr_arch_get_beam(rcv->arch + m, az, el);
+    sdr_arch_get_beam(rcv->arch + m, az, el);
     sdr_mutex_unlock(&rcv->mtx);
-    return ret;
+    return 1;
 }
 
 // run one receiver array calibration epoch -------------------------------------

@@ -269,15 +269,19 @@ typedef struct {                // SDR RF channel type
     void *LUT;                  // raw to IF data LUT (256 or 4*256 entries)
 } sdr_rfch_t;
 
+typedef struct {                // per-CH per-cpx8-byte LUT entry (interleaved)
+    int32_t re, im;             //   re/im weighted contributions in Q8
+} sdr_lut_t;
+
 typedef struct {                // SDR array channel type
     double az;                  // beam azimuth (rad, from N, CW positive)
     double el;                  // beam elevation (rad, above horizon)
     double scale;               // beam-forming scale (<=0: disabled)
     int16_t w[SDR_MAX_RFCH*2];  // beam-forming weights in Q8 [re_0,im_0,...]
+    sdr_lut_t lut[SDR_MAX_RFCH][256]; // per-CH LUT: cpx8 byte -> (re, im)
 } sdr_arch_t;
 
 typedef struct {                // SDR antenna array state
-    struct sdr_rcv_tag *rcv;    // back-pointer to SDR receiver (NULL = standalone)
     int freq;                   // frequency index (0:L1,1:L2,...)
     int nrfch;                  // number of RF channels
     int ant_ena[SDR_MAX_RFCH];  // element enable flag
@@ -486,7 +490,7 @@ void sdr_pvt_udsol(sdr_pvt_t *pvt, int64_t ix);
 void sdr_pvt_solstr(sdr_pvt_t *pvt, char *buff, int size);
 
 // sdr_array.c
-sdr_array_t *sdr_array_new(sdr_rcv_t *rcv, int freq);
+sdr_array_t *sdr_array_new(int nrfch, int freq);
 void sdr_array_free(sdr_array_t *array);
 int sdr_array_ant_pos(sdr_array_t *array, const double *ant_pos,
     const int *ant_ena);
@@ -499,11 +503,10 @@ void sdr_array_calib(sdr_array_t *array, const obsd_t *obs, int nobs,
 int sdr_array_save(sdr_array_t *array, const char *file);
 int sdr_array_load(sdr_array_t *array, const char *file);
 void sdr_arch_free(sdr_arch_t *arch);
-int sdr_arch_set_beam(sdr_arch_t *arch, const sdr_array_t *array, double az,
+void sdr_arch_set_beam(sdr_arch_t *arch, const sdr_rcv_t *rcv, double az,
     double el, double scale);
-int sdr_arch_get_beam(const sdr_arch_t *arch, double *az, double *el);
-void sdr_arch_combine(const sdr_arch_t *arch, const sdr_array_t *array,
-    int base);
+void sdr_arch_get_beam(const sdr_arch_t *arch, double *az, double *el);
+void sdr_arch_combine(const sdr_arch_t *arch, const sdr_rcv_t *rcv, int base);
 
 // receiver array wrappers
 int sdr_rcv_array_ant_pos(sdr_rcv_t *rcv, const double *ant_pos,
