@@ -7,7 +7,14 @@ sys.path.append('../python')
 import numpy as np
 import sdr_ldpc, sdr_nb_ldpc
 
-rng = np.random.default_rng()
+rng = np.random.default_rng(0)
+
+# add exactly n bit errors without duplication ----------------------------------
+def add_errors(data, n):
+    err_data = data.copy()
+    if n > 0:
+        err_data[rng.choice(len(err_data), size=n, replace=False)] ^= 1
+    return err_data
 
 # sdr_ldpc.decode_LDPC('CNV2_SF2') ---------------------------------------------
 def test_01():
@@ -23,8 +30,7 @@ def test_01():
     t = time.time()
     
     for n in range(50):
-        err_data = SF.copy()
-        err_data[rng.integers(1200, size=n)] ^= 1
+        err_data = add_errors(SF, n)
         
         dec_data, nerr = sdr_ldpc.decode_LDPC('CNV2_SF2', err_data)
         
@@ -48,8 +54,7 @@ def test_02():
     t = time.time()
     
     for n in range(30):
-        err_data = SF.copy()
-        err_data[rng.integers(548, size=n)] ^= 1
+        err_data = add_errors(SF, n)
         
         dec_data, nerr = sdr_ldpc.decode_LDPC('CNV2_SF3', err_data)
         
@@ -76,8 +81,7 @@ def test_03():
     t = time.time()
     
     for n in range(50):
-        err_data = SF.copy()
-        err_data[rng.integers(1200, size=n)] ^= 1
+        err_data = add_errors(SF, n)
         
         dec_data, nerr = sdr_ldpc.decode_LDPC('IRNV1_SF2', err_data)
         
@@ -101,8 +105,7 @@ def test_04():
     t = time.time()
     
     for n in range(30):
-        err_data = SF.copy()
-        err_data[rng.integers(548, size=n)] ^= 1
+        err_data = add_errors(SF, n)
         
         dec_data, nerr = sdr_ldpc.decode_LDPC('IRNV1_SF3', err_data)
         
@@ -129,8 +132,7 @@ def test_05():
     t = time.time()
     
     for n in range(50):
-        err_data = SF.copy()
-        err_data[rng.integers(1200, size=n)] ^= 1
+        err_data = add_errors(SF, n)
         
         dec_data, nerr = sdr_ldpc.decode_LDPC('BCNV1_SF2', err_data)
         
@@ -154,8 +156,7 @@ def test_06():
     t = time.time()
     
     for n in range(30):
-        err_data = SF.copy()
-        err_data[rng.integers(528, size=n)] ^= 1
+        err_data = add_errors(SF, n)
         
         dec_data, nerr = sdr_ldpc.decode_LDPC('BCNV1_SF3', err_data)
         
@@ -179,8 +180,7 @@ def test_07():
     t = time.time()
     
     for n in range(30):
-        err_data = SF.copy()
-        err_data[rng.integers(576, size=n)] ^= 1
+        err_data = add_errors(SF, n)
         
         dec_data, nerr = sdr_ldpc.decode_LDPC('BCNV2', err_data)
         
@@ -206,8 +206,7 @@ def test_08():
     t = time.time()
     
     for n in range(50):
-        err_data = SF.copy()
-        err_data[rng.integers(972, size=n)] ^= 1
+        err_data = add_errors(SF, n)
         
         dec_data, nerr = sdr_ldpc.decode_LDPC('BCNV3', err_data)
         
@@ -238,8 +237,7 @@ def test_09():
             ok, ng = 0, 0
             t = time.time()
             for n in range(50):
-                err_data = SF.copy()
-                err_data[rng.integers(972, size=n)] ^= 1
+                err_data = add_errors(SF, n)
                 
                 dec_data, nerr = sdr_ldpc.decode_LDPC('BCNV3', err_data)
                 

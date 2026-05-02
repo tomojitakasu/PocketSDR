@@ -122,7 +122,7 @@ def test_04():
             print('test_04: OK N=%6d err_max=%9.7f %9.7f' % (N, np.max(d1), np.max(d2)))
         else:
             print('test_04: NG N=%6d err_max=%9.7f %9.7f' % (N, np.max(d1), np.max(d2)))
-
+    
 # test psd() -------------------------------------------------------------------
 def test_05():
     N, IQ, fs, T, file = 1024, 1, 12e6, 0.01, 'sample/L1.bin'
@@ -175,7 +175,7 @@ def test_06():
     coff = 1.345
     phi = 3.456
     
-    print('test_05: performance')
+    print('test_06: performance')
     print('%6s %9s%9s%9s (ms)' % ('', '', 'Python', ''))
     print('%6s  %8s %8s %8s' % ('N  ', 'mix_carr', 'corr_std', 'corr_fft'))
     

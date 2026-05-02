@@ -176,9 +176,9 @@ static void test_03(void)
         
         sdr_buff_t *buff = gen_data(N[i] * 2);
         
-        sdr_cpx_t C[4], C_ref[4];
+        sdr_cpx_t C[4], C_ref[4], C2[2];
         sdr_mix_carr(buff, ix[i], N[i], fs[i], fc[i], phi[i], data);
-        sdr_corr_std(data, code_res, N[i], pos, 4, C);
+        sdr_corr_std(data, code_res, N[i], 0.0, pos, 4, C, C2);
         sdr_corr_std_ref(buff, ix[i], N[i], fs[i], fc[i], phi[i], code_res, pos, 4, C_ref);
         
         for (int j = 0; j < 4; j++) {
@@ -203,22 +203,98 @@ static void test_04(void)
     printf("test_04: OK\n");
 }
 
-// test performance: sdr_mix_carr(), sdr_corr_std(), sdr_corr_fft() ------------
+// test sdr_lpf_new()/sdr_lpf_free()/sdr_lpf_apply() --------------------------
 static void test_05(void)
+{
+    // (1) invalid arguments -> NULL
+    if (sdr_lpf_new(0.0, 24e6) || sdr_lpf_new(-1.0, 24e6) ||
+        sdr_lpf_new(1e6, 0.0) || sdr_lpf_new(1e6, -1.0) ||
+        sdr_lpf_new(12e6, 24e6) || sdr_lpf_new(15e6, 24e6)) {
+        printf("sdr_lpf_new() error: invalid args not rejected\n");
+        exit(-1);
+    }
+    sdr_lpf_free(NULL); // must not crash
+    printf("test_05: sdr_lpf_new() invalid args OK\n");
+
+    // (2) DC response: constant input -> constant output (gain = 1)
+    {
+        sdr_lpf_t *lpf = sdr_lpf_new(2e6, 24e6);
+        if (!lpf) { printf("sdr_lpf_new() NULL\n"); exit(-1); }
+
+        const int N = 32;
+        sdr_cpx8_t data[N];
+        for (int i = 0; i < N; i++) data[i] = SDR_CPX8(3, -2);
+        sdr_lpf_apply(lpf, data, N);
+
+        int8_t oI = SDR_CPX8_I(data[N-1]), oQ = SDR_CPX8_Q(data[N-1]);
+        if (abs(oI - 3) > 1 || abs(oQ - (-2)) > 1) {
+            printf("LPF DC error: in=(3,-2) out=(%d,%d)\n", oI, oQ);
+            exit(-1);
+        }
+        sdr_lpf_free(lpf);
+        printf("test_05: LPF DC response out=(%d,%d) OK\n", oI, oQ);
+    }
+    // (3) high-freq attenuation: Nyquist-like input -> small output
+    {
+        sdr_lpf_t *lpf = sdr_lpf_new(1e6, 24e6); // narrow cutoff
+        const int N = 64;
+        sdr_cpx8_t data[N];
+        for (int i = 0; i < N; i++) {
+            int8_t s = (i & 1) ? 7 : -7;
+            data[i] = SDR_CPX8(s, s);
+        }
+        sdr_lpf_apply(lpf, data, N);
+
+        int maxI = 0, maxQ = 0;
+        for (int i = N/2; i < N; i++) { // skip transient
+            int8_t oI = SDR_CPX8_I(data[i]), oQ = SDR_CPX8_Q(data[i]);
+            if (abs(oI) > maxI) maxI = abs(oI);
+            if (abs(oQ) > maxQ) maxQ = abs(oQ);
+        }
+        if (maxI > 2 || maxQ > 2) {
+            printf("LPF attenuation error: maxI=%d maxQ=%d\n", maxI, maxQ);
+            exit(-1);
+        }
+        sdr_lpf_free(lpf);
+        printf("test_05: LPF high-freq attenuation maxI=%d maxQ=%d OK\n", maxI, maxQ);
+    }
+    // (4) output clipping to [-7, 7]
+    {
+        sdr_lpf_t *lpf = sdr_lpf_new(8e6, 24e6);
+        const int N = 32;
+        sdr_cpx8_t data[N];
+        for (int i = 0; i < N; i++) data[i] = SDR_CPX8(7, -7);
+        sdr_lpf_apply(lpf, data, N);
+
+        for (int i = 0; i < N; i++) {
+            int8_t oI = SDR_CPX8_I(data[i]), oQ = SDR_CPX8_Q(data[i]);
+            if (oI < -7 || oI > 7 || oQ < -7 || oQ > 7) {
+                printf("LPF clip error: out=(%d,%d)\n", oI, oQ);
+                exit(-1);
+            }
+        }
+        sdr_lpf_free(lpf);
+        printf("test_05: LPF output clip OK\n");
+    }
+    printf("test_05: OK\n");
+}
+
+// test performance ------------------------------------------------------------
+static void test_06(void)
 {
     int n = 10000;
     double fs = 12e6, fc = 13500.0, coff = 1.345, phi = 3.456;
     double pos[] = {0, -3, 3, -80};
     int N[] = {12000, 16000, 24000, 32000, 32768, 48000, 65536, 96000, 0};
     
-    printf("test_05: performance\n");
+    printf("test_06: performance\n");
     
-    printf("%6s %9s%9s%6s (ms)\n", "", "", "C+AVX2+FFTW3", "");
-    printf("%6s  %8s %8s %8s\n", "", "mix_carr", "corr_std", "corr_fft");
+    printf("%8s %10s %10s %10s (ms)\n", "N", "mix_carr", "corr_std", "corr_fft");
     
     for (int i = 0; N[i]; i++) {
-        sdr_cpx16_t *code_res, *IQ;
-        sdr_cpx_t *code_fft, *C1;
+        sdr_cpx16_t *code_res;
+        sdr_cpx16_t *IQ;
+        sdr_cpx_t *code_fft, *C1, C2[2];
         int len_code;
         
         code_res = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N[i]);
@@ -240,7 +316,7 @@ static void test_05(void)
         tt = sdr_get_tick();
         for (int j = 0; j < n; j++) {
             sdr_mix_carr(buff, 0, N[i], fs, fc, phi, IQ);
-            sdr_corr_std(IQ, code_res, N[i], pos, 4, C1);
+            sdr_corr_std(IQ, code_res, N[i], 0.0, pos, 4, C1, C2);
         }
         double t2 = (double)(sdr_get_tick() - tt) / n;
         
@@ -251,7 +327,7 @@ static void test_05(void)
         }
         double t3 = (double)(sdr_get_tick() - tt) / n;
         
-        printf("%6d  %8.4f %8.4f %8.4f\n", N[i], t1, t2, t3);
+        printf("%8d %10.4f %10.4f %10.4f\n", N[i], t1, t2, t3);
         fflush(stdout);
         
         sdr_free(code_res);
@@ -260,19 +336,40 @@ static void test_05(void)
         sdr_cpx_free(C1);
         sdr_buff_free(buff);
     }
-    printf("test_05: OK\n");
+    fs = 24e6;
+    fc = 4e6;
+    printf("%8s %10s (ms)\n", "N", "sdr_lpf_apply");
+
+    for (int i = 0; N[i]; i++) {
+        sdr_buff_t *buff = gen_data(N[i]);
+        sdr_lpf_t *lpf = sdr_lpf_new(fc, fs);
+
+        uint32_t tt = sdr_get_tick();
+        for (int j = 0; j < n; j++) {
+            sdr_lpf_apply(lpf, buff->data, N[i]);
+        }
+        double t = (double)(sdr_get_tick() - tt) / n;
+        double rate = (t > 0.0) ? (double)N[i] / (t * 1e3) : 0.0;
+
+        printf("%8d %10.4f    (%6.1f Msps)\n", N[i], t, rate);
+
+        sdr_lpf_free(lpf);
+        sdr_buff_free(buff);
+    }
+    printf("test_06: OK\n");
 }
 
 // test main --------------------------------------------------------------------
 int main(int argc, char **argv)
 {
     sdr_func_init("../../python/fftw_wisdom.txt");
-    
+
     test_01();
     test_02();
     test_03();
     test_04();
     test_05();
+    test_06();
     return 0;
 }
 
