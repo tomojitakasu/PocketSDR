@@ -533,7 +533,7 @@ extern int satexclude(int sat, double var, int svh, const prcopt_t *opt)
         if (opt->exsats[sat-1]==2) return 0; /* included satellite */
         if (!(sys&opt->navsys)) return 1; /* unselected sat sys */
     }
-    if (sys==SYS_QZS) svh&=0xFE; /* mask QZSS LEX health */
+    if (sys==SYS_QZS) svh&=0xEE; /* mask QZSS L1C/A, L1C/B health */
     if (svh) {
         trace(3,"unhealthy satellite: sat=%3d svh=%02X\n",sat,svh);
         return 1;
@@ -3280,11 +3280,13 @@ extern int expath(const char *path, char *paths[], int nmax)
 #ifdef WIN32
     WIN32_FIND_DATA file;
     HANDLE h;
-    char dir[1024]="",*p;
-    
+    char dir[1024]="",*p,*p1,*p2;
+
     trace(3,"expath  : path=%s nmax=%d\n",path,nmax);
-    
-    if ((p=strrchr(path,'\\'))) {
+
+    p1=strrchr(path,'\\'); p2=strrchr(path,'/');
+    p=(p1>p2)?p1:p2;
+    if (p) {
         strncpy(dir,path,p-path+1); dir[p-path+1]='\0';
     }
     if ((h=FindFirstFile((LPCTSTR)path,&file))==INVALID_HANDLE_VALUE) {
