@@ -1,4 +1,4 @@
-# **Pocket SDR - An Open-Source GNSS SDR, ver. 0.14**
+# **Pocket SDR - An Open-Source GNSS SDR, ver. 0.15b**
 
 ## **Overview**
 
@@ -22,7 +22,7 @@ The supported GNSS signals by Pocket SDR are as follows. For details on these si
 
 * **GPS**: L1C/A, L1C-D, L1C-P, L2C-M, L5-I, L5-Q
 * **GLONASS**: L1C/A (L1OF), L2C/A (L2OF), L1OCd, L1OCp, L2OCp, L3OCd, L3OCp
-* **Galileo**: E1-B, E1-C, E5a-I, E5a-Q, E5b-I, E5b-Q, E6-B, E6-C
+* **Galileo**: E1-B, E1-C, E5a-I, E5a-Q, E5b-I, E5b-Q, E5AltBOC (E5abQ), E6-B, E6-C
 * **QZSS**: L1C/A, L1C/B, L1C-D, L1C-P, L1S, L2C-M, L5-I, L5-Q, L5S-I, L5S-Q, L6D, L6E
 * **BeiDou**: B1I, B1C-D, B1C-P, B2a-D, B2a-P, B2I, B2b-I, B3I
 * **NavIC**: L1-SPS-D, L1-SPS-P, L5-SPS
@@ -77,29 +77,37 @@ PocketSDR
 │   ├── pocket_acq   # GNSS signal acquisition
 │   ├── pocket_trk   # GNSS signal tracking and PVT generation
 │   ├── pocket_snap  # Snapshot Positioning
-│   └── convbin      # RINEX converter supporting Pocket SDR
+│   ├── pocket_calib # Antenna array attitude / per-CH bias calibration
+│   ├── convbin      # RINEX converter supporting Pocket SDR
+│   └── str2str      # Stream converter (RTKLIB-derived)
 ├── src         # Pocket SDR library source programs
-├── python      # Pocket SDR Python scripts
+├── python      # Pocket SDR Python scripts (incl. pocket_sdr.py GUI)
 ├── lib         # Libraries for APs and Python scripts
-│   ├── win32        # Libraries for Windows
-│   ├── macos        # Libraries for mac OS
-│   ├── linux        # Libraries for Linux or Raspberry Pi OS
-│   ├── build        # Makefiles to build libraries
+│   ├── win32        # Built libraries for Windows (UCRT64)
+│   ├── macos        # Built libraries for macOS
+│   ├── linux        # Built libraries for Linux or Raspberry Pi OS
+│   ├── win32_msvc   # Built libraries for Windows (MSVC, optional)
+│   ├── build        # Makefiles to build libraries (UCRT64 / Linux / macOS)
+│   ├── build_msvc   # Makefiles to build libraries with MSVC (optional)
 │   ├── cyusb        # Cypress EZ-USB API (CyAPI.a) and includes
 │   ├── RTKLIB       # RTKLIB source programs based on 2.4.3 b34
+│   ├── pocketfft    # PocketFFT (header-only FFT, used internally)
+│   ├── SoapySDR     # SoapySDR headers + import lib for SDR device support
 │   ├── (libfec)     # Library for FEC (forward error corrections) ([1])
 │   └── (LDPC-codes) # Library for LDPC-decoder ([2])
 ├── conf        # Configuration files for Pocket SDR FE
 ├── FE_2CH      # Pocket SDR FE 2CH H/W and F/W
 ├── FE_4CH      # Pocket SDR FE 4CH H/W and F/W
-├── FE_8CH      # Pocket SDR FE 8CH H/W and F/W
+├── FE_8CH      # Pocket SDR FE 8CH H/W and F/W (3-bit RF samples)
+├── FE_8CH_12bit # Pocket SDR FE 8CH 12-bit H/W and F/W (FPGA-based, in dev.)
 ├── driver      # Driver installation instruction for Pocket SDR FE
-├── doc         # Documents
+├── doc         # Documents (incl. api_ref.md, command_ref.md)
 ├── image       # Image files for documents
 ├── sample      # Sample digital IF data captured by Pocket SDR FE
 └── test        # Test codes and data
 
-Note: Items in parentheses () are not included in the package.
+Note: Items in parentheses () are not included in the package and are
+fetched by lib/clone_lib.sh.
 ```
 
 --------------------------------------------------------------------------------
@@ -121,14 +129,32 @@ or
 > pip install numpy scipy matplotlib
 ```
 * (Optional) To use SoapySDR-supported devices (LimeSDR, HackRF, RTL-SDR, etc.)
-  with the python APs, install [**radioconda**](https://github.com/ryanvolz/radioconda/releases).
-  Download the latest `Radioconda-Windows-x86_64.exe` from the releases page and
-  run it with default settings. After install, add radioconda's runtime DLL
-  directory to the Windows PATH so the SoapySDR plug-in DLLs can be loaded:
+  with the python APs, install [**radioconda**](https://github.com/ryanvolz/radioconda).
+  radioconda is the recommended way to get SoapySDR + per-device plug-in DLLs
+  on Windows in one bundle. Steps:
+  1. Download the latest `Radioconda-Windows-x86_64.exe` from the
+     [releases page](https://github.com/ryanvolz/radioconda/releases) and
+     run it with default settings (per-user install, no admin needed).
+  2. Add the runtime DLL directory to the Windows PATH so `SoapySDR.dll`
+     and the per-device plug-in DLLs can be loaded:
 ```
 <radioconda_install_dir>\Library\bin
 ```
-  (typical default: `C:\Users\<user>\radioconda\Library\bin`)
+     (typical default: `C:\Users\<user>\radioconda\Library\bin`)
+  3. Verify the SoapySDR install and the plug-in modules in a fresh
+     command prompt:
+```
+> SoapySDRUtil --info
+> SoapySDRUtil --probe="driver=lime"
+```
+     The first command lists the discovered modules
+     (e.g., `LMS7`, `HackRF`, `RTLSDR`, `SDRPlay`, `BladeRF`).
+     The second probes a specific device. If the module is missing, see
+     radioconda's docs to add per-device packages via `mamba install`.
+  4. The Pocket SDR python APs (`pocket_sdr.py`, `pocket_dump.py`, ...)
+     auto-add radioconda's `Library\bin` to the DLL search path on
+     start, so PATH addition above is mainly needed for the C-level
+     `pocket_trk.exe` etc. to find the DLLs at runtime.
 * Add the Pocket SDR binary programs path (<install_dir>\PocketSDR\bin) to 
   the command search path (Path) of Windows environment variables.
 * Add the Pocket SDR Python scripts path (<install_dir>\PocketSDR\python) to 
@@ -157,12 +183,19 @@ $ pacman -S mingw-w64-ucrt-x86_64-python-numpy
 $ pacman -S mingw-w64-ucrt-x86_64-python-scipy
 $ pacman -S mingw-w64-ucrt-x86_64-python-matplotlib
 ```
-* If you intend to use SoapySDR-supported devices (LimeSDR, HackRF, etc.),
-  install [**radioconda**](https://github.com/ryanvolz/radioconda/releases) and
-  add its `Library/bin` directory to PATH at runtime so the SDR plug-in DLLs
-  can be loaded. The MinGW import library `libSoapySDR.dll.a` is generated
-  automatically from radioconda's `SoapySDR.dll` during the library build
-  (see SOAPY_ROOT below).
+* If you intend to use SoapySDR-supported devices (LimeSDR, HackRF, RTL-SDR,
+  SDRPlay, BladeRF, etc.), install
+  [**radioconda**](https://github.com/ryanvolz/radioconda) (see Windows
+  install section above for details). The Pocket SDR build picks up the
+  SoapySDR headers and the import library from the radioconda install:
+  - Headers: `<radioconda>\Library\include\SoapySDR\`
+  - DLL: `<radioconda>\Library\bin\SoapySDR.dll`
+  - The MinGW import library `libSoapySDR.dll.a` is auto-generated from
+    `SoapySDR.dll` during the first library build via `gen_soapysdr_implib.sh`.
+
+  The default radioconda location used by the Makefiles is
+  `/c/Users/<user>/radioconda/Library`. If installed elsewhere, override
+  with `SOAPY_ROOT` on the make command line (see below).
 
 * Move to the library directory. The external libraries are for Forward Error
   Correction (FEC) and Low-Density Parity-Check (LDPC) decoding. Install the
@@ -192,9 +225,43 @@ $ make install
 
 ## **Installation for Linux or Raspberry Pi OS**
 
+> **Note**: Pocket SDR has been primarily verified on Ubuntu / Debian-based
+> Linux distributions. **Raspberry Pi OS** is supported in principle but
+> SoapySDR-based device support has not been thoroughly verified on
+> Raspberry Pi.
+
 * You need fundamental development packages and some libraries. Confirm the following
 packages installed: git, gcc, g++, make, libusb-1.0-0-dev, libfftw3-dev, python3, python3-numpy,
 python3-scipy, python3-matplotlib, python3-tk
+* (Optional) To use SoapySDR-supported devices (LimeSDR, HackRF, RTL-SDR,
+  SDRPlay, BladeRF, etc.), install SoapySDR and the per-device modules.
+  On Ubuntu / Debian, the simplest way is the meta-package
+  `soapysdr-module-all`, which pulls in all device modules at once:
+```
+$ sudo apt install libsoapysdr-dev soapysdr-tools soapysdr-module-all
+```
+  If you prefer to install only the modules you need, install them
+  individually instead:
+```
+$ sudo apt install libsoapysdr-dev soapysdr-tools
+$ sudo apt install soapysdr-module-rtlsdr      # RTL-SDR
+$ sudo apt install soapysdr-module-hackrf      # HackRF
+$ sudo apt install soapysdr-module-lms7        # LimeSDR (also: limesuite)
+$ sudo apt install soapysdr-module-bladerf     # BladeRF
+$ sudo apt install soapysdr-module-sdrplay     # SDRPlay (non-free, see vendor)
+$ sudo apt install soapysdr-module-airspy      # Airspy
+```
+  After install, verify the modules are loadable:
+```
+$ SoapySDRUtil --info
+$ SoapySDRUtil --probe="driver=lime"   # for LimeSDR
+```
+  Some devices (LimeSDR / SDRPlay / etc.) need additional vendor drivers
+  and udev rules — refer to each project's documentation.
+
+  For distros without prebuilt packages, build SoapySDR and the device
+  modules from source: see https://github.com/pothosware/SoapySDR/wiki .
+
 * Download and extract PocketSDR.zip or clone the git repository to an appropriate directory <install_dir>.
 ```
 $ unzip PocketSDR.zip
@@ -231,6 +298,13 @@ $ sudo pocket_sdr.py
 --------------------------------------------------------------------------------
 
 ## **Installation for macOS**
+
+> **Note**: macOS support is provided on a best-effort basis. Build and
+> basic functionality have been confirmed but **SoapySDR-based device
+> support on macOS is not actively verified**. SoapySDR may be installed
+> via Homebrew (`brew install soapysdr` plus per-device formulas such as
+> `soapyhackrf`, `soapyrtlsdr`, `limesuite`) but expect to do some
+> integration work yourself.
 
 * You need [**Homebrew**](https://brew.sh) as a package manager for macOS. Install Homebrew by running the following command in the terminal:
 
@@ -384,5 +458,11 @@ $ pocket_trk.py ch2.bin -f 12 -sig E6B -prn 4 -log trk.log -p -ts 0.2
 - **2024-05-28 (v0.12)**: Performance optimizations. Added support for PVT generation, RTCM3, and NMEA outputs.
 - **2024-07-04 (v0.13)**: Added GUI-based GNSS SDR receiver AP. Added support for macOS and Raspberry Pi OS.
 - **2025-03-21 (v0.14)**: Added Pocket SDR FE 8CH. Fixed various issues.
+- **2026-05-02 (v0.15b)**: Added antenna array calibration (per-epoch EKF on
+  single-difference carrier-phase residuals) and digital beam-forming. Added
+  LUT-based array combine (~2x throughput at narch=8). Added GUI Array tab
+  with calibration / beam control and gain pattern overlay. Added Galileo
+  E5ABQ signal support. Added SoapySDR / LimeSDR support on Windows
+  (UCRT64 + radioconda). Refactored array calibration / beam-forming API.
 
 --------------------------------------------------------------------------------
