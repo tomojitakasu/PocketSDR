@@ -18,7 +18,7 @@
 //  2024-05-28  1.10 update constants, types and APIs
 //  2024-07-01  1.11 import pocket_dev.h
 //  2024-08-26  1.12 update types and APIs
-//  2024-12-30  1.13 update constants, types and APIs
+//  2026-05-02  1.13 ver.0.15
 //
 #ifndef POCKET_SDR_H
 #define POCKET_SDR_H
@@ -104,9 +104,10 @@ extern "C" {
 
 // type definitions ----------------------------------------------------------
 typedef uint8_t sdr_cpx8_t;      // 8(4+4) bits complex type
-typedef struct {int8_t I, Q;} sdr_cpx16_t; // 16(8+8) bits complex type
+typedef struct {int8_t  I, Q;} sdr_cpx16_t; // 16(8+8)   bits complex type
+typedef struct {int32_t I, Q;} sdr_cpx64_t; // 64(32+32) bits complex type
 typedef float sdr_cpx_t[2];      // single precision complex type
-typedef struct sdr_lpf_tag sdr_lpf_t; // LPF state (opaque, see sdr_rcv.c)
+typedef struct sdr_lpf_tag sdr_lpf_t; // LPF type
 
 #ifdef WIN32
 typedef HANDLE sdr_thread_t;     // thread type
@@ -269,26 +270,22 @@ typedef struct {                // SDR RF channel type
     void *LUT;                  // raw to IF data LUT (256 or 4*256 entries)
 } sdr_rfch_t;
 
-typedef struct {                // per-CH per-cpx8-byte LUT entry (interleaved)
-    int32_t re, im;             //   re/im weighted contributions in Q8
-} sdr_lut_t;
-
 typedef struct {                // SDR array channel type
-    double az;                  // beam azimuth (rad, from N, CW positive)
-    double el;                  // beam elevation (rad, above horizon)
+    double az, el;              // beam azimuth and elevation (rad)
     double scale;               // beam-forming scale (<=0: disabled)
     int16_t w[SDR_MAX_RFCH*2];  // beam-forming weights in Q8 [re_0,im_0,...]
-    sdr_lut_t lut[SDR_MAX_RFCH][256]; // per-CH LUT: cpx8 byte -> (re, im)
+    sdr_cpx64_t LUT[SDR_MAX_RFCH][256]; // LUT: cpx8 -> cpx64
 } sdr_arch_t;
 
-typedef struct {                // SDR antenna array state
+typedef struct {                // SDR antenna array type
+    int calib_run;              // calibration state
     int freq;                   // frequency index (0:L1,1:L2,...)
     int nrfch;                  // number of RF channels
     int ant_ena[SDR_MAX_RFCH];  // element enable flag
     double ant_pos[SDR_MAX_RFCH][3]; // element positions in body-frame (m)
-    int calib_run, nep;         // calibration flag (0/1) and epoch count
     double x[3+SDR_MAX_RFCH];   // EKF state {roll,pitch,yaw,bias_1..bias_n-1}
     double P[(3+SDR_MAX_RFCH)*(3+SDR_MAX_RFCH)]; // EKF covariance
+    int nep;                    // calibration epoch count
     double rms;                 // calibration RMS (m)
 } sdr_array_t;
 
@@ -502,6 +499,8 @@ void sdr_array_calib(sdr_array_t *array, const obsd_t *obs, int nobs,
     const nav_t *nav, const double *rr);
 int sdr_array_save(sdr_array_t *array, const char *file);
 int sdr_array_load(sdr_array_t *array, const char *file);
+int sdr_array_geom_save(const char *file, const double *ant_pos, int n);
+int sdr_array_geom_load(const char *file, double *ant_pos, int max_ant);
 void sdr_arch_free(sdr_arch_t *arch);
 void sdr_arch_set_beam(sdr_arch_t *arch, const sdr_rcv_t *rcv, double az,
     double el, double scale);

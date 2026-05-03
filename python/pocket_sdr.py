@@ -10,7 +10,7 @@
 #  2025-03-19  1.1  ver.0.14
 #  2026-04-26  1.2  ver.0.15
 #
-import sys, os, platform, time, re
+import sys, os, platform, time, re, shutil
 from collections import deque
 from math import *
 from ctypes import *
@@ -19,6 +19,7 @@ from numpy import ctypeslib
 from tkinter import *
 from tkinter import ttk
 from tkinter import scrolledtext
+from tkinter import filedialog
 import tkinter.font as tkfont
 import sdr_func, sdr_code, sdr_opt, sdr_rtk
 import sdr_plot as plt
@@ -130,6 +131,14 @@ def to_float(str):
 def str2time(str):
     ep = [float(s) for s in re.split('[-/:_ ]', str)]
     return sdr_rtk.epoch2time(ep) if len(ep) >= 3 else sdr_rtk.GTIME()
+
+# set state of all widgets in panel --------------------------------------------
+def config_panel_state(p, state):
+    for c in p.winfo_children():
+        if c.winfo_class() == 'Frame':
+            config_panel_state(c, state)
+        else:
+            c.configure(state=state)
 
 # start receiver ---------------------------------------------------------------
 def rcv_open(sys_opt, inp_opt, out_opt, sig_opt, array_opt):
@@ -512,18 +521,18 @@ def array_calib_stat(rcv):
     return run, rpy, bias, rms.value, nep.value
 
 # set array CH beam direction --------------------------------------------------
-def array_set_beam(rcv, ach, az, el):
+def array_set_beam(rcv, arch, az, el):
     libsdr.sdr_rcv_array_set_beam.argtypes = (c_void_p, c_int32, c_double,
         c_double)
-    return libsdr.sdr_rcv_array_set_beam(rcv, ach, az, el)
+    return libsdr.sdr_rcv_array_set_beam(rcv, arch, az, el)
 
 # get array CH beam direction --------------------------------------------------
-def array_get_beam(rcv, ach):
+def array_get_beam(rcv, arch):
     az = c_double(0.0)
     el = c_double(0.0)
     libsdr.sdr_rcv_array_get_beam.argtypes = (c_void_p, c_int32,
         POINTER(c_double), POINTER(c_double))
-    if not libsdr.sdr_rcv_array_get_beam(rcv, ach, byref(az), byref(el)):
+    if not libsdr.sdr_rcv_array_get_beam(rcv, arch, byref(az), byref(el)):
         return None
     return az.value, el.value # (rad)
 
@@ -539,11 +548,26 @@ def array_ant_pos(rcv, ant_pos, ena):
 # save / load array calibration state to / from file -------------------------
 def array_calib_save_file(rcv, file=CALIB_FILE):
     libsdr.sdr_rcv_array_save.argtypes = (c_void_p, c_char_p)
-    return bool(libsdr.sdr_rcv_array_save(rcv, file.encode()))
+    return libsdr.sdr_rcv_array_save(rcv, file.encode())
 
 def array_calib_load_file(rcv, file=CALIB_FILE):
     libsdr.sdr_rcv_array_load.argtypes = (c_void_p, c_char_p)
-    return bool(libsdr.sdr_rcv_array_load(rcv, file.encode()))
+    return libsdr.sdr_rcv_array_load(rcv, file.encode())
+
+# save / load array geometry to / from file ----------------------------------
+def array_geom_save_file(file, ant_pos):
+    n = len(ant_pos) // 3
+    c_pos = (c_double * (n * 3))(*ant_pos)
+    libsdr.sdr_array_geom_save.argtypes = (c_char_p, POINTER(c_double), c_int32)
+    libsdr.sdr_array_geom_save.restype = c_int32
+    return libsdr.sdr_array_geom_save(file.encode(), c_pos, n)
+
+def array_geom_load_file(file, max_ant=MAX_RFCH):
+    c_pos = (c_double * (max_ant * 3))()
+    libsdr.sdr_array_geom_load.argtypes = (c_char_p, POINTER(c_double), c_int32)
+    libsdr.sdr_array_geom_load.restype = c_int32
+    n = libsdr.sdr_array_geom_load(file.encode(), c_pos, max_ant)
+    return [(c_pos[i*3], c_pos[i*3+1], c_pos[i*3+2]) for i in range(n)]
 
 # get PVT solution -------------------------------------------------------------
 def get_rcv_pvt_sol(rcv):
@@ -735,17 +759,14 @@ def get_azel(e, p):
 
 # skyplot click/drag callback --------------------------------------------------
 def on_skyplot_click(e, p):
-    if not rcv_body: return
     rfch = p.box2.get()
     arch = to_int(rfch)
-    if arch < 9:
-        return
     az, el = get_azel(e, p.plt1)
-    if az < 0.0:
+    if not rcv_body or arch <= MAX_RFCH or az < 0.0:
         return
     array_set_beam(rcv_body, arch - 1, az, el)
     if array_page is not None:
-        idx = arch - 9
+        idx = arch - 1 - MAX_RFCH
         if 0 <= idx < MAX_ARCH:
             array_page.beam_az[idx].set('%.3f' % (az / D2R))
             array_page.beam_el[idx].set('%.3f' % (el / D2R))
@@ -796,22 +817,47 @@ def update_str_stat(p):
     for i, ind in enumerate(p):
         ind.configure(bg=col[stat[3-i]+1])
 
+# read rpy (rad) from saved calibration file, or zeros if unavailable ---------
+def read_calib_rpy_file(file=CALIB_FILE):
+    try:
+        with open(file) as f:
+            for line in f:
+                idx = line.find('#')
+                if idx >= 0: line = line[:idx]
+                vals = line.split()
+                if len(vals) >= 3:
+                    try:
+                        return [float(v) * D2R for v in vals[:3]]
+                    except ValueError:
+                        pass
+    except OSError:
+        pass
+    return [0.0, 0.0, 0.0]
+
 # overlay array gain -----------------------------------------------------------
-def draw_array_gain_overlay(p, ach):
-    stat = array_calib_stat(rcv_body)
-    if not stat: return
-    rpy = stat[1]
+def draw_array_gain_overlay(p, arch):
+    if rcv_body:
+        stat = array_calib_stat(rcv_body)
+        if not stat: return
+        rpy = stat[1]
+    else:
+        rpy = read_calib_rpy_file()
     ant_pos, ena = array_read_opt()
     pos = np.asarray(ant_pos, dtype=float).reshape(-1, 3)
     ena_arr = np.asarray(ena, dtype=bool)[:len(pos)]
-    if ena_arr.sum() < 2: return
+    if ena_arr.sum() < 1: return
     pos = pos[ena_arr]
-    beam = array_get_beam(rcv_body, ach - 1)
-    if beam is None: return
-    az_b, el_b = beam
+    if rcv_body:
+        beam = array_get_beam(rcv_body, arch - 1)
+        if beam is None: return
+        az_b, el_b = beam
+    else:
+        m = arch - MAX_RFCH - 1
+        if not (0 <= m < MAX_ARCH) or array_page is None: return
+        az_b = to_float(array_page.beam_az[m].get()) * D2R
+        el_b = to_float(array_page.beam_el[m].get()) * D2R
     lam = CLIGHT / 1.57542e9
-    M = GAIN_OVL_M
-    g = np.linspace(-1.0, 1.0, M)
+    g = np.linspace(-1.0, 1.0, GAIN_OVL_M)
     X, Y = np.meshgrid(g, g)
     R2 = X * X + Y * Y
     az = np.arctan2(X, Y)
@@ -825,7 +871,6 @@ def draw_array_gain_overlay(p, ach):
         [sy*cp, sy*sp*sr + cy*cr, sy*sp*cr - cy*sr],
         [-sp,   cp*sr,            cp*cr           ]])
     pos_enu = pos @ Rmat.T
-
     ce = np.cos(el)
     e_enu = np.stack([np.sin(az) * ce, np.cos(az) * ce, np.sin(el)], axis=-1)
     proj = e_enu @ pos_enu.T
@@ -833,37 +878,40 @@ def draw_array_gain_overlay(p, ach):
     proj_b = e_b @ pos_enu.T
     resp = np.sum(np.exp(1j * (2.0 * np.pi / lam) * (proj - proj_b)), axis=-1)
     gain = 20.0 * np.log10(np.abs(resp) + 1e-30)
-
     gain_img = gain[::-1]
-    actual_half = plt.plot_image(p, 0.0, 0.0, 1.0, gain_img, -30, 20,
-        tag='gain')
+    actual_half = plt.plot_image(p, 0.0, 0.0, 1.0, gain_img, -30, 20, tag='gain')
     plt.plot_sky_mask(p, actual_half, n_arc=24, tag='gain')
     p.c.tag_lower('gain')
 
 # update skyplot ---------------------------------------------------------------
 def update_sky_plot(p, sys, rfch):
-    sats, sat, sig, cn0, prn = get_sig_stat(rcv_body, sys, 1,
-        rfch=(0 if rfch == 'ALL' else int(rfch)))
+    sats, sat, sig, cn0, prn = get_sig_stat(rcv_body, sys, 1, 0)
     az, el, pvt, obs, eph, svh, fcn = get_sat_stat(rcv_body, sats)
+    if to_int(rfch) > 0:
+        e_sats, _, _, _, _ = get_sig_stat(rcv_body, sys, 1,
+            rfch=(0 if rfch == 'ALL' else int(rfch)))
+    else:
+        e_sats = sats
     plt.plot_clear(p)
     plt.plot_sky(p, color=None)
     arch = to_int(rfch)
     gain_on = getattr(p, 'gain_on', None)
-    if rcv_body and arch >= 9 and (gain_on is None or gain_on.get()):
+    if arch > MAX_RFCH and (gain_on is None or gain_on.get()):
         draw_array_gain_overlay(p, arch)
-    xs, _ = plt.plot_scale(p)
+    xs, ys = plt.plot_scale(p)
     for i in range(len(sats) - 1, -1, -1):
         if el[i] <= 0.0:
             continue
         x = (90 - el[i]) / 90 * sin(az[i] * pi / 180)
         y = (90 - el[i]) / 90 * cos(az[i] * pi / 180)
-        color1 = sat_color(sats[i]) if pvt[i] else BG_COLOR1
-        color2 = BG_COLOR1 if pvt[i] and rcv_body else plt.FG_COLOR
+        ena = pvt[i] and sats[i] in e_sats
+        color1 = sat_color(sats[i]) if ena else None
+        color2 = BG_COLOR1 if ena else plt.FG_COLOR
         plt.plot_circle(p, x, y, 12 / xs, fill=color1)
         plt.plot_text(p, x, y, sats[i], color=color2, font=get_font(-1))
     plt.plot_sky(p, gcolor=None)
 
-    if rcv_body and arch >= 9:
+    if rcv_body and arch > MAX_RFCH:
         draw_beam_mark(p, arch)
     
 # draw beam direction mark ------------------------------------------------------
@@ -1690,37 +1738,41 @@ def array_page_new(parent):
     p.toolbar = tool_bar_new(p.panel)
     p.txt_stat = ttk.Label(p.toolbar, foreground='blue')
     p.txt_stat.pack(side=LEFT, padx=10)
-    p.btn_clear = ttk.Button(p.toolbar, width=8, text='Clear')
-    p.btn_clear.pack(side=RIGHT, padx=(1, 10))
-    p.btn_calib = ttk.Button(p.toolbar, width=8, text='Start')
-    p.btn_calib.pack(side=RIGHT, padx=1)
-    ttk.Label(p.toolbar, text='Calibration').pack(side=RIGHT, padx=4)
+    p.btn_save = ttk.Button(p.toolbar, width=7, text='Save')
+    p.btn_save.pack(side=RIGHT, padx=(0, 10))
+    p.btn_load = ttk.Button(p.toolbar, width=7, text='Load')
+    p.btn_load.pack(side=RIGHT)
+    p.btn_clear = ttk.Button(p.toolbar, width=7, text='Clear')
+    p.btn_clear.pack(side=RIGHT)
+    p.btn_calib = ttk.Button(p.toolbar, width=7, text='Start')
+    p.btn_calib.pack(side=RIGHT)
+    ttk.Label(p.toolbar, text='Calibration').pack(side=RIGHT, padx=2)
     panel1 = Frame(p.panel, bg=BG_COLOR1)
     panel1.pack(expand=1, fill=BOTH)
     panel3 = Frame(panel1, relief=SOLID, bd=1, bg=BG_COLOR1)
     panel3.pack(fill=X, padx=10, pady=4)
     ttk.Label(panel3, text='ARRAY ATTITUDE', font=get_font(1, 'bold')).pack(pady=4)
-    p.txt_att = ttk.Label(panel3, text='ROLL:  0.000\xb0  PITCH:  0.000\xb0  YAW:  0.000\xb0\n')
-    p.txt_att.pack(padx=10, pady=(4, 0))
+    p.txt_att = ttk.Label(panel3)
+    p.txt_att.pack(padx=10, pady=(6, 16))
     panel4 = Frame(panel1, relief=SOLID, bd=1, bg=BG_COLOR1)
     panel4.pack(fill=X, padx=10, pady=4)
     ttk.Label(panel4, text='RF CH DELAY', font=get_font(1, 'bold')).pack(pady=4)
-    text = ''
-    for i in range(MAX_RFCH):
-        text += ' CH%d:%7.4f m ' % (i + 1, 0.0) + ('\n' if i % 4 == 3 else '')
-    p.txt_bias = ttk.Label(panel4, text=text)
-    p.txt_bias.pack(padx=10, pady=(4, 0))
+    p.txt_bias = ttk.Label(panel4)
+    p.txt_bias.pack(padx=10, pady=(6, 16))
     panel5 = Frame(panel1, relief=SOLID, bd=1, bg=BG_COLOR1)
     panel5.pack(expand=1, fill=BOTH, padx=10, pady=4)
     ttk.Label(panel5, text='ARRAY CH BEAM DIRECTION', font=get_font(1, 'bold')).pack(pady=4)
     p.beam_az = [StringVar() for i in range(MAX_ARCH)]
     p.beam_el = [StringVar() for i in range(MAX_ARCH)]
+    p.beam_panel = []
     for i in range(MAX_ARCH):
         p.beam_az[i].set('0.000')
         p.beam_el[i].set('90.000')
-        gen_beam_dirs(panel5, p, i)
+        p.beam_panel.append(gen_beam_dirs(panel5, p, i))
     p.btn_calib.bind('<Button-1>', lambda e: on_array_calib_toggle(e, p))
     p.btn_clear.bind('<Button-1>', lambda e: on_array_calib_clear(e, p))
+    p.btn_load.bind('<Button-1>', lambda e: on_array_calib_load(e, p))
+    p.btn_save.bind('<Button-1>', lambda e: on_array_calib_save(e, p))
     return p
 
 # generate beam directions -----------------------------------------------------
@@ -1729,16 +1781,38 @@ def gen_beam_dirs(parent, p, i):
     panel.pack_propagate(0)
     panel.pack(pady=1)
     btn = ttk.Button(panel, width=6, text='Update')
-    btn.pack(side=RIGHT, padx=2)
-    ttk.Label(panel, text='\xb0').pack(side=RIGHT, padx=2)
+    btn.pack(side=RIGHT, padx=1)
+    ttk.Label(panel, text='\xb0').pack(side=RIGHT, padx=(0, 4))
     el = ttk.Entry(panel, width=10, justify='right', textvariable=p.beam_el[i])
-    el.pack(side=RIGHT, padx=2)
-    ttk.Label(panel, text='\xb0  EL').pack(side=RIGHT, padx=2)
+    el.pack(side=RIGHT, padx=1)
+    ttk.Label(panel, text='\xb0  EL').pack(side=RIGHT)
     az = ttk.Entry(panel, width=10, justify='right', textvariable=p.beam_az[i])
     az.pack(side=RIGHT, padx=2)
-    ttk.Label(panel, text='  AZ').pack(side=RIGHT, padx=2)
-    ttk.Label(panel, text='  CH%-2d:' % (i + 9)).pack(side=LEFT, padx=2)
+    ttk.Label(panel, text='  AZ').pack(side=RIGHT)
+    ttk.Label(panel, text='  CH%-2d' % (i + 9), font=get_font(0, 'bold')).pack(side=LEFT, padx=2)
     btn.bind('<Button-1>', lambda e: on_beam_update(e, p, i))
+    return panel
+
+# update Array page ------------------------------------------------------------
+def update_array_page(p):
+    global array_opt
+    narch = to_int(array_opt.no_array.get())
+    for i in range(MAX_ARCH):
+        config_panel_state(p.beam_panel[i], NORMAL if i < narch else DISABLED)
+    stat = array_calib_stat(rcv_body)
+    if not stat: return
+    run, rpy, bias, rms, nep = stat
+    text1 = 'CALIB: %s  EPOCHS: %3d  RMS: %6.4f m' % (
+        'RUN...' if run else 'STOP', nep, rms)
+    text2 = 'ROLL:%8.3f\xb0  PITCH:%8.3f\xb0  YAW:%8.3f\xb0' % (rpy[0] / D2R,
+        rpy[1] / D2R, rpy[2] / D2R)
+    text3 = ''
+    for i in range(MAX_RFCH):
+        text3 += ' CH%d:%7.4f m ' % (i + 1, bias[i])
+        text3 += '\n\n' if i % 4 == 3 and i < MAX_RFCH - 1 else ''
+    p.txt_stat.configure(text=text1)
+    p.txt_att.configure(text=text2)
+    p.txt_bias.configure(text=text3)
 
 # Array page clear button callback ---------------------------------------------
 def on_array_calib_clear(e, p):
@@ -1780,30 +1854,49 @@ def on_array_calib_toggle(e, p):
         array_calib_stop(rcv_body)
         p.btn_calib.configure(text='Start')
 
-# Array page beam update callback ----------------------------------------------
-def on_beam_update(e, p, idx):
-    if not rcv_body: return
-    az = to_float(p.beam_az[idx].get()) * D2R
-    el = to_float(p.beam_el[idx].get()) * D2R
-    ant_pos, ena = array_read_opt()
-    array_ant_pos(rcv_body, ant_pos, ena)
-    array_set_beam(rcv_body, idx, az, el)
+# Array page calibration load button callback ---------------------------------
+def on_array_calib_load(e, p):
+    file = filedialog.askopenfilename(parent=p.panel,
+        title='Load Array Calibration', initialfile=CALIB_FILE,
+        filetypes=[('Calibration', '*.txt'), ('All', '*.*')])
+    if not file: return
+    if rcv_body:
+        ok = array_calib_load_file(rcv_body, file)
+    else:
+        try:
+            shutil.copyfile(file, CALIB_FILE)
+            ok = True
+        except OSError:
+            ok = False
+    if not ok:
+        status_bar_show('Calibration load error. ' + file)
 
-# update Array page ------------------------------------------------------------
-def update_array_page(p):
-    stat = array_calib_stat(rcv_body)
-    if not stat: return
-    run, rpy, bias, rms, nep = stat
-    text1 = 'CALIB: %s  EPOCHS: %3d  RMS: %6.4f m' % (
-        'RUN...' if run else 'STOP', nep, rms)
-    text2 = 'ROLL:%8.3f\xb0  PITCH:%8.3f\xb0  YAW:%8.3f\xb0\n' % (rpy[0] / D2R,
-        rpy[1] / D2R, rpy[2] / D2R)
-    text3 = ''
-    for i in range(MAX_RFCH):
-        text3 += ' CH%d:%7.4f m ' % (i + 1, bias[i]) + ('\n' if i % 4 == 3 else '')
-    p.txt_stat.configure(text=text1)
-    p.txt_att.configure(text=text2)
-    p.txt_bias.configure(text=text3)
+# Array page calibration save button callback ---------------------------------
+def on_array_calib_save(e, p):
+    file = filedialog.asksaveasfilename(parent=p.panel,
+        title='Save Array Calibration', initialfile=CALIB_FILE,
+        defaultextension='.txt',
+        filetypes=[('Calibration', '*.txt'), ('All', '*.*')])
+    if not file: return
+    if rcv_body:
+        ok = array_calib_save_file(rcv_body, file)
+    elif os.path.isfile(CALIB_FILE):
+        try:
+            shutil.copyfile(CALIB_FILE, file)
+            ok = True
+        except OSError:
+            ok = False
+    else:
+        ok = False
+    if not ok:
+        status_bar_show('Calibration save error. ' + file)
+
+# Array page beam update callback ----------------------------------------------
+def on_beam_update(e, p, i):
+    if not rcv_body: return
+    az = to_float(p.beam_az[i].get()) * D2R
+    el = to_float(p.beam_el[i].get()) * D2R
+    array_set_beam(rcv_body, i + MAX_ARCH, az, el)
 
 # generate Log page ------------------------------------------------------------
 def log_page_new(parent):
@@ -1877,7 +1970,7 @@ def on_btn_start_push(bar):
         ant_pos, ena = array_read_opt()
         array_ant_pos(rcv_body, ant_pos, ena)
         array_calib_load_file(rcv_body)
-        
+
         status_bar_show('Receiver started. ' + info)
         for i, btn in enumerate(bar.panel.winfo_children()):
             btn.configure(state=NORMAL if i in (1, 7) else DISABLED)
@@ -1923,7 +2016,8 @@ def on_btn_system_push(bar):
 def on_btn_array_push(bar):
     global array_opt
     if not rcv_body:
-        array_opt = sdr_opt.array_opt_dlg(root, array_opt)
+        array_opt = sdr_opt.array_opt_dlg(root, array_opt,
+            geom_load=array_geom_load_file, geom_save=array_geom_save_file)
 
 # Help button push callback ----------------------------------------------------
 def on_btn_help_push(bar):

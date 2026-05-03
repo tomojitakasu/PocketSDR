@@ -250,7 +250,7 @@ static void reset_state(sdr_array_t *array)
 int sdr_array_run(sdr_array_t *array, int run)
 {
     if (array->nrfch < 2) return 0;
-
+    
     if (run == 1 || run == 2) reset_state(array);
     if (run == 0 || run == 1) array->calib_run = run;
     if (run == 2) array->calib_run = 0;
@@ -262,7 +262,7 @@ void sdr_array_calib(sdr_array_t *array, const obsd_t *obs, int nobs,
     const nav_t *nav, const double *rr)
 {
     if (!array->calib_run || nobs <= 0 || norm(rr, 3) < 1e-6) return;
-
+    
     if (array->P[0] == 0.0) {
         kf_init(array, obs, nobs, nav, rr);
     } else {
@@ -301,19 +301,19 @@ int sdr_array_save(sdr_array_t *array, const char *file)
 {
     double rpy[3], bias[SDR_MAX_RFCH], rms;
     int nep;
-
+    
     sdr_array_stat(array, rpy, bias, &rms, &nep);
     if (nep <= 0 && norm(rpy, 3) < 1e-9) return 0;
-
+    
     FILE *fp = fopen(file, "w");
     if (!fp) return 0;
     fprintf(fp, "# Pocket SDR Array Calibration\n");
-    fprintf(fp, "# epochs=%d, rms=%.4fm\n", nep, rms);
-    fprintf(fp, "# Roll Pitch Yaw (rad)\n");
-    fprintf(fp, "%.9f %.9f %.9f\n", rpy[0], rpy[1], rpy[2]);
+    fprintf(fp, "# epochs=%d rms=%.4fm freq=%d\n", nep, rms, array->freq);
+    fprintf(fp, "# Roll Pitch Yaw (deg)\n");
+    fprintf(fp, "%.3f %.3f %.3f\n", rpy[0] * R2D, rpy[1] * R2D, rpy[2] * R2D);
     fprintf(fp, "# Bias CH1..CHn (m)\n");
     for (int i = 0; i < array->nrfch; i++) {
-        fprintf(fp, "%s%.9f", i ? " " : "", bias[i]);
+        fprintf(fp, "%s%.4f", i ? " " : "", bias[i]);
     }
     fprintf(fp, "\n");
     fclose(fp);
@@ -325,7 +325,7 @@ int sdr_array_load(sdr_array_t *array, const char *file)
 {
     FILE *fp = fopen(file, "r");
     if (!fp) return 0;
-
+    
     double rpy[3] = {0}, bias[SDR_MAX_RFCH] = {0};
     char buff[1024];
     int line = 0;
@@ -339,6 +339,7 @@ int sdr_array_load(sdr_array_t *array, const char *file)
                 fclose(fp);
                 return 0;
             }
+            for (int i = 0; i < 3; i++) rpy[i] *= D2R;
         } else {
             int n = 0;
             for (char *s = buff, *e; n < array->nrfch; s = e) {
@@ -353,6 +354,42 @@ int sdr_array_load(sdr_array_t *array, const char *file)
     fclose(fp);
     if (line < 2) return 0;
     return sdr_array_set(array, rpy, bias);
+}
+
+// save antenna geometry to file -----------------------------------------------
+int sdr_array_geom_save(const char *file, const double *ant_pos, int n)
+{
+    FILE *fp = fopen(file, "w");
+    if (!fp) return 0;
+    
+    fprintf(fp, "# Pocket SDR Array Geometry in body-frame, m)\n");
+    for (int i = 0; i < n; i++) {
+        fprintf(fp, "%.6f %.6f %.6f\n", ant_pos[i*3], ant_pos[i*3+1],
+            ant_pos[i*3+2]);
+    }
+    fclose(fp);
+    return n;
+}
+
+// load antenna geometry from file ---------------------------------------------
+int sdr_array_geom_load(const char *file, double *ant_pos, int max_ant)
+{
+    FILE *fp = fopen(file, "r");
+    if (!fp) return 0;
+    
+    char buff[256];
+    int n = 0;
+    while (n < max_ant && fgets(buff, sizeof(buff), fp)) {
+        char *p = strchr(buff, '#');
+        if (p) *p = '\0';
+        double pos[3];
+        if (sscanf(buff, "%lf %lf %lf", pos, pos + 1, pos + 2) == 3) {
+            matcpy(ant_pos + n * 3, pos, 3, 1);
+            n++;
+        }
+    }
+    fclose(fp);
+    return n;
 }
 
 // free array CH beam state -----------------------------------------------------
@@ -395,7 +432,7 @@ static void steer_body(const double *rpy, double az, double el, double *e_body)
     matmul("TN", 3, 1, 3, 1.0, R, e_enu, 0.0, e_body);
 }
 
-// build per-CH lookup table from current weights ------------------------------
+// build lookup table from weights ---------------------------------------------
 static void build_lut(sdr_arch_t *arch, int nrfch)
 {
     for (int j = 0; j < nrfch; j++) {
@@ -403,8 +440,8 @@ static void build_lut(sdr_arch_t *arch, int nrfch)
         for (int b = 0; b < 256; b++) {
             int32_t I = SDR_CPX8_I((sdr_cpx8_t)b);
             int32_t Q = SDR_CPX8_Q((sdr_cpx8_t)b);
-            arch->lut[j][b].re = I * wr - Q * wi;
-            arch->lut[j][b].im = I * wi + Q * wr;
+            arch->LUT[j][b].I = I * wr - Q * wi;
+            arch->LUT[j][b].Q = I * wi + Q * wr;
         }
     }
 }
@@ -415,31 +452,38 @@ void sdr_arch_set_beam(sdr_arch_t *arch, const sdr_rcv_t *rcv, double az,
 {
     arch->az = az;
     arch->el = el;
-    arch->scale = (scale > 0.0) ? scale : 0.0;
+    const sdr_array_t *array = rcv->array;
+    
+    int n_act = 0;
+    if (array && scale > 0.0) {
+        for (int i = 0; i < rcv->nrfch; i++) {
+            if (is_l1_ch(rcv, i) && array->ant_ena[i]) n_act++;
+        }
+    }
+    scale = (n_act > 0) ? 1.0 / n_act : 0.0;
+    arch->scale = scale;
     memset(arch->w, 0, sizeof(arch->w));
     if (scale <= 0.0) {
-        build_lut(arch, rcv->nrfch); // zero LUT (all weights are 0)
+        build_lut(arch, rcv->nrfch); // zero LUT
         return;
     }
-    const sdr_array_t *array = rcv->array;
-
     double lam = CLIGHT / ARRAY_FREQ;
     double amp = scale * bit_gain(rcv, array->ant_ena) * ARRAY_W_SCALE;
     double e_body[3], b_body[3];
-
+    
     // beam steering vector in body frame
     steer_body(array->x, az, el, e_body);
-
+    
     for (int i = 0; i < rcv->nrfch; i++) {
         if (!is_l1_ch(rcv, i) || !array->ant_ena[i]) continue;
-
+        
         for (int j = 0; j < 3; j++) {
             b_body[j] = array->ant_pos[i][j] - array->ant_pos[0][j];
         }
         double proj = dot(e_body, b_body, 3);
         double phi = -DPI * (proj + array->x[3+i]) / lam;
         double wr = amp * cos(phi), wi = amp * sin(phi);
-
+        
         arch->w[i*2  ] = (int16_t)floor(CLIP(wr, -32768.0, 32767.0) + 0.5);
         arch->w[i*2+1] = (int16_t)floor(CLIP(wi, -32768.0, 32767.0) + 0.5);
     }
@@ -460,24 +504,23 @@ void sdr_arch_combine(const sdr_arch_t *arch, const sdr_rcv_t *rcv, int base)
     int nrfch = rcv->nrfch, N = rcv->N;
     int m = (int)(arch - rcv->arch);
     if (m < 0 || m >= rcv->narch || nrfch < 2) return;
-
+    
     sdr_cpx8_t *out = rcv->buff[nrfch+m]->data + base;
     const sdr_cpx8_t *in[SDR_MAX_RFCH];
-    for (int a = 0; a < nrfch; a++) in[a] = rcv->buff[a]->data + base;
-
+    
+    for (int i = 0; i < nrfch; i++) {
+        in[i] = rcv->buff[i]->data + base;
+    }
     for (int i = 0; i < N; i++) {
-        int32_t sum_re = 0, sum_im = 0;
+        int32_t I = 0, Q = 0;
         for (int j = 0; j < nrfch; j++) {
-            const sdr_lut_t *e = &arch->lut[j][in[j][i]];
-            sum_re += e->re;
-            sum_im += e->im;
+            I += arch->LUT[j][in[j][i]].I;
+            Q += arch->LUT[j][in[j][i]].Q;
         }
-        sum_re += (sum_re >= 0) ? ARRAY_W_SCALE / 2 : -ARRAY_W_SCALE / 2;
-        sum_im += (sum_im >= 0) ? ARRAY_W_SCALE / 2 : -ARRAY_W_SCALE / 2;
-        sum_re /= ARRAY_W_SCALE;
-        sum_im /= ARRAY_W_SCALE;
-        sum_re = CLIP(sum_re, -8, 7);
-        sum_im = CLIP(sum_im, -8, 7);
-        out[i] = SDR_CPX8(sum_re, sum_im);
+        I += (I >= 0) ? ARRAY_W_SCALE / 2 : -ARRAY_W_SCALE / 2;
+        Q += (Q >= 0) ? ARRAY_W_SCALE / 2 : -ARRAY_W_SCALE / 2;
+        I /= ARRAY_W_SCALE;
+        Q /= ARRAY_W_SCALE;
+        out[i] = SDR_CPX8(CLIP(I, -8, 7), CLIP(Q, -8, 7));
     }
 }

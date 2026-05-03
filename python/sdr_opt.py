@@ -339,9 +339,9 @@ def array_opt_new(opt_p=None):
         opt.no_array.set('0')
         for i in range(MAX_RFCH):
             opt.ena_ele[i].set(0)
-            opt.posx[i].set('0.000')
-            opt.posy[i].set('0.000')
-            opt.posz[i].set('0.000')
+            opt.posx[i].set('0.0000')
+            opt.posy[i].set('0.0000')
+            opt.posz[i].set('0.0000')
     return opt
 
 # save options -----------------------------------------------------------------
@@ -681,15 +681,19 @@ def sys_opt_dlg(root, opt):
     return opt_new if dlg.ok else opt
 
 # show Array Options dialog ----------------------------------------------------
-def array_opt_dlg(root, opt):
+def array_opt_dlg(root, opt, geom_load=None, geom_save=None):
     opt_new = array_opt_new(opt)
-    dlg = modal_dlg_new(root, 420, 560, 'Array Options')
+    dlg = modal_dlg_new(root, 420, 590, 'Array Options')
     sel_panel_new(dlg.panel, 'Number of Array CH',
         sels=['%d' % n for n in range(9)], var=opt_new.no_array, width=8)
     w, h, r = 380, 220, 0.135
     plot = plt.plot_new(dlg.panel, w, h, margin=(0, 0, 0, 0),
         xlim=(-r * w / h, r * w / h), ylim=(-r, r))
     plot.c.pack(pady=2)
+    btn_row = Frame(dlg.panel, bg=BG_COLOR)
+    btn1 = ttk.Button(btn_row, width=10, padding=(2, 2), text='Update')
+    btn1.pack(side=RIGHT)
+    btn_row.pack(fill=X, pady=2)
     panel1 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     panel2 = Frame(panel1, bg=BG_COLOR)
     ttk.Label(panel2, text='RF CH').pack(side=LEFT, pady=2)
@@ -699,12 +703,55 @@ def array_opt_dlg(root, opt):
     for ch in range(MAX_RFCH):
         ant_ele_opt_panel_new(panel1, plot, ch, opt_new).pack(fill=X, pady=2)
     panel1.pack(fill=X, pady=2, ipady=1)
-    btn1 = ttk.Button(dlg.panel, width=10, padding=(2, 2), text='Update')
-    btn1.place(x=0, y=502)
+    btn2 = ttk.Button(dlg.panel, width=9, padding=(2, 2), text='Load...')
+    btn2.place(x=0, y=532)
+    btn3 = ttk.Button(dlg.panel, width=9, padding=(2, 2), text='Save...')
+    btn3.place(x=76, y=532)
     btn1.bind('<Button-1>', lambda e: on_btn_update_push(e, plot, opt_new))
+    btn2.bind('<Button-1>', lambda e: on_btn_geom_load_push(e, dlg, plot,
+        opt_new, geom_load))
+    btn3.bind('<Button-1>', lambda e: on_btn_geom_save_push(e, dlg, opt_new,
+        geom_save))
     plot.c.bind('<Configure>', lambda e: on_show_ant_ele_plot(e, plot, opt_new))
     root.wait_window(dlg.win)
     return opt_new if dlg.ok else opt
+
+# button geometry load push callback -------------------------------------------
+def on_btn_geom_load_push(e, dlg, plot, opt, geom_load):
+    if geom_load is None: return
+    file = filedialog.askopenfilename(parent=dlg.win,
+        title='Load Array Geometry',
+        filetypes=[('Geometry', '*.geom'), ('All', '*.*')])
+    if not file: return
+    pos = geom_load(file, MAX_RFCH)
+    for i, (x, y, z) in enumerate(pos):
+        opt.posx[i].set('%.4f' % x)
+        opt.posy[i].set('%.4f' % y)
+        opt.posz[i].set('%.4f' % z)
+        opt.ena_ele[i].set(1)
+    for i in range(len(pos), MAX_RFCH):
+        opt.ena_ele[i].set(0)
+    plot_ant_ele(plot, opt)
+
+# button geometry save push callback -------------------------------------------
+def on_btn_geom_save_push(e, dlg, opt, geom_save):
+    if geom_save is None: return
+    n = 0
+    for i in range(MAX_RFCH):
+        if opt.ena_ele[i].get(): n = i + 1
+    if n == 0: return
+    file = filedialog.asksaveasfilename(parent=dlg.win,
+        title='Save Array Geometry', defaultextension='.geom',
+        filetypes=[('Geometry', '*.geom'), ('All', '*.*')])
+    if not file: return
+    try:
+        flat = []
+        for i in range(n):
+            flat += [float(opt.posx[i].get()), float(opt.posy[i].get()),
+                float(opt.posz[i].get())]
+    except ValueError:
+        return
+    geom_save(file, flat)
 
 # generate antenna element options panel ---------------------------------------
 def ant_ele_opt_panel_new(parent, plot, ch, opt):

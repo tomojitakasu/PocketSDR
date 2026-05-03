@@ -23,7 +23,7 @@ static void print_ver(void)
 // show usage -------------------------------------------------------------------
 static void show_usage(void)
 {
-    printf("Usage: pocket_calib [-ts time] [-te time] [-f freq] -g file -n file [-o file]\n");
+    printf("Usage: pocket_calib [-ts time] [-te time] [-f freq] -g file -n file -o file\n");
     printf("       obs1 obs2 [obs3 ...]\n");
     exit(0);
 }
@@ -40,26 +40,6 @@ static gtime_t parse_time(const char *str)
     }
     sscanf(buff, "%lf%lf%lf%lf%lf%lf", ep, ep+1, ep+2, ep+3, ep+4, ep+5);
     return epoch2time(ep);
-}
-
-// read geometry file ----------------------------------------------------------
-static int read_geom(const char *file, double *ant_pos)
-{
-    FILE *fp;
-    char buff[256], *p;
-    double pos[3];
-    int nant = 0;
-    
-    if (!(fp = fopen(file, "r"))) return 0;
-    while (fgets(buff, sizeof(buff), fp) && nant < SDR_MAX_RFCH) {
-        if ((p = strchr(buff, '#'))) *p = '\0';
-        if (sscanf(buff, "%lf %lf %lf", pos, pos + 1, pos + 2) == 3) {
-            matcpy(ant_pos + nant * 3, pos, 3, 1);
-            nant++;
-        }
-    }
-    fclose(fp);
-    return nant;
 }
 
 // group obs data by epoch ------------------------------------------------------
@@ -108,37 +88,6 @@ static int est_pos(const obs_t *obs, const nav_t *nav, double *rr)
     return 0;
 }
 
-// write output -----------------------------------------------------------------
-static void write_result(FILE *fp, const char *geom_file, const char *nav_file,
-    const char *obs_files[], int nant, int freq, const double *rr, int nep,
-    const double *bias, const double *rpy, double rms)
-{
-    double pos[3];
-    ecef2pos(rr, pos);
-    
-    fprintf(fp, "# ARRAY CALIBRATION by %s\n", PROG_NAME);
-    fprintf(fp, "# GEOMETRY FILE   : %s\n", geom_file);
-    for (int i = 0; i < nant; i++) {
-        fprintf(fp, "# OBS FILE CH%d    : %s\n", i + 1, obs_files[i]);
-    }
-    fprintf(fp, "# NAV FILE        : %s\n", nav_file);
-    fprintf(fp, "# POSTION LLH     : %.9f %.9f %.3f\n", pos[0] * R2D,
-        pos[1] * R2D, pos[2]);
-    fprintf(fp, "# FREQ INDEX      : %d\n", freq);
-    fprintf(fp, "# NUM EPOCHS      : %d\n", nep);
-    fprintf(fp, "# RESIDUALS RMS   : %9.4f m\n", rms);
-    fprintf(fp, "# ATTITUDE ROLL   : %9.4f deg\n", rpy[0] * R2D);
-    fprintf(fp, "# ATTITUDE PITCH  : %9.4f deg\n", rpy[1] * R2D);
-    fprintf(fp, "# ATTITUDE YAW    : %9.4f deg (CCW+ from N; compass = -yaw)\n",
-        rpy[2] * R2D);
-    fprintf(fp, "# H/W DELAY       :\n");
-    fprintf(fp, "#  %-4s %12s %12s\n", "CH", "DELAY(ns)", "DELAY(m)");
-    for (int i = 0; i < nant; i++) {
-        fprintf(fp, "   CH%-2d %12.4f %12.4f\n", i + 1, bias[i] / CLIGHT * 1e9,
-            bias[i]);
-    }
-}
-
 //-----------------------------------------------------------------------------
 //
 //   Synopsis
@@ -170,7 +119,7 @@ static void write_result(FILE *fp, const char *geom_file, const char *nav_file,
 //         RINEX navigation data file.
 //
 //     -o file
-//         Output text file. [stdout]
+//         Output text file (calibration result).
 //
 //     obs1 obs2 [obs3 ...]
 //         Per-element RINEX OBS files. The k-th file is element CH(k).
@@ -179,7 +128,6 @@ int main(int argc, char **argv)
 {
     nav_t nav = {};
     obs_t obs = {};
-    FILE *fp = stdout;
     gtime_t ts = {0, 0}, te = {0, 0};
     const char *geom_file = "", *nav_file = "", *out_file = "";
     const char *obs_files[SDR_MAX_RFCH];
@@ -207,11 +155,11 @@ int main(int argc, char **argv)
             obs_files[nobs++] = argv[i];
         }
     }
-    if (!*geom_file || !*nav_file || nobs < 2) {
+    if (!*geom_file || !*nav_file || !*out_file || nobs < 2) {
         show_usage();
     }
     // read geometry file
-    if ((nant = read_geom(geom_file, ant_pos)) != nobs) {
+    if ((nant = sdr_array_geom_load(geom_file, ant_pos, SDR_MAX_RFCH)) != nobs) {
         fprintf(stderr, "number of antenna elements error %d %d\n", nant, nobs);
         return -1;
     }
@@ -256,32 +204,28 @@ int main(int argc, char **argv)
     sdr_array_ant_pos(array, ant_pos, ant_ena);
     sdr_array_run(array, 1);
 
-    double bias[SDR_MAX_RFCH] = {0}, rpy[3] = {0}, rms = 0.0;
-    int n_ok = 0;
     for (int k = 0; k < nep; k++) {
         sdr_array_calib(array, obs_ep[k], nobs_ep[k], &nav, rr);
     }
-    sdr_array_stat(array, rpy, bias, &rms, &n_ok);
-
-    sdr_array_free(array);
-    free(obs_ep); free(nobs_ep);
-    freeobs(&obs); freenav(&nav, NAV_MASK);
+    double rpy_chk[3], bias_chk[SDR_MAX_RFCH], rms_chk;
+    int n_ok = 0;
+    sdr_array_stat(array, rpy_chk, bias_chk, &rms_chk, &n_ok);
 
     if (n_ok <= 0) {
         fprintf(stderr, "array_calib() error\n");
+        sdr_array_free(array);
+        free(obs_ep); free(nobs_ep);
+        freeobs(&obs); freenav(&nav, NAV_MASK);
         return -1;
     }
     printf("TIME = %.3f s\n", (sdr_get_tick() - tick) * 1e-3);
 
-    // write output
-    if (*out_file && !(fp = fopen(out_file, "w"))) {
-        fprintf(stderr, "output file open error %s\n", out_file);
-        return -1;
+    if (!sdr_array_save(array, out_file)) {
+        fprintf(stderr, "output file write error %s\n", out_file);
     }
-    write_result(fp, geom_file, nav_file, obs_files, nant, freq, rr, n_ok, bias,
-        rpy, rms);
-    
-    if (fp != stdout) fclose(fp);
-    
+    sdr_array_free(array);
+    free(obs_ep); free(nobs_ep);
+    freeobs(&obs); freenav(&nav, NAV_MASK);
+
     return 0;
 }
