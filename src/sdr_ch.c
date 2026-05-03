@@ -27,7 +27,7 @@
 #define SP_CORR    0.25     // correlator spacing (chip)
 #define T_ACQ      0.02     // non-coherent integration time for acquisition (s)
 #define T_DLL      0.02     // non-coherent integration time for DLL (s)
-#define T_CN0      1.0      // averaging time for C/N0 (s)
+#define T_CN0      0.5      // averaging time for C/N0 (s)
 #define T_FPULLIN  1.0      // frequency pull-in time (s)
 #define T_NPULLIN  1.5      // navigation data pull-in time (s)
 #define B_DLL      0.25     // band-width of DLL filter (Hz)
@@ -345,8 +345,7 @@ static void sync_sec_code(sdr_ch_t *ch, int N)
             ch->trk->sec_sync = ch->lock;
             ch->trk->sec_pol = (P > 0.0f) ? 1 : -1;
         }
-    }
-    else if ((ch->lock - ch->trk->sec_sync) % N == 0) {
+    } else if ((ch->lock - ch->trk->sec_sync) % N == 0) {
         float P = 0.0;
         for (int i = 0; i < N; i++) {
             P += ch->trk->P[SDR_N_HIST-N+i][0] / N;
@@ -356,8 +355,8 @@ static void sync_sec_code(sdr_ch_t *ch, int N)
         }
     }
     if (ch->trk->sec_sync > 0) {
-        int8_t C = ch->sec_code[(ch->lock - ch->trk->sec_sync - 1) % N] *
-            ch->trk->sec_pol;
+        int idx = (ch->lock - ch->trk->sec_sync - 1 + N) % N;
+        int8_t C = ch->sec_code[idx] * ch->trk->sec_pol;
         for (int i = 0; i < ch->trk->npos + ch->trk->nposx; i++) {
             ch->trk->C[i][0] *= C;
             ch->trk->C[i][1] *= C;
@@ -429,8 +428,7 @@ static void bump_jump(sdr_ch_t *ch)
     double coff = ch->coff;
     if (ch->trk->sumVL > ch->trk->sumP && ch->trk->sumP > ch->trk->sumVE) {
         ch->coff += ch->T / ch->len_code; // shift forward by sub-chip
-    }
-    else if (ch->trk->sumVE > ch->trk->sumP && ch->trk->sumP > ch->trk->sumVL) {
+    } else if (ch->trk->sumVE > ch->trk->sumP && ch->trk->sumP > ch->trk->sumVL) {
         ch->coff -= ch->T / ch->len_code; // shift backward by sub-chip
     }
     if (ch->coff != coff) {
@@ -519,8 +517,7 @@ static void adj_coff(sdr_ch_t *ch)
         ch->lock--;
         memmove(ch->trk->P + 1, ch->trk->P, sizeof(sdr_cpx_t) *
             (SDR_N_HIST - 1));
-    }
-    else if (ch->coff < 0.0) {
+    } else if (ch->coff < 0.0) {
         ch->coff += ch->T;
         update_tow(ch, ch->T);
         ch->lock++;
@@ -558,8 +555,7 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
         
         // add P correlator outputs to history 
         sdr_add_buff(ch->trk->P, SDR_N_HIST, ch->trk->C[0], sizeof(sdr_cpx_t));
-    }
-    else {
+    } else {
         sdr_cpx_t C1[2];
         
         // mix carrier
