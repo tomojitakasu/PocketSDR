@@ -247,17 +247,9 @@ def jet_lut(n=64):
     _JET_LUT_CACHE[n] = lut
     return lut
 
-# render a 2D float array as a heatmap PhotoImage centered at (xc, yc) -------
-#   data    (M, M) array; data[0] is the TOP row in plot (row index increases
-#           downward in canvas).
-#   half    image spans plot range [xc-half, xc+half] in both axes (the actual
-#           rendered extent may be slightly larger due to integer zoom; the
-#           function returns the actual half-extent so callers can place
-#           accompanying overlays/masks correctly).
-#   vmin/vmax   color-scale range. Values are clipped to [vmin, vmax].
-#   lut     list of '#RRGGBB' hex strings; defaults to jet_lut().
+# render heatmap image ---------------------------------------------------------
 def plot_image(plt, xc, yc, half, data, vmin, vmax, lut=None, tag=''):
-    if lut is None: lut = jet_lut()
+    if lut is None: lut = jet_lut() # colormap
     nlev = len(lut)
     norm = (data - vmin) / (vmax - vmin)
     idx = np.clip((norm * (nlev - 1)).astype(int), 0, nlev - 1)
@@ -274,30 +266,28 @@ def plot_image(plt, xc, yc, half, data, vmin, vmax, lut=None, tag=''):
     if xs <= 0: return half
     z = max(1, int(np.ceil(2.0 * half * xs / M)))
     img_disp = img if z == 1 else img.zoom(z, z)
-    plt._img_disp_ref = img_disp                  # hold ref to prevent GC
+    plt._img_disp_ref = img_disp # hold ref to prevent GC
     xp, yp = plot_pos(plt, xc, yc)
     plt.c.create_image(xp, yp, image=img_disp, anchor=CENTER, tag=tag)
-    return (M * z) / (2.0 * xs)                   # actual half-extent (plot)
+    return (M * z) / (2.0 * xs) # actual half-extent (plot)
 
-# mask the area outside the unit circle in a sky plot (between the unit circle
-# and a bounding square at ±half plot units). Useful for hiding overflow from
-# plot_image overlays. ------------------------------------------------------
+# mask outside of skyplot ------------------------------------------------------
 def plot_sky_mask(plt, half, color=BG_COLOR, n_arc=24, tag=''):
-    xs, _ = plot_scale(plt)
+    xs, ys = plot_scale(plt)
     if xs <= 0: return
     xc, yc = plot_pos(plt, 0, 0)
     h_px = half * xs
     ts = np.linspace(0, pi / 2, n_arc + 1)
-    card = [(1, 0), (0, -1), (-1, 0), (0, 1)]      # E, N, W, S (canvas frame)
+    card = [(1, 0), (0, -1), (-1, 0), (0, 1)]
     for q in range(4):
         ang = ts + q * pi / 2
         ax = xc + xs * np.cos(ang)
         ay = yc - xs * np.sin(ang)
-        cs, ce = card[q], card[(q + 1) % 4]
+        cs, ce = card[q], card[(q+1)%4]
         pts = []
         for k in range(len(ang)):
             pts.append(float(ax[k])); pts.append(float(ay[k]))
         pts += [xc + ce[0]*h_px, yc + ce[1]*h_px,
-                xc + (cs[0]+ce[0])*h_px, yc + (cs[1]+ce[1])*h_px,
-                xc + cs[0]*h_px, yc + cs[1]*h_px]
+            xc + (cs[0] + ce[0]) * h_px, yc + (cs[1] + ce[1]) * h_px,
+            xc + cs[0] * h_px, yc + cs[1] * h_px]
         plt.c.create_polygon(*pts, fill=color, outline='', tag=tag)
