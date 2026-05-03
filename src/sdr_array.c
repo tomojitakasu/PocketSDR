@@ -40,6 +40,7 @@ static void euler_rot(const double *rpy, double *R, double *Dr, double *Dp,
     R [0] =  cy*cp; R [3] =  cy*sp*sr - sy*cr; R [6] =  cy*sp*cr + sy*sr;
     R [1] =  sy*cp; R [4] =  sy*sp*sr + cy*cr; R [7] =  sy*sp*cr - cy*sr;
     R [2] = -sp;    R [5] =  cp*sr;            R [8] =  cp*cr;
+    if (!Dr) return;
     
     // Dr = dR/droll, Dp = dR/dpitch, Dy = dR/dyaw
     Dr[0] =  0.0;   Dr[3] =  cy*sp*cr + sy*sr; Dr[6] = -cy*sp*sr + sy*cr;
@@ -136,7 +137,7 @@ static int lsq_init(const sdr_array_t *array, const obsd_t *obs, int nobs,
         
         int nv = build_meas(array, obs, nobs, nav, rr, x, v, H);
         if (nv == 0) return 0;
-
+        
         for (int i = 0; i < SDR_MAX_RFCH; i++) { // avoid rank-deficient
             if (i == 0 || !array->ant_ena[i]) H[3+i+NX*(nv++)] = 1e-12;
         }
@@ -364,8 +365,7 @@ int sdr_array_geom_save(const char *file, const double *ant_pos, int n)
     
     fprintf(fp, "# Pocket SDR Array Geometry in body-frame, m)\n");
     for (int i = 0; i < n; i++) {
-        fprintf(fp, "%.6f %.6f %.6f\n", ant_pos[i*3], ant_pos[i*3+1],
-            ant_pos[i*3+2]);
+        fprintf(fp, "%.6f %.6f %.6f\n", ant_pos[i*3], ant_pos[i*3+1], ant_pos[i*3+2]);
     }
     fclose(fp);
     return n;
@@ -424,15 +424,15 @@ static double bit_gain(const sdr_rcv_t *rcv, const int *ant_ena)
 // beam steering vector in body frame ------------------------------------------
 static void steer_body(const double *rpy, double az, double el, double *e_body)
 {
-    double R[9], Dr[9], Dp[9], Dy[9], e_enu[3];
-    euler_rot(rpy, R, Dr, Dp, Dy);
+    double R[9], e_enu[3];
+    euler_rot(rpy, R, NULL, NULL, NULL);
     e_enu[0] = sin(az) * cos(el);
     e_enu[1] = cos(az) * cos(el);
     e_enu[2] = sin(el);
     matmul("TN", 3, 1, 3, 1.0, R, e_enu, 0.0, e_body);
 }
 
-// build lookup table from weights ---------------------------------------------
+// build LUT for weight multiplication -----------------------------------------
 static void build_lut(sdr_arch_t *arch, int nrfch)
 {
     for (int j = 0; j < nrfch; j++) {
@@ -454,13 +454,13 @@ void sdr_arch_set_beam(sdr_arch_t *arch, const sdr_rcv_t *rcv, double az,
     arch->el = el;
     const sdr_array_t *array = rcv->array;
     
-    int n_act = 0;
+    int nant = 0; // effective antenna count
     if (array && scale > 0.0) {
         for (int i = 0; i < rcv->nrfch; i++) {
-            if (is_l1_ch(rcv, i) && array->ant_ena[i]) n_act++;
+            if (is_l1_ch(rcv, i) && array->ant_ena[i]) nant++;
         }
     }
-    scale = (n_act > 0) ? 1.0 / n_act : 0.0;
+    scale = (nant > 0) ? 1.0 / nant : 0.0;
     arch->scale = scale;
     memset(arch->w, 0, sizeof(arch->w));
     if (scale <= 0.0) {
@@ -487,6 +487,7 @@ void sdr_arch_set_beam(sdr_arch_t *arch, const sdr_rcv_t *rcv, double az,
         arch->w[i*2  ] = (int16_t)floor(CLIP(wr, -32768.0, 32767.0) + 0.5);
         arch->w[i*2+1] = (int16_t)floor(CLIP(wi, -32768.0, 32767.0) + 0.5);
     }
+    // build LUT for weight multiplication
     build_lut(arch, rcv->nrfch);
 }
 
