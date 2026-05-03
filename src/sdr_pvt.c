@@ -19,6 +19,7 @@
 #define SDR_EPOCH      1.0      // epoch time interval (s)
 #define LAG_EPOCH      0.5      // max PVT epoch lag (s)
 #define EL_MASK        15.0     // elavation mask (deg)
+#define MAX_NOBS       256      // max number of obs data in a epoch
 #define STD_ERR        0.015    // std-dev of carrier phase noise (m)
 #define FILE_NAV       ".pocket_navdata.csv" // navigation data file
 
@@ -478,8 +479,8 @@ sdr_pvt_t *sdr_pvt_new(sdr_rcv_t *rcv)
 {
     sdr_pvt_t *pvt = (sdr_pvt_t *)sdr_malloc(sizeof(sdr_pvt_t));
     pvt->obs = (obs_t *)sdr_malloc(sizeof(obs_t));
-    pvt->obs->data = (obsd_t *)sdr_malloc(sizeof(obsd_t) * MAXSAT);
-    pvt->obs->nmax = MAXSAT;
+    pvt->obs->data = (obsd_t *)sdr_malloc(sizeof(obsd_t) * MAX_NOBS);
+    pvt->obs->nmax = MAX_NOBS;
     pvt->nav = (nav_t *)sdr_malloc(sizeof(nav_t));
     pvt->nav->eph = (eph_t *)sdr_malloc(sizeof(eph_t) * MAXSAT * 4);
     pvt->nav->n = pvt->nav->nmax = MAXSAT * 4;
@@ -595,7 +596,7 @@ static void update_obs(gtime_t time, obs_t *obs, sdr_ch_t *ch)
             (idx != 0 || obs->data[i].rcv == ch->rf_ch + 1)) break;
     }
     if (i >= obs->n) {
-        if (i >= MAXSAT) return;
+        if (i >= obs->nmax) return;
         memset(obs->data + i, 0, sizeof(obsd_t));
         obs->data[i].time = time;
         obs->data[i].sat = sat;
@@ -838,12 +839,15 @@ static void update_sol(sdr_pvt_t *pvt)
     double time = pvt->ix * SDR_CYC;
     char msg[128] = "";
     
+    // count obs data in first RF CH
+    int nobs = 0;
+    for (int i = 0; i < pvt->obs->n; i++) {
+        if (pvt->obs->data[i].rcv > pvt->obs->data[0].rcv) break;
+        nobs++;
+    }
     // point positioning with L1 pseudorange
-    if (pntpos(pvt->obs->data, pvt->obs->n, pvt->nav, &opt, pvt->sol, NULL,
+    if (pntpos(pvt->obs->data, nobs, pvt->nav, &opt, pvt->sol, NULL,
              pvt->ssat, msg)) {
-        
-        // update satellite az/el angles
-        update_azel(pvt->nav, pvt->sol, pvt->ssat);
         
         // correct solution time
         corr_sol_time(pvt->sol);
@@ -859,6 +863,8 @@ static void update_sol(sdr_pvt_t *pvt)
             out_log_sat(time, i + 1, pvt->sol, pvt->ssat + i);
         }
     } else {
+        // update satellite az/el angles
+        update_azel(pvt->nav, pvt->sol, pvt->ssat);
         pvt->sol->ns = 0;
         sdr_log(3, "$LOG,%.3f,PNTPOS ERROR,%s", time, msg);
     }
