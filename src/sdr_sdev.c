@@ -27,6 +27,7 @@
 #define FREQ_TOL      10e3         // freq tolerance (Hz)
 #define GAP_THRES     10000        // silent-drop detection threshold (ns)
 #define GAP_MAX_SEC   0.1          // max zero-fill duration on a single gap (s)
+#define TIMER_RES     1            // timer resolution for Windows (ms)
 #define MIN(x, y)     ((x) < (y) ? (x) : (y))
 
 // elapsed time in seconds -----------------------------------------------------
@@ -199,9 +200,9 @@ void sdr_sdev_close(sdr_sdev_t *sdev)
 #endif
 }
 
-// rise process/thread priority ------------------------------------------------
+// raise process/thread priority -----------------------------------------------
 #ifdef SOAPYSDR
-static void rise_pri(void)
+static void raise_pri(void)
 {
 #ifdef WIN32
     if (!SetPriorityClass(GetCurrentProcess(), REALTIME_PRIORITY_CLASS)) {
@@ -268,9 +269,14 @@ static void *reader_thread(void *arg)
     long long tns, tns_prev = 0;
     uint32_t tick = sdr_get_tick();
     
-    // rise process/thread priority
-    rise_pri();
+    // raise process/thread priority
+    raise_pri();
     
+#ifdef WIN32 // raise timer resolution
+    if (timeBeginPeriod(TIMER_RES)) {
+        fprintf(stderr, "sdev: timeBeginPeriod (%d)\n", (int)GetLastError());
+    }
+#endif
     while (sdev->state) {
         int pos = (int)(sdev->wp % (BUFF_SIZE * BUFF_CNT));
         int size = MIN(BUFF_SIZE, (BUFF_SIZE * BUFF_CNT - pos)) / sdev->ssize;
@@ -320,6 +326,9 @@ static void *reader_thread(void *arg)
             ts_elapsed(tick), ovcnt, dropcnt, gapcnt);
     }
     sdr_free(gap_buf);
+#ifdef WIN32
+    timeEndPeriod(TIMER_RES);
+#endif
     return NULL;
 }
 #endif
