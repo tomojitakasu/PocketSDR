@@ -16,7 +16,7 @@
 #define CONV_THRES_A 1e-6       // angle update convergence (rad)
 #define CONV_THRES_B 1e-5       // bias update convergence (m)
 #define MIN_EL      15.0        // elevation mask (deg)
-#define MAX_RMS     0.03        // max RMS of residuals (m)
+#define MAX_RMS     0.015       // max RMS of residuals (m)
 #define NX          (3+SDR_MAX_RFCH)
 #define MAX_NV      ((SDR_MAX_RFCH-1)*MAXOBS)
 #define VAR_INIT_RPY  (1.0)     // initial covariance for rpy (rad^2)
@@ -202,9 +202,15 @@ static void kf_update(sdr_array_t *array, const obsd_t *obs, int nobs,
     
     // post-fit residual RMS
     nv = build_meas(array, obs, nobs, nav, rr, array->x, v, H);
-    array->rms = nv > 0 ? sqrt(dot(v, v, nv) / nv) : 0.0;
+    double rms = nv > 0 ? sqrt(dot(v, v, nv) / nv) : 0.0;
     
-    array->nep++;
+    if (rms > MAX_RMS) { // fallback to init KF
+        memset(array->P, 0, sizeof(double) * NX * NX);
+        array->nep = 0;
+    } else {
+        array->rms = rms;
+        array->nep++;
+    }
 }
 
 // generate new antenna array --------------------------------------------------
