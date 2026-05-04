@@ -10,10 +10,8 @@ cd ..
 tar cvf - \
         --exclude ".git" \
         --exclude "*.o" \
-        --exclude "win32/*.a" \
         --exclude "linux/*.a" \
         --exclude "macos/*.a" \
-        --exclude "*.so" \
         --exclude "*.bin" \
         --exclude "*.exe" \
         --exclude "*.log" \
