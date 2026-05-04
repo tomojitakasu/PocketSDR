@@ -360,6 +360,8 @@ static void out_rtcm3_msm(rtcm_t *rtcm, const obs_t *obs, stream_t *str,
     }
     if (idx_tail < 0) return;
     
+    rtcm->staid = rcv_no; // 0:all,1-:rcv_no
+    
     for (int i = 0; msgs[i]; i++) {
         if (!nsig[i]) continue;
         rtcm->obs.n = 0;
@@ -384,9 +386,6 @@ static void out_rtcm3_msm(rtcm_t *rtcm, const obs_t *obs, stream_t *str,
 }
 
 // output RTCM3 observation data -----------------------------------------------
-//   If -ARRAY is set in rcv option, MSM messages are split per RF CH with
-//   rtcm->staid set to the RF CH number (1..narch). Otherwise all CHs are
-//   merged in a single set of messages.
 static void out_rtcm3_obs(rtcm_t *rtcm, const obs_t *obs, stream_t *str,
     const sdr_rcv_t *rcv)
 {
@@ -394,14 +393,11 @@ static void out_rtcm3_obs(rtcm_t *rtcm, const obs_t *obs, stream_t *str,
     
     rtcm->time = obs->data[0].time;
     
-    if (rcv && strstr(rcv->opt, "-ARRAY")) {
-        int staid_save = rtcm->staid;
-        int narch = (rcv->narch > 0) ? rcv->narch : rcv->nrfch;
-        for (int k = 1; k <= narch; k++) {
-            rtcm->staid = k; // RF CH as RTCM station ID
-            out_rtcm3_msm(rtcm, obs, str, k);
+    if (strstr(rcv->opt, "-ARRAY")) { // set staid by RF CH number
+        int nch = rcv->nrfch + rcv->narch;
+        for (int rcv_no = 1; rcv_no <= nch; rcv_no++) {
+            out_rtcm3_msm(rtcm, obs, str, rcv_no);
         }
-        rtcm->staid = staid_save;
     } else {
         out_rtcm3_msm(rtcm, obs, str, 0);
     }
@@ -634,17 +630,20 @@ void sdr_pvt_udobs(sdr_pvt_t *pvt, int64_t ix, sdr_ch_t *ch)
     if (pvt->ix <= 0) { // initialize epoch time and cycle
         init_epoch(pvt, ix, ch);
     }
-    if (ix == pvt->ix) { // update observation data
+    if (pvt->ix > 0 && ix == pvt->ix) { // update observation data
         if (ch->state == SDR_STATE_LOCK && ch->tow >= 0 && ch->tow_v > 0 &&
             (ch->nav->fsync > 0 || ch->trk->sec_sync > 0)) {
             update_obs(pvt->time, pvt->obs, ch);
         }
         pvt->nch++;
-        
-        // output log $CH
-        if (ch->state == SDR_STATE_LOCK && ch->lock > 0) {
-            out_log_ch(ch);
-        }
+    }
+    // Output $CH log at sdr_epoch intervals.
+    int64_t log_step = (int64_t)(sdr_epoch / SDR_CYC + 0.5);
+    int log_now = (pvt->ix > 0) ?
+        (ix == pvt->ix) : (log_step > 0 && ix % log_step == 0);
+    
+    if (log_now && ch->state == SDR_STATE_LOCK && ch->lock > 0) {
+        out_log_ch(ch);
     }
     sdr_mutex_unlock(&pvt->mtx);
 }
@@ -837,17 +836,19 @@ static void update_sol(sdr_pvt_t *pvt)
     opt.posopt[4] = 1;
 #endif
     double time = pvt->ix * SDR_CYC;
+    obsd_t obs[MAXSAT];
+    int mask[MAXSAT] = {0}, nobs = 0;
     char msg[128] = "";
     
-    // count obs data in first RF CH
-    int nobs = 0;
-    for (int i = 0; i < pvt->obs->n; i++) {
-        if (pvt->obs->data[i].rcv > pvt->obs->data[0].rcv) break;
-        nobs++;
+    // delete duplicated L1 obs data
+    for (int i = 0; i < pvt->obs->n && nobs < MAXSAT; i++) {
+        int sat = pvt->obs->data[i].sat;
+        if (pvt->obs->data[i].P[0] == 0.0 || mask[sat-1]) continue;
+        obs[nobs++] = pvt->obs->data[i];
+        mask[sat-1] = 1;
     }
     // point positioning with L1 pseudorange
-    if (pntpos(pvt->obs->data, nobs, pvt->nav, &opt, pvt->sol, NULL,
-             pvt->ssat, msg)) {
+    if (pntpos(obs, nobs, pvt->nav, &opt, pvt->sol, NULL, pvt->ssat, msg)) {
         
         // correct solution time
         corr_sol_time(pvt->sol);
