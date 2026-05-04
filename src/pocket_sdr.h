@@ -53,8 +53,7 @@ extern "C" {
 #define SDR_MAX_NCH    1500     // max number of receiver channels
 #define SDR_MAX_NSYM   2000     // max number of symbols
 #define SDR_MAX_DATA   4096     // max length of navigation data
-#define SDR_N_CORRX    81       // number of additional correlators
-#define SDR_W_CORRX    4.0e-6   // width of additional correlators (s)
+#define SDR_N_CORRX    101      // number of additional correlators
 #define SDR_MAX_CORR   (6+SDR_N_CORRX) // max number of correlators
 #define SDR_N_HIST     5000     // number of P correlator history 
 #define SDR_N_CODES    10       // number of resampled code bank
@@ -162,15 +161,17 @@ typedef struct {                // signal acquisition type
 
 typedef struct {                // signal tracking type 
     int npos, nposx;            // number of correlator positions
-    double pos[SDR_MAX_CORR];   // correlator positions 
+    double pos[SDR_MAX_CORR];   // correlator positions (samples)
     sdr_cpx_t C[SDR_MAX_CORR];  // correlations 
     sdr_cpx_t C0, C1;           // correlation buffers
     sdr_cpx_t P[SDR_N_HIST];    // history of P correlations 
     int sec_sync;               // secondary code sync status 
     int sec_pol;                // secondary code polarity 
-    double err_phas;            // phase error (cyc) 
-    double err_code;            // code error (chip) 
-    double sumP, sumN, sumVE, sumVL; // sum of correlations 
+    double err_phas;            // phase error (cyc)
+    double err_code;            // code error (chip)
+    double phas_acc;            // 3rd-order PLL acceleration accumulator (Hz/s)
+    double code_int;            // 2nd-order DLL integrator (s/s)
+    double sumP, sumN, sumVE, sumVL; // sum of correlations
     double sumC[SDR_MAX_CORR];  // sum of correlations DLL
     double aveP[SDR_MAX_CORR];  // average of correlation powers
     sdr_cpx16_t *code;          // resampled code 
@@ -429,33 +430,23 @@ void sdr_lpf_apply(sdr_lpf_t *lpf, sdr_cpx8_t *data, int N);
 
 // sdr_code.c
 int8_t *sdr_gen_code(const char *sig, int prn, int *N);
-int sdr_gen_code_cpx(const char *sig, int prn, int8_t **code_I,
-    int8_t **code_Q, int *N);
-int sdr_gen_code_cpx_sec(const char *sig, int prn, int sec,
-    int8_t **code_I, int8_t **code_Q, int *N);
 int8_t *sdr_sec_code(const char *sig, int prn, int *N);
 double sdr_code_cyc(const char *sig);
 int sdr_code_len(const char *sig);
 double sdr_sig_freq(const char *sig);
 void sdr_sat_id(const char *sig, int prn, char *sat);
 int sdr_sig_boc(const char *sig);
-int sdr_sig_cpx(const char *sig);
-int sdr_sig_e5abq(const char *sig);
-void sdr_res_code(const int8_t *code, int len_code, double T, double coff,
-    double fs, int N, int Nz, sdr_cpx16_t *code_res);
-void sdr_res_code_cpx(const int8_t *code_I, const int8_t *code_Q, int len_code,
+// Pass code_Q = NULL for real (BPSK) codes; non-NULL for complex codes.
+void sdr_res_code(const int8_t *code_I, const int8_t *code_Q, int len_code,
     double T, double coff, double fs, int N, int Nz, sdr_cpx16_t *code_res);
-void sdr_gen_code_fft(const int8_t *code, int len_code, double T, double coff,
-    double fs, int N, int Nz, sdr_cpx_t *code_fft);
-void sdr_gen_code_fft_cpx(const int8_t *code_I, const int8_t *code_Q,
-    int len_code, double T, double coff, double fs, int N, int Nz,
-    sdr_cpx_t *code_fft);
+void sdr_gen_code_fft(const int8_t *code_I, const int8_t *code_Q, int len_code,
+    double T, double coff, double fs, int N, int Nz, sdr_cpx_t *code_fft);
 
 // sdr_ch.c
 sdr_ch_t *sdr_ch_new(const char *sig, int prn, double fs, double fi);
 void sdr_ch_free(sdr_ch_t *ch);
 void sdr_ch_update(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix);
-void sdr_ch_set_corr(sdr_ch_t *ch, int nposx);
+void sdr_ch_set_corr(sdr_ch_t *ch, int nposx, double width);
 int sdr_ch_corr_stat(sdr_ch_t *ch, double *stat, double *pos, sdr_cpx_t *C,
     double *P);
 int sdr_ch_corr_hist(sdr_ch_t *ch, double tspan, double *stat, sdr_cpx_t *P);
@@ -542,7 +533,7 @@ void sdr_rcv_str_stat(sdr_rcv_t *rcv, int *stat);
 int sdr_rcv_sat_stat(sdr_rcv_t *rcv, const char *sat, char *buff, int size);
 int sdr_rcv_ch_stat(sdr_rcv_t *rcv, const char *sys, int all,
     double min_lock, int rfch, int opt, char *buff, int size);
-void sdr_rcv_sel_ch(sdr_rcv_t *rcv, int ch);
+void sdr_rcv_sel_ch(sdr_rcv_t *rcv, int ch, double width);
 int sdr_rcv_corr_stat(sdr_rcv_t *rcv, int ch, double *stat, double *pos,
     sdr_cpx_t *C, double *P);
 int sdr_rcv_corr_hist(sdr_rcv_t *rcv, int ch, double tspan, double *stat,
