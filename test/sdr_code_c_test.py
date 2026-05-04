@@ -44,9 +44,9 @@ def sdr_res_code(code, T, coff, fs, N, Nz):
     code = np.array(code, dtype='int8')
     code_res = np.zeros(N + Nz, dtype='float32')
     libsdr.sdr_res_code.argtypes = [
-        ctypeslib.ndpointer('int8'), c_int32, c_double, c_double, c_double,
-        c_int32, c_int32, ctypeslib.ndpointer('float32')]
-    libsdr.sdr_res_code(code, len(code), T, coff, fs, N, Nz, code_res)
+        ctypeslib.ndpointer('int8'), c_void_p, c_int32, c_double, c_double,
+        c_double, c_int32, c_int32, ctypeslib.ndpointer('float32')]
+    libsdr.sdr_res_code(code, None, len(code), T, coff, fs, N, Nz, code_res)
     return np.array(code_res, dtype='complex64')
 
 # sdr_gen_code_fft() by libsdr -------------------------------------------------
@@ -54,9 +54,9 @@ def sdr_gen_code_fft(code, T, coff, fs, N, Nz):
     code = np.array(code, dtype='int8')
     code_fft = np.zeros(N + Nz, dtype='complex64')
     libsdr.sdr_gen_code_fft.argtypes = [
-        ctypeslib.ndpointer('int8'), c_int32, c_double, c_double, c_double,
-        c_int32, c_int32, ctypeslib.ndpointer('complex64')]
-    libsdr.sdr_gen_code_fft(code, len(code), T, coff, fs, N, Nz, code_fft)
+        ctypeslib.ndpointer('int8'), c_void_p, c_int32, c_double, c_double,
+        c_double, c_int32, c_int32, ctypeslib.ndpointer('complex64')]
+    libsdr.sdr_gen_code_fft(code, None, len(code), T, coff, fs, N, Nz, code_fft)
     return code_fft
 
 # dummy function to measure overhead -------------------------------------------
