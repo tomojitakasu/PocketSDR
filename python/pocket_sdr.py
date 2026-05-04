@@ -40,7 +40,7 @@ P1_COLOR   = '#003020'       # plot color 1
 P2_COLOR   = '#888844'       # plot color 2
 P3_COLOR   = '#BBBBBB'       # plot color 3
 WARN_COLOR = '#FF8000'       # warning color
-SDR_N_CORR = (6+81)          # number of correlators
+SDR_N_CORR = (6+101)         # number of correlators
 SDR_N_HIST = 5000            # number of correlator history
 SDR_N_PSD  = 2048            # number FFT points for PSD
 MAX_RCVLOG = 2000            # max receiver logs
@@ -460,9 +460,9 @@ def set_rfch_filt(rcv, ch, bw, freq, order):
     return libsdr.sdr_rcv_set_filt(rcv, ch - 1, bw, freq, order)
 
 # select receiver channel -------------------------------------------------------
-def set_sel_ch(rcv, ch):
-    libsdr.sdr_rcv_sel_ch.argtypes = (c_void_p, c_int32)
-    libsdr.sdr_rcv_sel_ch(rcv, ch)
+def set_sel_ch(rcv, ch, width):
+    libsdr.sdr_rcv_sel_ch.argtypes = (c_void_p, c_int32, c_double)
+    libsdr.sdr_rcv_sel_ch(rcv, ch, width)
 
 # get correlator status ---------------------------------------------------------
 def get_corr_stat(rcv, ch):
@@ -715,7 +715,7 @@ def rcv_page_new(parent):
     ttk.Label(p.toolbar, text='RF CH').pack(side=RIGHT, padx=1)
     panel1 = Frame(p.panel)
     panel1.pack(expand=1, fill=BOTH)
-    p.plt1 = plt.plot_new(panel1, 257, 257, margin=(25, 25, 25, 25),
+    p.plt1 = plt.plot_new(panel1, 257, 257, margin=(18, 18, 18, 18),
         xlim=(-1, 1), ylim=(-1, 1), aspect=1, font=get_font(-1))
     p.plt1.c.pack(side=RIGHT, expand=1, fill=BOTH)
     p.plt1.gain_on = BooleanVar(value=False)
@@ -1342,9 +1342,11 @@ def corr_page_new(parent):
     p.box2 = sel_box_new(p.toolbar, ['0.1', '0.2', '0.5', '1', '2', '5', '10'],
         '1', 3)
     p.box2.pack(side=RIGHT, padx=1)
-    p.box4 = sel_box_new(p.toolbar, ['I', 'IQ', 'AveIQ'], 'I', 5)
+    p.box5 = sel_box_new(p.toolbar, ['0.2', '0.3', '0.5', '1', '1.5', '2', '3', '5'], '2', 3)
+    p.box5.pack(side=RIGHT, padx=1)
+    p.box4 = sel_box_new(p.toolbar, ['I', 'Q', 'IQ', 'AveIQ'], 'I', 5)
     p.box4.pack(side=RIGHT, padx=1)
-    ttk.Label(p.toolbar, text='IQ/Span(s)/Range').pack(side=RIGHT, padx=2)
+    ttk.Label(p.toolbar, text='IQ/W(μs)/T(s)/Range').pack(side=RIGHT, padx=2)
     p.plt3 = plt.plot_new(p.panel, 800, 245, [0, 1], [-0.6, 0.6], title=ti[2])
     p.plt3.c.pack(side=BOTTOM, expand=1, fill=BOTH)
     panel1 = Frame(p.panel)
@@ -1360,6 +1362,7 @@ def corr_page_new(parent):
     p.box2.bind('<<ComboboxSelected>>', lambda e: on_corr_ch_select(e, p))
     p.box3.bind('<<ComboboxSelected>>', lambda e: on_corr_ch_select(e, p))
     p.box4.bind('<<ComboboxSelected>>', lambda e: on_corr_ch_select(e, p))
+    p.box5.bind('<<ComboboxSelected>>', lambda e: on_corr_ch_select(e, p))
     update_corr_page(p)
     update_corr_ch_sel(p)
     return p
@@ -1367,27 +1370,30 @@ def corr_page_new(parent):
 # correlator channel down callback ---------------------------------------------
 def on_corr_ch_down(e, p):
     chs, ch = p.box1['values'], p.box1.get()
+    w = float(p.box5.get()) * 1e-6
     i = chs.index(ch) if ch in chs else -1
     if i - 1 >= 0:
         ch = chs[i-1]
         p.box1.set(ch)
-        set_sel_ch(rcv_body, int(ch))
+        set_sel_ch(rcv_body, int(ch), w)
         update_corr_page(p)
 
 # correlator channel up callback -----------------------------------------------
 def on_corr_ch_up(e, p):
     chs, ch = p.box1['values'], p.box1.get()
+    w = float(p.box5.get()) * 1e-6
     i = chs.index(ch) if ch in chs else -1
     if i >= 0 and i + 1 < len(chs):
         ch = chs[i+1]
         p.box1.set(ch)
-        set_sel_ch(rcv_body, int(ch))
+        set_sel_ch(rcv_body, int(ch), w)
         update_corr_page(p)
 
 # correlator channel select callback -------------------------------------------
 def on_corr_ch_select(e, p):
     ch = p.box1.get()
-    set_sel_ch(rcv_body, int(ch))
+    w = float(p.box5.get()) * 1e-6
+    set_sel_ch(rcv_body, int(ch), w)
     update_corr_page(p)
 
 # update Correlator page -------------------------------------------------------
@@ -1399,26 +1405,27 @@ def update_corr_page(p):
     state, fs, lock, cn0, coff, fd, npos, pos, C, aveC = get_corr_stat(rcv_body, ch)
     tt, T, P = get_corr_hist(rcv_body, ch, rng[0])
     update_corr_plot1(p.plt1, coff, fs, npos, pos, C, aveC, type, rng[1])
-    update_corr_plot2(p.plt2, P, rng[1])
+    update_corr_plot2(p.plt2, P, C, rng[1])
     update_corr_plot3(p.plt3, tt, T, P, rng)
     update_corr_text(p, ch, tt)
     
 # update correlator channel selection ------------------------------------------
 def update_corr_ch_sel(p):
     chs = [s.split()[0] for s in get_ch_stat(rcv_body, 'ALL')[2:]]
+    w = float(p.box5.get()) * 1e-6
     p.box1.configure(values=chs, height=min([len(chs), 32]))
     if len(chs) > 0 and not p.box1.get() in chs:
         p.box1.set(chs[0])
-        set_sel_ch(rcv_body, int(chs[0]))
+        set_sel_ch(rcv_body, int(chs[0]), w)
     else:
-        set_sel_ch(rcv_body, int(p.box1.get()))
+        set_sel_ch(rcv_body, int(p.box1.get()), w)
 
 # update correlator text -------------------------------------------------------
 def update_corr_text(p, ch, time):
     s = get_ch_stat(rcv_body, 'ALL', chno=int(ch), opt=1)[2:]
     if not s: return
     ss = s[0].split()
-    text = 'RF: %s SAT: %s  SIG: %s  PRN: %s  LOCK: %s s' % (ss[1], ss[2],
+    text = 'RF CH: %s  SAT: %s  SIG: %s  PRN: %s  LOCK: %s s' % (ss[1], ss[2],
         ss[3], ss[4], ss[5])
     p.txt1.configure(text=text)
     xs, ys = plt.plot_scale(p.plt3)
@@ -1435,21 +1442,32 @@ def update_corr_text(p, ch, time):
 # update correlator plot 1 -----------------------------------------------------
 def update_corr_plot1(p, coff, fs, npos, pos, C, aveC, type, rng):
     x = [coff + pos[i] / fs * 1e3 for i in range(len(pos))]
-    C *= np.sign(C[0])
+    D = C * np.sign(C[0])
+    if type == 'I':
+        ti, yl = 'I * sign(IP)', [-rng * 0.3, rng]
+    elif type == 'Q':
+        ti, yl = 'Q', [-rng, rng]
+    elif type == 'IQ':
+        ti, yl = '\u221A (I\xb2+Q\xb2)', [0, rng]
+    else:
+        ti, yl = '\u221A \u03A3 (I\xb2+Q\xb2)', [0, rng]
     plt.plot_clear(p)
     plt.plot_xlim(p, [x[npos], x[-1]])
-    plt.plot_ylim(p, [-rng * 0.3 if type == 'I' else 0, rng])
+    plt.plot_ylim(p, yl)
     xs, ys = plt.plot_scale(p)
-    p.title = 'I * sign(IP)' if type == 'I' else '\u221A (I\xb2+Q\xb2)' \
-        if type == 'IQ' else '\u221A \u03A3 (I\xb2+Q\xb2)'
+    p.title = ti
     plt.plot_axis(p, fcolor=None, tcolor=None)
     plt.plot_poly(p, [coff, coff], p.yl, color='grey')
     plt.plot_poly(p, p.xl, [0, 0], color='grey')
     plt.plot_dots(p, [coff], [0], color=plt.FG_COLOR, size=3)
-    y = C.real if type == 'I' else abs(C) if type == 'IQ' else np.sqrt(aveC)
+    y = D.real if type == 'I' else D.imag if type == 'Q' \
+        else abs(D) if type == 'IQ' else np.sqrt(aveC)
     plt.plot_poly(p, x[npos:], y[npos:], color=P2_COLOR)
     plt.plot_dots(p, x[npos:], y[npos:], color=P2_COLOR, fill=P1_COLOR, size=3)
-    plt.plot_dots(p, x[:npos], y[:npos], color=P1_COLOR, fill=P1_COLOR, size=9)
+    #plt.plot_dots(p, x[:npos], y[:npos], color=P1_COLOR, fill=P1_COLOR, size=9)
+    plt.plot_dots(p, [x[1]], [y[1]], color='red',    fill='red'   , size=9) # E
+    plt.plot_dots(p, [x[2]], [y[2]], color='green',  fill='green' , size=9) # L
+    plt.plot_dots(p, [x[0]], [y[0]], color=P1_COLOR, fill=P1_COLOR, size=9) # P
     plt.plot_axis(p, gcolor=None)
     plt.plot_text(p, p.xl[1] - 18 / xs, p.yl[0] + 10 / ys, 'COFF (ms)',
         anchor=SE)
@@ -1458,7 +1476,7 @@ def update_corr_plot1(p, coff, fs, npos, pos, C, aveC, type, rng):
             'Integ = %s s' % (sys_opt.t_dll.get()), anchor=NE)
 
 # update correlator plot 2 -----------------------------------------------------
-def update_corr_plot2(p, P, rng):
+def update_corr_plot2(p, P, C, rng):
     plt.plot_clear(p)
     plt.plot_xlim(p, [-rng, rng])
     plt.plot_ylim(p, [-rng, rng])
@@ -1467,9 +1485,10 @@ def update_corr_plot2(p, P, rng):
     plt.plot_poly(p, p.xl, [0, 0], color='grey')
     plt.plot_dots(p, [0], [0], color=plt.FG_COLOR, size=3)
     plt.plot_dots(p, P.real, P.imag, color=P2_COLOR, size=1)
-    plt.plot_dots(p, P[-1:].real, P[-1:].imag, color=BG_COLOR1, size=11)
-    plt.plot_dots(p, P[-1:].real, P[-1:].imag, color=P1_COLOR, fill=P1_COLOR,
-        size=9)
+    plt.plot_dots(p, [C[1].real], [C[1].imag], color='red'  , fill='red'  , size=9) # E
+    plt.plot_dots(p, [C[2].real], [C[2].imag], color='green', fill='green', size=9) # L
+    plt.plot_dots(p, [C[0].real], [C[0].imag], color=BG_COLOR1, size=11)
+    plt.plot_dots(p, [C[0].real], [C[0].imag], color=P1_COLOR, fill=P1_COLOR, size=9) # P
     plt.plot_axis(p, gcolor=None)
     
 # update correlator plot 3 -----------------------------------------------------
@@ -1752,12 +1771,12 @@ def array_page_new(parent):
     panel3 = Frame(panel1, relief=SOLID, bd=1, bg=BG_COLOR1)
     panel3.pack(fill=X, padx=10, pady=4)
     ttk.Label(panel3, text='ARRAY ATTITUDE', font=get_font(1, 'bold')).pack(pady=4)
-    p.txt_att = ttk.Label(panel3)
+    p.txt_att = Label(panel3, font=get_font(), bg=BG_COLOR1)
     p.txt_att.pack(padx=10, pady=(6, 16))
     panel4 = Frame(panel1, relief=SOLID, bd=1, bg=BG_COLOR1)
     panel4.pack(fill=X, padx=10, pady=4)
     ttk.Label(panel4, text='RF CH DELAY', font=get_font(1, 'bold')).pack(pady=4)
-    p.txt_bias = ttk.Label(panel4)
+    p.txt_bias = Label(panel4, font=get_font(), bg=BG_COLOR1)
     p.txt_bias.pack(padx=10, pady=(6, 16))
     panel5 = Frame(panel1, relief=SOLID, bd=1, bg=BG_COLOR1)
     panel5.pack(expand=1, fill=BOTH, padx=10, pady=4)
@@ -1811,8 +1830,8 @@ def update_array_page(p):
         text3 += ' CH%d:%7.4f m ' % (i + 1, bias[i])
         text3 += '\n\n' if i % 4 == 3 and i < MAX_RFCH - 1 else ''
     p.txt_stat.configure(text=text1)
-    p.txt_att.configure(text=text2)
-    p.txt_bias.configure(text=text3)
+    p.txt_att.configure(text=text2, fg=WARN_COLOR if run else 'black')
+    p.txt_bias.configure(text=text3, fg=WARN_COLOR if run else 'black')
 
 # Array page clear button callback ---------------------------------------------
 def on_array_calib_clear(e, p):
@@ -2078,7 +2097,7 @@ def pages_update(note, pages):
     if not root_resize:
         update_page(i, pages[i])
         if i != 3:
-            set_sel_ch(rcv_body, 0)
+            set_sel_ch(rcv_body, 0, 3e-6)
     text = 'Time: ' + get_rcv_stat(rcv_body).split()[0] + ' s'
     stat_bar.msg2.configure(text=text)
     return UD_CYCLE1 if i in (1, 3) else UD_CYCLE2 # update interval (ms)
