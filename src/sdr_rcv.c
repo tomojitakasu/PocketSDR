@@ -346,11 +346,11 @@ int sdr_rcv_sat_stat(sdr_rcv_t *rcv, const char *sat, char *buff, int size)
 }
 
 // select channel for correlator status ----------------------------------------
-void sdr_rcv_sel_ch(sdr_rcv_t *rcv, int ch)
+void sdr_rcv_sel_ch(sdr_rcv_t *rcv, int ch, double width)
 {
     if (!rcv || !rcv->state) return;
     for (int i = 0; i < rcv->nch; i++) {
-        sdr_ch_set_corr(rcv->th[i]->ch, i + 1 == ch ? SDR_N_CORRX : 0);
+        sdr_ch_set_corr(rcv->th[i]->ch, i + 1 == ch ? SDR_N_CORRX : 0, width);
     }
 }
 
@@ -1278,7 +1278,7 @@ int sdr_rcv_array_ant_pos(sdr_rcv_t *rcv, const double *ant_pos,
 {
     sdr_array_t *array = rcv ? rcv->array : NULL;
     if (!array) return 0;
-
+    
     sdr_mutex_lock(&rcv->mtx);
     int ret = sdr_array_ant_pos(array, ant_pos, ant_ena);
     if (ret) refresh_arch_beams(rcv);
@@ -1291,7 +1291,7 @@ int sdr_rcv_array_run(sdr_rcv_t *rcv, int run)
 {
     sdr_array_t *array = rcv ? rcv->array : NULL;
     if (!array) return 0;
-
+    
     sdr_mutex_lock(&rcv->mtx);
     int ret = sdr_array_run(array, run);
     if (ret) refresh_arch_beams(rcv);
@@ -1305,7 +1305,7 @@ int sdr_rcv_array_stat(sdr_rcv_t *rcv, double *rpy, double *bias, double *rms,
 {
     sdr_array_t *array = rcv ? rcv->array : NULL;
     if (!array) return 0;
-
+    
     sdr_mutex_lock(&rcv->mtx);
     int ret = sdr_array_stat(array, rpy, bias, rms, nep);
     sdr_mutex_unlock(&rcv->mtx);
@@ -1317,7 +1317,7 @@ int sdr_rcv_array_save(sdr_rcv_t *rcv, const char *file)
 {
     sdr_array_t *array = rcv ? rcv->array : NULL;
     if (!array) return 0;
-
+    
     sdr_mutex_lock(&rcv->mtx);
     int ret = sdr_array_save(array, file);
     sdr_mutex_unlock(&rcv->mtx);
@@ -1328,7 +1328,7 @@ int sdr_rcv_array_load(sdr_rcv_t *rcv, const char *file)
 {
     sdr_array_t *array = rcv ? rcv->array : NULL;
     if (!array) return 0;
-
+    
     sdr_mutex_lock(&rcv->mtx);
     int ret = sdr_array_load(array, file);
     if (ret) refresh_arch_beams(rcv);
@@ -1345,7 +1345,7 @@ int sdr_rcv_array_set_beam(sdr_rcv_t *rcv, int ach, double az, double el)
     if (m < 0) return 0;
     double scale = rcv->arch[m].scale > 0.0 ? rcv->arch[m].scale :
         1.0 / rcv->nrfch;
-
+    
     sdr_mutex_lock(&rcv->mtx);
     sdr_arch_set_beam(rcv->arch + m, rcv, az, el, scale);
     sdr_mutex_unlock(&rcv->mtx);
@@ -1359,7 +1359,7 @@ int sdr_rcv_array_get_beam(sdr_rcv_t *rcv, int ach, double *az, double *el)
     if (!array) return 0;
     int m = ach_to_m(rcv, ach);
     if (m < 0) return 0;
-
+    
     sdr_mutex_lock(&rcv->mtx);
     sdr_arch_get_beam(rcv->arch + m, az, el);
     sdr_mutex_unlock(&rcv->mtx);
@@ -1371,7 +1371,7 @@ void sdr_rcv_array_calib(sdr_rcv_t *rcv, const obsd_t *obs, int nobs,
     const nav_t *nav, const double *rr)
 {
     if (!rcv || !rcv->array) return;
-
+    
     sdr_mutex_lock(&rcv->mtx);
     sdr_array_calib(rcv->array, obs, nobs, nav, rr);
     sdr_mutex_unlock(&rcv->mtx);
