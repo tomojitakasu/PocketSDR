@@ -44,7 +44,11 @@
 #elif defined(NEON)
 #include <arm_neon.h>
 #endif
+#if defined(FFTW)
+#include <fftw3.h>
+#else
 #include "pocketfft.h"
+#endif
 
 #define NTBL          256   // carrier-mixed-data LUT size
 #define DOP_STEP      0.5   // Doppler frequency search step (* 1 / code cycle)
