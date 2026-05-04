@@ -346,6 +346,55 @@ $ make install
 
 --------------------------------------------------------------------------------
 
+## **Using FFTW3 instead of PocketFFT (optional)**
+
+Starting from version 0.15b, Pocket SDR ships with [**PocketFFT**](https://gitlab.mpcdf.mpg.de/mtr/pocketfft) (BSD-3-Clause) as the default FFT backend, replacing [**FFTW3**](https://www.fftw.org/) (GPL). The change is licensing-driven; for most workloads PocketFFT is competitive, but FFTW3 is still slightly faster on large transforms and supports runtime wisdom (auto-tuned plans) — `pocket_trk` / `pocket_snap` / `pocket_acq` can read `python/fftw_wisdom.txt` for further speed-up.
+
+To build with FFTW3 instead, install the library and edit four makefiles.
+
+* Install FFTW3 (single-precision):
+```
+$ pacman -S mingw-w64-ucrt-x86_64-fftw    # MSYS2 UCRT64 (Windows)
+$ sudo apt install libfftw3-dev           # Ubuntu / Debian / Raspberry Pi OS
+$ brew install fftw                       # macOS
+```
+* Edit [lib/build/libsdr.mk](/lib/build/libsdr.mk): comment out the `# PocketFFT` block and uncomment the `# FFTW3` block.
+```
+# PocketFFT
+#INCLUDE = -I$(SRC) -I../RTKLIB/src -I../pocketfft
+#OPTIONS =
+#LIBS = ./librtk.a ./libfec.a ./libldpc.a ./libpocketfft.a
+
+# FFTW3
+INCLUDE = -I$(SRC) -I../RTKLIB/src
+OPTIONS = -DFFTW
+LIBS = ./librtk.a ./libfec.a ./libldpc.a -lfftw3f
+```
+* Edit the application makefiles [app/pocket_acq/makefile](/app/pocket_acq/makefile), [app/pocket_snap/makefile](/app/pocket_snap/makefile), and [app/pocket_trk/makefile](/app/pocket_trk/makefile): in each `ifeq` branch (Windows / macOS / Linux), comment out the `libpocketfft.a` line and uncomment the `-lfftw3f` line. For `pocket_trk` also flip `OPTIONS = -DFFTW`. Example (Windows section of `pocket_trk/makefile`):
+```
+    #LDLIBS += $(LIB)/win32/libpocketfft.a
+    #OPTIONS =
+    LDLIBS += -lfftw3f
+    OPTIONS = -DFFTW
+```
+* Rebuild from scratch:
+```
+$ cd <install_dir>/lib/build
+$ make clean && make && make install
+$ cd <install_dir>/app
+$ make clean && make && make install
+```
+* (Optional, FFTW3 only) Generate a wisdom file tuned for the host CPU. Once present, `pocket_trk`, `pocket_snap`, and `pocket_acq` pick it up automatically.
+```
+$ cd <install_dir>/app/pocket_trk
+$ ./fftw_wisdom -n 4096
+$ cp fftw_wisdom.txt ../../python/
+```
+
+Note: FFTW3 is GPL-licensed, so a binary linked against it inherits GPL terms. Keep this in mind when redistributing.
+
+--------------------------------------------------------------------------------
+
 ## **GNSS SDR Utilities and APs**
 
 Pocket SDR includes the following utilities for the Pocket SDR FE.
