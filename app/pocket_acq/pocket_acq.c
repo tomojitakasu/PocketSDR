@@ -53,19 +53,7 @@ int search_sig(const char *sig, int prn, const sdr_buff_t *buff, double fs,
     double T = sdr_code_cyc(sig);
     int N = (int)(fs * T), Nz = opt[2] ? 0 : N;
     sdr_cpx_t *code_fft = sdr_cpx_malloc(2 * N);
-    if (sdr_sig_cpx(sig)) {
-        int8_t *code_I, *code_Q;
-
-        if (!sdr_gen_code_cpx(sig, prn, &code_I, &code_Q, &len_code)) {
-            sdr_cpx_free(code_fft);
-            return 0;
-        }
-        sdr_gen_code_fft_cpx(code_I, code_Q, len_code, T, 0.0, fs, N, Nz,
-            code_fft);
-    }
-    else {
-        sdr_gen_code_fft(code, len_code, T, 0.0, fs, N, Nz, code_fft);
-    }
+    sdr_gen_code_fft(code, NULL, len_code, T, 0.0, fs, N, Nz, code_fft);
     
     // doppler search bins
     int len_fds;

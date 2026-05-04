@@ -131,19 +131,8 @@ static int search_sig(data_t *data, const char *sig, int sys, int prn,
     if (!code_fft[sat-1]) {
         int8_t *code = sdr_gen_code(sig, prn, &len_code);
         code_fft[sat-1] = sdr_cpx_malloc(2 * N);
-        if (sdr_sig_cpx(sig)) {
-            int8_t *code_I, *code_Q;
-
-            if (!sdr_gen_code_cpx(sig, prn, &code_I, &code_Q, &len_code)) {
-                return 0;
-            }
-            sdr_gen_code_fft_cpx(code_I, code_Q, len_code, T, 0.0, fs, N, N,
-                code_fft[sat-1]);
-        }
-        else {
-            sdr_gen_code_fft(code, len_code, T, 0.0, fs, N, N,
-                code_fft[sat-1]);
-        }
+        sdr_gen_code_fft(code, NULL, len_code, T, 0.0, fs, N, N,
+            code_fft[sat-1]);
     }
     // doppler search bins
     float *fds;

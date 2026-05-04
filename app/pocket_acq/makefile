@@ -18,7 +18,7 @@ ifeq ($(OS),Windows_NT)
 else ifeq ($(shell uname -sm),Darwin arm64)
     CC = clang
     LDLIBS = -L/opt/homebrew/lib $(LIB)/macos/libsdr.a $(LIB)/macos/librtk.a -lpthread -lm
-    LDLIBS += $(LIB)/win32/libpocketfft.a
+    LDLIBS += $(LIB)/macos/libpocketfft.a
     #LDLIBS += -lfftw3f
     OPTIONS = -I/opt/homebrew/include
 else
