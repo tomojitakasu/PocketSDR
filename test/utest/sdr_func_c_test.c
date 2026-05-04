@@ -172,7 +172,7 @@ static void test_03(void)
         int8_t *code = sdr_gen_code("L6D", 194, &len_code);
         sdr_cpx16_t *code_res = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N[i]);
         sdr_cpx16_t *data = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N[i]);
-        sdr_res_code(code, len_code, 4e-3, 1.345, fs[i], N[i], 0, code_res);
+        sdr_res_code(code, NULL, len_code, 4e-3, 1.345, fs[i], N[i], 0, code_res);
         
         sdr_buff_t *buff = gen_data(N[i] * 2);
         
@@ -304,8 +304,8 @@ static void test_06(void)
         
         sdr_buff_t *buff = gen_data(N[i]);
         int8_t *code = sdr_gen_code("L6D", 194, &len_code);
-        sdr_res_code(code, len_code, 4e-3, coff, fs, N[i], 0, code_res);
-        sdr_gen_code_fft(code, len_code, 4e-3, coff, fs, N[i], 0, code_fft);
+        sdr_res_code(code, NULL, len_code, 4e-3, coff, fs, N[i], 0, code_res);
+        sdr_gen_code_fft(code, NULL, len_code, 4e-3, coff, fs, N[i], 0, code_fft);
         
         uint32_t tt = sdr_get_tick();
         for (int j = 0; j < n; j++) {
