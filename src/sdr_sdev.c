@@ -115,7 +115,7 @@ sdr_sdev_t *sdr_sdev_open(const char *driver, int fmt, double rate,
         }
         SoapySDRDevice_setSampleRate(dev, SOAPY_SDR_RX, ch, rate);
         SoapySDRDevice_setFrequency(dev, SOAPY_SDR_RX, ch, freq, NULL);
-
+        
         if (gain > 0.0) {
             (void)SoapySDRDevice_setGainMode(dev, SOAPY_SDR_RX, ch, false);
             (void)SoapySDRDevice_setGain(dev, SOAPY_SDR_RX, ch, gain);
