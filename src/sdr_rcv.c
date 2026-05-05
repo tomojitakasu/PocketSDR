@@ -640,10 +640,22 @@ sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
     const char *opt)
 {
     sdr_rcv_t *rcv = (sdr_rcv_t *)sdr_malloc(sizeof(sdr_rcv_t));
+    extern double sdr_e5ab_off, sdr_bump_k;
     const char *p;
     int nrfch, narch = 0;
-    
+
     if ((p = strstr(opt, "-ARCH="))) sscanf(p, "-ARCH=%d", &narch);
+    sdr_e5ab_off = 0.0;
+    if ((p = strstr(opt, "-E5AB_OFF="))) {
+        double off_ns = 0.0;
+        sscanf(p, "-E5AB_OFF=%lf", &off_ns);
+        sdr_e5ab_off = off_ns * 1e-9;
+    }
+    sdr_bump_k = 1.5;
+    if ((p = strstr(opt, "-BUMP_K="))) {
+        sscanf(p, "-BUMP_K=%lf", &sdr_bump_k);
+        if (sdr_bump_k < 1.01) sdr_bump_k = 1.01;
+    }
     rcv->fmt = fmt;
     rcv->fs = fs;
     rcv->nrfch = num_rfch(fmt);
