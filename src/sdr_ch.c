@@ -61,6 +61,8 @@ double sdr_max_dop = MAX_DOP;
 double sdr_thres_cn0_l = THRES_CN0_L;
 double sdr_thres_cn0_u = THRES_CN0_U;
 int sdr_bump_jump = 0;
+double sdr_e5ab_off = 0.0;  // E5a/E5b receiver group-delay offset (s, E5a-base)
+double sdr_bump_k = 1.5;    // bump-jump trigger ratio (sumX > k * sumY)
 
 // upper cases of signal string ------------------------------------------------
 static void sig_upper(const char *sig, char *Sig)
@@ -73,37 +75,43 @@ static void sig_upper(const char *sig, char *Sig)
     Sig[i] = '\0';
 }
 
-// generate E5ABQ replica------------------------------------------------------
-static int gen_e5abq_code(int prn, int rel, int8_t **code_I, int8_t **code_Q,
-    int *N)
+// generate E5a-Q × SC_E5aI chip pattern (4× chip rate) ------------------------
+static int gen_e5aq_chip(int prn, int8_t **code_I, int8_t **code_Q, int *N)
 {
-    // E5 AltBOC I-channel subcarriers
     static const int8_t SC_E5aI_I[] = { 1, -1,  1, -1, -1,  1, -1,  1};
     static const int8_t SC_E5aI_Q[] = {-1,  1,  1, -1,  1, -1, -1,  1};
-    static const int8_t SC_E5bI_I[] = { 1, -1,  1, -1, -1,  1, -1,  1};
-    static const int8_t SC_E5bI_Q[] = { 1, -1, -1,  1, -1,  1,  1, -1};
-    
-    int n1, n2 = 0;
-    int8_t *c1 = sdr_gen_code("E5AQ", prn, &n1);
-    int8_t *c2 = (rel == 0) ? NULL : sdr_gen_code("E5BQ", prn, &n2);
-    if (!c1 || (rel != 0 && (!c2 || n1 != n2))) return 0;
-
-    *N = n1 * 4;
+    int n;
+    int8_t *c = sdr_gen_code("E5AQ", prn, &n);
+    if (!c) return 0;
+    *N = n * 4;
     *code_I = (int8_t *)sdr_malloc(*N);
     *code_Q = (int8_t *)sdr_malloc(*N);
-
-    // c_E5aQ * sc_E5aI - rel * c_E5bQ * sc_E5bI (sign quantized).
-    for (int i = 0; i < n1; i++) {
+    for (int i = 0; i < n; i++) {
         for (int j = 0; j < 4; j++) {
             int k = (i * 4 + j) % 8;
-            int I = c1[i] * SC_E5aI_I[k];
-            int Q = c1[i] * SC_E5aI_Q[k];
-            if (rel != 0) {
-                I -= rel * c2[i] * SC_E5bI_I[k];
-                Q -= rel * c2[i] * SC_E5bI_Q[k];
-            }
-            (*code_I)[i*4+j] = (I > 0) - (I < 0);
-            (*code_Q)[i*4+j] = (Q > 0) - (Q < 0);
+            (*code_I)[i*4+j] = c[i] * SC_E5aI_I[k];
+            (*code_Q)[i*4+j] = c[i] * SC_E5aI_Q[k];
+        }
+    }
+    return 1;
+}
+
+// generate E5b-Q × SC_E5bI chip pattern (4× chip rate) ------------------------
+static int gen_e5bq_chip(int prn, int8_t **code_I, int8_t **code_Q, int *N)
+{
+    static const int8_t SC_E5bI_I[] = { 1, -1,  1, -1, -1,  1, -1,  1};
+    static const int8_t SC_E5bI_Q[] = { 1, -1, -1,  1, -1,  1,  1, -1};
+    int n;
+    int8_t *c = sdr_gen_code("E5BQ", prn, &n);
+    if (!c) return 0;
+    *N = n * 4;
+    *code_I = (int8_t *)sdr_malloc(*N);
+    *code_Q = (int8_t *)sdr_malloc(*N);
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < 4; j++) {
+            int k = (i * 4 + j) % 8;
+            (*code_I)[i*4+j] = c[i] * SC_E5bI_I[k];
+            (*code_Q)[i*4+j] = c[i] * SC_E5bI_Q[k];
         }
     }
     return 1;
@@ -115,34 +123,47 @@ static void gen_e5abq_code_fft(int prn, double T, double fs, int N,
 {
     int8_t *code_I, *code_Q;
     int len;
-    if (gen_e5abq_code(prn, 0, &code_I, &code_Q, &len)) {
+    if (gen_e5aq_chip(prn, &code_I, &code_Q, &len)) {
         sdr_gen_code_fft(code_I, code_Q, len, T, 0.0, fs, N, N, code_fft);
         sdr_free(code_I);
         sdr_free(code_Q);
     }
 }
 
-// E5ABQ tracking banks (0=E5aQ-only, 1/2=combined for rel = +/-1) -------------
+// E5ABQ tracking banks (0=E5aQ-only, 1/2 = E5a -/+ E5b for rel = +/-1) --------
+//   Bank 1/2 use soft-sum of separately-resampled E5a and E5b. The E5b chip
+//   phase is offset by -sdr_e5ab_off so that positive sdr_e5ab_off corresponds
+//   to E5b arriving later than E5a in the receiver (E5a-base sign).
 static sdr_cpx16_t *gen_e5abq_banks(int prn, double T, double fs, int N)
 {
     int n_banks = 3;
     sdr_cpx16_t *banks = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N *
         SDR_N_CODES * n_banks);
-    
-    for (int bank = 0; bank < n_banks; bank++) {
-        int rel = (bank == 0) ? 0 : (bank == 1 ? +1 : -1);
-        int8_t *code_I, *code_Q;
-        int len;
-        if (!gen_e5abq_code(prn, rel, &code_I, &code_Q, &len)) continue;
-        
-        for (int i = 0; i < SDR_N_CODES; i++) {
-            double coff = -i / fs / SDR_N_CODES;
-            sdr_cpx16_t *p = banks + (bank * SDR_N_CODES + i) * N;
-            sdr_res_code(code_I, code_Q, len, T, coff, fs, N, 0, p);
-        }
-        sdr_free(code_I);
-        sdr_free(code_Q);
+    int8_t *Ia, *Qa, *Ib, *Qb;
+    int n_a = 0, n_b = 0;
+    if (!gen_e5aq_chip(prn, &Ia, &Qa, &n_a)) return banks;
+    if (!gen_e5bq_chip(prn, &Ib, &Qb, &n_b)) {
+        sdr_free(Ia); sdr_free(Qa);
+        return banks;
     }
+    sdr_cpx16_t *buf_b = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N);
+
+    for (int i = 0; i < SDR_N_CODES; i++) {
+        double coff = -i / fs / SDR_N_CODES;
+        sdr_cpx16_t *p0 = banks + (0 * SDR_N_CODES + i) * N;
+        sdr_cpx16_t *p1 = banks + (1 * SDR_N_CODES + i) * N;
+        sdr_cpx16_t *p2 = banks + (2 * SDR_N_CODES + i) * N;
+        sdr_res_code(Ia, Qa, n_a, T, coff, fs, N, 0, p0);
+        sdr_res_code(Ib, Qb, n_b, T, coff - sdr_e5ab_off, fs, N, 0, buf_b);
+        for (int s = 0; s < N; s++) {
+            p1[s].I = (int16_t)(p0[s].I - buf_b[s].I);
+            p1[s].Q = (int16_t)(p0[s].Q - buf_b[s].Q);
+            p2[s].I = (int16_t)(p0[s].I + buf_b[s].I);
+            p2[s].Q = (int16_t)(p0[s].Q + buf_b[s].Q);
+        }
+    }
+    sdr_free(buf_b);
+    sdr_free(Ia); sdr_free(Qa); sdr_free(Ib); sdr_free(Qb);
     return banks;
 }
 
@@ -202,7 +223,9 @@ static sdr_trk_t *trk_new(const char *sig, int prn, const int8_t *code,
     trk->pos[npos++] =  0.5 * sp;  // L
     trk->pos[npos++] = POS_CORR_N; // N
     if (sdr_bump_jump && sdr_sig_boc(sig)) {
-        double vsp = !strcmp(sig, "E5ABQ") ? sc / 3 : sc / 2;
+        // E5ABQ: ±2/3 chip (probes ZP at main-lock, lands on main when 2-sub
+        // slip occurs); other BOC: ±1/2 chip (BOC sub-peak structure)
+        double vsp = !strcmp(sig, "E5ABQ") ? 2 * sc / 3 : sc / 2;
         trk->pos[npos++] = -vsp; // VE
         trk->pos[npos++] =  vsp; // VL
     }
@@ -497,10 +520,11 @@ static void DLL(sdr_ch_t *ch)
 static void bump_jump(sdr_ch_t *ch)
 {
     double coff = ch->coff;
+    // step matches VE/VL probe distance: 2/3 chip for E5ABQ, 1 chip for others
     double step = !strcmp(ch->sig, "E5ABQ") ?
-        ch->T / ch->len_code / 3 : ch->T / ch->len_code;
-    
-    const double k_bump = 1.5;
+        ch->T / ch->len_code * 2 / 3 : ch->T / ch->len_code;
+
+    const double k_bump = sdr_bump_k;
     if (ch->trk->sumVL > k_bump * ch->trk->sumP &&
         ch->trk->sumP   > k_bump * ch->trk->sumVE) {
         ch->coff += step;
