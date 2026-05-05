@@ -1336,13 +1336,14 @@ def corr_page_new(parent):
     p.btn2.panel.pack(side=LEFT, padx=2, pady=1)
     p.txt1 = ttk.Label(p.toolbar, foreground=P1_COLOR)
     p.txt1.pack(side=LEFT, expand=1, fill=X, padx=10)
-    p.box3 = sel_box_new(p.toolbar, ['0.1', '0.2', '0.3', '0.4', '0.6', '0.8',
-        '1.0', '1.5', '2'], '0.4', 3)
+    p.box3 = sel_box_new(p.toolbar, ['0.1', '0.15', '0.2', '0.3', '0.4', '0.6',
+        '0.8', '1.0', '1.5', '2'], '0.4', 3)
     p.box3.pack(side=RIGHT, padx=(1, 10))
     p.box2 = sel_box_new(p.toolbar, ['0.1', '0.2', '0.5', '1', '2', '5', '10'],
         '1', 3)
     p.box2.pack(side=RIGHT, padx=1)
-    p.box5 = sel_box_new(p.toolbar, ['0.2', '0.3', '0.5', '1', '1.5', '2', '3', '5'], '2', 3)
+    p.box5 = sel_box_new(p.toolbar, ['0.2', '0.3', '0.5', '1', '1.5', '2', '3',
+        '5', '10'], '2', 3)
     p.box5.pack(side=RIGHT, padx=1)
     p.box4 = sel_box_new(p.toolbar, ['I', 'Q', 'IQ', 'AveIQ'], 'I', 5)
     p.box4.pack(side=RIGHT, padx=1)
@@ -1400,11 +1401,12 @@ def on_corr_ch_select(e, p):
 def update_corr_page(p):
     update_corr_ch_sel(p)
     ch = int(p.box1.get())
+    w = float(p.box5.get()) * 1e-6
     rng = [float(p.box2.get()), float(p.box3.get())]
     type = p.box4.get()
     state, fs, lock, cn0, coff, fd, npos, pos, C, aveC = get_corr_stat(rcv_body, ch)
     tt, T, P = get_corr_hist(rcv_body, ch, rng[0])
-    update_corr_plot1(p.plt1, coff, fs, npos, pos, C, aveC, type, rng[1])
+    update_corr_plot1(p.plt1, coff, fs, npos, pos, w, C, aveC, type, rng[1])
     update_corr_plot2(p.plt2, P, C, rng[1])
     update_corr_plot3(p.plt3, tt, T, P, rng)
     update_corr_text(p, ch, tt)
@@ -1440,7 +1442,7 @@ def update_corr_text(p, ch, time):
         text, anchor=W)
 
 # update correlator plot 1 -----------------------------------------------------
-def update_corr_plot1(p, coff, fs, npos, pos, C, aveC, type, rng):
+def update_corr_plot1(p, coff, fs, npos, pos, w, C, aveC, type, rng):
     x = [coff + pos[i] / fs * 1e3 for i in range(len(pos))]
     D = C * np.sign(C[0])
     if type == 'I':
@@ -1452,7 +1454,8 @@ def update_corr_plot1(p, coff, fs, npos, pos, C, aveC, type, rng):
     else:
         ti, yl = '\u221A \u03A3 (I\xb2+Q\xb2)', [0, rng]
     plt.plot_clear(p)
-    plt.plot_xlim(p, [x[npos], x[-1]])
+    #plt.plot_xlim(p, [x[npos], x[-1]])
+    plt.plot_xlim(p, [x[0] - w * 5e2, x[0] + w * 5e2])
     plt.plot_ylim(p, yl)
     xs, ys = plt.plot_scale(p)
     p.title = ti
@@ -1464,16 +1467,23 @@ def update_corr_plot1(p, coff, fs, npos, pos, C, aveC, type, rng):
         else abs(D) if type == 'IQ' else np.sqrt(aveC)
     plt.plot_poly(p, x[npos:], y[npos:], color=P2_COLOR)
     plt.plot_dots(p, x[npos:], y[npos:], color=P2_COLOR, fill=P1_COLOR, size=3)
-    #plt.plot_dots(p, x[:npos], y[:npos], color=P1_COLOR, fill=P1_COLOR, size=9)
-    plt.plot_dots(p, [x[1]], [y[1]], color='red',    fill='red'   , size=9) # E
-    plt.plot_dots(p, [x[2]], [y[2]], color='green',  fill='green' , size=9) # L
-    plt.plot_dots(p, [x[0]], [y[0]], color=P1_COLOR, fill=P1_COLOR, size=9) # P
+    plt.plot_dots(p, x[:npos], y[:npos], color=P1_COLOR, fill=P1_COLOR, size=9)
     plt.plot_axis(p, gcolor=None)
     plt.plot_text(p, p.xl[1] - 18 / xs, p.yl[0] + 10 / ys, 'COFF (ms)',
         anchor=SE)
+    plot_scale(p, x[0] + w * 4.5e2 - 20 / xs, yl[1] - 20 / ys, w * 1e2, '%.2f ns' % (w * 1e5))
     if type == 'AveIQ':
-        plt.plot_text(p, p.xl[1] - 18 / xs, p.yl[1] - 10 / ys,
+        plt.plot_text(p, p.xl[1] - 18 / xs, p.yl[1] - 32 / ys,
             'Integ = %s s' % (sys_opt.t_dll.get()), anchor=NE)
+
+# plot scale -------------------------------------------------------------------
+def plot_scale(p, x, y, w, label, color=plt.FG_COLOR):
+    xs, ys = plt.plot_scale(p)
+    d = 6 / ys
+    plt.plot_poly(p, [x - w / 2, x + w / 2], [y, y], color=color)
+    plt.plot_poly(p, [x - w / 2, x - w / 2], [y - d, y + d], color=color)
+    plt.plot_poly(p, [x + w / 2, x + w / 2], [y - d, y + d], color=color)
+    plt.plot_text(p, x - w / 2 - 8 / xs, y, label, anchor=E, color=color)
 
 # update correlator plot 2 -----------------------------------------------------
 def update_corr_plot2(p, P, C, rng):
@@ -1485,10 +1495,8 @@ def update_corr_plot2(p, P, C, rng):
     plt.plot_poly(p, p.xl, [0, 0], color='grey')
     plt.plot_dots(p, [0], [0], color=plt.FG_COLOR, size=3)
     plt.plot_dots(p, P.real, P.imag, color=P2_COLOR, size=1)
-    plt.plot_dots(p, [C[1].real], [C[1].imag], color='red'  , fill='red'  , size=9) # E
-    plt.plot_dots(p, [C[2].real], [C[2].imag], color='green', fill='green', size=9) # L
     plt.plot_dots(p, [C[0].real], [C[0].imag], color=BG_COLOR1, size=11)
-    plt.plot_dots(p, [C[0].real], [C[0].imag], color=P1_COLOR, fill=P1_COLOR, size=9) # P
+    plt.plot_dots(p, [C[0].real], [C[0].imag], color=P1_COLOR, fill=P1_COLOR, size=9)
     plt.plot_axis(p, gcolor=None)
     
 # update correlator plot 3 -----------------------------------------------------
