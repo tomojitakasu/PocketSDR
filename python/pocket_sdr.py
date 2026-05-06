@@ -1830,7 +1830,7 @@ def update_array_page(p):
     if not stat: return
     run, rpy, bias, rms, nep = stat
     text1 = 'CALIB: %s  EPOCHS: %3d  RMS: %6.4f m' % (
-        'RUN...' if run else 'STOP', nep, rms)
+        'RUN' if run else 'STOP', nep, rms)
     text2 = 'ROLL:%8.3f\xb0  PITCH:%8.3f\xb0  YAW:%8.3f\xb0' % (rpy[0] / D2R,
         rpy[1] / D2R, rpy[2] / D2R)
     text3 = ''
