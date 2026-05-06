@@ -1327,18 +1327,18 @@ def corr_page_new(parent):
     p.parent = parent
     p.panel = Frame(parent)
     p.toolbar = tool_bar_new(p.panel)
-    ttk.Label(p.toolbar, text='BB CH').pack(side=LEFT, padx=(8, 4))
+    ttk.Label(p.toolbar, text='BB CH').pack(side=LEFT, padx=(8, 1))
     p.btn1 = sdr_opt.custom_btn_new(p.toolbar, label=' < ')
-    p.btn1.panel.pack(side=LEFT, padx=2, pady=1)
+    p.btn1.panel.pack(side=LEFT, padx=1, pady=1)
     p.box1 = sel_box_new(p.toolbar, ['1'], '1', 4)
     p.box1.pack(side=LEFT)
     p.btn2 = sdr_opt.custom_btn_new(p.toolbar, label=' > ')
-    p.btn2.panel.pack(side=LEFT, padx=2, pady=1)
+    p.btn2.panel.pack(side=LEFT, padx=1, pady=1)
     p.txt1 = ttk.Label(p.toolbar, foreground=P1_COLOR)
-    p.txt1.pack(side=LEFT, expand=1, fill=X, padx=10)
+    p.txt1.pack(side=LEFT, expand=1, fill=X, padx=6)
     p.box3 = sel_box_new(p.toolbar, ['0.1', '0.15', '0.2', '0.3', '0.4', '0.6',
         '0.8', '1.0', '1.5', '2'], '0.4', 3)
-    p.box3.pack(side=RIGHT, padx=(1, 10))
+    p.box3.pack(side=RIGHT, padx=(1, 4))
     p.box2 = sel_box_new(p.toolbar, ['0.1', '0.2', '0.5', '1', '2', '5', '10'],
         '1', 3)
     p.box2.pack(side=RIGHT, padx=1)
@@ -1427,7 +1427,7 @@ def update_corr_text(p, ch, time):
     s = get_ch_stat(rcv_body, 'ALL', chno=int(ch), opt=1)[2:]
     if not s: return
     ss = s[0].split()
-    text = 'RF CH: %s  SAT: %s  SIG: %s  PRN: %s  LOCK: %s s' % (ss[1], ss[2],
+    text = 'RF CH: %s SAT: %s SIG: %s PRN: %s LOCK: %s s' % (ss[1], ss[2],
         ss[3], ss[4], ss[5])
     p.txt1.configure(text=text)
     xs, ys = plt.plot_scale(p.plt3)
