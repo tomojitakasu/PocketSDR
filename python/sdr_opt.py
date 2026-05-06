@@ -432,10 +432,10 @@ def inp_opt_dlg(root, opt):
     p3 = ch_opt_panel_new(dlg.panel, opt_new)
     p4 = Frame(dlg.panel, bg=BG_COLOR)
     p4.pack(fill=X)
-    text = '* Automatically configured if <Path>.tag file exists.'
+    text = '* Automatically configured if <Path>.tag file exists.\n' + \
+        '** -GAIN=gain_dB -BW=bandwidth_MHz\n'
     ttk.Label(p4, text=text, anchor=N).pack(fill=X)
     inp_opt_enable_update(opt_new.inp.get(), p1, p2, p3, p4)
-    ch_opt_enable_update(opt_new.fmt.get(), p3)
     btn1.bind('<Button-1>', lambda e: on_inp_select(e, 0, p1, p2, p3, p4))
     btn2.bind('<Button-1>', lambda e: on_inp_select(e, 1, p1, p2, p3, p4))
     sel1 = p1.winfo_children()[1].winfo_children()[1]
@@ -452,7 +452,6 @@ def inp_opt_enable_update(sel, p1, p2, p3, p4):
     config_panel_state(p2, NORMAL if sel else DISABLED)
     if sel:
         fmt = p3.winfo_children()[0].winfo_children()[1].get()
-        ch_opt_enable_update(fmt, p3)
 
 # generate RF Frontend options panel -------------------------------------------
 def rf_opt_panel_new(parent, opt):
@@ -493,13 +492,12 @@ def ch_opt_panel_new(parent, opt):
     p1 = sel_panel_new(panel, 'IF Data Format*', opt.fmts, opt.fmt)
     p1.pack(pady=(4, 2))
     p2 = p1.winfo_children()[1]
-    p2.bind('<<ComboboxSelected>>', lambda e: on_fmt_select(e, panel))
     inp_panel_new(panel, 'Sampling Rate (Msps)*', opt.fs)
-    inp_panel_new(panel, 'Device Options  ', opt.dev_opt, width=80,
+    inp_panel_new(panel, 'Device Options**', opt.dev_opt, width=80,
         justify=LEFT)
     panel1 = Frame(panel, bg=BG_COLOR)
     panel1.pack(fill=X, pady=(4, 0))
-    label = ' RF  LO (MHz)*  I/IQ* Bits*  LPF (MHz)'
+    label = 'RF       LO_MHz*  I/IQ*  Bits* LPF_MHz'
     ttk.Label(panel1, text=label).pack(side=LEFT, padx=(4, 0))
     ttk.Label(panel1, text=label).pack(side=RIGHT, padx=(0, 2))
     panel2 = Frame(panel, bg=BG_COLOR)
@@ -512,21 +510,6 @@ def ch_opt_panel_new(parent, opt):
     for ch in range(n, MAX_RFCH):
         rfch_opt_panel_new(panel3, ch, opt)
     return panel
-
-# IF data format select callback -----------------------------------------------
-def on_fmt_select(e, p3):
-    ch_opt_enable_update(e.widget.get(), p3)
-
-# update channel options enable ------------------------------------------------
-def ch_opt_enable_update(fmt, p3):
-    fmt_int = ('INT8', 'INT8X2', 'CS8', 'CS16')
-    p = p3.winfo_children()
-    p2 = [p[4].winfo_children(), p[5].winfo_children()]
-    n = MAX_RFCH // 2
-    for i in range(MAX_RFCH):
-        ena = (fmt in fmt_int and i < 1) or (fmt == 'RAW8' and i < 2) or \
-            (fmt == 'RAW16' and i < 4) or (fmt == 'RAW32' and i < 8)
-        config_panel_state(p2[i//n][i%n], NORMAL if ena else DISABLED)
 
 # generate RF channel options panel --------------------------------------------
 def rfch_opt_panel_new(parent, ch, opt):
@@ -648,8 +631,8 @@ def sys_opt_dlg(root, opt):
         '30'), var=opt_new.el_mask, width=8)
     panel2 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     panel2.pack(fill=X, pady=2, ipady=1)
-    sel_panel_new(panel2, labels[3], sels=('0.05', '0.1', '0.2', '0.25', '0.5',
-        '0.75', '1.0'), var=opt_new.sp_corr, width=8)
+    sel_panel_new(panel2, labels[3], sels=('0.05', '0.1', '0.15', '0.2', '0.25',
+        '0.5', '0.75', '1.0'), var=opt_new.sp_corr, width=8)
     sel_panel_new(panel2, labels[4], sels=('0.005', '0.01', '0.02', '0.05',
         '0.1', '0.2'), var=opt_new.t_acq, width=8)
     sel_panel_new(panel2, labels[5], sels=('0.005', '0.01', '0.02', '0.05',
