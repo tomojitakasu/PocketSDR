@@ -699,7 +699,7 @@ sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
     sdr_mutex_init(&rcv->mtx);
 
     rcv->narch = narch;
-    if (narch > 0 && rcv->nrfch > 0) {
+    if (rcv->nrfch >= 2) {
         rcv->array = sdr_array_new(rcv->nrfch, 0);
         for (int m = 0; m < narch; m++) {
             rcv->arch[m].scale = 1.0 / rcv->nrfch;
