@@ -43,11 +43,13 @@
 #define THRES_LOST 0.002    // threshold for sec-code lost
 #define POS_CORR_N -120.0   // N-correlator position (samples)
 #define FILT_CN0   0.5      // filter parameter for C/N0
+#define BUMP_K     1.3      // bump-jump threshold
 
 #define DPI        (2.0 * PI)
-#define SQR(x)     ((x) * (x)) 
+#define SQR(x)     ((x) * (x))
 #define MAX(x, y)  ((x) > (y) ? (x) : (y))
 #define MIN(x, y)  ((x) < (y) ? (x) : (y))
+#define SIGN(x)    ((x) < 0 ? -1 : ((x) > 0 ? 1 : 0))
 
 // global variables ------------------------------------------------------------
 double sdr_sp_corr = SP_CORR;
@@ -61,8 +63,8 @@ double sdr_max_dop = MAX_DOP;
 double sdr_thres_cn0_l = THRES_CN0_L;
 double sdr_thres_cn0_u = THRES_CN0_U;
 int sdr_bump_jump = 0;
-double sdr_e5ab_off = 0.0;  // E5a/E5b receiver group-delay offset (s, E5a-base)
-double sdr_bump_k = 1.5;    // bump-jump trigger ratio (sumX > k * sumY)
+double sdr_e5ab_off = 0.0;  // E5b-E5a group-delay (s)
+double sdr_bump_k = BUMP_K; // bump-jump threshold
 
 // upper cases of signal string ------------------------------------------------
 static void sig_upper(const char *sig, char *Sig)
@@ -130,10 +132,7 @@ static void gen_e5abq_code_fft(int prn, double T, double fs, int N,
     }
 }
 
-// E5ABQ tracking banks (0=E5aQ-only, 1/2 = E5a -/+ E5b for rel = +/-1) --------
-//   Bank 1/2 use soft-sum of separately-resampled E5a and E5b. The E5b chip
-//   phase is offset by -sdr_e5ab_off so that positive sdr_e5ab_off corresponds
-//   to E5b arriving later than E5a in the receiver (E5a-base sign).
+// E5ABQ tracking banks --------------------------------------------------------
 static sdr_cpx16_t *gen_e5abq_banks(int prn, double T, double fs, int N)
 {
     int n_banks = 3;
@@ -153,13 +152,15 @@ static sdr_cpx16_t *gen_e5abq_banks(int prn, double T, double fs, int N)
         sdr_cpx16_t *p0 = banks + (0 * SDR_N_CODES + i) * N;
         sdr_cpx16_t *p1 = banks + (1 * SDR_N_CODES + i) * N;
         sdr_cpx16_t *p2 = banks + (2 * SDR_N_CODES + i) * N;
-        sdr_res_code(Ia, Qa, n_a, T, coff, fs, N, 0, p0);
+        sdr_res_code(Ia, Qa, n_a, T, coff, fs, N, 0, p0); // bank1: E5aQ*SC_E5aI
         sdr_res_code(Ib, Qb, n_b, T, coff - sdr_e5ab_off, fs, N, 0, buf_b);
+        
+        // bank2: E5aQ*SC_E5aI+E5bQ+SC_E5bI, bank3: E5aQ*SC_E5aI-E5bQ*SC_E5bI
         for (int s = 0; s < N; s++) {
-            p1[s].I = (int16_t)(p0[s].I - buf_b[s].I);
-            p1[s].Q = (int16_t)(p0[s].Q - buf_b[s].Q);
-            p2[s].I = (int16_t)(p0[s].I + buf_b[s].I);
-            p2[s].Q = (int16_t)(p0[s].Q + buf_b[s].Q);
+            p1[s].I = (int8_t)SIGN(p0[s].I - buf_b[s].I);
+            p1[s].Q = (int8_t)SIGN(p0[s].Q - buf_b[s].Q);
+            p2[s].I = (int8_t)SIGN(p0[s].I + buf_b[s].I);
+            p2[s].Q = (int8_t)SIGN(p0[s].Q + buf_b[s].Q);
         }
     }
     sdr_free(buf_b);
@@ -167,17 +168,15 @@ static sdr_cpx16_t *gen_e5abq_banks(int prn, double T, double fs, int N)
     return banks;
 }
 
-// Select E5ABQ bank: 0 (E5aQ-only) pre-sync, else 1/2 by current rel ----------
-static const sdr_cpx16_t *select_e5abq_bank(const sdr_ch_t *ch)
+// Select E5ABQ bank -----------------------------------------------------------
+static const sdr_cpx16_t *select_e5abq_bank(sdr_ch_t *ch)
 {
-    if (ch->trk->sec_sync <= 0 || ch->len_sec_code <= 0 ||
-        ch->len_sec_code2 <= 0) {
-        return ch->trk->code; // bank 0
+    if (ch->trk->sec_sync <= 0) {
+        return ch->trk->code; // bank 1
     }
-    int idx = (ch->lock - ch->trk->sec_sync) % ch->len_sec_code;
-    if (idx < 0) idx += ch->len_sec_code;
-    int rel = ch->sec_code[idx] * ch->sec_code2[idx % ch->len_sec_code2];
-    int bank = rel > 0 ? 1 : 2;
+    int N1 = ch->len_sec_code, N2 = ch->len_sec_code2;
+    int idx = (ch->lock - ch->trk->sec_sync + N1) % N1;
+    int bank = ch->sec_code[idx] * ch->sec_code2[idx%N2] > 0 ? 1 : 2; // bank 2/3
     return ch->trk->code + bank * ch->N * SDR_N_CODES;
 }
 
@@ -223,14 +222,12 @@ static sdr_trk_t *trk_new(const char *sig, int prn, const int8_t *code,
     trk->pos[npos++] =  0.5 * sp;  // L
     trk->pos[npos++] = POS_CORR_N; // N
     if (sdr_bump_jump && sdr_sig_boc(sig)) {
-        // E5ABQ: ±2/3 chip (probes ZP at main-lock, lands on main when 2-sub
-        // slip occurs); other BOC: ±1/2 chip (BOC sub-peak structure)
-        double vsp = !strcmp(sig, "E5ABQ") ? 2 * sc / 3 : sc / 2;
+        double vsp = !strcmp(sig, "E5ABQ") ? sc / 3 : sc / 2;
         trk->pos[npos++] = -vsp; // VE
         trk->pos[npos++] =  vsp; // VL
     }
     trk->npos = npos;
-
+    
     trk->nposx = 0;
     trk->sec_sync = trk->sec_pol = 0;
     trk->err_phas = trk->err_code = 0.0;
@@ -427,7 +424,8 @@ static void sync_sec_code(sdr_ch_t *ch, int N)
     if (ch->trk->sec_sync == 0) {
         float P = 0.0, R = 0.0;
         for (int i = 0; i < N; i++) {
-            P += ch->trk->P[SDR_N_HIST-N+i][0] * ch->sec_code[i] / N;
+            int j = i % ch->len_sec_code;
+            P += ch->trk->P[SDR_N_HIST-N+i][0] * ch->sec_code[j] / N;
             R += fabsf(ch->trk->P[SDR_N_HIST-N+i][0]) / N;
         }
         if (fabsf(P) >= R && R >= THRES_SYNC) {
@@ -444,7 +442,7 @@ static void sync_sec_code(sdr_ch_t *ch, int N)
         }
     }
     if (ch->trk->sec_sync > 0) {
-        int idx = (ch->lock - ch->trk->sec_sync - 1 + N) % N;
+        int idx = (ch->lock - ch->trk->sec_sync - 1 + N) % N % ch->len_sec_code;
         int8_t C = ch->sec_code[idx] * ch->trk->sec_pol;
         for (int i = 0; i < ch->trk->npos + ch->trk->nposx; i++) {
             ch->trk->C[i][0] *= C;
@@ -475,7 +473,7 @@ static void FLL(sdr_ch_t *ch)
     ch->trk->C0[1] = ch->trk->C[0][1];
 }
 
-// PLL (3rd-order, a3=1.1, b3=2.4, Bn = W/0.7845) ------------------------------
+// PLL (3rd-order, a3=1.1, b3=2.4, Bn=W/0.7845) --------------------------------
 static void PLL(sdr_ch_t *ch)
 {
     double IP = ch->trk->C[0][0];
@@ -485,13 +483,12 @@ static void PLL(sdr_ch_t *ch)
         double W = sdr_b_pll / 0.7845;
         ch->trk->phas_acc += W * W * W * err_phas * ch->T;
         ch->fd += 2.4 * W * (err_phas - ch->trk->err_phas) +
-            1.1 * W * W * err_phas * ch->T +
-            ch->trk->phas_acc * ch->T;
+            1.1 * W * W * err_phas * ch->T + ch->trk->phas_acc * ch->T;
         ch->trk->err_phas = err_phas;
     }
 }
 
-// DLL (2nd-order, zeta=0.707, Bn = W/0.53) ------------------------------------
+// DLL (2nd-order, zeta=0.707, Bn=W/0.53) --------------------------------------
 static void DLL(sdr_ch_t *ch)
 {
     int N = MAX(1, (int)(sdr_t_dll / ch->T));
@@ -520,22 +517,19 @@ static void DLL(sdr_ch_t *ch)
 static void bump_jump(sdr_ch_t *ch)
 {
     double coff = ch->coff;
-    // step matches VE/VL probe distance: 2/3 chip for E5ABQ, 1 chip for others
-    double step = !strcmp(ch->sig, "E5ABQ") ?
-        ch->T / ch->len_code * 2 / 3 : ch->T / ch->len_code;
+    double step = ch->T / ch->len_code / (!strcmp(ch->sig, "E5ABQ") ? 3 : 1);
 
-    const double k_bump = sdr_bump_k;
-    if (ch->trk->sumVL > k_bump * ch->trk->sumP &&
-        ch->trk->sumP   > k_bump * ch->trk->sumVE) {
+    if (ch->trk->sumVL > sdr_bump_k * ch->trk->sumP &&
+        ch->trk->sumP > sdr_bump_k * ch->trk->sumVE) {
         ch->coff += step;
-    } else if (ch->trk->sumVE > k_bump * ch->trk->sumP &&
-        ch->trk->sumP  > k_bump * ch->trk->sumVL) {
+    } else if (ch->trk->sumVE > sdr_bump_k * ch->trk->sumP &&
+        ch->trk->sumP > sdr_bump_k * ch->trk->sumVL) {
         ch->coff -= step;
     }
     if (ch->coff != coff) {
-        sdr_log(3, "$LOG,%.3f,%s,%d,FALSE LOCK (%.2f,%.2f,%.2f) COFF (%.7f->%.7f)",
+        sdr_log(3, "$LOG,%.3f,%s,%d,FALSE LOCK (%.2f,%.2f,%.2f) COFF (%.7f->%.7f) K=%.2f",
             ch->time, ch->sig, ch->prn, ch->trk->sumVE, ch->trk->sumP,
-            ch->trk->sumVL, coff * 1e3, ch->coff * 1e3);
+            ch->trk->sumVL, coff * 1e3, ch->coff * 1e3, sdr_bump_k);
     }
     ch->trk->sumVE = ch->trk->sumVL = 0.0;
 }
