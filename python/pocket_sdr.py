@@ -471,14 +471,17 @@ def get_corr_stat(rcv, ch):
     pos[0:4] = [0, -40, 0, 40]
     C = np.zeros(SDR_N_CORR, dtype='complex64')
     P = np.zeros(SDR_N_CORR, dtype='float64')
+    I = np.zeros(SDR_N_CORR, dtype='float64')
     libsdr.sdr_rcv_corr_stat.argtypes = (c_void_p, c_int32,
         ctypeslib.ndpointer('float64'), ctypeslib.ndpointer('float64'),
-        ctypeslib.ndpointer('complex64'), ctypeslib.ndpointer('float64'))
-    n = libsdr.sdr_rcv_corr_stat(rcv, ch, stat, pos, C, P)
-    # state, fs, lock, cn0, coff, fd, pos, C, P
+        ctypeslib.ndpointer('complex64'), ctypeslib.ndpointer('float64'),
+        ctypeslib.ndpointer('float64'))
+    n = libsdr.sdr_rcv_corr_stat(rcv, ch, stat, pos, C, P, I)
+    # state, fs, lock, cn0, coff, fd, npos, pos, C, P, I
     return int(stat[0]), stat[1], stat[2], stat[3], stat[4], stat[5], \
         int(stat[6]) if n > 0 else 1, pos[:n] if n > 0 else pos[:4], \
-        C[:n] if n > 0 else C[:4], P[:n] if n > 0 else P[:4]
+        C[:n] if n > 0 else C[:4], P[:n] if n > 0 else P[:4], \
+        I[:n] if n > 0 else I[:4]
 
 # get correlator history -------------------------------------------------------
 def get_corr_hist(rcv, ch, tspan):
@@ -1350,7 +1353,7 @@ def corr_page_new(parent):
     p.box5 = sel_box_new(p.toolbar, ['0.2', '0.3', '0.5', '1', '1.5', '2', '3',
         '5', '10'], '2', 3)
     p.box5.pack(side=RIGHT, padx=1)
-    p.box4 = sel_box_new(p.toolbar, ['I', 'Q', 'IQ', 'AveIQ'], 'I', 5)
+    p.box4 = sel_box_new(p.toolbar, ['I', 'Q', 'IQ', 'AveI', 'AveIQ'], 'I', 5)
     p.box4.pack(side=RIGHT, padx=1)
     ttk.Label(p.toolbar, text='IQ/W(μs)/T(s)/Range').pack(side=RIGHT, padx=2)
     p.plt3 = plt.plot_new(p.panel, 800, 245, [0, 1], [-0.6, 0.6], title=ti[2])
@@ -1409,9 +1412,9 @@ def update_corr_page(p):
     w = float(p.box5.get()) * 1e-6
     rng = [float(p.box2.get()), float(p.box3.get())]
     type = p.box4.get()
-    state, fs, lock, cn0, coff, fd, npos, pos, C, aveC = get_corr_stat(rcv_body, ch)
+    state, fs, lock, cn0, coff, fd, npos, pos, C, aveC, aveI = get_corr_stat(rcv_body, ch)
     tt, T, P = get_corr_hist(rcv_body, ch, rng[0])
-    update_corr_plot1(p.plt1, coff, fs, npos, pos, w, C, aveC, type, rng[1])
+    update_corr_plot1(p.plt1, coff, fs, npos, pos, w, C, aveC, aveI, type, rng[1])
     update_corr_plot2(p.plt2, P, C, rng[1])
     update_corr_plot3(p.plt3, tt, T, P, rng)
     update_corr_text(p, ch, tt)
@@ -1447,7 +1450,7 @@ def update_corr_text(p, ch, time):
         text, anchor=W)
 
 # update correlator plot 1 -----------------------------------------------------
-def update_corr_plot1(p, coff, fs, npos, pos, w, C, aveC, type, rng):
+def update_corr_plot1(p, coff, fs, npos, pos, w, C, aveC, aveI, type, rng):
     x = [coff + pos[i] / fs * 1e3 for i in range(len(pos))]
     D = C * np.sign(C[0])
     if type == 'I':
@@ -1456,8 +1459,10 @@ def update_corr_plot1(p, coff, fs, npos, pos, w, C, aveC, type, rng):
         ti, yl = 'Q', [-rng, rng]
     elif type == 'IQ':
         ti, yl = '\u221A (I\xb2+Q\xb2)', [0, rng]
+    elif type == 'AveI':
+        ti, yl = '\u03A3 (I * sign(IP)) / N', [-rng * 0.3, rng]
     else:
-        ti, yl = '\u221A \u03A3 (I\xb2+Q\xb2)', [0, rng]
+        ti, yl = '\u221A (\u03A3 (I\xb2+Q\xb2) / N)', [0, rng]
     plt.plot_clear(p)
     #plt.plot_xlim(p, [x[npos], x[-1]])
     plt.plot_xlim(p, [x[0] - w * 5e2, x[0] + w * 5e2])
@@ -1469,7 +1474,8 @@ def update_corr_plot1(p, coff, fs, npos, pos, w, C, aveC, type, rng):
     plt.plot_poly(p, p.xl, [0, 0], color='grey')
     plt.plot_dots(p, [coff], [0], color=plt.FG_COLOR, size=3)
     y = D.real if type == 'I' else D.imag if type == 'Q' \
-        else abs(D) if type == 'IQ' else np.sqrt(aveC)
+        else abs(D) if type == 'IQ' else aveI if type == 'AveI' \
+        else np.sqrt(aveC)
     plt.plot_poly(p, x[npos:], y[npos:], color=P2_COLOR)
     plt.plot_dots(p, x[npos:], y[npos:], color=P2_COLOR, fill=P1_COLOR, size=3)
     plt.plot_dots(p, x[:npos], y[:npos], color=P1_COLOR, fill=P1_COLOR, size=9)
@@ -1477,7 +1483,7 @@ def update_corr_plot1(p, coff, fs, npos, pos, w, C, aveC, type, rng):
     plt.plot_text(p, p.xl[1] - 18 / xs, p.yl[0] + 10 / ys, 'COFF (ms)',
         anchor=SE)
     plot_scale(p, x[0] + w * 4.5e2 - 20 / xs, yl[1] - 20 / ys, w * 1e2, '%.2f ns' % (w * 1e5))
-    if type == 'AveIQ':
+    if type == 'AveIQ' or type == 'AveI':
         plt.plot_text(p, p.xl[1] - 18 / xs, p.yl[1] - 32 / ys,
             'Integ = %s s' % (sys_opt.t_dll.get()), anchor=NE)
 
