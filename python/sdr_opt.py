@@ -676,6 +676,8 @@ def array_opt_dlg(root, opt, geom_load=None, geom_save=None):
     btn_row = Frame(dlg.panel, bg=BG_COLOR)
     btn1 = ttk.Button(btn_row, width=10, padding=(2, 2), text='Update')
     btn1.pack(side=RIGHT)
+    btn4 = ttk.Button(btn_row, width=10, padding=(2, 2), text='Clear')
+    btn4.pack(side=RIGHT, padx=(0, 4))
     btn_row.pack(fill=X, pady=2)
     panel1 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     panel2 = Frame(panel1, bg=BG_COLOR)
@@ -695,6 +697,7 @@ def array_opt_dlg(root, opt, geom_load=None, geom_save=None):
         opt_new, geom_load))
     btn3.bind('<Button-1>', lambda e: on_btn_geom_save_push(e, dlg, opt_new,
         geom_save))
+    btn4.bind('<Button-1>', lambda e: on_btn_clear_push(e, plot, opt_new))
     plot.c.bind('<Configure>', lambda e: on_show_ant_ele_plot(e, plot, opt_new))
     root.wait_window(dlg.win)
     return opt_new if dlg.ok else opt
@@ -758,6 +761,14 @@ def on_show_ant_ele_plot(e, plot, opt):
 
 # button update push callback --------------------------------------------------
 def on_btn_update_push(e, plot, opt):
+    plot_ant_ele(plot, opt)
+
+# button clear push callback ---------------------------------------------------
+def on_btn_clear_push(e, plot, opt):
+    for ch in range(MAX_RFCH):
+        opt.posx[ch].set('0.0000')
+        opt.posy[ch].set('0.0000')
+        opt.posz[ch].set('0.0000')
     plot_ant_ele(plot, opt)
 
 # plot antenna elements --------------------------------------------------------
