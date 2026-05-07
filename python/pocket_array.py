@@ -12,39 +12,37 @@ import sys, time
 from math import *
 import numpy as np
 from tkinter import *
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from tkinter import *
 from tkinter import ttk
-import sdr_func, sdr_opt
+import sdr_func, sdr_opt, sdr_plot
 
-# constans ---------------------------------------------------------------------
-BG_COLOR = 'white'     # background color
-FG_COLOR = '#555555'   # foreground color
-GR_COLOR = '#CCCCCC'   # grid color
-PLT_COLOR = 'red'      # plot color
+# constants --------------------------------------------------------------------
+BG_COLOR = 'white'
+FG_COLOR = '#555555'
+GR_COLOR = '#CCCCCC'
+PLT_COLOR = 'red'
 FONT = {'family': 'Tahoma', 'size': 10, 'weight': 'normal', 'color': FG_COLOR}
+PLOT_FONT = (FONT['family'], FONT['size'] + 2, FONT['weight'])
 D2R = pi / 180.0
-TB_HEIGHT  = 25              # toolbar height
+TB_HEIGHT = 25
+CONTOUR_M = 241
 
 # antenna element positions ----------------------------------------------------
 lam = 299792458.0 / 1.57542e9 # L1 wave length (m)
-ANT_POS_1 = np.array([0.0, 0.0, 0]) # 1-element ant
-ANT_POS_2 = lam / 2 * np.array([-1.5, 0.0, 0, # 4-element ULA (uniform linear)
+ANT_POS_1 = np.array([0.0, 0.0, 0]) # 1-element
+ANT_POS_2 = lam / 2 * np.array([-1.5, 0.0, 0, # 4-element ULA
     -0.5, 0.0, 0,  0.5, 0.0, 0,  1.5, 0.0, 0])
-ANT_POS_3 = lam / 2 * np.array([-0.5, -0.5, 0, # 4-element square grid
+ANT_POS_3 = lam / 2 * np.array([-0.5, -0.5, 0, # 4-element square
     -0.5, 0.5, 0,  0.5, -0.5, 0,  0.5, 0.5, 0])
-ANT_POS_4 = lam / 2 * np.array([-1.5, -0.5, 0, # 8-element square grid
+ANT_POS_4 = lam / 2 * np.array([-1.5, -0.5, 0, # 8-element square
     -0.5, -0.5, 0,  0.5, -0.5, 0,  1.5, -0.5, 0,
     -1.5, 0.5, 0, -0.5, 0.5, 0,  0.5, 0.5, 0,  1.5, 0.5, 0])
-ANT_POS_5 = lam / 2 * 1.3 * np.array([ # 8-element UCA (uniform circular)
+ANT_POS_5 = lam / 2 * 1.3 * np.array([ # 8-element UCA
     sin(pi*0/8), cos(pi*0/8), 0, sin(pi*2/8), cos(pi*2/8), 0,
     sin(pi*4/8), cos(pi*4/8), 0, sin(pi*6/8), cos(pi*6/8), 0,
     sin(pi*8/8), cos(pi*8/8), 0, sin(pi*10/8), cos(pi*10/8), 0,
     sin(pi*12/8), cos(pi*12/8), 0, sin(pi*14/8), cos(pi*14/8), 0])
-ANT_POS_6 = lam / 2 * np.array([0.0, 0.0, 0, # 7-element hexagnal
+ANT_POS_6 = lam / 2 * np.array([0.0, 0.0, 0, # 7-element hexagonal
     sin(pi*0/6), cos(pi*0/6), 0, sin(pi*2/6), cos(pi*2/6), 0,
     sin(pi*4/6), cos(pi*4/6), 0, sin(pi*6/6), cos(pi*6/6), 0,
     sin(pi*8/6), cos(pi*8/6), 0, sin(pi*10/6), cos(pi*10/6), 0])
@@ -78,40 +76,16 @@ def sel_box_new(parent, vals=[], val='', width=8):
     box.set(val)
     return box
 
-# draw skyplot mask ------------------------------------------------------------
-def draw_mask(ax):
-    p1 = [(sin(az * D2R), cos(az * D2R)) for az in np.arange(0, 363, 3)]
-    p2 = ((0.0, 1.1), (-1.1, 1.1), (-1.1, -1.1), (1.1, -1.1), (1.1, 1.1), (0.0, 1.1))
-    ax.add_patch(plt.Polygon(np.vstack([p1, p2]), facecolor=BG_COLOR))
-
-# draw skyplot -----------------------------------------------------------------
-def draw_sky(ax, d_az=30, d_el=30, label=0):
-    for az in np.arange(0, 360, d_az):
-        x = sin(az * D2R)
-        y = cos(az * D2R)
-        ax.plot([0, x], [0, y], '-', color=GR_COLOR, lw=0.8, alpha=0.5)
-        if label and az % 30 == 0:
-            text = ('%.0f' % (az)) if az % 90 else 'NESW'[az//90]
-            ax.text(x * 1.05, y * 1.05, text, ha='center', va='center',
-                rotation=-az, fontdict=FONT)
-    for el in np.arange(0, 90, d_el):
-        x = [(90 - el) / 90 * sin(az * D2R) for az in np.arange(0, 363, 3)]
-        y = [(90 - el) / 90 * cos(az * D2R) for az in np.arange(0, 363, 3)]
-        if el == 0:
-            ax.plot(x, y, '-', color=FG_COLOR, lw=0.8)
-        else:
-            ax.plot(x, y, '-', color=GR_COLOR, lw=0.8, alpha=0.5)
-
 # antenna element gain ---------------------------------------------------------
-ELE_GAIN_ON = False     # apply elevation-dependent element gain
+ELE_GAIN_ON = False
 
 def ant_ele_gain(el):
     if not ELE_GAIN_ON: return 0.0
     if   el >  pi / 2: el = pi - el
     elif el < -pi / 2: el = -pi - el
     return 1 - 2 ** ((90 - el / D2R) / 30) # (dB)
-    
-# steering vector a_i(az,el) = exp(2j pi pos_i . e(az,el) / lam) -------------
+
+# steering vector a_i(az,el) = exp(2j pi pos_i . e(az,el) / lam) ---------------
 def steering_vec(lam, pos, az, el):
     n = len(pos) // 3
     es = np.array((sin(az) * cos(el), cos(az) * cos(el), sin(el)))
@@ -120,11 +94,7 @@ def steering_vec(lam, pos, az, el):
         a[i] = np.exp(2j * pi * np.dot(pos[i*3:i*3+3], es) / lam)
     return a
 
-# complex RFCH weights (classic beamformer, MVDR or PI) ----------------------
-#   jammers: list of (az,el) in radians. empty -> classic.
-#   slider_amp: per-channel amplitude (used only when no jammers)
-#   mode: 'MVDR' (signal direction unity) or 'PI' (reference antenna unity)
-#   returns complex weight w such that sig(e) = sum_i w_i * exp(2j pi pos_i.e/lam)
+# complex RFCH weights (classic beamformer, MVDR or PI) ------------------------
 def compute_weights(lam, pos, az_s, el_s, slider_amp, jammers, mode='MVDR'):
     n = len(pos) // 3
     if n == 0:
@@ -132,33 +102,26 @@ def compute_weights(lam, pos, az_s, el_s, slider_amp, jammers, mode='MVDR'):
     a_s = steering_vec(lam, pos, az_s, el_s)
     if not jammers:
         return np.array([slider_amp[i] * np.conj(a_s[i]) for i in range(n)])
-    # element-gain-weighted covariance: R = I + J sum_k g_v(el_k)^2 a_k a_k^H
-    # (received jammer power scales by element pattern, so low-el jammers get
-    #  proportionally less null-suppression weight)
+    # element-gain-weighted covariance: low-el jammers get proportionally less
+    # null-suppression weight than high-el ones
     J = 1e4
     R = np.eye(n, dtype=complex)
     for az, el in jammers:
         a_j = steering_vec(lam, pos, az, el)
-        g_j = 10.0 ** (ant_ele_gain(el) / 20.0) # voltage gain
+        g_j = 10.0 ** (ant_ele_gain(el) / 20.0)
         R += J * (g_j * g_j) * np.outer(a_j, np.conj(a_j))
-    # constraint c: MVDR -> effective signal steering (g_s a_s), PI -> ref element
     g_s = 10.0 ** (ant_ele_gain(el_s) / 20.0)
-    if mode == 'PI':
+    if mode == 'PI':  # reference element (CH1) weight stays at unity
         c = np.zeros(n, dtype=complex)
         c[0] = 1.0
-    else:
+    else:             # MVDR: signal direction array factor = N
         c = g_s * a_s
-    # w = R^-1 c / (c^H R^-1 c)
     Rinv_c = np.linalg.solve(R, c)
     w = Rinv_c / (np.conj(c) @ Rinv_c)
-    # MVDR: scale = N * g_s so signal-dir array factor = N (matches classic);
-    #       total sky gain at signal dir = 20 log10(N) + ant_ele_gain(el_s).
-    # PI  : no scaling, so the reference element weight (CH1) stays at unity.
     scale = 1.0 if mode == 'PI' else n * g_s
     return np.conj(w) * scale
 
-# antenna gain ----------------------------------------------------------------
-#   weight: complex ndarray (N), sig(e) = sum_i weight_i * exp(2j pi pos_i.e/lam)
+# antenna gain at single (az, el) ----------------------------------------------
 def ant_gain(lam, pos, weight, a, e):
     n = len(weight)
     es = np.array((sin(a) * cos(e), cos(a) * cos(e), sin(e)))
@@ -168,133 +131,260 @@ def ant_gain(lam, pos, weight, a, e):
         sig += weight[i] * np.exp(2j * pi * phi)
     return 20.0 * log10(abs(sig) + 1e-30) + ant_ele_gain(e) # (dB)
 
-# plot antenna gain contour in skyplot -----------------------------------------
-def plot_sky(ax, lam, pos, weight, az, el, bins, jammers, show_beam=True):
-    ax.axis('off')
-    ax.set_aspect('equal')
-    ax.set_xlim(-1.05, 1.05)
-    ax.set_ylim(-1.09, 1.01)
-    dx = 0.025
-    x = np.arange(-1.0, 1.0 + dx, dx)
-    y = np.arange(-1.0, 1.0 + dx, dx)
-    z = np.zeros([len(y), len(x)])
-    for i in range(len(x)):
-        for j in range(len(y)):
-            a = atan2(x[i], y[j])
-            e = (1.0 - sqrt(x[i]**2 + y[j]**2)) * pi / 2.0
-            z[j][i] = ant_gain(lam, pos, weight, a, e)
-    cont = ax.contourf(x, y, z, bins, extend='both', cmap='jet')
-    draw_mask(ax)
-    draw_sky(ax, d_el=15, label=1)
+# vectorized antenna gain over a square grid ----------------------------------
+# samples at pixel centers ((2j+1)/M - 1)*half — matches plot_image's render
+# convention so the heatmap aligns with X marks regardless of canvas size
+def ant_gain_grid(lam, pos, weight, M, half=1.0):
+    n = len(weight)
+    pos_arr = np.asarray(pos, dtype=float).reshape(-1, 3)[:n]
+    g = ((2 * np.arange(M, dtype=float) + 1) / M - 1) * half
+    X, Y = np.meshgrid(g, g)
+    R = np.sqrt(X * X + Y * Y)
+    az = np.arctan2(X, Y)
+    el = np.maximum(0.0, (1.0 - np.minimum(R, 1.0)) * pi / 2)
+    ce = np.cos(el)
+    es = np.stack([np.sin(az) * ce, np.cos(az) * ce, np.sin(el)], axis=-1)
+    if n == 0:
+        return np.full((M, M), -100.0)
+    phi = (es @ pos_arr.T) / lam
+    sig = np.sum(weight[None, None, :] * np.exp(2j * pi * phi), axis=-1)
+    gain = 20.0 * np.log10(np.abs(sig) + 1e-30)
+    if ELE_GAIN_ON:
+        gain = gain + (1.0 - 2.0 ** ((90.0 - el / D2R) / 30.0))
+    return gain
+
+# X marker on tk canvas (with white halo) -------------------------------------
+def plot_x_mark(plt_obj, x, y, color, halo=BG_COLOR, size_px=11):
+    xs, _ = sdr_plot.plot_scale(plt_obj)
+    if xs <= 0: return
+    d = (size_px / 2.0) / xs
+    sdr_plot.plot_poly(plt_obj, [x - d, x + d], [y - d, y + d], color=halo, width=8)
+    sdr_plot.plot_poly(plt_obj, [x - d, x + d], [y + d, y - d], color=halo, width=8)
+    sdr_plot.plot_poly(plt_obj, [x - d, x + d], [y - d, y + d], color=color, width=4)
+    sdr_plot.plot_poly(plt_obj, [x - d, x + d], [y + d, y - d], color=color, width=4)
+
+# arrow with head triangle on tk canvas ---------------------------------------
+def plot_arrow(plt_obj, x0, y0, x1, y1, color, width=2, head_px=12):
+    sdr_plot.plot_poly(plt_obj, [x0, x1], [y0, y1], color=color, width=width)
+    xs, _ = sdr_plot.plot_scale(plt_obj)
+    if xs <= 0: return
+    h = head_px / xs
+    dx, dy = x1 - x0, y1 - y0
+    L = sqrt(dx * dx + dy * dy)
+    if L < 1e-9: return
+    ux, uy = dx / L, dy / L
+    px, py = -uy, ux
+    bx, by = x1 - h * ux, y1 - h * uy
+    sdr_plot.plot_poly(plt_obj,
+        [x1, bx + 0.45 * h * px, bx - 0.45 * h * px, x1],
+        [y1, by + 0.45 * h * py, by - 0.45 * h * py, y1],
+        color=color, width=width, fill=1)
+
+# horizontal colorbar in the bottom margin of a tk plot -----------------------
+def draw_colorbar_tk(plt_obj, vmin, vmax, lut=None, tag=''):
+    if lut is None: lut = sdr_plot.jet_lut()
+    w = plt_obj.c.winfo_width()
+    h = plt_obj.c.winfo_height()
+    if w <= 1 or h <= 1: return
+    bar_h = 12
+    bar_y = h - 40
+    bar_x0 = plt_obj.m[0] + 30
+    bar_x1 = w - plt_obj.m[1] - 30
+    if bar_x1 - bar_x0 < 30: return
+    n = len(lut)
+    width = bar_x1 - bar_x0
+    for i, c in enumerate(lut):
+        x0 = bar_x0 + width * i / n
+        x1 = bar_x0 + width * (i + 1) / n
+        plt_obj.c.create_rectangle(x0, bar_y, x1 + 1, bar_y + bar_h,
+            outline='', fill=c, tag=tag)
+    plt_obj.c.create_rectangle(bar_x0, bar_y, bar_x1, bar_y + bar_h,
+        outline=FG_COLOR, tag=tag)
+    rng = vmax - vmin
+    v0 = ceil(vmin / 10.0) * 10
+    for v in np.arange(v0, vmax + 0.5, 10):
+        x = bar_x0 + width * (v - vmin) / rng
+        plt_obj.c.create_line(x, bar_y + bar_h, x, bar_y + bar_h + 3,
+            fill=FG_COLOR, tag=tag)
+        plt_obj.c.create_text(x, bar_y + bar_h + 4, text='%.0f' % v,
+            fill=FG_COLOR, anchor=N, font=PLOT_FONT, tag=tag)
+    plt_obj.c.create_text(bar_x1 + 6, bar_y + bar_h / 2.0, text='(dB)',
+        fill=FG_COLOR, anchor=W, font=PLOT_FONT, tag=tag)
+
+# tk canvas pixel -> data coordinate (skyplot) --------------------------------
+def sky_pixel_to_data(plt_obj, xp, yp):
+    xs, ys = sdr_plot.plot_scale(plt_obj)
+    if xs <= 0 or ys <= 0: return None, None
+    xc = plt_obj.m[0] + (plt_obj.c.winfo_width () - plt_obj.m[0] - plt_obj.m[1]) / 2
+    yc = plt_obj.m[2] + (plt_obj.c.winfo_height() - plt_obj.m[2] - plt_obj.m[3]) / 2
+    x = (xp - xc) / xs + (plt_obj.xl[0] + plt_obj.xl[1]) / 2
+    y = (plt_obj.yl[0] + plt_obj.yl[1]) / 2 - (yp - yc) / ys
+    return x, y
+
+# plot antenna gain heatmap on the skyplot ------------------------------------
+def plot_sky_skyplot(plt_obj, lam, pos, weight, az_s, el_s, vmin, vmax,
+    jammers, show_beam=True):
+    sdr_plot.plot_clear(plt_obj)
+    # match the compute grid to plot_image's actual rendered extent so
+    # heatmap pixels align with X marks (avoids horizontal stretching when
+    # plot_image's z-rounding gives actual_half > 1). The 1e-9 shrink keeps
+    # plot_image's internal `ceil(2*half*xs/M)` from rounding 2.0+1ulp up to z+1
+    xs, _ = sdr_plot.plot_scale(plt_obj)
+    if xs <= 0: return
+    z = max(1, int(np.ceil(2.0 * xs / CONTOUR_M)))
+    actual_half = CONTOUR_M * z / (2.0 * xs)
+    gain = ant_gain_grid(lam, pos, weight, CONTOUR_M, half=actual_half)
+    sdr_plot.plot_image(plt_obj, 0.0, 0.0, actual_half * (1 - 1e-9),
+        gain[::-1], vmin, vmax)
+    # large outer half so the corner polygons clip past the canvas regardless
+    # of size or image zoom-rounding overflow
+    sdr_plot.plot_sky_mask(plt_obj, 100.0, color=BG_COLOR, n_arc=24)
+    for az_g in np.arange(0, 360, 30):
+        x, y = sin(az_g * D2R), cos(az_g * D2R)
+        sdr_plot.plot_poly(plt_obj, [0, x], [0, y], color=GR_COLOR)
+        text = ('%.0f' % az_g) if az_g % 90 else 'NESW'[az_g // 90]
+        sdr_plot.plot_text(plt_obj, x * 1.03, y * 1.03, text, color=FG_COLOR,
+            anchor=S, angle=-az_g)
+    for el_g in np.arange(0, 90, 15):
+        sdr_plot.plot_circle(plt_obj, 0, 0, (90 - el_g) / 90,
+            color=FG_COLOR if el_g < 5 else GR_COLOR)
     if show_beam:
-        d = 1.0 - el / pi * 2
-        xb = d * sin(az)
-        yb = d * cos(az)
+        d = 1.0 - el_s / pi * 2
+        xb = d * sin(az_s)
+        yb = d * cos(az_s)
         if d > 0.1:
             xa = (d - 0.1) / d * xb
             ya = (d - 0.1) / d * yb
-            ax.arrow(0, 0, xa, ya, lw=2, head_width=0.06, head_length=0.11,
-                ec=BG_COLOR, fc=BG_COLOR)
-            ax.arrow(0, 0, xa, ya, head_width=0.05, head_length=0.1, ec=PLT_COLOR,
-                fc=PLT_COLOR)
-        ax.plot(0, 0, '.', color=BG_COLOR, ms=14)
-        ax.plot(0, 0, '.', color=PLT_COLOR, ms=10)
-        ax.plot(xb, yb, 'X', color=BG_COLOR, ms=15, mew=3)
-        ax.plot(xb, yb, 'X', color=PLT_COLOR, ms=11, mew=1.5,
-            markeredgecolor=BG_COLOR)
+            plot_arrow(plt_obj, 0, 0, xa, ya, 'white', width=6, head_px=12)
+            plot_arrow(plt_obj, 0, 0, xa, ya, PLT_COLOR, width=2, head_px=12)
+        sdr_plot.plot_dots(plt_obj, [0], [0], color=PLT_COLOR, fill=PLT_COLOR,
+            size=10)
+        plot_x_mark(plt_obj, xb, yb, PLT_COLOR, halo=BG_COLOR, size_px=22)
     for az_j, el_j in jammers:
         dj = 1.0 - el_j / pi * 2
-        xj = dj * sin(az_j)
-        yj = dj * cos(az_j)
-        ax.plot(xj, yj, 'X', color=BG_COLOR, ms=15, mew=3)
-        ax.plot(xj, yj, 'X', color='black', ms=11, mew=1.5,
-            markeredgecolor=BG_COLOR)
-    return cont
+        plot_x_mark(plt_obj, dj * sin(az_j), dj * cos(az_j), 'black',
+            halo=BG_COLOR, size_px=11)
+    draw_colorbar_tk(plt_obj, vmin, vmax)
 
-# plot antenna gain plot in cross-section plot ---------------------------------
-def plot_gain(ax, lam, pos, weight, az, el, bins):
-    ax.axis('off')
-    ax.set_aspect('equal')
-    ax.set_xlim(-1.05, 1.05)
-    ax.set_ylim(-0.15, 1.05)
-    e = np.arange(-180.0, 180.0, 1.0) * D2R
-    x = np.zeros(len(e))
-    y = np.zeros(len(e))
-    rng = bins[-1] - bins[0]
-    for i in range(len(e)):
-        p = ant_gain(lam, pos, weight, az, e[i])
-        x[i] = np.max([0.0, (p - bins[0]) / rng]) * cos(e[i])
-        y[i] = np.max([0.0, (p - bins[0]) / rng]) * sin(e[i])
-    ax.plot(x, y, color=PLT_COLOR, lw=0.8)
-    draw_sky(ax, d_el=90 / (rng / 5))
-    for p in np.arange(bins[0], bins[-1], 10):
-        ax.text((p - bins[0]) / rng, -0.15, '%.0f' % (p), ha='center', va='top', fontdict=FONT)
-        ax.text((bins[0] - p) / rng, -0.15, '%.0f' % (p), ha='center', va='top', fontdict=FONT)
-    for e in range(0, 91, 30):
-        ax.text(1.07 * cos(e * D2R), 1.07 * sin(e * D2R), str(e), ha='center',
-            va='center', rotation=e-90, fontdict=FONT)
-    ax.plot([-1.05, 1.05], [0, 0], color=FG_COLOR, lw=0.8)
-    ax.plot(0, 0, '.', color=PLT_COLOR, ms=10)
-    ax.plot(cos(el), sin(el), '.', color=PLT_COLOR, ms=10)
-    ax.arrow(0, 0, 0.9 * cos(el), 0.9 * sin(el), head_width=0.05,
-        head_length=0.1, ec=PLT_COLOR, fc=PLT_COLOR)
+# vectorized antenna gain along a 1-D angle array (cross-section) -------------
+def ant_gain_1d(lam, pos, weight, az, e_arr):
+    n = len(weight)
+    pos_arr = np.asarray(pos, dtype=float).reshape(-1, 3)[:n]
+    if n == 0:
+        return np.full(len(e_arr), -100.0)
+    ce = np.cos(e_arr)
+    es = np.stack([sin(az) * ce, cos(az) * ce, np.sin(e_arr)], axis=-1)
+    phi = (es @ pos_arr.T) / lam
+    sig = np.sum(weight[None, :] * np.exp(2j * pi * phi), axis=-1)
+    g = 20.0 * np.log10(np.abs(sig) + 1e-30)
+    if ELE_GAIN_ON:
+        ee = np.where(e_arr >  pi / 2, pi - e_arr, e_arr)
+        ee = np.where(ee   < -pi / 2, -pi - ee, ee)
+        g = g + (1.0 - 2.0 ** ((90.0 - ee / D2R) / 30.0))
+    return g
 
-# plot antenna element positions -----------------------------------------------
-def plot_pos(ax, lam, pos):
-    ax.set_aspect('equal')
-    ax.set_xlim(-lam - 1e-3, lam + 1e-3)
-    ax.set_ylim(-lam - 1e-3, lam + 1e-3)
-    ax.axis('off')
-    for x in lam * np.arange(-2, 2.1, 0.5):
-        ax.plot([-lam, lam], [x, x], color=GR_COLOR, lw=0.8);
-        ax.plot([x, x], [-lam, lam], color=GR_COLOR, lw=0.8);
-    for i in range(len(pos) // 3):
-        x = pos[i*3]
-        y = pos[i*3+1]
-        ax.plot(x, y, 'o', color=PLT_COLOR, markerfacecolor=BG_COLOR, ms=20, lw=0.8)
-        ax.text(x, y, '%d' % (i + 1), ha='center', color=PLT_COLOR, va='center',
-            fontdict=FONT)
-    ax.text(0, -0.16, 'Antenna Element Positions', ha='center', va='top',
-        fontdict=FONT)
+# plot antenna gain cross-section ---------------------------------------------
+def plot_gain_tk(plt_obj, lam, pos, weight, az, el, vmin, vmax):
+    sdr_plot.plot_clear(plt_obj)
+    rng = vmax - vmin
+    if rng <= 0: return
+    e_arr = np.arange(-180.0, 180.0, 1.0) * D2R
+    g = ant_gain_1d(lam, pos, weight, az, e_arr)
+    mag = np.maximum(0.0, (g - vmin) / rng)
+    x_curve = mag * np.cos(e_arr)
+    y_curve = mag * np.sin(e_arr)
+    for ag in np.arange(0, 360, 30):
+        sdr_plot.plot_poly(plt_obj, [0, sin(ag * D2R)], [0, cos(ag * D2R)],
+            color=GR_COLOR)
+    n_circ = max(1, int(round(rng / 10)))
+    for k in range(1, n_circ + 1):
+        sdr_plot.plot_circle(plt_obj, 0, 0, k / n_circ,
+            color=FG_COLOR if k == n_circ else GR_COLOR)
+    sdr_plot.plot_poly(plt_obj, [-1.05, 1.05], [0, 0], color=FG_COLOR)
+    sdr_plot.plot_poly(plt_obj, x_curve, y_curve, color=PLT_COLOR, width=2)
+    sdr_plot.plot_dots(plt_obj, [0], [0], color=PLT_COLOR, fill=PLT_COLOR, size=10)
+    sdr_plot.plot_dots(plt_obj, [cos(el)], [sin(el)], color=PLT_COLOR,
+        fill=PLT_COLOR, size=10)
+    plot_arrow(plt_obj, 0, 0, 0.9 * cos(el), 0.9 * sin(el), PLT_COLOR,
+        width=2, head_px=12)
+    #for db in np.arange(vmin, vmax + 0.1, 10):
+    for db in np.arange(vmin, vmax + 0.1, 20):
+        frac = (db - vmin) / rng
+        sdr_plot.plot_text(plt_obj, frac, -0.05, '%.0f' % db, color=FG_COLOR,
+            anchor=N)
+        if frac > 0.001:
+            sdr_plot.plot_text(plt_obj, -frac, -0.05, '%.0f' % db,
+                color=FG_COLOR, anchor=N)
+    for e_g in range(0, 91, 30):
+        sdr_plot.plot_text(plt_obj, 1.08 * cos(e_g * D2R),
+            1.08 * sin(e_g * D2R), str(e_g), color=FG_COLOR, anchor=CENTER,
+            angle=e_g - 90)
 
-# add color bar ----------------------------------------------------------------
-def add_colorbar(fig, rect, cont, bins):
-    cax = fig.add_axes(rect)
-    bar = fig.colorbar(cont, cax=cax, orientation='horizontal')
-    bar.set_ticks(np.arange(bins[0], bins[-1] + 0.5, 10))
-    bar.ax.tick_params(color=FG_COLOR, labelcolor=FG_COLOR,
-        labelfontfamily=FONT['family'])
-    bar.lbl = fig.text(rect[0] + rect[2] + 0.03, rect[1] + rect[3] / 2,
-        '(dB)', ha='left', va='center', fontdict=FONT)
-    return bar
-    
-# plot antenna array -----------------------------------------------------------
+# plot antenna element positions ----------------------------------------------
+def plot_pos_tk(plt_obj, lam, pos):
+    sdr_plot.plot_clear(plt_obj)
+    n = len(pos) // 3
+    for v in lam * np.arange(-2.0, 2.1, 0.5):
+        sdr_plot.plot_poly(plt_obj, [-lam, lam], [v, v], color=GR_COLOR)
+        sdr_plot.plot_poly(plt_obj, [v, v], [-lam, lam], color=GR_COLOR)
+    r = 15 # px
+    for i in range(n):
+        xp, yp = sdr_plot.plot_pos(plt_obj, pos[i * 3], pos[i * 3 + 1])
+        plt_obj.c.create_oval(xp - r, yp - r, xp + r, yp + r,
+            outline=PLT_COLOR, fill=BG_COLOR, width=2)
+        plt_obj.c.create_text(xp, yp, text=str(i + 1), fill=PLT_COLOR,
+            font=PLOT_FONT)
+    w = plt_obj.c.winfo_width()
+    h = plt_obj.c.winfo_height()
+    if w > 1 and h > 1:
+        plt_obj.c.create_text(w / 2, h - 6, text='Antenna Element Positions',
+            fill=FG_COLOR, anchor=S, font=PLOT_FONT)
+
+# dispatch antenna array plot -------------------------------------------------
 def plot_array(p, type, weight, az_s, el_s, ant_pos, jammers, show_beam=True):
     bins = np.arange(-40, 20.05, 0.1)
-    p.ax.cla()
-    if p.bar != None:
-        p.bar.ax.remove()
-        p.bar.lbl.remove()
-    if type == 'POS':
-        plot_pos(p.ax, lam, ant_pos)
+    if type == 'SKY':
+        plot_sky_skyplot(p.plt, lam, ant_pos, weight, az_s, el_s, bins[0],
+            bins[-1], jammers, show_beam)
     elif type == 'GAIN':
-        plot_gain(p.ax, lam, ant_pos, weight, az_s, el_s, bins)
-    elif type == 'SKY':
-        cont = plot_sky(p.ax, lam, ant_pos, weight, az_s, el_s, bins, jammers,
-            show_beam)
-        p.bar = add_colorbar(p.fig, [0.14, 0.08, 0.72, 0.025], cont, bins)
-    p.canvas.draw()
-    p.canvas.get_tk_widget().pack(fill=BOTH, expand=1)
+        plot_gain_tk(p.plt, lam, ant_pos, weight, az_s, el_s, bins[0],
+            bins[-1])
+    elif type == 'POS':
+        plot_pos_tk(p.plt, lam, ant_pos)
 
-# generate array plot -----------------------------------------------------------
-def plot_new(parent, width, height):
+# generate skyplot tk-canvas plot ---------------------------------------------
+def plot_new_sky(parent, width, height):
     p = Obj()
     p.c = Frame(parent, width=width, height=height, bg=BG_COLOR)
     p.c.pack_propagate(False)
-    p.fig = plt.figure()
-    p.ax = p.fig.add_axes([0.08, 0.05, 0.84, 0.9])
-    p.bar = None
-    p.canvas = FigureCanvasTkAgg(p.fig, master=p.c)
+    p.plt = sdr_plot.plot_new(p.c, width=width, height=height,
+        xlim=(-1.05, 1.05), ylim=(-1.05, 1.05),
+        margin=(40, 40, 10, 40), aspect=1, tick=0, font=PLOT_FONT)
+    p.plt.c.pack(fill=BOTH, expand=1)
+    return p
+
+# generate gain cross-section tk-canvas plot ----------------------------------
+def plot_new_gain(parent, width, height):
+    p = Obj()
+    p.c = Frame(parent, width=width, height=height, bg=BG_COLOR)
+    p.c.pack_propagate(False)
+    # symmetric T/B margin + ylim centered on y=0.5 keeps the half-circle vertically centered
+    p.plt = sdr_plot.plot_new(p.c, width=width, height=height,
+        xlim=(-1.1, 1.1), ylim=(-1.1, 1.1),
+        margin=(10, 10, 10, 10), aspect=1, tick=0, font=PLOT_FONT)
+    p.plt.c.pack(fill=BOTH, expand=1)
+    return p
+
+# generate antenna position tk-canvas plot ------------------------------------
+def plot_new_pos(parent, width, height):
+    p = Obj()
+    p.c = Frame(parent, width=width, height=height, bg=BG_COLOR)
+    p.c.pack_propagate(False)
+    p.plt = sdr_plot.plot_new(p.c, width=width, height=height,
+        xlim=(-lam - 1e-3, lam + 1e-3),
+        ylim=(-lam - 1e-3, lam + 1e-3),
+        margin=(10, 10, 10, 24), aspect=1, tick=0, font=PLOT_FONT)
+    p.plt.c.pack(fill=BOTH, expand=1)
     return p
 
 # generate Array page ----------------------------------------------------------
@@ -343,33 +433,37 @@ def array_page_new(parent):
             command=lambda e: on_weight_change(e, p)).pack(side=LEFT)
         p.w_txt[idx] = ttk.Label(frm, text='', anchor=CENTER)
         p.w_txt[idx].pack(side=TOP, fill=X)
-    p.plt1 = plot_new(p.panel, 320, 200)
-    p.plt1.ax.set_position([0.08, 0.14, 0.84, 0.82])
-    p.gain_txt = p.plt1.fig.text(0.91, 0.95, '', ha='right', va='top',
-        fontdict={**FONT, 'size': FONT['size'] + 4})
+    p.plt1 = plot_new_sky(p.panel, 320, 200)
+    p.gain_lbl = ttk.Label(p.plt1.plt.c, text='', background=BG_COLOR,
+        foreground=FG_COLOR,
+        font=(FONT['family'], FONT['size'] + 4, FONT['weight']))
+    p.gain_lbl.place(relx=1.0, x=-15, y=10, anchor='ne')
     p.plt1.c.pack(side=LEFT, expand=1, fill=BOTH, padx=2, pady=2)
     p.panel1 = Frame(p.panel)
     p.panel1.pack(side=LEFT, expand=1, fill=BOTH)
-    p.plt2 = plot_new(p.panel1, 100, 100)
+    p.plt2 = plot_new_gain(p.panel1, 100, 100)
     p.plt2.c.pack(expand=1, fill=BOTH, padx=2, pady=2)
-    p.plt3 = plot_new(p.panel1, 100, 100)
+    p.plt3 = plot_new_pos(p.panel1, 100, 100)
     p.plt3.c.pack(expand=1, fill=BOTH, padx=2, pady=2)
     p.box1.bind('<<ComboboxSelected>>', lambda e: on_pos_select(e, p))
     p.box2.bind('<<ComboboxSelected>>', lambda e: on_jam_cnt_change(e, p))
     p.box3.bind('<<ComboboxSelected>>', lambda e: update_plt(p))
     p.box4.bind('<<ComboboxSelected>>', lambda e: on_ele_gain_change(e, p))
-    p.panel.bind("<Configure>", lambda e: on_plt_configure(e, p))
-    p.plt1.fig.canvas.mpl_connect('button_press_event',   lambda e: on_sky_press  (e, p))
-    p.plt1.fig.canvas.mpl_connect('motion_notify_event',  lambda e: on_sky_motion (e, p))
-    p.plt1.fig.canvas.mpl_connect('button_release_event', lambda e: on_sky_release(e, p))
-    p.plt1.fig.canvas.mpl_connect('axes_leave_event',     lambda e: on_sky_leave  (e, p))
+    p.plt1.plt.c.bind('<Configure>',       lambda e: schedule_update(p))
+    p.plt2.plt.c.bind('<Configure>',       lambda e: schedule_update(p))
+    p.plt3.plt.c.bind('<Configure>',       lambda e: schedule_update(p))
+    p.plt1.plt.c.bind('<Button-1>',        lambda e: on_sky_press  (e, p))
+    p.plt1.plt.c.bind('<B1-Motion>',       lambda e: on_sky_drag   (e, p))
+    p.plt1.plt.c.bind('<ButtonRelease-1>', lambda e: on_sky_release(e, p))
+    p.plt1.plt.c.bind('<Motion>',          lambda e: on_sky_motion (e, p))
+    p.plt1.plt.c.bind('<Leave>',           lambda e: on_sky_leave  (e, p))
     p.sky_drag = None        # None | ('beam',) | ('jammer', k)
     p.jammers = []           # list of [az_rad, el_rad]
-    p.weight_last = np.array([], dtype=complex)  # cached weights for cursor gain
+    p.weight_last = np.array([], dtype=complex)
     p.ant_pos = ANT_POSS[0]
     return p
 
-# antenna position select callback ---------------------------------------------
+# antenna position select callback --------------------------------------------
 def on_pos_select(e, p):
     p.ant_pos = ANT_POSS[int(p.box1.get())-1]
     update_plt(p)
@@ -389,11 +483,16 @@ def on_jam_cnt_change(e, p):
     p.jammers = p.jammers[:n]
     update_plt(p)
 
-# plots configure callback -----------------------------------------------------
-def on_plt_configure(e, p):
-    update_plt(p)
+# coalesce per-canvas <Configure> events into one redraw per idle cycle -------
+def schedule_update(p):
+    if getattr(p, '_upd_pending', False): return
+    p._upd_pending = True
+    def run():
+        p._upd_pending = False
+        update_plt(p)
+    p.parent.after_idle(run)
 
-# weight change callback -------------------------------------------------------
+# weight change callback ------------------------------------------------------
 def on_weight_change(e, p):
     update_plt(p)
 
@@ -408,15 +507,10 @@ def find_jammer(p, xdata, ydata, thresh=0.08):
     return -1
 
 # skyplot click/drag -> set beam AZ/EL or jammer AZ/EL ------------------------
-def set_sky_pos_from_event(e, p):
-    if p.sky_drag is None:
-        return
-    if e.inaxes != p.plt1.ax or e.xdata is None or e.ydata is None:
-        return
-    x, y = e.xdata, e.ydata
+def set_sky_pos_xy(p, x, y):
+    if p.sky_drag is None: return
     r = sqrt(x * x + y * y)
-    if r > 1.0:
-        return
+    if r > 1.0: return
     az = atan2(x, y)
     if az < 0: az += 2 * pi
     el = (1.0 - r) * pi / 2
@@ -425,51 +519,52 @@ def set_sky_pos_from_event(e, p):
         p.azel[1].set(el / D2R)
         p.txt1.configure(text='%.0f\xb0' % (el / D2R))
         p.txt2.configure(text='%.0f\xb0' % (az / D2R))
-    else:  # 'jammer'
+    else:
         p.jammers[p.sky_drag[1]] = [az, el]
     update_plt(p)
 
+# skyplot mouse press callback ------------------------------------------------
 def on_sky_press(e, p):
-    if e.button != 1 or e.inaxes != p.plt1.ax:
-        return
-    if e.xdata is None or e.ydata is None:
-        return
-    k = find_jammer(p, e.xdata, e.ydata)
-    if k >= 0:
-        p.sky_drag = ('jammer', k)
-    else:
-        p.sky_drag = ('beam',)
-    set_sky_pos_from_event(e, p)
+    x, y = sky_pixel_to_data(p.plt1.plt, e.x, e.y)
+    if x is None or sqrt(x * x + y * y) > 1.0: return
+    k = find_jammer(p, x, y)
+    p.sky_drag = ('jammer', k) if k >= 0 else ('beam',)
+    set_sky_pos_xy(p, x, y)
 
-def on_sky_motion(e, p):
-    if p.sky_drag is not None:
-        set_sky_pos_from_event(e, p)
-    else:
-        update_cursor_gain(e, p)
+# skyplot mouse drag callback -------------------------------------------------
+def on_sky_drag(e, p):
+    if p.sky_drag is None: return
+    x, y = sky_pixel_to_data(p.plt1.plt, e.x, e.y)
+    if x is None: return
+    set_sky_pos_xy(p, x, y)
 
+# skyplot mouse release callback ----------------------------------------------
 def on_sky_release(e, p):
     p.sky_drag = None
 
+# skyplot mouse motion callback -----------------------------------------------
+def on_sky_motion(e, p):
+    if p.sky_drag is not None: return
+    update_cursor_gain(e, p)
+
+# skyplot mouse leave callback ------------------------------------------------
 def on_sky_leave(e, p):
-    if p.gain_txt.get_text():
-        p.gain_txt.set_text('')
-        p.plt1.fig.canvas.draw_idle()
+    if p.gain_lbl.cget('text'):
+        p.gain_lbl.configure(text='')
 
 # cursor hover -> show gain at cursor point -----------------------------------
 def update_cursor_gain(e, p):
     text = ''
-    if (e.inaxes == p.plt1.ax and e.xdata is not None and e.ydata is not None
-            and len(p.weight_last) > 0):
-        x, y = e.xdata, e.ydata
+    x, y = sky_pixel_to_data(p.plt1.plt, e.x, e.y)
+    if x is not None and len(p.weight_last) > 0:
         r = sqrt(x * x + y * y)
         if r <= 1.0:
             az = atan2(x, y)
             el = (1.0 - r) * pi / 2
             gain = ant_gain(lam, p.ant_pos, p.weight_last, az, el)
             text = '%.1f dB' % gain
-    if p.gain_txt.get_text() != text:
-        p.gain_txt.set_text(text)
-        p.plt1.fig.canvas.draw_idle()
+    if p.gain_lbl.cget('text') != text:
+        p.gain_lbl.configure(text=text)
 
 # update complex weight labels ------------------------------------------------
 def update_weight_text(p, weight):
@@ -481,7 +576,7 @@ def update_weight_text(p, weight):
         else:
             p.w_txt[i].configure(text='---')
 
-# update plots -----------------------------------------------------------------
+# update plots ----------------------------------------------------------------
 def update_plt(p):
     az_s = p.azel[0].get() * D2R
     el_s = p.azel[1].get() * D2R
@@ -496,31 +591,26 @@ def update_plt(p):
     plot_array(p.plt3, 'POS',  weight, az_s, el_s, p.ant_pos, p.jammers, show_beam)
     update_weight_text(p, weight)
 
-# root Window close callback ---------------------------------------------------
+# root window close callback --------------------------------------------------
 def on_root_close():
     exit()
 
-# set styles -------------------------------------------------------------------
+# set styles ------------------------------------------------------------------
 def set_styles():
     style = ttk.Style()
     style.configure('TLabel', font=get_font(), background=BG_COLOR)
     style.configure('TScale', background=BG_COLOR)
     style.configure('TCombobox', font=get_font(), background=BG_COLOR)
 
-# main -------------------------------------------------------------------------
-if __name__ == '__main__':
-    
-    # generate root window
+# main ------------------------------------------------------------------------
+def main():
     root = Tk()
     root.geometry('%dx%d' % (800, 600))
     root.title('ANTENNA ARRAY SIMULATION')
     root.protocol("WM_DELETE_WINDOW", on_root_close)
-    
-    # set styles
     set_styles()
-   
-    # generate array pages
     p = array_page_new(root)
-    
-    # main loop of Tk
     root.mainloop()
+
+if __name__ == '__main__':
+    main()
