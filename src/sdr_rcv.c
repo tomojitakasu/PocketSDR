@@ -356,10 +356,10 @@ void sdr_rcv_sel_ch(sdr_rcv_t *rcv, int ch, double width)
 
 // get correlator status -------------------------------------------------------
 int sdr_rcv_corr_stat(sdr_rcv_t *rcv, int ch, double *stat, double *pos,
-    sdr_cpx_t *C, double *P)
+    sdr_cpx_t *C, double *P, double *I)
 {
     if (!rcv || !rcv->state || ch < 1 || ch > rcv->nch) return 0;
-    return sdr_ch_corr_stat(rcv->th[ch-1]->ch, stat, pos, C, P);
+    return sdr_ch_corr_stat(rcv->th[ch-1]->ch, stat, pos, C, P, I);
 }
 
 // get correlator history ------------------------------------------------------

@@ -177,7 +177,9 @@ typedef struct {                // signal tracking type
     double code_int;            // 2nd-order DLL integrator (s/s)
     double sumP, sumN, sumVE, sumVL; // sum of correlations
     double sumC[SDR_MAX_CORR];  // sum of correlations DLL
+    double sumI[SDR_MAX_CORR];  // sum of I*sign(IP) DLL (data-wipe-off)
     double aveP[SDR_MAX_CORR];  // average of correlation powers
+    double aveI[SDR_MAX_CORR];  // average of I*sign(IP) DLL
     sdr_cpx16_t *code;          // resampled code 
     sdr_cpx_t *code_fft;        // code FFT
 } sdr_trk_t;
@@ -453,7 +455,7 @@ void sdr_ch_free(sdr_ch_t *ch);
 void sdr_ch_update(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix);
 void sdr_ch_set_corr(sdr_ch_t *ch, int nposx, double width);
 int sdr_ch_corr_stat(sdr_ch_t *ch, double *stat, double *pos, sdr_cpx_t *C,
-    double *P);
+    double *P, double *I);
 int sdr_ch_corr_hist(sdr_ch_t *ch, double tspan, double *stat, sdr_cpx_t *P);
 
 // sdr_nav.c
@@ -542,7 +544,7 @@ int sdr_rcv_ch_stat(sdr_rcv_t *rcv, const char *sys, int all,
     double min_lock, int rfch, int opt, char *buff, int size);
 void sdr_rcv_sel_ch(sdr_rcv_t *rcv, int ch, double width);
 int sdr_rcv_corr_stat(sdr_rcv_t *rcv, int ch, double *stat, double *pos,
-    sdr_cpx_t *C, double *P);
+    sdr_cpx_t *C, double *P, double *I);
 int sdr_rcv_corr_hist(sdr_rcv_t *rcv, int ch, double tspan, double *stat,
     sdr_cpx_t *P);
 int sdr_rcv_rfch_stat(sdr_rcv_t *rcv, int ch, double *stat);
