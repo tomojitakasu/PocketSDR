@@ -494,6 +494,11 @@ def array_run(rcv, run):
     libsdr.sdr_rcv_array_run.argtypes = (c_void_p, c_int32)
     return libsdr.sdr_rcv_array_run(rcv, run)
 
+# set array calibration mode (0:both, 1:bias only, 2:rpy only) ----------------
+def array_calib_mode(rcv, mode):
+    libsdr.sdr_rcv_array_set_mode.argtypes = (c_void_p, c_int32)
+    return libsdr.sdr_rcv_array_set_mode(rcv, mode)
+
 # start array calibration ------------------------------------------------------
 def array_calib_start(rcv):
     return array_run(rcv, 1)
@@ -1763,7 +1768,7 @@ def array_page_new(parent):
     p.parent = parent
     p.panel = Frame(parent)
     p.toolbar = tool_bar_new(p.panel)
-    p.txt_stat = ttk.Label(p.toolbar, foreground='blue')
+    p.txt_stat = Label(p.toolbar, font=get_font(), bg=BG_COLOR1)
     p.txt_stat.pack(side=LEFT, padx=10)
     p.btn_save = ttk.Button(p.toolbar, width=7, text='Save')
     p.btn_save.pack(side=RIGHT, padx=(0, 10))
@@ -1774,6 +1779,12 @@ def array_page_new(parent):
     p.btn_calib = ttk.Button(p.toolbar, width=7, text='Start')
     p.btn_calib.pack(side=RIGHT)
     ttk.Label(p.toolbar, text='Calibration').pack(side=RIGHT, padx=2)
+    p.mode_var = StringVar(value='Both')
+    p.mode_box = ttk.Combobox(p.toolbar, width=5, state='readonly',
+        values=['Both', 'Bias', 'RPY'], textvariable=p.mode_var,
+        justify=CENTER, font=get_font())
+    p.mode_box.pack(side=RIGHT, padx=(0, 8))
+    ttk.Label(p.toolbar, text='Mode').pack(side=RIGHT, padx=(0, 2))
     panel1 = Frame(p.panel, bg=BG_COLOR1)
     panel1.pack(expand=1, fill=BOTH)
     panel3 = Frame(panel1, relief=SOLID, bd=1, bg=BG_COLOR1)
@@ -1800,7 +1811,16 @@ def array_page_new(parent):
     p.btn_clear.bind('<Button-1>', lambda e: on_array_calib_clear(e, p))
     p.btn_load.bind('<Button-1>', lambda e: on_array_calib_load(e, p))
     p.btn_save.bind('<Button-1>', lambda e: on_array_calib_save(e, p))
+    p.mode_box.bind('<<ComboboxSelected>>', lambda e: on_array_mode_change(e, p))
     return p
+
+# array calibration mode lookup ------------------------------------------------
+ARRAY_MODES = {'Both': 0, 'Bias': 1, 'RPY': 2}
+
+# Array page mode change callback ----------------------------------------------
+def on_array_mode_change(e, p):
+    if not rcv_body: return
+    array_calib_mode(rcv_body, ARRAY_MODES.get(p.mode_var.get(), 0))
 
 # generate beam directions -----------------------------------------------------
 def gen_beam_dirs(parent, p, i):
@@ -1837,7 +1857,7 @@ def update_array_page(p):
     for i in range(MAX_RFCH):
         text3 += ' CH%d:%7.4f m ' % (i + 1, bias[i])
         text3 += '\n\n' if i % 4 == 3 and i < MAX_RFCH - 1 else ''
-    p.txt_stat.configure(text=text1)
+    p.txt_stat.configure(text=text1, fg=WARN_COLOR if run else 'black')
     p.txt_att.configure(text=text2, fg=WARN_COLOR if run else 'black')
     p.txt_bias.configure(text=text3, fg=WARN_COLOR if run else 'black')
 
@@ -1874,6 +1894,7 @@ def on_array_calib_toggle(e, p):
         if sum(ena) < 2:
             return
         array_ant_pos(rcv_body, ant_pos, ena)
+        array_calib_mode(rcv_body, ARRAY_MODES.get(p.mode_var.get(), 0))
         if not array_calib_start(rcv_body):
             return
         p.btn_calib.configure(text='Stop')
