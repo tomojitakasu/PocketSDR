@@ -1300,10 +1300,22 @@ int sdr_rcv_array_run(sdr_rcv_t *rcv, int run)
 {
     sdr_array_t *array = rcv ? rcv->array : NULL;
     if (!array) return 0;
-    
+
     sdr_mutex_lock(&rcv->mtx);
     int ret = sdr_array_run(array, run);
     if (ret) refresh_arch_beams(rcv);
+    sdr_mutex_unlock(&rcv->mtx);
+    return ret;
+}
+
+// set receiver array calibration mode -----------------------------------------
+int sdr_rcv_array_set_mode(sdr_rcv_t *rcv, int mode)
+{
+    sdr_array_t *array = rcv ? rcv->array : NULL;
+    if (!array) return 0;
+
+    sdr_mutex_lock(&rcv->mtx);
+    int ret = sdr_array_set_mode(array, mode);
     sdr_mutex_unlock(&rcv->mtx);
     return ret;
 }

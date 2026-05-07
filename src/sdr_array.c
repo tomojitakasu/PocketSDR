@@ -131,8 +131,10 @@ static int build_meas(const sdr_array_t *array, const obsd_t *obs, int nobs,
 static int lsq_init(const sdr_array_t *array, const obsd_t *obs, int nobs,
     const nav_t *nav, const double *rr, double *x, double *rms)
 {
+    int mode = array->calib_mode;
     for (int iter = 0; iter < MAX_ITER; iter++) {
-        double v[MAX_NV+SDR_MAX_RFCH] = {0}, H[NX*(MAX_NV+SDR_MAX_RFCH)] = {0};
+        double v[MAX_NV+SDR_MAX_RFCH+SDR_MAX_RFCH+3] = {0};
+        double H[NX*(MAX_NV+SDR_MAX_RFCH+SDR_MAX_RFCH+3)] = {0};
         double dx[NX], Q[NX*NX];
         
         int nv = build_meas(array, obs, nobs, nav, rr, x, v, H);
@@ -140,6 +142,17 @@ static int lsq_init(const sdr_array_t *array, const obsd_t *obs, int nobs,
         
         for (int i = 0; i < SDR_MAX_RFCH; i++) { // avoid rank-deficient
             if (i == 0 || !array->ant_ena[i]) H[3+i+NX*(nv++)] = 1e-12;
+        }
+        if (mode == SDR_CALIB_BIAS) { // freeze rpy at zero
+            for (int i = 0; i < 3; i++) {
+                H[i+NX*nv] = 1.0;
+                v[nv++] = -x[i];
+            }
+        } else if (mode == SDR_CALIB_RPY) { // freeze bias at current value
+            for (int i = 3; i < NX; i++) {
+                H[i+NX*nv] = 1.0;
+                v[nv++] = 0.0;
+            }
         }
         if (lsq(H, v, NX, nv, dx, Q)) break;
         
@@ -158,22 +171,34 @@ static int lsq_init(const sdr_array_t *array, const obsd_t *obs, int nobs,
 static void kf_init(sdr_array_t *array, const obsd_t *obs, int nobs,
     const nav_t *nav, const double *rr)
 {
+    int mode = array->calib_mode;
     array->rms = 1e3;
     
-    for (double y = -PI; y < PI; y += YAW_STEP * D2R) {
-        double x[NX] = {0.0, 0.0, y}, rms = 0.0;
-        
-        if (!lsq_init(array, obs, nobs, nav, rr, x, &rms)) continue;
-        
-        if (rms < array->rms) {
+    if (mode == SDR_CALIB_BIAS) { // rpy is fixed at 0; no yaw search needed
+        double x[NX] = {0}, rms = 0.0;
+        if (lsq_init(array, obs, nobs, nav, rr, x, &rms)) {
             matcpy(array->x, x, NX, 1);
             array->rms = rms;
+        }
+    } else { // BOTH or RPY: search over yaw initial values
+        for (double y = -PI; y < PI; y += YAW_STEP * D2R) {
+            double x[NX] = {0.0, 0.0, y}, rms = 0.0;
+            if (mode == SDR_CALIB_RPY) { // preserve loaded biases
+                for (int i = 3; i < NX; i++) x[i] = array->x[i];
+            }
+            if (!lsq_init(array, obs, nobs, nav, rr, x, &rms)) continue;
+            if (rms < array->rms) {
+                matcpy(array->x, x, NX, 1);
+                array->rms = rms;
+            }
         }
     }
     if (array->rms > MAX_RMS) return;
     
     memset(array->P, 0, sizeof(double) * NX * NX);
     for (int i = 0; i < NX; i++) {
+        if (mode == SDR_CALIB_BIAS && i < 3) continue; // rpy frozen at 0
+        if (mode == SDR_CALIB_RPY  && i >= 3) continue; // bias frozen
         array->P[i+i*NX] = (i < 3) ? VAR_INIT_RPY : VAR_INIT_BIAS;
     }
 }
@@ -182,11 +207,19 @@ static void kf_init(sdr_array_t *array, const obsd_t *obs, int nobs,
 static void kf_update(sdr_array_t *array, const obsd_t *obs, int nobs,
     const nav_t *nav, const double *rr)
 {
+    int mode = array->calib_mode;
     double v[MAX_NV], H[NX*MAX_NV] = {0};
     
-    // predict: P += Q (random walk; identity transition)
-    for (int i = 0; i < NX; i++) {
-        array->P[i+i*NX] += (i < 3) ? VAR_PROC_RPY : VAR_PROC_BIAS;
+    // predict: P += Q (random walk; identity transition); skip frozen states
+    if (mode == SDR_CALIB_BIAS) {
+        array->x[0] = array->x[1] = array->x[2] = 0.0;
+        for (int i = 3; i < NX; i++) array->P[i+i*NX] += VAR_PROC_BIAS;
+    } else if (mode == SDR_CALIB_RPY) {
+        for (int i = 0; i < 3; i++) array->P[i+i*NX] += VAR_PROC_RPY;
+    } else {
+        for (int i = 0; i < NX; i++) {
+            array->P[i+i*NX] += (i < 3) ? VAR_PROC_RPY : VAR_PROC_BIAS;
+        }
     }
     int nv = build_meas(array, obs, nobs, nav, rr, array->x, v, H);
     if (nv < 1) return;
@@ -219,6 +252,7 @@ sdr_array_t *sdr_array_new(int nrfch, int freq)
     sdr_array_t *array = (sdr_array_t *)sdr_malloc(sizeof(sdr_array_t));
     array->freq = freq;
     array->nrfch = nrfch;
+    array->calib_mode = SDR_CALIB_BOTH;
     for (int i = 0; i < SDR_MAX_RFCH; i++) {
         array->ant_ena[i] = (i < nrfch);
     }
@@ -264,13 +298,24 @@ int sdr_array_run(sdr_array_t *array, int run)
     return 1;
 }
 
+// set calibration mode (SDR_CALIB_BOTH / BIAS / RPY) ---------------------------
+int sdr_array_set_mode(sdr_array_t *array, int mode)
+{
+    if (mode != SDR_CALIB_BOTH && mode != SDR_CALIB_BIAS && mode != SDR_CALIB_RPY)
+        return 0;
+    array->calib_mode = mode;
+    return 1;
+}
+
 // calibrate antenna array -----------------------------------------------------
 void sdr_array_calib(sdr_array_t *array, const obsd_t *obs, int nobs,
     const nav_t *nav, const double *rr)
 {
     if (!array->calib_run || nobs <= 0 || norm(rr, 3) < 1e-6) return;
     
-    if (array->P[0] == 0.0) {
+    // initialized if any diagonal of P is set; covers BOTH (P[0]),
+    // BIAS (P[3+3*NX], rpy frozen at 0), RPY (P[0], bias frozen)
+    if (array->P[0] == 0.0 && array->P[3+3*NX] == 0.0) {
         kf_init(array, obs, nobs, nav, rr);
     } else {
         kf_update(array, obs, nobs, nav, rr);

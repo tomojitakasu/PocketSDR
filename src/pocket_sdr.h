@@ -97,6 +97,10 @@ extern "C" {
 #define SDR_FFT_FORWARD 0       // SDR FFT direction forward
 #define SDR_FFT_BACKWARD 1      // SDR FFT direction backward
 
+#define SDR_CALIB_BOTH 0        // calib mode: estimate rpy + bias
+#define SDR_CALIB_BIAS 1        // calib mode: estimate bias only (rpy=0 fixed)
+#define SDR_CALIB_RPY  2        // calib mode: estimate rpy only (bias fixed)
+
 #define SDR_CPX8(re, im) (sdr_cpx8_t)(((int8_t)(im)<<4)|(((int8_t)((re)<<4)>>4)&0xF))
 #define SDR_CPX8_I(x)  ((int8_t)((x)<<4)>>4)
 #define SDR_CPX8_Q(x)  ((int8_t)((x)<<0)>>4)
@@ -280,6 +284,7 @@ typedef struct {                // SDR array channel type
 
 typedef struct {                // SDR antenna array type
     int calib_run;              // calibration state
+    int calib_mode;             // calibration mode (SDR_CALIB_???)
     int freq;                   // frequency index (0:L1,1:L2,...)
     int nrfch;                  // number of RF channels
     int ant_ena[SDR_MAX_RFCH];  // element enable flag
@@ -483,6 +488,7 @@ void sdr_array_free(sdr_array_t *array);
 int sdr_array_ant_pos(sdr_array_t *array, const double *ant_pos,
     const int *ant_ena);
 int sdr_array_run(sdr_array_t *array, int run);
+int sdr_array_set_mode(sdr_array_t *array, int mode);
 int sdr_array_set(sdr_array_t *array, const double *rpy, const double *bias);
 int sdr_array_stat(sdr_array_t *array, double *rpy, double *bias, double *rms,
     int *nep);
@@ -502,6 +508,7 @@ void sdr_arch_combine(const sdr_arch_t *arch, const sdr_rcv_t *rcv, int base);
 int sdr_rcv_array_ant_pos(sdr_rcv_t *rcv, const double *ant_pos,
     const int *ant_ena);
 int sdr_rcv_array_run(sdr_rcv_t *rcv, int run);
+int sdr_rcv_array_set_mode(sdr_rcv_t *rcv, int mode);
 int sdr_rcv_array_stat(sdr_rcv_t *rcv, double *rpy, double *bias, double *rms,
     int *nep);
 int sdr_rcv_array_set_beam(sdr_rcv_t *rcv, int ach, double az, double el);
