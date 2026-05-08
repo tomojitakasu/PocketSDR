@@ -643,7 +643,7 @@ sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
     extern double sdr_e5ab_off, sdr_bump_k;
     const char *p;
     int nrfch, narch = 0;
-    
+
     if ((p = strstr(opt, "-ARCH="))) sscanf(p, "-ARCH=%d", &narch);
     if ((p = strstr(opt, "-E5AB_OFF="))) {
         double off_ns = 0.0;
