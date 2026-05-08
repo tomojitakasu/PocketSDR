@@ -222,7 +222,14 @@ static sdr_trk_t *trk_new(const char *sig, int prn, const int8_t *code,
     trk->pos[npos++] =  0.5 * sp;  // L
     trk->pos[npos++] = POS_CORR_N; // N
     if (sdr_bump_jump && sdr_sig_boc(sig)) {
-        double vsp = !strcmp(sig, "E5ABQ") ? sc / 3 : sc / 2;
+        double vsp;
+        if (!strcmp(sig, "E5ABQ")) {
+            vsp = sc / 3;
+        } else if (!strcmp(sig, "G1OCP") || !strcmp(sig, "G2OCP")) {
+            vsp = sc / 4;
+        } else {
+            vsp = sc / 2;
+        }
         trk->pos[npos++] = -vsp; // VE
         trk->pos[npos++] =  vsp; // VL
     }
@@ -525,7 +532,14 @@ static void DLL(sdr_ch_t *ch)
 static void bump_jump(sdr_ch_t *ch)
 {
     double coff = ch->coff;
-    double step = ch->T / ch->len_code / (!strcmp(ch->sig, "E5ABQ") ? 3 : 1);
+    double step;
+    if (!strcmp(ch->sig, "E5ABQ")) {
+        step = ch->T / ch->len_code / 3;
+    } else if (!strcmp(ch->sig, "G1OCP") || !strcmp(ch->sig, "G2OCP")) {
+        step = ch->T / ch->len_code / 2;
+    } else {
+        step = ch->T / ch->len_code;
+    }
 
     if (ch->trk->sumVL > sdr_bump_k * ch->trk->sumP &&
         ch->trk->sumP > sdr_bump_k * ch->trk->sumVE) {
