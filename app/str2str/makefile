@@ -21,7 +21,8 @@ else
     LDLIBS = $(LIB)/linux/librtk.a -lm -lpthread
 endif
 
-WARNOPT = -ansi -pedantic -Wall -Wno-unused-but-set-variable
+#WARNOPT = -ansi -pedantic -Wall -Wno-unused-but-set-variable
+WARNOPT = -Wall -Wno-unused-but-set-variable
 
 CFLAGS = -O3 $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
 
