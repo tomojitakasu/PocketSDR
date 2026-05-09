@@ -16,7 +16,7 @@ ifeq ($(OS),Windows_NT)
     #LDLIBS += -lfftw3f
     OPTIONS =
 else ifeq ($(shell uname -sm),Darwin arm64)
-    CC = clang
+    CC = clang++
     LDLIBS = -L/opt/homebrew/lib $(LIB)/macos/libsdr.a $(LIB)/macos/librtk.a -lpthread -lm
     LDLIBS += $(LIB)/macos/libpocketfft.a
     #LDLIBS += -lfftw3f
@@ -31,8 +31,8 @@ endif
 
 WARNOPT = -Wall -Wextra -Wno-unused-parameter
 
-#CFLAGS = -Ofast -march=native $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
-CFLAGS = -Ofast $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
+#CFLAGS = -O3 -march=native $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
+CFLAGS = -O3 $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
 
 TARGET = pocket_acq
 
