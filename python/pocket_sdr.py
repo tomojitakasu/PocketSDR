@@ -8,7 +8,7 @@
 #  History:
 #  2024-06-29  1.0  ver.0.13
 #  2025-03-19  1.1  ver.0.14
-#  2026-04-26  1.2  ver.0.15
+#  2026-05-02  1.2  ver.0.15
 #
 import sys, os, platform, time, re, shutil
 from collections import deque
@@ -36,10 +36,14 @@ WIDTH      = 800             # root window width
 HEIGHT     = 600             # root window height
 TB_HEIGHT  = 25              # toolbar height
 SB_HEIGHT  = 20              # status bar height
+ROW_HEIGHT = 15              # table row height
+BG_COLOR1  = '#F8F8F8'       # background color 1
+BG_COLOR2  = BG_COLOR1       # background color 2
 P1_COLOR   = '#003020'       # plot color 1
 P2_COLOR   = '#888844'       # plot color 2
 P3_COLOR   = '#BBBBBB'       # plot color 3
-WARN_COLOR = '#FF8000'       # warning color
+WARN_COLOR = '#FF4000'       # warning color
+FONT_SIZE  = (9, 9)          # font size (sans, mono)
 SDR_N_CORR = (6+101)         # number of correlators
 SDR_N_HIST = 5000            # number of correlator history
 SDR_N_PSD  = 2048            # number FFT points for PSD
@@ -62,10 +66,6 @@ if 'Windows' in env:
     #LIBSDR = AP_DIR + '/../lib/win32_msvc/libsdr.dll' # MSVC DLL
     LIBSDR = AP_DIR + '/../lib/win32/libsdr.so' # UCRT64 DLL
     FONT = ('Tahoma', 'Consolas')
-    FONT_SIZE = (9, 9)
-    BG_COLOR1 = '#F8F8F8'
-    BG_COLOR2 = BG_COLOR1
-    ROW_HEIGHT = 15
     
     # setup SoapySDR paths (radioconda)
     soapy_dir = os.path.expandvars(r'%USERPROFILE%\radioconda\Library')
@@ -76,19 +76,16 @@ elif 'macOS' in env:
     LIBSDR = AP_DIR + '/../lib/macos/libsdr.so'
     #FONT = ('Arial Narrow', 'Monaco')
     FONT = ('Tahoma', 'Monaco')
-    FONT_SIZE = (13, 12)
-    BG_COLOR1 = '#E5E5E5'
-    BG_COLOR2 = '#ECECEC'
-    ROW_HEIGHT = 14
+    
+    # setup SoapySDR paths (radioconda)
+    soapy_dir = os.path.expanduser('~/radioconda')
+    os.environ['PATH'] = soapy_dir + '/bin' + os.pathsep + os.environ.get('PATH', '')
+    os.environ['SOAPY_SDR_PLUGIN_PATH'] = soapy_dir + '/lib/SoapySDR/modules0.8'
 else: # Linux or Raspberry Pi OS
     LIBSDR = AP_DIR + '/../lib/linux/libsdr.so'
     FONT = ('DejaVu Sans', 'DejaVu Sans Mono')
     #FONT = ('Noto Sans', 'Noto Sans Mono')
     #FONT = ('Ubuntu', 'Ubuntu Mono')
-    FONT_SIZE = (9, 9)
-    BG_COLOR1 = '#F8F8F8'
-    BG_COLOR2 = BG_COLOR1
-    ROW_HEIGHT = 15
 
 # load external library
 try:
@@ -637,7 +634,7 @@ def btn_bar_new(parent, labels, callbacks):
     bar = Obj()
     bar.panel = Frame(parent)
     for label in labels:
-        btn = ttk.Button(bar.panel, text=label)
+        btn = ttk.Button(bar.panel, text=label, width=5)
         btn.bind('<ButtonRelease-1>', lambda e: on_btn_bar_push(e, bar))
         btn.pack(side=LEFT, expand=1, fill=X)
     bar.callbacks = callbacks
@@ -2140,7 +2137,10 @@ def pages_update(note, pages):
 # set styles -------------------------------------------------------------------
 def set_styles():
     style = ttk.Style()
+    if not 'Windows' in env:
+        style.theme_use('clam')
     style.configure('TButton', font=get_font(1), background=BG_COLOR1)
+    style.configure('TButton', padding=(0, 0))
     style.map('TButton', background=[(DISABLED, BG_COLOR1)])
     style.configure('TRadiobutton', font=get_font(), background=BG_COLOR1)
     style.configure('TLabel', font=get_font(), background=BG_COLOR1)
