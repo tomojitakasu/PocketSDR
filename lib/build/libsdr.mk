@@ -1,11 +1,6 @@
 #
 #  makefile for Pocket SDR GNSS-SDR library (libsdr.so, libsdr.a)
 #
-#! To use FFTW3 instead of PocketFFT, you need to install libfftw3.
-#!
-#! $ pacman -S mingw-w64-x86_64-fftw (UCRT64)
-#! $ sudo apt install libfftw3-dev   (Ubuntu)
-#! $ brew install libfftw            (Mac OS)
 
 SRC = ../../src
 
@@ -34,7 +29,8 @@ ifeq ($(OS),Windows_NT)
     LDLIBS += -L../SoapySDR/lib -Wl,-Bdynamic -lSoapySDR -Wl,-Bstatic
 else ifeq ($(shell uname -sm),Darwin arm64)
     CC = clang
-    CX = $(CC)
+    CX = clang++
+    LD = clang++
     INSTALL = ../macos
     INCLUDE += -I/opt/homebrew/include
     OPTIONS += -DMACOS -DNEON -Wno-deprecated
@@ -59,8 +55,7 @@ else
     LDLIBS += -lSoapySDR
 endif
 
-#CFLAGS = -Ofast -march=native $(INCLUDE) $(OPTIONS) -Wall -fPIC -g
-#CFLAGS = -Ofast $(INCLUDE) $(OPTIONS) -Wall -fPIC -g
+#CFLAGS = -O3 -march=native $(INCLUDE) $(OPTIONS) -Wall -fPIC -g
 CFLAGS = -O3 $(INCLUDE) $(OPTIONS) -Wall -fPIC -g
 
 OBJ = sdr_cmn.o sdr_func.o sdr_code.o sdr_code_gal.o sdr_ch.o \
