@@ -8,7 +8,7 @@
 #  2024-06-10  1.0  new
 #  2024-12-30  1.1  update input options, output options, system options
 #
-import os, re, webbrowser
+import os, webbrowser
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
@@ -50,10 +50,10 @@ def modal_dlg_new(root, width, height, title='', nocancel=0):
     btns = Frame(dlg.panel, bg=BG_COLOR)
     btns.pack(side=BOTTOM, fill=X)
     if not nocancel:
-        btn2 = ttk.Button(btns, width=14, padding=(2, 2), text='Cancel')
+        btn2 = ttk.Button(btns, width=12, padding=(2, 2), text='Cancel')
         btn2.bind('<Button-1>', lambda e: on_modal_dlg_cancel(e, dlg))
         btn2.pack(side=RIGHT, padx=1)
-    btn1 = ttk.Button(btns, width=14, padding=(2, 2), text='OK')
+    btn1 = ttk.Button(btns, width=12, padding=(2, 2), text='OK')
     btn1.bind('<Button-1>', lambda e: on_modal_dlg_ok(e, dlg))
     btn1.pack(side=TOP if nocancel else RIGHT, padx=1)
     dlg.win.update()
@@ -419,7 +419,7 @@ def read_opt(val, opt):
 # show Input Options dialog ----------------------------------------------------
 def inp_opt_dlg(root, opt):
     opt_new = inp_opt_new(opt)
-    dlg = modal_dlg_new(root, 500, 600, 'Input Options')
+    dlg = modal_dlg_new(root, 510, 600, 'Input Options')
     panel = Frame(dlg.panel, width=450, bg=BG_COLOR)
     panel.pack(fill=X, pady=4)
     ttk.Label(panel, text='Input Source').pack(side=LEFT, padx=4)
@@ -515,7 +515,7 @@ def ch_opt_panel_new(parent, opt):
 def rfch_opt_panel_new(parent, ch, opt):
     panel = Frame(parent, bg=BG_COLOR)
     ttk.Label(panel, text='CH%d' % (ch + 1)).pack(side=LEFT, padx=(0, 2))
-    ttk.Entry(panel, width=4, justify=RIGHT, textvariable=opt.lpf_bw[ch],
+    ttk.Entry(panel, width=3, justify=RIGHT, textvariable=opt.lpf_bw[ch],
         font=FONT).pack(side=RIGHT, padx=1)
     ttk.Combobox(panel, width=2, justify=CENTER, values=opt.bitss,
         textvariable=opt.bits[ch], font=FONT).pack(side=RIGHT, padx=1)
@@ -535,7 +535,7 @@ def out_opt_dlg(root, opt):
         '%Y=Year(yyyy) %y=year(yy) %m=month(mm) %d=day(dd)',
         '%h=hour(00-23) %M=minute(00-59) %S=second(00-59)')
     opt_new = out_opt_new(opt)
-    dlg = modal_dlg_new(root, 480, 520, 'Output Options')
+    dlg = modal_dlg_new(root, 500, 520, 'Output Options')
     panel1 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     panel1.pack(fill=X, pady=2)
     ttk.Label(panel1, text=texts[0], justify=LEFT).pack(fill=X, padx=10,
@@ -620,7 +620,7 @@ def sys_opt_dlg(root, opt):
         'C/N0 Threshold for Signal Lost (dB-Hz)', 'Bump Jump for BOC Modulation',
         'Max Code Length for direct acquisition (ms)')
     opt_new = sys_opt_new(opt)
-    dlg = modal_dlg_new(root, 420, 540, 'System Options')
+    dlg = modal_dlg_new(root, 420, 560, 'System Options')
     panel1 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     panel1.pack(fill=X, pady=2, ipady=1)
     sel_panel_new(panel1, labels[0], sels=('0.1', '0.2', '0.5', '1.0',
@@ -674,10 +674,14 @@ def array_opt_dlg(root, opt, geom_load=None, geom_save=None):
         xlim=(-r * w / h, r * w / h), ylim=(-r, r))
     plot.c.pack(pady=2)
     btn_row = Frame(dlg.panel, bg=BG_COLOR)
-    btn1 = ttk.Button(btn_row, width=10, padding=(2, 2), text='Update')
+    btn1 = ttk.Button(btn_row, width=9, padding=(2, 2), text='Update')
     btn1.pack(side=RIGHT)
-    btn4 = ttk.Button(btn_row, width=10, padding=(2, 2), text='Clear')
+    btn4 = ttk.Button(btn_row, width=9, padding=(2, 2), text='Clear')
     btn4.pack(side=RIGHT, padx=(0, 4))
+    btn2 = ttk.Button(btn_row, width=9, padding=(2, 2), text='Load...')
+    btn2.pack(side=LEFT, padx=(0, 4))
+    btn3 = ttk.Button(btn_row, width=9, padding=(2, 2), text='Save...')
+    btn3.pack(side=LEFT, padx=(0, 4))
     btn_row.pack(fill=X, pady=2)
     panel1 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     panel2 = Frame(panel1, bg=BG_COLOR)
@@ -688,10 +692,6 @@ def array_opt_dlg(root, opt, geom_load=None, geom_save=None):
     for ch in range(MAX_RFCH):
         ant_ele_opt_panel_new(panel1, plot, ch, opt_new).pack(fill=X, pady=2)
     panel1.pack(fill=X, pady=2, ipady=1)
-    btn2 = ttk.Button(dlg.panel, width=9, padding=(2, 2), text='Load...')
-    btn2.place(x=0, y=532)
-    btn3 = ttk.Button(dlg.panel, width=9, padding=(2, 2), text='Save...')
-    btn3.place(x=76, y=532)
     btn1.bind('<Button-1>', lambda e: on_btn_update_push(e, plot, opt_new))
     btn2.bind('<Button-1>', lambda e: on_btn_geom_load_push(e, dlg, plot,
         opt_new, geom_load))
