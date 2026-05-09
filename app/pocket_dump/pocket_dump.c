@@ -102,18 +102,15 @@ static int write_file(int fmt, const uint8_t *buff, int size, int ch, int IQ,
             if (IQ == 1) {
                 if (bits == 2) {
                     data[i] = LUT_2b[pos][buff[j]];
-                }
-                else {
+                } else {
                     data[i] = LUT_3b[pos][buff[j]];
                 }
-            }
-            else {
+            } else {
                 data[i*2  ] = LUT_2b[pos  ][buff[j]];
                 data[i*2+1] = LUT_2b[pos+1][buff[j]];
             }
         }
-    }
-    else { // SDR_FMT_RAW16I
+    } else { // SDR_FMT_RAW16I
         int pos = ch % 4;
         for (int i = 0, j = ch / 4; i < size; i++, j += 2) {
             data[i] = LUT_2b[pos][buff[j]];
@@ -134,8 +131,7 @@ static void print_head(int raw, int fmt, int nfile, const int *IQ, FILE **fp)
     fprintf(stderr, "%8s", "TIME(s)");
     if (raw) {
         if (fp[0]) fprintf(stderr, "    %6s(B)", str_fmt[fmt-1]);
-    }
-    else {
+    } else {
         for (int i = 0; i < nfile; i++) {
             if (fp[i]) fprintf(stderr, "    CH%d:%s(B)", i + 1, str_IQ[IQ[i]]);
         }
@@ -181,8 +177,7 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int raw, int fmt,
                 if (!fp[j]) continue;
                 if (raw) {
                     byte[j] += fwrite(buff, 1, SDR_SIZE_UBUFF * ns, fp[j]);
-                }
-                else {
+                } else {
                     byte[j] += write_file(fmt, buff, SDR_SIZE_UBUFF, j, IQ[j],
                         bits[j], fp[j]);
                 }
@@ -218,8 +213,7 @@ static void write_tag_files(gtime_t time, int raw, int fmt, double fs,
         
         if (raw) {
             sdr_tag_write(files[i], PROG_NAME, time, fmt, fs, fo, IQ, bits);
-        }
-        else {
+        } else {
             int fmt_i = IQ[i] == 1 ? SDR_FMT_INT8 : SDR_FMT_INT8X2;
             sdr_tag_write(files[i], PROG_NAME, time, fmt_i, fs, fo + i, IQ + i,
                 bits + i);
@@ -227,49 +221,7 @@ static void write_tag_files(gtime_t time, int raw, int fmt, double fs,
     }
 }
 
-//------------------------------------------------------------------------------
-//  Synopsis
-//
-//    pocket_dump [-t tsec] [-r] [-p bus[,port]] [-c conf_file] [-q]
-//                [file [file ...]]
-//
-//  Description
-//
-//    Capture and dump digital IF (DIF) data of a Pocket SDR FE device to output
-//    files. To stop capturing, press Ctr-C.
-//
-//  Options
-//    -t tsec
-//        Data capturing time in seconds.
-//
-//    -r
-//        Dump raw data of the Pocket SDR FE device without channel separation
-//        and quantization.
-//
-//    -p bus[,port]
-//        USB bus and port number of the Pocket SDR FE device. Without the
-//        option, the command selects the device firstly found.
-//
-//    -c conf_file
-//        Configure the Pocket SDR FE device with a device configuration file
-//        before capturing.
-//
-//    -q 
-//        Suppress showing data dump status.
-//
-//    [file [file ...]]
-//        Output digital IF data file paths. The first path is for CH1,
-//        the second one is for CH2 and so on. The second one or the later
-//        can be omitted. With option -r, only the first path is used. If
-//        the file path is "", data are not output to anywhere. If the file
-//        path is "-", data are output to stdout. If all of the file paths
-//        omitted, the following default file paths are used.
-//        
-//        CH1: ch1_YYYYMMDD_hhmmss.bin
-//        CH2: ch2_YYYYMMDD_hhmmss.bin
-//        ...
-//        (YYYYMMDD: dump start date in UTC, hhmmss: dump start time in UTC)
-//
+// main (see doc/command_ref.md) -----------------------------------------------
 int main(int argc, char **argv)
 {
     FILE *fp[SDR_MAX_RFCH] = {0};
@@ -284,26 +236,19 @@ int main(int argc, char **argv)
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-t") && i + 1 < argc) {
             tsec = atof(argv[++i]);
-        }
-        else if (!strcmp(argv[i], "-r")) {
+        } else if (!strcmp(argv[i], "-r")) {
             raw = 1; // raw output
-        }
-        else if (!strcmp(argv[i], "-p") && i + 1 < argc) {
+        } else if (!strcmp(argv[i], "-p") && i + 1 < argc) {
             sscanf(argv[++i], "%d,%d", &bus, &port);
-        }
-        else if (!strcmp(argv[i], "-c") && i + 1 < argc) {
+        } else if (!strcmp(argv[i], "-c") && i + 1 < argc) {
             conf_file = argv[++i];
-        }
-        else if (!strcmp(argv[i], "-q")) {
+        } else if (!strcmp(argv[i], "-q")) {
             quiet = 1;
-        }
-        else if (!strcmp(argv[i], "-v")) {
+        } else if (!strcmp(argv[i], "-v")) {
             print_ver();
-        }
-        else if (argv[i][0] == '-' && argv[i][1] != '\0') {
+        } else if (argv[i][0] == '-' && argv[i][1] != '\0') {
             print_usage();
-        }
-        else if (n < SDR_MAX_RFCH) {
+        } else if (n < SDR_MAX_RFCH) {
             files[n++] = argv[i];
         }
     }
@@ -328,10 +273,11 @@ int main(int argc, char **argv)
         for (int i = 0; i < nfile; i++) {
             double ep[6] = {0};
             char *p = path[i];
+            char *e = path[i] + sizeof(path[i]);
             time2epoch(dump_time, ep);
-            p += sprintf(p, "ch%d_", i + 1);
-            p += sprintf(p, "%04.0f%02.0f%02.0f_%02.0f%02.0f%02.0f.bin", ep[0],
-                ep[1], ep[2], ep[3], ep[4], ep[5]);
+            p += snprintf(p, e - p, "ch%d_", i + 1);
+            p += snprintf(p, e - p, "%04.0f%02.0f%02.0f_%02.0f%02.0f%02.0f.bin",
+                ep[0], ep[1], ep[2], ep[3], ep[4], ep[5]);
             files[i] = path[i];
         }
     }
@@ -342,8 +288,7 @@ int main(int argc, char **argv)
             _setmode(_fileno(stdout), _O_BINARY);
 #endif
             fp[i] = stdout;
-        }
-        else if (*files[i] && !(fp[i] = fopen(files[i], "wb"))) {
+        } else if (*files[i] && !(fp[i] = fopen(files[i], "wb"))) {
             fprintf(stderr, "file open error %s\n", files[i]);
             sdr_dev_close(dev);
             return -1;
