@@ -9,7 +9,7 @@ ifeq ($(OS),Windows_NT)
     INSTALL = ../win32
     INCLUDE = -I$(SRC)
 else ifeq ($(shell uname -sm),Darwin arm64)
-    CC = clang
+    CC = clang++
     INSTALL = ../macos
     INCLUDE = -I$(SRC)
 else
