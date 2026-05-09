@@ -28,62 +28,7 @@ static void show_usage(void)
     exit(0);
 }
 
-//------------------------------------------------------------------------------
-//  Synopsis
-//
-//    pocket_conf [-s] [-a] [-h] [-p bus[,port]] [conf_file]
-//
-//  Description
-//
-//    Configure or show settings for a Pocket SDR FE device. If conf_file
-//    specified, the settings in the configuration file are set to the Pocket
-//    SDR FE device registers. The configuration is a text file containing
-//    records of MAX2771 register field settings as like follows. The register
-//    field settings are written as keyword = value format or hexadecimal
-//    format. In the case of keyword = value format, a keyword is a field name
-//    shown in MAX2771 manual [1]. Strings after # in a line is treated as
-//    comments. If conf_file omitted, the command shows the settings of the
-//    Pocket SDR FE device in the same format of the configuration file.
-//    
-//    Keyword = value format:
-//
-//    [CHx]
-//    FCEN     = 97  # ...
-//    FBW      =  0  # ...
-//    F3OR5    =  1  # ...
-//    ...
-//
-//    Hexadecimal format:
-//
-//    #CH  ADDR       VALUE
-//      1  0x00  0xA2241C17
-//      1  0x01  0x20550288
-//    ...
-//
-//  Options
-//
-//    -s
-//        Save the settings to EEPROM of the SDR device. These settings are
-//        also loaded at reset of the Pocket SDR FE device.
-//
-//    -a
-//        Show all of the register fields.
-//
-//    -h
-//        Configure or show registers in a hexadecimal format.
-//
-//    -p [bus[,port]]
-//        USB bus and port number of the Pocket SDR FE device. Without the
-//        option, the command selects the device firstly found.
-//
-//    conf_file
-//        Path of the configuration file. Without the option, the command shows
-//        current register field settings of the Pocket SDR FE device.
-//
-//  References
-//
-//    [1] maxim integrated, MAX2771 Multiband Universal GNSS Receiver, July 2018
-//
+// main (see doc/command_ref.md) -----------------------------------------------
 int main(int argc, char **argv)
 {
     sdr_dev_t *dev;
@@ -93,24 +38,18 @@ int main(int argc, char **argv)
     for (i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-s")) {
             opt1 |= 1;
-        }
-        else if (!strcmp(argv[i], "-a")) {
+        } else if (!strcmp(argv[i], "-a")) {
             opt2 |= 1;
-        }
-        else if (!strcmp(argv[i], "-h")) {
+        } else if (!strcmp(argv[i], "-h")) {
             opt1 |= 4;
             opt2 |= 4;
-        }
-        else if (!strcmp(argv[i], "-p") && i + 1 < argc) {
+        } else if (!strcmp(argv[i], "-p") && i + 1 < argc) {
             sscanf(argv[++i], "%d,%d", &bus, &port);
-        }
-        else if (!strcmp(argv[i], "-v")) {
+        } else if (!strcmp(argv[i], "-v")) {
             print_ver();
-        }
-        else if (!strncmp(argv[i], "-", 1)) {
+        } else if (!strncmp(argv[i], "-", 1)) {
             show_usage();
-        }
-        else {
+        } else {
             file = argv[i];
         }
     }
@@ -124,8 +63,7 @@ int main(int argc, char **argv)
         }
         printf("%s device settings are changed%s.\n", SDR_DEV_NAME,
             (opt1 & 1) ? " and saved to EEPROM" : "");
-    }
-    else {
+    } else {
         if (!sdr_conf_read(dev, "", opt2)) {
             sdr_dev_close(dev);
             return -1;
