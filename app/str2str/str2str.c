@@ -199,7 +199,7 @@ static void readcmd(const char *file, char *cmd, int type)
     while (fgets(buff,sizeof(buff),fp)) {
         if (*buff=='@') i++;
         else if (i==type&&p+strlen(buff)+1<cmd+MAXRCVCMD) {
-            p+=sprintf(p,"%s",buff);
+            p+=snprintf(p,cmd+MAXRCVCMD-p,"%s",buff);
         }
     }
     fclose(fp);
@@ -337,7 +337,7 @@ int main(int argc, char **argv)
         strsvrstat(&strsvr,stat,log_stat,byte,bps,strmsg);
         
         /* show stream server status */
-        for (i=0,p=buff;i<MAXSTR;i++) p+=sprintf(p,"%c",ss[stat[i]+1]);
+        for (i=0,p=buff;i<MAXSTR;i++) p+=snprintf(p,buff+sizeof(buff)-p,"%c",ss[stat[i]+1]);
         
         fprintf(stderr,"%s [%s] %10d B %7d bps %s\n",
                 time_str(utc2gpst(timeget()),0),buff,byte[0],bps[0],strmsg);
