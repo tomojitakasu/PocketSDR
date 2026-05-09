@@ -36,8 +36,8 @@ endif
 
 WARNOPT = -Wall -Wextra -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function
 
-#CFLAGS = -Ofast -march=native $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
-#CFLAGS = -Ofast $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
+#CFLAGS = -O3 -march=native $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
+#CFLAGS = -O3 $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
 CFLAGS = -O3 $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
 
 TARGET = pocket_trk fftw_wisdom
