@@ -47,7 +47,7 @@ static void get_usb_string(struct libusb_device *dev, char *name, size_t size)
             break;
         }
         if (p + strlen(buff) + 2 < name + size) {
-            p += sprintf(p, " %s", buff);
+            p += snprintf(p, name + size - p, " %s", buff);
         }
     }
     libusb_close(h);
@@ -128,20 +128,7 @@ static int scan_usb(int ep)
     return 1;
 }
 
-//------------------------------------------------------------------------------
-//  Synopsis
-//
-//    pocket_scan [-e]
-//
-//  Description
-//
-//    Scan and list USB devices.
-//
-//  Options
-//
-//    -e
-//        Show end point information for USB devices.
-//
+// main (see doc/command_ref.c) ------------------------------------------------
 int main(int argc, char **argv)
 {
     int i, ep = 0;
@@ -149,8 +136,7 @@ int main(int argc, char **argv)
     for (i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-e")) {
             ep = 1;
-        }
-        else if (!strncmp(argv[i], "-", 1)) {
+        } else if (!strncmp(argv[i], "-", 1)) {
             show_usage();
         }
     }
