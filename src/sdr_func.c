@@ -222,7 +222,7 @@ void sdr_cpx_mul(const sdr_cpx_t *a, const sdr_cpx_t *b, int N, float s,
             vmulq_f32(va.val[1], vb.val[0]));
         re = vmulq_f32(re, scale);
         im = vmulq_f32(im, scale);
-        float32x4x2_t vc = {re, im};
+        float32x4x2_t vc = {{re, im}};
         vst2q_f32((float32_t *)(c + i), vc);
     }
 #endif
