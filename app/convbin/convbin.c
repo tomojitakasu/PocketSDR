@@ -232,7 +232,7 @@ extern int showmsg(const char *format, ...)
 /* copy string within max length ---------------------------------------------*/
 static void strcpy_n(char *dst, const char *src, int max_len)
 {
-    sprintf(dst,"%.*s",max_len,src);
+    snprintf(dst,max_len+1,"%.*s",max_len,src);
 }
 /* insert "_CHn" before extension in file path -------------------------------*/
 static void insert_ch_suffix(char *dst, const char *src, int ch, int max_len)
@@ -386,7 +386,7 @@ static int convbin(int format, rnxopt_t *opt, const char *ifile, char **file,
         if (!*dir||!*ofile[i]) continue;
         if ((p=strrchr(ofile[i],FILEPATHSEP))) strcpy_n(work,p+1,255);
         else strcpy_n(work,ofile[i],255);
-        sprintf(ofile[i],"%.767s%c%.255s",dir,FILEPATHSEP,work);
+        snprintf(ofile[i],1024,"%.767s%c%.255s",dir,FILEPATHSEP,work);
     }
     /* suppress NAV/SBAS outputs if requested (output only once per -array run) */
     if (!nav_out) {
@@ -458,7 +458,7 @@ static int get_filetime(const char *file, gtime_t *time)
     if (!expath(file,paths,1)) return 0;
     
     /* get start time of time-tag file */
-    sprintf(path_tag,"%.1019s.tag",path);
+    snprintf(path_tag,sizeof(path_tag),"%.1019s.tag",path);
     if ((fp=fopen(path_tag,"rb"))) {
         if (fread(buff,64,1,fp)==1&&!strncmp((char *)buff,"TIMETAG",7)&&
             fread(&time_time,4,1,fp)==1) {
@@ -726,7 +726,7 @@ int main(int argc, char **argv)
         fprintf(stderr,"input format can not be recognized\n");
         return -1;
     }
-    sprintf(opt.prog,"%s %s %s",PRGNAME,VER_RTKLIB,PATCH_LEVEL);
+    snprintf(opt.prog,sizeof(opt.prog),"%s %s %s",PRGNAME,VER_RTKLIB,PATCH_LEVEL);
     
     if (trace>0) {
         traceopen(TRACEFILE);
