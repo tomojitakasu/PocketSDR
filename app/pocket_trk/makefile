@@ -2,8 +2,6 @@
 #  makefile for pocket_trk, fftw_wisdom
 #
 
-CC = g++
-
 SRC = ../../src
 LIB = ../../lib
 BIN = ../../bin
@@ -11,33 +9,35 @@ BIN = ../../bin
 INCLUDE = -I$(SRC) -I$(LIB)/RTKLIB/src
 
 ifeq ($(OS),Windows_NT)
+    CC = g++
     INCLUDE += -I$(LIB)/cyusb -I$(LIB)/SoapySDR/include
     LDLIBS = $(LIB)/win32/libsdr.a $(LIB)/win32/librtk.a $(LIB)/win32/libfec.a \
              $(LIB)/win32/libldpc.a $(LIB)/cyusb/CyAPI.a -lsetupapi -lavrt -lwinmm \
              -lws2_32 -lpthread \
              -static -L$(LIB)/SoapySDR/lib -Wl,-Bdynamic -lSoapySDR -Wl,-Bstatic
-    #OPTIONS =
-    #LDLIBS += $(LIB)/win32/libpocketfft.a
-    OPTIONS = -DFFTW
-    LDLIBS += -lfftw3f
     
+    LDLIBS += $(LIB)/win32/libpocketfft.a
+    #LDLIBS += -lfftw3f
 else ifeq ($(shell uname -sm),Darwin arm64)
+    CC = clang++
     INCLUDE += -I/opt/homebrew/include
     LDLIBS = -L/opt/homebrew/lib $(LIB)/macos/libsdr.a $(LIB)/macos/librtk.a $(LIB)/macos/libfec.a \
-             $(LIB)/macos/libldpc.a $(LIB)/macos/libpocketfft.a \
-             -lpthread -lm -lusb-1.0 -lSoapySDR
-    #OPTIONS = -Wno-deprecated
+             $(LIB)/macos/libldpc.a -lpthread -lm -lusb-1.0 -lSoapySDR
+    
+    LDLIBS += $(LIB)/macos/libpocketfft.a
+    #LDLIBS += -lfftw3f
 else
+    CC = g++
     LDLIBS = $(LIB)/linux/libsdr.a $(LIB)/linux/librtk.a $(LIB)/linux/libfec.a \
-             $(LIB)/linux/libldpc.a $(LIB)/linux/libpocketfft.a \
-             -lpthread -lm -lusb-1.0 -lSoapySDR
-    OPTIONS =
+             $(LIB)/linux/libldpc.a -lpthread -lm -lusb-1.0 -lSoapySDR
+    
+    LDLIBS += $(LIB)/linux/libpocketfft.a
+    #LDLIBS += -lfftw3f
 endif
 
 WARNOPT = -Wall -Wextra -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function
 
 #CFLAGS = -O3 -march=native $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
-#CFLAGS = -O3 $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
 CFLAGS = -O3 $(INCLUDE) $(WARNOPT) $(OPTIONS) -g
 
 TARGET = pocket_trk fftw_wisdom
