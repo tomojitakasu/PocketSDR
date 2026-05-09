@@ -14,7 +14,7 @@ ifeq ($(OS),Windows_NT)
     LDLIBS = $(LIB)/win32/libsdr.a $(LIB)/win32/librtk.a -lwinmm -lws2_32
     LDLIBS += $(LIB)/win32/libpocketfft.a
     #LDLIBS += -lfftw3f
-    OPTIONS = -DWIN32 -DAVX2 -mavx2 -mfma
+    OPTIONS = -DWIN32
 else ifeq ($(shell uname -sm),Darwin arm64)
     CC = clang++
     LDLIBS = -L/opt/homebrew/lib $(LIB)/macos/libsdr.a $(LIB)/macos/librtk.a -lpthread -lm
@@ -26,7 +26,7 @@ else
     LDLIBS = $(LIB)/linux/libsdr.a $(LIB)/linux/librtk.a -lpthread -lm
     LDLIBS += $(LIB)/linux/libpocketfft.a
     #LDLIBS += -lfftw3f
-    OPTIONS = -DAVX2 -mavx2 -mfma
+    OPTIONS =
 endif
 
 WARNOPT = -Wall -Wextra -Wno-unused-parameter -Wno-unused-but-set-variable
