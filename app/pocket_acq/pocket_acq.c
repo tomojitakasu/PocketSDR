@@ -77,65 +77,7 @@ int search_sig(const char *sig, int prn, const sdr_buff_t *buff, double fs,
     return 1;
 }
 
-//------------------------------------------------------------------------------
-//
-//   Synopsis
-//
-//     pocket_acq [-sig sig] [-prn prn[,...]] [-tint tint] [-toff toff]
-//         [-f freq] [-fi freq] [-d freq] [-nz] file
-//
-//   Description
-//
-//     Search GNSS signals in digital IF data and plot signal search results.
-//     If single PRN number by -prn option, it plots correlation power and
-//     correlation shape of the specified GNSS signal. If multiple PRN numbers
-//     specified by -prn option, it plots C/N0 for each PRN.
-// 
-//   Options ([]: default)
-//  
-//     -sig sig
-//         GNSS signal type ID (L1CA, L2CM, ...). See below for details. [L1CA]
-// 
-//     -prn prn[,...]
-//         PRN numbers of the GNSS signal separated by ','. A PRN number can be a
-//         PRN number range like 1-32 with start and end PRN numbers. For GLONASS
-//         FDMA signals (G1CA, G2CA), the PRN number is treated as FCN (frequency
-//         channel number). [1]
-// 
-//     -tint tint
-//         Integration time in ms to search GNSS signals. [code cycle]
-// 
-//     -toff toff
-//         Time offset from the start of digital IF data in ms. [0.0]
-// 
-//     -f freq
-//         Sampling frequency of digital IF data in MHz. [12.0]
-//
-//     -fi freq
-//         IF frequency of digital IF data in MHz. The IF frequency equals 0, the
-//         IF data is treated as IQ-sampling (zero-IF). [0.0]
-//
-//     -d freq[,freq]
-//         Reference and max Doppler frequency to search the signal in Hz.
-//         [0.0,5000.0]
-//
-//     -nz
-//         Disalbe zero-padding for circular colleration to search the signal.
-//         [enabled]
-//
-//     -h
-//         Show usage and signal type IDs
-//
-//     file
-//         File path of the input digital IF data. The format should be a series of
-//         int8_t (signed byte) for real-sampling (I-sampling) or interleaved int8_t
-//         for complex-sampling (IQ-sampling). PocketSDR and AP pocket_dump can be
-//         used to capture such digital IF data.
-//         If the tag file <file>.tag of the input IF data exists, the format,
-//         the sampling frequency, the LO frequencies and the sampling types
-//         are automatically recognized by the tag file and the options -fmt,
-//         -f, -fi, and -IQ are ignored.
-//
+// main (see doc/command_ref.md) -----------------------------------------------
 int main(int argc, char **argv)
 {
     const char *sig = "L1CA", *file = "", *fftw_wisdom = FFTW_WISDOM;
