@@ -758,8 +758,10 @@ int main(int argc, char **argv)
         for (i=0;i<nch;i++) {
             /* pass -STA=<n> to RTKLIB RTCM3 decoder to filter MSM by staid;
                non-MSM (NAV, etc.) is not filtered and passes through */
-            snprintf(opt.rcvopt,sizeof(opt.rcvopt),"%s%s-STA=%d",saved_rcvopt,
+            char buf[sizeof(saved_rcvopt)+32];
+            snprintf(buf,sizeof(buf),"%s%s-STA=%d",saved_rcvopt,
                 *saved_rcvopt?" ":"",staids[i]);
+            strcpy_n(opt.rcvopt,buf,sizeof(opt.rcvopt)-1);
             r=convbin(format,&opt,ifile,ofile,dir,staids[i],NULL,i==0);
             if (r<0) stat=-1;
         }
