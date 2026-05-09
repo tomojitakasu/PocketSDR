@@ -101,9 +101,20 @@ sdr_sdev_t *sdr_sdev_open(const char *driver, int fmt, double rate,
         return NULL;
     }
     for (int retry = 0; retry < OPEN_RETRY; retry++) {
-        args = SoapySDRKwargs_fromString("");
-        SoapySDRKwargs_set(&args, "driver", driver);
-        dev = SoapySDRDevice_make(&args);
+        if (strchr(driver, '=') || strchr(driver, ',')) {
+            args = SoapySDRKwargs_fromString(driver);
+        } else {
+            args = SoapySDRKwargs_fromString("");
+            SoapySDRKwargs_set(&args, "driver", driver);
+        }
+        size_t nfound = 0;
+        SoapySDRKwargs *found = SoapySDRDevice_enumerate(&args, &nfound);
+        if (nfound > 0) {
+            dev = SoapySDRDevice_make(&found[0]);
+        } else {
+            dev = SoapySDRDevice_make(&args);
+        }
+        SoapySDRKwargsList_clear(found, nfound);
         SoapySDRKwargs_clear(&args);
         if (!dev) {
             fprintf(stderr, "sdev: SoapySDRDevice_make error: %s\n",
