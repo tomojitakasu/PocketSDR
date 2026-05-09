@@ -88,42 +88,7 @@ static int est_pos(const obs_t *obs, const nav_t *nav, double *rr)
     return 0;
 }
 
-//-----------------------------------------------------------------------------
-//
-//   Synopsis
-//
-//     pocket_calib [-ts time] [-te time] [-f freq] -g file -n file [-o file]
-//         obs1 obs2 [obs3 ...]
-//
-//   Description
-//
-//     Estimates antenna array hardware delays (CH1 reference) and attitude
-//     (roll/pitch/yaw) from per-element RINEX OBS files and a RINEX NAV file
-//     using array_calib() (see sdr_array.c). Results are written to a text
-//     file (stdout by default).
-//
-//   Options ([]: default)
-//
-//     -ts time, -te time
-//         Start/end time to use (GPST, YYYY/MM/DD HH:MM:SS). [all]
-//
-//     -f freq
-//         frequency index (0:L1,1:L2, ...) [0]
-//
-//     -g file
-//         Array geometry file: one "x y z" per line in body frame (m). The
-//         body frame is X=right, Y=forward, Z=up. The i-th line is the
-//         position of element CH(i). First line is CH1 (reference).
-//
-//     -n file
-//         RINEX navigation data file.
-//
-//     -o file
-//         Output text file (calibration result).
-//
-//     obs1 obs2 [obs3 ...]
-//         Per-element RINEX OBS files. The k-th file is element CH(k).
-//
+// main (see doc/command_ref.md) -----------------------------------------------
 int main(int argc, char **argv)
 {
     nav_t nav = {};
