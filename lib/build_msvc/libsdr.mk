@@ -10,14 +10,24 @@ LD = link
 AR = lib
 LDFLAGS = /NOLOGO /DLL
 
-SOAPY_ROOT = "C:\Program Files\PothosSDR"
-#INCFLAGS = /I$(SRC) /I..\RTKLIB\src /I..\cyusb /I..\pocketfft
-#CFLAGS = /nologo /O2 /W3 /MD /arch:AVX2 /DAVX2 /DWIN32 /DWIN32_LEAN_AND_MEAN /D_CRT_SECURE_NO_WARNINGS $(INCFLAGS)
-INCFLAGS = /I$(SRC) /I..\RTKLIB\src /I..\cyusb /I..\pocketfft /I$(SOAPY_ROOT)\include
-CFLAGS = /nologo /O2 /W3 /MD /arch:AVX2 /DSOAPYSDR /DAVX2 /DWIN32 /DWIN32_LEAN_AND_MEAN /D_CRT_SECURE_NO_WARNINGS $(INCFLAGS)
+# SoapySDR headers are bundled under lib/SoapySDR/include. The import library
+# (SoapySDR.lib) is not bundled — set SOAPY_LIB_DIR to a directory containing
+# SoapySDR.lib (e.g. PothosSDR install). SoapySDR support is auto-disabled if
+# the import library cannot be found.
+SOAPY_LIB_DIR = C:\Program Files\PothosSDR\lib
+
+!IF EXIST("$(SOAPY_LIB_DIR)\SoapySDR.lib")
+SOAPY_DEF = /DSOAPYSDR
+SOAPY_LIB = "$(SOAPY_LIB_DIR)\SoapySDR.lib"
+!ELSE
+SOAPY_DEF =
+SOAPY_LIB =
+!ENDIF
+
+INCFLAGS = /I$(SRC) /I..\RTKLIB\src /I..\cyusb /I..\pocketfft /I..\SoapySDR\include
+CFLAGS = /nologo /O2 /W3 /MD /arch:AVX2 /utf-8 $(SOAPY_DEF) /DAVX2 /DWIN32 /DWIN32_LEAN_AND_MEAN /D_CRT_SECURE_NO_WARNINGS $(INCFLAGS)
 CXXFLAGS = $(CFLAGS) /TP
-#LDLIBS = librtk.lib libfec.lib libldpc.lib libpocketfft.lib ..\win32_msvc\CyAPI.lib setupapi.lib avrt.lib wsock32.lib winmm.lib user32.lib
-LDLIBS = librtk.lib libfec.lib libldpc.lib libpocketfft.lib ..\win32_msvc\CyAPI.lib $(SOAPY_ROOT)\lib\SoapySDR.lib setupapi.lib avrt.lib wsock32.lib winmm.lib user32.lib
+LDLIBS = librtk.lib libfec.lib libldpc.lib libpocketfft.lib ..\win32_msvc\CyAPI.lib $(SOAPY_LIB) setupapi.lib avrt.lib wsock32.lib winmm.lib user32.lib
 
 OBJ = sdr_cmn.obj sdr_func.obj sdr_code.obj sdr_code_gal.obj sdr_ch.obj \
       sdr_nav.obj sdr_pvt.obj sdr_rcv.obj sdr_fec.obj sdr_ldpc.obj sdr_nb_ldpc.obj \
