@@ -4,15 +4,17 @@
 
 SRC = ../../src
 
-# PocketFFT
-INCLUDE = -I$(SRC) -I../RTKLIB/src -I../pocketfft
+INCLUDE = -I$(SRC) -I../RTKLIB/src
 OPTIONS =
-LIBS = ./librtk.a ./libfec.a ./libldpc.a ./libpocketfft.a
+LIBS = ./librtk.a ./libfec.a ./libldpc.a
+
+# PocketFFT
+INCLUDE += -I../pocketfft
+LIBS += ./libpocketfft.a
 
 # FFTW3
-#INCLUDE = -I$(SRC) -I../RTKLIB/src
-#OPTIONS = -DFFTW
-#LIBS = ./librtk.a ./libfec.a ./libldpc.a -lfftw3f
+#OPTIONS += -DFFTW
+#LIBS += -lfftw3f
 
 ifeq ($(OS),Windows_NT)
     CC = gcc
