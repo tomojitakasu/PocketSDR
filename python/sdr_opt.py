@@ -165,7 +165,7 @@ def inp_opt_new(opt_p=None):
     opt.inps = ('RF Frontend', 'IF Data')
     opt.types = ('Pocket SDR FE', 'USRP (uhd)', 'LimeSDR (lime)',
         'LimeSDR (limesuiteng)', 'BladeRF (bladerf)', 'RTL-SDR (rtlsdr)',
-        'Pluto-SDR (plutosdr)')
+        'Pluto-SDR (plutosdr)', 'Airspy (airspy)')
     opt.fmts = ('INT8', 'INT8X2', 'RAW8', 'RAW16', 'RAW16I', 'RAW32', 'CS8',
         'CS16')
     opt.IQs = ('IQ', 'I')
