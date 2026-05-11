@@ -13,6 +13,7 @@
 #ifdef SOAPYSDR
 #include <SoapySDR/Device.h>
 #include <SoapySDR/Formats.h>
+#include <SoapySDR/Logger.h>
 #endif
 #include "pocket_sdr.h"
 #ifdef WIN32
@@ -29,6 +30,18 @@
 #define GAP_MAX_SEC   0.1          // max zero-fill duration on a single gap (s)
 #define TIMER_RES     1            // timer resolution for Windows (ms)
 #define MIN(x, y)     ((x) < (y) ? (x) : (y))
+
+#ifdef SOAPYSDR
+static void soapy_log_handler(const SoapySDRLogLevel level, const char *msg)
+{
+    if (level == SOAPY_SDR_SSI) {
+        return;
+    }
+    if (level <= SOAPY_SDR_WARNING) {
+        fprintf(stderr, "%s\n", msg);
+    }
+}
+#endif
 
 // elapsed time in seconds -----------------------------------------------------
 static double ts_elapsed(uint32_t tick)
@@ -96,6 +109,8 @@ sdr_sdev_t *sdr_sdev_open(const char *driver, int fmt, double rate,
     double fs_act = 0.0, fo_act = 0.0;
     int ok = 0;
     
+    SoapySDR_registerLogHandler(soapy_log_handler);
+    
     if (fmt != SDR_FMT_CS8 && fmt != SDR_FMT_CS16) {
         fprintf(stderr, "sdev: format error (only supports CS8 or CS16)\n");
         return NULL;
@@ -162,6 +177,8 @@ sdr_sdev_t *sdr_sdev_open(const char *driver, int fmt, double rate,
         str_args = "linkFormat=CS12,latency=1";
     } else if (!strcmp(driver, "uhd")) { // USRP
         str_args = "num_recv_frames=2048,recv_frame_size=16384,wirefmt=sc8";
+    } else if (!strcmp(driver, "bladerf")) { // bladeRF
+        str_args = "buffers=128,transfers=32,buflen=32768,meta=normal";
     }
     SoapySDRKwargs stream_args = SoapySDRKwargs_fromString(str_args);
     str = SoapySDRDevice_setupStream(dev, SOAPY_SDR_RX, str_fmt, chs, 1,
@@ -181,6 +198,7 @@ sdr_sdev_t *sdr_sdev_open(const char *driver, int fmt, double rate,
     sdev->rate = fs_act;
     sdev->buff = (uint8_t *)sdr_malloc(BUFF_SIZE * BUFF_CNT);
     sdev->rp = sdev->wp = 0;
+    sdev->state = 0;
     sdr_mutex_init(&sdev->mtx);
     return sdev;
 #else
@@ -298,6 +316,10 @@ static void *reader_thread(void *arg)
         if (ret == SOAPY_SDR_TIMEOUT) continue;
         if (ret == SOAPY_SDR_OVERFLOW) {
             ovcnt++;
+            continue;
+        }
+        if (ret == 0) {
+            sdr_sleep_msec(1);
             continue;
         }
         if (ret < 0) {
@@ -441,4 +463,3 @@ int sdr_sdev_read(sdr_sdev_t *sdev, uint8_t *buff, int size)
     sdev->rp += size;
     return size;
 }
-
