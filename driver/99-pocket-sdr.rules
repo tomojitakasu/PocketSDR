@@ -1,0 +1,19 @@
+# udev rules for Pocket SDR FE devices.
+#
+# Grants the "plugdev" group read/write access to Pocket SDR FE 2CH (Cypress
+# EZ-USB FX2LP) and FE 4CH / 8CH (Cypress EZ-USB FX3) so that pocket_conf,
+# pocket_dump, pocket_trk, pocket_sdr.py etc. can be run without sudo.
+#
+# Install:
+#   sudo cp 99-pocket-sdr.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+#   sudo usermod -aG plugdev $USER     # add yourself to plugdev (re-login required)
+#
+# After re-plugging the device, `lsusb` should show the device and
+# `pocket_scan` / `pocket_conf` should run without sudo.
+
+# Pocket SDR FE 2CH (EZ-USB FX2LP)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="1004", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+
+# Pocket SDR FE 4CH / 8CH (EZ-USB FX3)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
