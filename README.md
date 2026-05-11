@@ -1,6 +1,3 @@
-<style>
-@import url('./doc/pdf_style.css');
-</style>
 
 # **Pocket SDR - An Open-Source GNSS SDR,<br> ver. 0.15**
 
@@ -316,7 +313,7 @@ constraints to be aware of:
 ```
 $ lsusb -t
 ```
-  The relevant device should show `5000M` (USB 3.0) — `480M` means the
+  The relevant device should show `5000M` (USB 3.0) ? `480M` means the
   device fell back to USB 2.0, which is bandwidth-limited and will drop
   samples at high rates.
 
@@ -339,7 +336,7 @@ $ lsusb -t
 
 * **PocketFFT vs FFTW3**: PocketFFT (default) works on aarch64 with
   NEON. If FFT becomes a bottleneck for your workload, FFTW3 is
-  marginally faster on large transforms — install with
+  marginally faster on large transforms ? install with
   `sudo apt install libfftw3-dev` and switch the build per the
   [Using FFTW3 instead of PocketFFT](#using-fftw3-instead-of-pocketfft-optional)
   section below.
@@ -419,7 +416,7 @@ $ pocket_dump -t 10 ch1.bin ch2.bin
 
 ## **Using FFTW3 instead of PocketFFT (optional)**
 
-Starting from version 0.15b, Pocket SDR ships with [**PocketFFT**](https://gitlab.mpcdf.mpg.de/mtr/pocketfft) (BSD-3-Clause) as the default FFT backend, replacing [**FFTW3**](https://www.fftw.org/) (GPL). The change is licensing-driven; for most workloads PocketFFT is competitive, but FFTW3 is still slightly faster on large transforms and supports runtime wisdom (auto-tuned plans) — `pocket_trk` / `pocket_snap` / `pocket_acq` can read `python/fftw_wisdom.txt` for further speed-up.
+Starting from version 0.15b, Pocket SDR ships with [**PocketFFT**](https://gitlab.mpcdf.mpg.de/mtr/pocketfft) (BSD-3-Clause) as the default FFT backend, replacing [**FFTW3**](https://www.fftw.org/) (GPL). The change is licensing-driven; for most workloads PocketFFT is competitive, but FFTW3 is still slightly faster on large transforms and supports runtime wisdom (auto-tuned plans) ? `pocket_trk` / `pocket_snap` / `pocket_acq` can read `python/fftw_wisdom.txt` for further speed-up.
 
 To build with FFTW3 instead, install the library and edit four makefiles.
 
@@ -441,7 +438,7 @@ INCLUDE = -I$(SRC) -I../RTKLIB/src
 OPTIONS = -DFFTW
 LIBS = ./librtk.a ./libfec.a ./libldpc.a -lfftw3f
 ```
-* Edit the application makefiles [app/pocket_acq/makefile](https://github.com/tomojitakasu/PocketSDR/blob/master/app/pocket_acq/makefile), [app/pocket_snap/makefile](https://github.com/tomojitakasu/PocketSDR/blob/master/app/pocket_snap/makefile), and [app/pocket_trk/makefile](https://github.com/tomojitakasu/PocketSDR/blob/master/app/pocket_trk/makefile): in each `ifeq` branch (Windows / macOS / Linux), comment out the `libpocketfft.a` line and uncomment the `-lfftw3f` line. The `-DFFTW` preprocessor switch lives in `lib/build/libsdr.mk` only — the application makefiles do not need an OPTIONS change. Example (Windows section of `pocket_trk/makefile`):
+* Edit the application makefiles [app/pocket_acq/makefile](https://github.com/tomojitakasu/PocketSDR/blob/master/app/pocket_acq/makefile), [app/pocket_snap/makefile](https://github.com/tomojitakasu/PocketSDR/blob/master/app/pocket_snap/makefile), and [app/pocket_trk/makefile](https://github.com/tomojitakasu/PocketSDR/blob/master/app/pocket_trk/makefile): in each `ifeq` branch (Windows / macOS / Linux), comment out the `libpocketfft.a` line and uncomment the `-lfftw3f` line. The `-DFFTW` preprocessor switch lives in `lib/build/libsdr.mk` only ? the application makefiles do not need an OPTIONS change. Example (Windows section of `pocket_trk/makefile`):
 ```
     #LDLIBS += $(LIB)/win32/libpocketfft.a
     LDLIBS += -lfftw3f
@@ -559,7 +556,7 @@ repository does not exempt users from compliance with applicable export
 control regulations, including the Japan Foreign Exchange and Foreign Trade
 Act (外為法), the US Export Administration Regulations (EAR), the EU
 dual-use regulation (EU 2021/821), and the Wassenaar Arrangement (Category 7
-— Navigation and Avionics). The 8-channel hardware (FE_8CH) combined with
+? Navigation and Avionics). The 8-channel hardware (FE_8CH) combined with
 the antenna array calibration and digital beam-forming features added in
 v0.15 may be regarded as dual-use technology under some jurisdictions;
 users should perform their own classification (該非判定) before cross-border
