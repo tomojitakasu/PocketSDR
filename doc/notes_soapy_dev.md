@@ -1,7 +1,3 @@
-<style>
-@import url('./pdf_style.css');
-</style>
-
 # **SoapySDR Device Notes**
 
 ---

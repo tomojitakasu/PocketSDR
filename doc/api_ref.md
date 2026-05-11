@@ -1,7 +1,3 @@
-<style>
-@import url('./pdf_style.css');
-</style>
-
 # Pocket SDR C Library API Reference
 
 <div style="text-align: right;">
