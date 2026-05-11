@@ -94,7 +94,7 @@ img {
 
 @page {
     size: A4 portrait;
-    margin: 20mm 18mm;
+    margin: 25mm 18mm;
 }
 
 /* Language-specific font override: when lang="ja" is present, force Yu Gothic stack */
