@@ -49,7 +49,7 @@ static const char *usage_text[] = {
     "       [-fmt {INT8|INT8X2|RAW8|RAW16|RAW32|CS8|CS16}] [-f freq]",
     "       [-fo freq[,...]] [-IQ {1|2}[,...]] [-bits {2|3}[,...]",
     "       [-toff toff] [-ti tint] [-p bus,[,port] [-c conf_file]",
-    "       [-driver name] [-gain gain] [-bw bw]",
+    "       [-driver name] [-gain gain] [-bw bw] [-fd dopp]",
     "       [-log path] [-nmea path] [-rtcm path] [-raw path] [-opt file] [file]",
     NULL
 };
@@ -173,7 +173,7 @@ int main(int argc, char **argv)
     const char *paths[4] = {"", "", "", ""}, *opt_file = "";
     const char *debug_file = "";
     const char *driver = "";
-    double gain = 0.0, bw = 0.0;
+    double gain = 0.0, bw = 0.0, max_dop = 0.0;
     char rfch_opt[1024] = "-RFCH";
     
     for (int i = 1; i < argc; i++) {
@@ -246,6 +246,8 @@ int main(int argc, char **argv)
             gain = atof(argv[++i]);
         } else if (!strcmp(argv[i], "-bw") && i + 1 < argc) {
             bw = atof(argv[++i]);
+        } else if (!strcmp(argv[i], "-fd") && i + 1 < argc) {
+            max_dop = atof(argv[++i]);
         } else if (!strcmp(argv[i], "-v")) {
             print_ver();
         } else if (argv[i][0] == '-') {
@@ -260,6 +262,9 @@ int main(int argc, char **argv)
     }
     if (*opt_file && !load_opt_file(opt_file)) {
         fprintf(stderr, "options file read error: %s\n", opt_file);
+    }
+    if (max_dop > 0.0) { // -fd overrides max_dop from -opt file
+        sdr_rcv_setopt("max_dop", max_dop);
     }
     sdr_func_init(fftw_wisdom);
     
