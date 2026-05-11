@@ -1,4 +1,4 @@
-# **Pocket SDR - An Open-Source GNSS SDR, ver. 0.15b**
+# **Pocket SDR - An Open-Source GNSS SDR,<br> ver. 0.15b**
 
 ## **Overview**
 
@@ -30,6 +30,12 @@ The supported GNSS signals by Pocket SDR are as follows. For details on these si
 
 These utilities and APs are written in Python, C, and C++ in a compact and modular way,
 making them easy to modify for adding custom algorithms.
+
+In addition to the Pocket SDR FE devices, Pocket SDR supports third-party
+SDR hardware (**USRP**, **LimeSDR**, **bladRF**, **PlutoSDR**, **RTL-SDR**, and so on) via 
+[**SoapySDR**](https://github.com/pothosware/SoapySDR/wiki).
+See [**SoapySDR Device Notes**](doc/notes_soapy_dev.md) for verified devices,
+installation notes, and device-specific caveats.
 
 <p align="center">
   <img src="image/pocket_sdr_image.jpg">
@@ -99,7 +105,6 @@ PocketSDR
 ├── FE_2CH      # Pocket SDR FE 2CH H/W and F/W
 ├── FE_4CH      # Pocket SDR FE 4CH H/W and F/W
 ├── FE_8CH      # Pocket SDR FE 8CH H/W and F/W (3-bit RF samples)
-├── FE_8CH_12bit # Pocket SDR FE 8CH 12-bit H/W and F/W (FPGA-based, in dev.)
 ├── driver      # Driver installation instruction for Pocket SDR FE
 ├── doc         # Documents (incl. api_ref.md, command_ref.md)
 ├── image       # Image files for documents
@@ -128,33 +133,11 @@ or
 ```
 > pip install numpy scipy matplotlib
 ```
-* (Optional) To use SoapySDR-supported devices (LimeSDR, HackRF, RTL-SDR, etc.)
-  with the python APs, install [**radioconda**](https://github.com/ryanvolz/radioconda).
-  radioconda is the recommended way to get SoapySDR + per-device plug-in DLLs
-  on Windows in one bundle. Steps:
-  1. Download the latest `Radioconda-Windows-x86_64.exe` from the
-     [releases page](https://github.com/ryanvolz/radioconda/releases) and
-     run it with default settings (per-user install, no admin needed).
-  2. Add the runtime DLL directory to the Windows PATH so `SoapySDR.dll`
-     and the per-device plug-in DLLs can be loaded:
-```
-<radioconda_install_dir>\Library\bin
-```
-     (typical default: `C:\Users\<user>\radioconda\Library\bin`)
-  3. Verify the SoapySDR install and the plug-in modules in a fresh
-     command prompt:
-```
-> SoapySDRUtil --info
-> SoapySDRUtil --probe="driver=lime"
-```
-     The first command lists the discovered modules
-     (e.g., `LMS7`, `HackRF`, `RTLSDR`, `SDRPlay`, `BladeRF`).
-     The second probes a specific device. If the module is missing, see
-     radioconda's docs to add per-device packages via `mamba install`.
-  4. The Pocket SDR python APs (`pocket_sdr.py`, `pocket_dump.py`, ...)
-     auto-add radioconda's `Library\bin` to the DLL search path on
-     start, so PATH addition above is mainly needed for the C-level
-     `pocket_trk.exe` etc. to find the DLLs at runtime.
+* (Optional) To use SoapySDR-supported devices (LimeSDR, HackRF, RTL-SDR,
+  bladeRF, etc.), install [**radioconda**](https://github.com/ryanvolz/radioconda)
+  and add `<radioconda_install_dir>\Library\bin` to PATH. See
+  [SoapySDR Device Notes](doc/notes_soapy_dev.md#windows) for per-device
+  packages, Zadig driver setup, and bladeRF version caveats.
 * Add the Pocket SDR binary programs path (<install_dir>\PocketSDR\bin) to 
   the command search path (Path) of Windows environment variables.
 * Add the Pocket SDR Python scripts path (<install_dir>\PocketSDR\python) to 
@@ -183,19 +166,12 @@ $ pacman -S mingw-w64-ucrt-x86_64-python-numpy
 $ pacman -S mingw-w64-ucrt-x86_64-python-scipy
 $ pacman -S mingw-w64-ucrt-x86_64-python-matplotlib
 ```
-* If you intend to use SoapySDR-supported devices (LimeSDR, HackRF, RTL-SDR,
-  SDRPlay, BladeRF, etc.), install
-  [**radioconda**](https://github.com/ryanvolz/radioconda) (see Windows
-  install section above for details). The Pocket SDR build picks up the
-  SoapySDR headers and the import library from the radioconda install:
-  - Headers: `<radioconda>\Library\include\SoapySDR\`
-  - DLL: `<radioconda>\Library\bin\SoapySDR.dll`
-  - The MinGW import library `libSoapySDR.dll.a` is auto-generated from
-    `SoapySDR.dll` during the first library build via `gen_soapysdr_implib.sh`.
-
+* If you intend to use SoapySDR-supported devices, install radioconda first.
   The default radioconda location used by the Makefiles is
   `/c/Users/<user>/radioconda/Library`. If installed elsewhere, override
-  with `SOAPY_ROOT` on the make command line (see below).
+  with `SOAPY_ROOT` on the make command line. See
+  [SoapySDR Device Notes](doc/notes_soapy_dev.md#windows-build-notes)
+  for details.
 
 * Move to the library directory. The external libraries are for Forward Error
   Correction (FEC) and Low-Density Parity-Check (LDPC) decoding. Install the
@@ -225,42 +201,24 @@ $ make install
 
 ## **Installation for Linux or Raspberry Pi OS**
 
-> **Note**: Pocket SDR has been primarily verified on Ubuntu / Debian-based
-> Linux distributions. **Raspberry Pi OS** is supported in principle but
-> SoapySDR-based device support has not been thoroughly verified on
-> Raspberry Pi.
+> **Note**: Pocket SDR has been verified on Ubuntu / Debian-based Linux
+> distributions and on **Raspberry Pi OS (Bookworm) on Raspberry Pi 5**
+> (aarch64). The Pi 5 has been confirmed to handle Pocket SDR FE and the
+> apt-installed SoapySDR devices for typical L1 / L2 single-channel use;
+> see the **Notes for Raspberry Pi 5** subsection below for hardware
+> caveats (USB power, USB 3.0 routing, CPU limits).
 
 * You need fundamental development packages and some libraries. Confirm the following
 packages installed: git, gcc, g++, make, libusb-1.0-0-dev, libfftw3-dev, python3, python3-numpy,
 python3-scipy, python3-matplotlib, python3-tk
 * (Optional) To use SoapySDR-supported devices (LimeSDR, HackRF, RTL-SDR,
-  SDRPlay, BladeRF, etc.), install SoapySDR and the per-device modules.
-  On Ubuntu / Debian, the simplest way is the meta-package
-  `soapysdr-module-all`, which pulls in all device modules at once:
+  SDRPlay, bladeRF, etc.), install SoapySDR and the per-device modules:
 ```
 $ sudo apt install libsoapysdr-dev soapysdr-tools soapysdr-module-all
 ```
-  If you prefer to install only the modules you need, install them
-  individually instead:
-```
-$ sudo apt install libsoapysdr-dev soapysdr-tools
-$ sudo apt install soapysdr-module-rtlsdr      # RTL-SDR
-$ sudo apt install soapysdr-module-hackrf      # HackRF
-$ sudo apt install soapysdr-module-lms7        # LimeSDR (also: limesuite)
-$ sudo apt install soapysdr-module-bladerf     # BladeRF
-$ sudo apt install soapysdr-module-sdrplay     # SDRPlay (non-free, see vendor)
-$ sudo apt install soapysdr-module-airspy      # Airspy
-```
-  After install, verify the modules are loadable:
-```
-$ SoapySDRUtil --info
-$ SoapySDRUtil --probe="driver=lime"   # for LimeSDR
-```
-  Some devices (LimeSDR / SDRPlay / etc.) need additional vendor drivers
-  and udev rules — refer to each project's documentation.
-
-  For distros without prebuilt packages, build SoapySDR and the device
-  modules from source: see https://github.com/pothosware/SoapySDR/wiki .
+  See [SoapySDR Device Notes](doc/notes_soapy_dev.md#linux--raspberry-pi-os)
+  for per-device package names, udev access, UHD image installation, and
+  the Ubuntu 24.04 bladeRF module update workaround.
 
 * Download and extract PocketSDR.zip or clone the git repository to an appropriate directory <install_dir>.
 ```
@@ -287,62 +245,159 @@ $ make
 $ make install
 ```
 * Add the Pocket SDR binary programs path (<install_dir>/PocketSDR/bin) to the command search path.
-* For Linux or Raspberry Pi OS users, you usually need to have root permission to access USB devices. So you have to add
-"sudo" to execute some utilities, APs or python scripts like:
+
+* (Recommended) Install the udev rule so the Pocket SDR FE device is
+  accessible to a normal user account (no `sudo` required). The repository
+  ships a ready-to-use rule at [`driver/99-pocket-sdr.rules`](/driver/99-pocket-sdr.rules) that grants the
+  `plugdev` group read/write access to Pocket SDR FE 2CH (Cypress
+  EZ-USB FX2LP, VID `04B4` / PID `1004`) and FE 4CH / 8CH (Cypress
+  EZ-USB FX3, VID `04B4` / PID `00F1`):
+```
+$ sudo cp <install_dir>/driver/99-pocket-sdr.rules /etc/udev/rules.d/
+$ sudo udevadm control --reload-rules && sudo udevadm trigger
+$ sudo usermod -aG plugdev $USER     # add yourself to plugdev
+```
+  Log out and back in (or reboot) so the new group membership takes effect,
+  then unplug and re-plug the device. After that, `pocket_scan`,
+  `pocket_conf`, `pocket_dump`, `pocket_trk`, and `pocket_sdr.py` all run
+  without `sudo`.
+
+  Verify the rule is in effect:
+```
+$ lsusb -d 04b4:                         # confirm the device is enumerated
+$ ls -l /dev/bus/usb/<bus>/<dev>          # group should be "plugdev", mode 0660
+$ pocket_scan                             # should list the device
+```
+  If your distribution uses a different group than `plugdev` (e.g.
+  `dialout` on some systems, or systemd-logind's `uaccess` is sufficient
+  on its own), adjust `GROUP=` in the rule file or rely on the
+  `TAG+="uaccess"` line which grants access to the currently logged-in
+  seat user on systemd-based systems.
+
+* If you skip the udev rule, you must run the Pocket SDR utilities under
+  `sudo` to access the USB device:
 ```
 $ sudo pocket_conf ../conf/pocket_L1L6_12MHz.conf
 $ sudo pocket_dump -t 10 ch1.bin ch2.bin
 $ sudo pocket_sdr.py
 ```
 
+### **Notes for Raspberry Pi 5**
+
+Raspberry Pi 5 (Cortex-A76 4-core @ 2.4 GHz, aarch64) runs the same
+build path as desktop Linux above. The Makefiles auto-detect aarch64
+and enable NEON SIMD optimizations (`-DNEON`). A few Pi-specific
+constraints to be aware of:
+
+* **USB power budget**: Pi 5 advertises 5V / 5A on the official PSU but
+  the USB ports share a ~1.6 A budget. USRP B210 (~2 A peak), Pocket
+  SDR FE 8CH, and BladeRF 2.0 typically need either a USB Y-cable
+  (separate +5V feed) or a **self-powered (externally-fed) USB hub**.
+  Symptoms of insufficient power are intermittent USB resets, FPGA
+  bitstream upload failures (USRP), and dropped samples.
+
+* **USB 3.0 routing**: Pi 5 has 2× USB 3.0 + 2× USB 2.0 ports. Always
+  connect high-rate SDRs (LimeSDR, USRP B210, Pocket SDR FE 8CH) to a
+  USB 3.0 port. Verify enumeration speed with:
+```
+$ lsusb -t
+```
+  The relevant device should show `5000M` (USB 3.0) — `480M` means the
+  device fell back to USB 2.0, which is bandwidth-limited and will drop
+  samples at high rates.
+
+* **CPU / sample rate limits**: Pi 5 holds up well thanks to NEON SIMD
+  acceleration. Measured load (`pocket_trk` realtime, single-band L1
+  tracking, all-in-view PRNs):
+
+  | Device | Sample rate × tracked channels | CPU load (of 400% = 4 cores) |
+  |---|---|---|
+  | LimeSDR USB | 32 Msps × 7 ch | ~280% |
+  | USRP B210 | 32 Msps × 8 ch | ~290% |
+  | PlutoSDR | 6 Msps × 10 ch | ~121% |
+  | RTL-SDR | 2.4 Msps × 16 ch | ~102% |
+
+  32 Msps with many tracked channels is workable but leaves limited
+  headroom for additional bands or PVT processing. **8 Msps** is a
+  comfortable sweet spot for general L1 use on Pi 5. Heavier configs
+  (LimeSDR 60 Msps × 2-band, Pocket SDR FE 8CH × multi-band) will
+  saturate the Pi 5 CPU and are intended for desktop use.
+
+* **PocketFFT vs FFTW3**: PocketFFT (default) works on aarch64 with
+  NEON. If FFT becomes a bottleneck for your workload, FFTW3 is
+  marginally faster on large transforms — install with
+  `sudo apt install libfftw3-dev` and switch the build per the
+  [Using FFTW3 instead of PocketFFT](#using-fftw3-instead-of-pocketfft-optional)
+  section below.
+
+* **Storage**: For long IF data captures (`pocket_dump -t <long>`,
+  `pocket_trk -raw`), use a USB 3.0 SSD or NVMe HAT. The microSD card
+  on stock Pi 5 cannot sustain >50 MB/s writes for extended periods
+  and will drop samples.
+
 --------------------------------------------------------------------------------
 
 ## **Installation for macOS**
 
-> **Note**: macOS support is provided on a best-effort basis. Build and
-> basic functionality have been confirmed but **SoapySDR-based device
-> support on macOS is not actively verified**. SoapySDR may be installed
-> via Homebrew (`brew install soapysdr` plus per-device formulas such as
-> `soapyhackrf`, `soapyrtlsdr`, `limesuite`) but expect to do some
-> integration work yourself.
+> **Note**: Verified on Apple Silicon (arm64). Pocket SDR FE 2/4/8CH (USB)
+> has been confirmed working. For SoapySDR devices on macOS, see
+> [SoapySDR Device Notes](doc/notes_soapy_dev.md#macos).
 
-* You need [**Homebrew**](https://brew.sh) as a package manager for macOS. Install Homebrew by running the following command in the terminal:
+* You need [**Homebrew**](https://brew.sh) as a base package manager. Install
+  Homebrew by following the instructions on its site, then install
+  development tools:
+```
+$ brew install libusb fftw
+```
 
-* Open a terminal window on macOS and install the basic libraries by using Homebrew:
+* (Optional) Install [**radioconda**](https://github.com/ryanvolz/radioconda)
+  to use SoapySDR devices and a self-contained Python environment:
 ```
-$ brew install numpy
-$ brew install scipy
-$ brew install python3-matplotlib
-$ brew install python3-numpy
-$ brew install python3-tk
-$ brew install libusb
+$ curl -L -O https://github.com/ryanvolz/radioconda/releases/latest/download/Radioconda-MacOSX-arm64.sh
+$ bash Radioconda-MacOSX-arm64.sh
 ```
-* Download and extract PocketSDR.zip or clone the git repository to an appropriate directory <install_dir>.
+  For Intel mac use `Radioconda-MacOSX-x86_64.sh`. Known macOS SoapySDR
+  packaging workarounds are collected in
+  [SoapySDR Device Notes](doc/notes_soapy_dev.md#macos).
+
+* Download and extract PocketSDR.zip or clone the git repository to an
+  appropriate directory <install_dir>.
 ```
 $ unzip PocketSDR.zip
 or
 $ git clone https://github.com/tomojitakasu/PocketSDR
 ```
-* Move to the library directory, install external library source trees ([1], [2]) as follows:
+* Move to the library directory, install external library source trees ([1], [2]):
 ```
 $ cd <install_dir>/lib
 $ chmod +x clone_lib.sh
 $ ./clone_lib.sh
 ```
-* Move to the library build directory and build libraries.
+* Build libraries and applications. The Makefiles auto-detect Apple
+  Silicon (`Darwin arm64`) and use `clang++` for C++ sources and pull
+  Homebrew's `libusb` / `fftw` headers from `/opt/homebrew/include`:
 ```
 $ cd <install_dir>/lib/build
 $ make
 $ make install
-```
-* Move to the application program directory and build utilities and APs.
-```
 $ cd <install_dir>/app
 $ make
 $ make install
 ```
-* Add the Pocket SDR binary programs path (<install_dir>/PocketSDR/bin) to 
-  the command search path.
+* Add `<install_dir>/PocketSDR/bin` to the command search path.
+
+* For SoapySDR-supported devices, use the driver shortcuts in
+  `<install_dir>/app/pocket_trk/pocket_trk.sh`. See
+  [SoapySDR Device Notes](doc/notes_soapy_dev.md#runtime-driver-shortcuts).
+
+* Pocket SDR FE 2CH / 4CH / 8CH USB devices work on macOS via libusb-1.0
+  with **no driver install needed** (Apple's IOUSB stack provides
+  raw USB access through libusb). Plug in the device and run:
+```
+$ pocket_scan                                          # device should be listed
+$ pocket_conf <install_dir>/conf/pocket_L1L6_12MHz.conf
+$ pocket_dump -t 10 ch1.bin ch2.bin
+```
 
 --------------------------------------------------------------------------------
 
@@ -370,12 +425,10 @@ INCLUDE = -I$(SRC) -I../RTKLIB/src
 OPTIONS = -DFFTW
 LIBS = ./librtk.a ./libfec.a ./libldpc.a -lfftw3f
 ```
-* Edit the application makefiles [app/pocket_acq/makefile](/app/pocket_acq/makefile), [app/pocket_snap/makefile](/app/pocket_snap/makefile), and [app/pocket_trk/makefile](/app/pocket_trk/makefile): in each `ifeq` branch (Windows / macOS / Linux), comment out the `libpocketfft.a` line and uncomment the `-lfftw3f` line. For `pocket_trk` also flip `OPTIONS = -DFFTW`. Example (Windows section of `pocket_trk/makefile`):
+* Edit the application makefiles [app/pocket_acq/makefile](/app/pocket_acq/makefile), [app/pocket_snap/makefile](/app/pocket_snap/makefile), and [app/pocket_trk/makefile](/app/pocket_trk/makefile): in each `ifeq` branch (Windows / macOS / Linux), comment out the `libpocketfft.a` line and uncomment the `-lfftw3f` line. The `-DFFTW` preprocessor switch lives in `lib/build/libsdr.mk` only — the application makefiles do not need an OPTIONS change. Example (Windows section of `pocket_trk/makefile`):
 ```
     #LDLIBS += $(LIB)/win32/libpocketfft.a
-    #OPTIONS =
     LDLIBS += -lfftw3f
-    OPTIONS = -DFFTW
 ```
 * Rebuild from scratch:
 ```
@@ -476,6 +529,28 @@ $ pocket_trk.py ch2.bin -f 12 -sig E6B -prn 4 -log trk.log -p -ts 0.2
 <img src="image/image005.jpg" width=49%>
 <img src="image/image006.jpg" width=49%>
 <img src="image/image007.jpg" width=49%>
+
+--------------------------------------------------------------------------------
+
+## **Export Control Notice**
+
+Pocket SDR is released for **research and educational use**. Public
+availability of the source code, hardware design data, and firmware in this
+repository does not exempt users from compliance with applicable export
+control regulations, including the Japan Foreign Exchange and Foreign Trade
+Act (外為法), the US Export Administration Regulations (EAR), the EU
+dual-use regulation (EU 2021/821), and the Wassenaar Arrangement (Category 7
+— Navigation and Avionics). The 8-channel hardware (FE_8CH) combined with
+the antenna array calibration and digital beam-forming features added in
+v0.15 may be regarded as dual-use technology under some jurisdictions;
+users should perform their own classification (該非判定) before cross-border
+transfer.
+
+Use of this software or hardware design data by, or transfer to, individuals
+or entities subject to applicable economic sanctions (e.g., US OFAC SDN
+List, EU consolidated sanctions list, Japan METI End-User List), or for
+military, weapons of mass destruction (WMD), or delivery system development
+purposes, is prohibited.
 
 --------------------------------------------------------------------------------
 

@@ -3,7 +3,7 @@
 # generate package
 #
 PRG=PocketSDR
-VER=0.15b
+VER=0.15
 
 cd ..
 
@@ -11,7 +11,7 @@ tar cvf - \
         --exclude ".git" \
         --exclude "*.o" \
         --exclude "linux/*.a" \
-        --exclude "macos/*.a" \
+        --exclude "linux/*.so" \
         --exclude "*.bin" \
         --exclude "*.exe" \
         --exclude "*.log" \
