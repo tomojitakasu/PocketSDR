@@ -801,6 +801,7 @@ static int8_t *gen_LUT8(int fmt, double off, double scale)
     int N = fmt == SDR_FMT_CS16 ? 65536 : 256, val;
     int8_t *LUT8 = (int8_t *)sdr_malloc(sizeof(int8_t) * N);
     
+    if (scale <= 0.0) scale = 1.0;
     for (int i = -N / 2; i < N / 2; i++) {
         val = (int)floor((i - off) / scale + 0.5);
         int j = fmt == SDR_FMT_CS16 ? (uint16_t)i : (uint8_t)i;
@@ -855,9 +856,10 @@ static void write_buff(sdr_rcv_t *rcv, const uint8_t *raw, int64_t ix)
             rcv->buff[0]->data[i] = SDR_CPX8(LUT8[raw[j]], LUT8[raw[j+1]]);
         }
     } else if (rcv->fmt == SDR_FMT_CS16) { // int16 x 2 complex
+        int8_t *LUTQ = rcv->rfch[1].LUT ? (int8_t *)rcv->rfch[1].LUT : LUT8;
         for (int j = 0; j < rcv->N * 4; i++, j += 4) {
             int8_t I = LUT8[*(uint16_t *)(raw + j    )];
-            int8_t Q = LUT8[*(uint16_t *)(raw + j + 2)];
+            int8_t Q = LUTQ[*(uint16_t *)(raw + j + 2)];
             rcv->buff[0]->data[i] = SDR_CPX8(I, Q);
         }
     } else if (rcv->fmt == SDR_FMT_RAW8) { // Pocket SDR FE 2CH raw
@@ -965,8 +967,12 @@ static void update_data_stats(sdr_rcv_t *rcv, const uint8_t *raw)
             rcv->stats.sum_sq[0] += (int8_t)raw[i];
             rcv->stats.sum_sq[1] += SQR((int8_t)raw[i]);
         } else if (rcv->fmt == SDR_FMT_CS16) {
-            rcv->stats.sum_sq[0] += *(int16_t *)(raw + i * 2);
-            rcv->stats.sum_sq[1] += SQR(*(int16_t *)(raw + i * 2));
+            int16_t I = *(int16_t *)(raw + i * 4);
+            int16_t Q = *(int16_t *)(raw + i * 4 + 2);
+            rcv->stats.sum_iq[0] += I;
+            rcv->stats.sum_iq[1] += Q;
+            rcv->stats.sumsq_iq[0] += SQR(I);
+            rcv->stats.sumsq_iq[1] += SQR(Q);
         } else {
             return;
         }
@@ -977,7 +983,8 @@ static void update_data_stats(sdr_rcv_t *rcv, const uint8_t *raw)
 // update scale ----------------------------------------------------------------
 static void update_scale(sdr_rcv_t *rcv)
 {
-    double ave, std, scale = 0.0;
+    double ave, std, ave_i = 0.0, ave_q = 0.0, std_i = 0.0, std_q = 0.0;
+    double scale = 0.0;
     const char *p;
     
     if ((rcv->fmt != SDR_FMT_INT8  && rcv->fmt != SDR_FMT_INT8X2 &&
@@ -985,9 +992,20 @@ static void update_scale(sdr_rcv_t *rcv)
         rcv->stats.cnt <= 0) {
         return;
     }
-    ave = rcv->stats.sum_sq[0] / rcv->stats.cnt;
-    std = sqrt(rcv->stats.sum_sq[1] / rcv->stats.cnt - SQR(ave));
+    if (rcv->fmt == SDR_FMT_CS16) {
+        ave_i = rcv->stats.sum_iq[0] / rcv->stats.cnt;
+        ave_q = rcv->stats.sum_iq[1] / rcv->stats.cnt;
+        std_i = sqrt(rcv->stats.sumsq_iq[0] / rcv->stats.cnt - SQR(ave_i));
+        std_q = sqrt(rcv->stats.sumsq_iq[1] / rcv->stats.cnt - SQR(ave_q));
+        ave = 0.5 * (ave_i + ave_q);
+        std = sqrt(0.5 * (SQR(std_i) + SQR(std_q)));
+    } else {
+        ave = rcv->stats.sum_sq[0] / rcv->stats.cnt;
+        std = sqrt(rcv->stats.sum_sq[1] / rcv->stats.cnt - SQR(ave));
+    }
     rcv->stats.sum_sq[0] = rcv->stats.sum_sq[1] = 0.0;
+    rcv->stats.sum_iq[0] = rcv->stats.sum_iq[1] = 0.0;
+    rcv->stats.sumsq_iq[0] = rcv->stats.sumsq_iq[1] = 0.0;
     rcv->stats.cnt = 0;
     rcv->stats.std = std;
     
@@ -996,7 +1014,13 @@ static void update_scale(sdr_rcv_t *rcv)
     }
     if (scale <= 0.0) { // auto gain control
         sdr_free(rcv->rfch[0].LUT);
-        rcv->rfch[0].LUT = (void *)gen_LUT8(rcv->fmt, ave, std / AGC_LEVEL);
+        if (rcv->fmt == SDR_FMT_CS16) {
+            sdr_free(rcv->rfch[1].LUT);
+            rcv->rfch[0].LUT = (void *)gen_LUT8(rcv->fmt, ave_i, std_i / AGC_LEVEL);
+            rcv->rfch[1].LUT = (void *)gen_LUT8(rcv->fmt, ave_q, std_q / AGC_LEVEL);
+        } else {
+            rcv->rfch[0].LUT = (void *)gen_LUT8(rcv->fmt, ave, std / AGC_LEVEL);
+        }
     }
 }
 
@@ -1143,6 +1167,9 @@ int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, const char **paths)
     if (rcv->fmt == SDR_FMT_INT8 || rcv->fmt == SDR_FMT_INT8X2 ||
         rcv->fmt == SDR_FMT_CS8  || rcv->fmt == SDR_FMT_CS16) {
         rcv->rfch[0].LUT = (void *)gen_LUT8(rcv->fmt, 0.0, scale);
+        if (rcv->fmt == SDR_FMT_CS16) {
+            rcv->rfch[1].LUT = (void *)gen_LUT8(rcv->fmt, 0.0, scale);
+        }
     } else {
         for (int i = 0; i < rcv->nrfch; i++) {
             rcv->rfch[i].LUT = rtoc_of(rcv, i) ? (void *)gen_LUTC_rtoc(i) :
