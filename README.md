@@ -1,4 +1,14 @@
-# **Pocket SDR - An Open-Source GNSS SDR,<br> ver. 0.15b**
+<style>
+@import url('./doc/pdf_style.css');
+</style>
+
+# **Pocket SDR - An Open-Source GNSS SDR,<br> ver. 0.15**
+
+<div style="text-align: right;">
+<strong>2026-05-12</strong>
+</div>
+
+---
 
 ## **Overview**
 
@@ -9,7 +19,7 @@ in Python, C, and C++. It supports almost all signals for **GPS**, **GLONASS**, 
 **QZSS**, **BeiDou**, **NavIC**, and **SBAS**.
 
 The Pocket SDR FE device includes 2, 4, or 8 RF frontend channels, supporting the
-GNSS L1 band (1525 - 1610 MHz) or L2/L5/L6 bands (1160 - 1290 MHz). For these signal bands, refer to [**GNSS Signal Bands**](/doc/signal_bands.pdf). Each RF channel
+GNSS L1 band (1525 - 1610 MHz) or L2/L5/L6 bands (1160 - 1290 MHz). For these signal bands, refer to [**GNSS Signal Bands**](https://github.com/tomojitakasu/PocketSDR/blob/master/doc/signal_bands.pdf). Each RF channel
 of the Pocket SDR FE device provides IF (intermediate-frequency) bandwidth of up to 36 MHz. The ADC sampling rate can be configured up to 32 Msps (FE 2CH) or 48 Msps (FE 4CH and FE 8CH).
 
 Pocket SDR also includes utility programs to configure the Pocket SDR FE devices,
@@ -18,7 +28,7 @@ Additionally, Pocket SDR provides GNSS SDR APs to display the PSD (power spectru
 These utilities and APs are compatible with **Windows**, **Linux**, **Raspberry Pi OS**, **macOS**, and other environments.
 
 The supported GNSS signals by Pocket SDR are as follows. For details on these signals and Pocket SDR signal IDs, refer to
-[**GNSS Signals**](/doc/signal_IDs.pdf).
+[**GNSS Signals**](https://github.com/tomojitakasu/PocketSDR/blob/master/doc/signal_IDs.pdf).
 
 * **GPS**: L1C/A, L1C-D, L1C-P, L2C-M, L5-I, L5-Q
 * **GLONASS**: L1C/A (L1OF), L2C/A (L2OF), L1OCd, L1OCp, L2OCp, L3OCd, L3OCp
@@ -34,7 +44,7 @@ making them easy to modify for adding custom algorithms.
 In addition to the Pocket SDR FE devices, Pocket SDR supports third-party
 SDR hardware (**USRP**, **LimeSDR**, **bladRF**, **PlutoSDR**, **RTL-SDR**, and so on) via 
 [**SoapySDR**](https://github.com/pothosware/SoapySDR/wiki).
-See [**SoapySDR Device Notes**](doc/notes_soapy_dev.md) for verified devices,
+See [**SoapySDR Device Notes**](https://github.com/tomojitakasu/PocketSDR/blob/master/doc/notes_soapy_dev.md) for verified devices,
 installation notes, and device-specific caveats.
 
 <p align="center">
@@ -71,6 +81,7 @@ GNSS Software Defined Receivers, Nov 19, 2024
 (https://gpspp.sakura.ne.jp/paper2005/pocketsdr_seminar_202411_revA.pdf)
 
 --------------------------------------------------------------------------------
+<div class="pagebreak"></div>
 
 ## **Directory Structure and Contents**
 ```
@@ -116,6 +127,7 @@ fetched by lib/clone_lib.sh.
 ```
 
 --------------------------------------------------------------------------------
+<div class="pagebreak"></div>
 
 ## **Installation for Windows**
 
@@ -126,7 +138,7 @@ to an appropriate directory <install_dir>.
 or
 > git clone https://github.com/tomojitakasu/PocketSDR
 ```
-* Install USB device driver for Pocket SDR FE according to [**driver/readme.txt**](/driver/readme.txt)
+* Install USB device driver for Pocket SDR FE according to [**driver/readme.txt**](https://github.com/tomojitakasu/PocketSDR/blob/master/driver/readme.txt)
 .
 * Install [**Python**](https://www.python.org/) with checking "Add python.exe to PATH".
 * Install additional python packages as follows.
@@ -136,7 +148,7 @@ or
 * (Optional) To use SoapySDR-supported devices (LimeSDR, HackRF, RTL-SDR,
   bladeRF, etc.), install [**radioconda**](https://github.com/ryanvolz/radioconda)
   and add `<radioconda_install_dir>\Library\bin` to PATH. See
-  [SoapySDR Device Notes](doc/notes_soapy_dev.md#windows) for per-device
+  [SoapySDR Device Notes](https://github.com/tomojitakasu/PocketSDR/blob/master/doc/notes_soapy_dev.md#windows) for per-device
   packages, Zadig driver setup, and bladeRF version caveats.
 * Add the Pocket SDR binary programs path (<install_dir>\PocketSDR\bin) to 
   the command search path (Path) of Windows environment variables.
@@ -170,7 +182,7 @@ $ pacman -S mingw-w64-ucrt-x86_64-python-matplotlib
   The default radioconda location used by the Makefiles is
   `/c/Users/<user>/radioconda/Library`. If installed elsewhere, override
   with `SOAPY_ROOT` on the make command line. See
-  [SoapySDR Device Notes](doc/notes_soapy_dev.md#windows-build-notes)
+  [SoapySDR Device Notes](https://github.com/tomojitakasu/PocketSDR/blob/master/doc/notes_soapy_dev.md#windows-build-notes)
   for details.
 
 * Move to the library directory. The external libraries are for Forward Error
@@ -197,7 +209,9 @@ $ cd <install_dir>/app
 $ make
 $ make install
 ```
+
 --------------------------------------------------------------------------------
+<div class="pagebreak"></div>
 
 ## **Installation for Linux or Raspberry Pi OS**
 
@@ -216,7 +230,7 @@ python3-scipy, python3-matplotlib, python3-tk
 ```
 $ sudo apt install libsoapysdr-dev soapysdr-tools soapysdr-module-all
 ```
-  See [SoapySDR Device Notes](doc/notes_soapy_dev.md#linux--raspberry-pi-os)
+  See [SoapySDR Device Notes](https://github.com/tomojitakasu/PocketSDR/blob/master/doc/notes_soapy_dev.md#linux--raspberry-pi-os)
   for per-device package names, udev access, UHD image installation, and
   the Ubuntu 24.04 bladeRF module update workaround.
 
@@ -248,7 +262,7 @@ $ make install
 
 * (Recommended) Install the udev rule so the Pocket SDR FE device is
   accessible to a normal user account (no `sudo` required). The repository
-  ships a ready-to-use rule at [`driver/99-pocket-sdr.rules`](/driver/99-pocket-sdr.rules) that grants the
+  ships a ready-to-use rule at [`driver/99-pocket-sdr.rules`](https://github.com/tomojitakasu/PocketSDR/blob/master/driver/99-pocket-sdr.rules) that grants the
   `plugdev` group read/write access to Pocket SDR FE 2CH (Cypress
   EZ-USB FX2LP, VID `04B4` / PID `1004`) and FE 4CH / 8CH (Cypress
   EZ-USB FX3, VID `04B4` / PID `00F1`):
@@ -336,12 +350,13 @@ $ lsusb -t
   and will drop samples.
 
 --------------------------------------------------------------------------------
+<div class="pagebreak"></div>
 
 ## **Installation for macOS**
 
 > **Note**: Verified on Apple Silicon (arm64). Pocket SDR FE 2/4/8CH (USB)
 > has been confirmed working. For SoapySDR devices on macOS, see
-> [SoapySDR Device Notes](doc/notes_soapy_dev.md#macos).
+> [SoapySDR Device Notes](https://github.com/tomojitakasu/PocketSDR/blob/master/doc/notes_soapy_dev.md#macos).
 
 * You need [**Homebrew**](https://brew.sh) as a base package manager. Install
   Homebrew by following the instructions on its site, then install
@@ -358,7 +373,7 @@ $ bash Radioconda-MacOSX-arm64.sh
 ```
   For Intel mac use `Radioconda-MacOSX-x86_64.sh`. Known macOS SoapySDR
   packaging workarounds are collected in
-  [SoapySDR Device Notes](doc/notes_soapy_dev.md#macos).
+  [SoapySDR Device Notes](https://github.com/tomojitakasu/PocketSDR/blob/master/doc/notes_soapy_dev.md#macos).
 
 * Download and extract PocketSDR.zip or clone the git repository to an
   appropriate directory <install_dir>.
@@ -388,7 +403,7 @@ $ make install
 
 * For SoapySDR-supported devices, use the driver shortcuts in
   `<install_dir>/app/pocket_trk/pocket_trk.sh`. See
-  [SoapySDR Device Notes](doc/notes_soapy_dev.md#runtime-driver-shortcuts).
+  [SoapySDR Device Notes](https://github.com/tomojitakasu/PocketSDR/blob/master/doc/notes_soapy_dev.md#runtime-driver-shortcuts).
 
 * Pocket SDR FE 2CH / 4CH / 8CH USB devices work on macOS via libusb-1.0
   with **no driver install needed** (Apple's IOUSB stack provides
@@ -400,6 +415,7 @@ $ pocket_dump -t 10 ch1.bin ch2.bin
 ```
 
 --------------------------------------------------------------------------------
+<div class="pagebreak"></div>
 
 ## **Using FFTW3 instead of PocketFFT (optional)**
 
@@ -413,7 +429,7 @@ $ pacman -S mingw-w64-ucrt-x86_64-fftw    # MSYS2 UCRT64 (Windows)
 $ sudo apt install libfftw3-dev           # Ubuntu / Debian / Raspberry Pi OS
 $ brew install fftw                       # macOS
 ```
-* Edit [lib/build/libsdr.mk](/lib/build/libsdr.mk): comment out the `# PocketFFT` block and uncomment the `# FFTW3` block.
+* Edit [lib/build/libsdr.mk](https://github.com/tomojitakasu/PocketSDR/blob/master/lib/build/libsdr.mk): comment out the `# PocketFFT` block and uncomment the `# FFTW3` block.
 ```
 # PocketFFT
 #INCLUDE = -I$(SRC) -I../RTKLIB/src -I../pocketfft
@@ -425,7 +441,7 @@ INCLUDE = -I$(SRC) -I../RTKLIB/src
 OPTIONS = -DFFTW
 LIBS = ./librtk.a ./libfec.a ./libldpc.a -lfftw3f
 ```
-* Edit the application makefiles [app/pocket_acq/makefile](/app/pocket_acq/makefile), [app/pocket_snap/makefile](/app/pocket_snap/makefile), and [app/pocket_trk/makefile](/app/pocket_trk/makefile): in each `ifeq` branch (Windows / macOS / Linux), comment out the `libpocketfft.a` line and uncomment the `-lfftw3f` line. The `-DFFTW` preprocessor switch lives in `lib/build/libsdr.mk` only — the application makefiles do not need an OPTIONS change. Example (Windows section of `pocket_trk/makefile`):
+* Edit the application makefiles [app/pocket_acq/makefile](https://github.com/tomojitakasu/PocketSDR/blob/master/app/pocket_acq/makefile), [app/pocket_snap/makefile](https://github.com/tomojitakasu/PocketSDR/blob/master/app/pocket_snap/makefile), and [app/pocket_trk/makefile](https://github.com/tomojitakasu/PocketSDR/blob/master/app/pocket_trk/makefile): in each `ifeq` branch (Windows / macOS / Linux), comment out the `libpocketfft.a` line and uncomment the `-lfftw3f` line. The `-DFFTW` preprocessor switch lives in `lib/build/libsdr.mk` only — the application makefiles do not need an OPTIONS change. Example (Windows section of `pocket_trk/makefile`):
 ```
     #LDLIBS += $(LIB)/win32/libpocketfft.a
     LDLIBS += -lfftw3f
@@ -447,6 +463,7 @@ $ cp fftw_wisdom.txt ../../python/
 Note: FFTW3 is GPL-licensed, so a binary linked against it inherits GPL terms. Keep this in mind when redistributing.
 
 --------------------------------------------------------------------------------
+<div class="pagebreak"></div>
 
 ## **GNSS SDR Utilities and APs**
 
@@ -468,9 +485,10 @@ Pocket SDR also provides the following GNSS SDR APs:
 - **pocket_trk**    : A C-version of pocket_trk.py (w/o graphical plots).
 - **pocket_snap**   : A C-version of pocket_snap.py.
 
-For more details about these utilities and APs, please refer to [**Pocket SDR Command References**](/doc/command_ref.pdf).
+For more details about these utilities and APs, please refer to [**Pocket SDR Command References**](https://github.com/tomojitakasu/PocketSDR/blob/master/doc/command_ref.pdf).
 
 --------------------------------------------------------------------------------
+
 ## **GUI-based Real-Time GNSS SDR Receiver AP**
 
 Starting from version 0.13, Pocket SDR includes a GUI-based real-time GNSS SDR
@@ -483,7 +501,7 @@ or alternatively:
 $ sudo python <install_dir>/python/pocket_sdr.py
 ```
 
-For more information about this application, please refer to [**pocket_sdr.py help**](/doc/pocket_sdr_help.pdf).
+For more information about this application, please refer to [**pocket_sdr.py help**](https://github.com/tomojitakasu/PocketSDR/blob/master/doc/pocket_sdr_help.pdf).
 
 --------------------------------------------------------------------------------
 
@@ -531,6 +549,7 @@ $ pocket_trk.py ch2.bin -f 12 -sig E6B -prn 4 -log trk.log -p -ts 0.2
 <img src="image/image007.jpg" width=49%>
 
 --------------------------------------------------------------------------------
+<div class="pagebreak"></div>
 
 ## **Export Control Notice**
 
@@ -553,6 +572,7 @@ military, weapons of mass destruction (WMD), or delivery system development
 purposes, is prohibited.
 
 --------------------------------------------------------------------------------
+<div class="pagebreak"></div>
 
 ## **References**
 
@@ -565,6 +585,7 @@ purposes, is prohibited.
 [4] *RTCM 10403.4 with Amendment 1: Differential GNSS (Global Navigation Satellite Systems) Service - Version 3*, Radio Technical Commission for Maritime Services, November 1, 2024
 
 --------------------------------------------------------------------------------
+<div class="pagebreak"></div>
 
 ## **History**
 
@@ -582,7 +603,7 @@ purposes, is prohibited.
 - **2024-05-28 (v0.12)**: Performance optimizations. Added support for PVT generation, RTCM3, and NMEA outputs.
 - **2024-07-04 (v0.13)**: Added GUI-based GNSS SDR receiver AP. Added support for macOS and Raspberry Pi OS.
 - **2025-03-21 (v0.14)**: Added Pocket SDR FE 8CH. Fixed various issues.
-- **2026-05-02 (v0.15b)**: Added antenna array calibration (per-epoch EKF on
+- **2026-05-12 (v0.15)**: Added antenna array calibration (per-epoch EKF on
   single-difference carrier-phase residuals) and digital beam-forming. Added
   LUT-based array combine (~2x throughput at narch=8). Added GUI Array tab
   with calibration / beam control and gain pattern overlay. Added Galileo
