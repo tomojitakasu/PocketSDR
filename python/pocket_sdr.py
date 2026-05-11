@@ -1781,35 +1781,34 @@ def array_page_new(parent):
     p.btn_clear.pack(side=RIGHT)
     p.btn_calib = ttk.Button(p.toolbar, width=7, text='Start')
     p.btn_calib.pack(side=RIGHT)
-    ttk.Label(p.toolbar, text='Calibration').pack(side=RIGHT, padx=2)
     p.mode_var = StringVar(value='Both')
     p.mode_box = ttk.Combobox(p.toolbar, width=5, state='readonly',
-        values=['Both', 'Bias', 'RPY'], textvariable=p.mode_var,
+        values=['Both', 'Delay', 'Att'], textvariable=p.mode_var,
         justify=CENTER, font=get_font())
-    p.mode_box.pack(side=RIGHT, padx=(0, 8))
-    ttk.Label(p.toolbar, text='Mode').pack(side=RIGHT, padx=(0, 2))
+    p.mode_box.pack(side=RIGHT)
+    ttk.Label(p.toolbar, text='Calibration').pack(side=RIGHT, padx=2)
     panel1 = Frame(p.panel, bg=BG_COLOR1)
     panel1.pack(expand=1, fill=BOTH)
+    panel2 = Frame(panel1, relief=SOLID, bd=1, bg=BG_COLOR1)
+    panel2.pack(fill=X, padx=10, pady=4)
+    ttk.Label(panel2, text='RF CH DELAY', font=get_font(1, 'bold')).pack(pady=4)
+    p.txt_bias = Label(panel2, font=get_font(), bg=BG_COLOR1)
+    p.txt_bias.pack(padx=10, pady=(6, 16))
     panel3 = Frame(panel1, relief=SOLID, bd=1, bg=BG_COLOR1)
     panel3.pack(fill=X, padx=10, pady=4)
     ttk.Label(panel3, text='ARRAY ATTITUDE', font=get_font(1, 'bold')).pack(pady=4)
     p.txt_att = Label(panel3, font=get_font(), bg=BG_COLOR1)
     p.txt_att.pack(padx=10, pady=(6, 16))
     panel4 = Frame(panel1, relief=SOLID, bd=1, bg=BG_COLOR1)
-    panel4.pack(fill=X, padx=10, pady=4)
-    ttk.Label(panel4, text='RF CH DELAY', font=get_font(1, 'bold')).pack(pady=4)
-    p.txt_bias = Label(panel4, font=get_font(), bg=BG_COLOR1)
-    p.txt_bias.pack(padx=10, pady=(6, 16))
-    panel5 = Frame(panel1, relief=SOLID, bd=1, bg=BG_COLOR1)
-    panel5.pack(expand=1, fill=BOTH, padx=10, pady=4)
-    ttk.Label(panel5, text='ARRAY CH BEAM DIRECTION', font=get_font(1, 'bold')).pack(pady=4)
+    panel4.pack(expand=1, fill=BOTH, padx=10, pady=4)
+    ttk.Label(panel4, text='ARRAY CH BEAM DIRECTION', font=get_font(1, 'bold')).pack(pady=4)
     p.beam_az = [StringVar() for i in range(MAX_ARCH)]
     p.beam_el = [StringVar() for i in range(MAX_ARCH)]
     p.beam_panel = []
     for i in range(MAX_ARCH):
         p.beam_az[i].set('0.000')
         p.beam_el[i].set('90.000')
-        p.beam_panel.append(gen_beam_dirs(panel5, p, i))
+        p.beam_panel.append(gen_beam_dirs(panel4, p, i))
     p.btn_calib.bind('<Button-1>', lambda e: on_array_calib_toggle(e, p))
     p.btn_clear.bind('<Button-1>', lambda e: on_array_calib_clear(e, p))
     p.btn_load.bind('<Button-1>', lambda e: on_array_calib_load(e, p))
@@ -1818,7 +1817,7 @@ def array_page_new(parent):
     return p
 
 # array calibration mode lookup ------------------------------------------------
-ARRAY_MODES = {'Both': 0, 'Bias': 1, 'RPY': 2}
+ARRAY_MODES = {'Both': 0, 'Delay': 1, 'Att': 2}
 
 # Array page mode change callback ----------------------------------------------
 def on_array_mode_change(e, p):
