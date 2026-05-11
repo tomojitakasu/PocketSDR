@@ -18,7 +18,7 @@
 //  2024-05-28  1.10 update constants, types and APIs
 //  2024-07-01  1.11 import pocket_dev.h
 //  2024-08-26  1.12 update types and APIs
-//  2026-05-02  1.13 ver.0.15
+//  2026-05-10  1.13 ver.0.15
 //
 #ifndef POCKET_SDR_H
 #define POCKET_SDR_H
@@ -42,7 +42,7 @@ extern "C" {
 
 // constants and macros ------------------------------------------------------
 #define SDR_LIB_NAME   "Pocket SDR" // library name
-#define SDR_LIB_VER    "0.15b"  // library version
+#define SDR_LIB_VER    "0.15"   // library version
 #define SDR_MAX_RFCH   8        // max number of RF channels
 #define SDR_MAX_ARCH   8        // max number of array channels
 #define SDR_MAX_BUFF   (SDR_MAX_RFCH+SDR_MAX_ARCH) // max number of IF buffer
@@ -55,11 +55,11 @@ extern "C" {
 #define SDR_MAX_DATA   4096     // max length of navigation data
 #define SDR_N_CORRX    101      // number of additional correlators
 #define SDR_MAX_CORR   (6+SDR_N_CORRX) // max number of correlators
-#define SDR_N_HIST     5000     // number of P correlator history 
+#define SDR_N_HIST     5000     // number of P correlator history
 #define SDR_N_CODES    10       // number of resampled code bank
 #define SDR_CSCALE    (1/11.2f) // carrier scale (max(IQ)*sqrt(2)/scale<=127)
 #define SDR_CYC        1e-3     // IF data processing cycle (s)
-#define PI 3.1415926535897932   // pi 
+#define PI 3.1415926535897932   // pi
 
 #define SDR_DEV_FILE   1        // SDR device: file
 #define SDR_DEV_USB    2        // SDR device: Pocket SDR FE
@@ -242,6 +242,8 @@ typedef struct {                // SDR IF data statistics
     double rate, sum;           // IF data rate (MB/s) and total size (MB)
     double buff_use;            // IF data buffer usage (%)
     double sum_sq[2];           // accumulators {sum, sum-of-squares}
+    double sum_iq[2];           // CS16 accumulators {sum I, sum Q}
+    double sumsq_iq[2];         // CS16 accumulators {sum-of-squares I, Q}
     int cnt;                    // sample count for stats
 } sdr_stats_t;
 
