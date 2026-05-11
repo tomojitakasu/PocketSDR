@@ -5,7 +5,7 @@
 # Pocket SDR C Library API Reference
 
 <div style="text-align: right;">
-<strong>ver.0.15b  2026-05-01</strong>
+<strong>ver.0.15  2026-05-12</strong>
 </div>
 
 ---
@@ -83,8 +83,7 @@ This API reference describes the **Pocket SDR** C library (`libsdr`). The librar
   - `SDR_MAX_NCH` (1500): maximum number of receiver channels.
   - `SDR_MAX_NSYM` (2000): maximum nav symbol buffer length.
   - `SDR_MAX_DATA` (4096): maximum nav data buffer length.
-  - `SDR_N_CORRX` (81): number of additional (extra) correlators.
-  - `SDR_W_CORRX` (4.0e-6 s): width of additional correlators.
+  - `SDR_N_CORRX` (101): number of additional (extra) correlators.
   - `SDR_MAX_CORR` (`6+SDR_N_CORRX`): total correlators per channel.
   - `SDR_N_HIST` (5000): P-correlator history length.
   - `SDR_N_CODES` (10): resampled code bank size.
@@ -132,6 +131,12 @@ This API reference describes the **Pocket SDR** C library (`libsdr`). The librar
 
 - **FFT direction**
   - `SDR_FFT_FORWARD` (0), `SDR_FFT_BACKWARD` (1).
+<br><br>
+
+- **Array calibration modes** (`sdr_array_t.calib_mode`)
+  - `SDR_CALIB_BOTH` (0): estimate attitude + biases.
+  - `SDR_CALIB_BIAS` (1): estimate biases only (rpy held at 0).
+  - `SDR_CALIB_RPY` (2): estimate attitude only (biases held).
 <br><br>
 
 - **Packed complex helpers** (4-bit I + 4-bit Q in a single byte)
@@ -218,15 +223,15 @@ This API reference describes the **Pocket SDR** C library (`libsdr`). The librar
 <br><br>
 
 - `sdr_arch_t`
-  - Per-array-CH beam state: azimuth/elevation, scale (`<= 0` disables this beam), and quantized weight buffer `w[SDR_MAX_RFCH*2]` of int16 Q8 values `[Re_0, Im_0, Re_1, Im_1, ...]`.
+  - Per-array-CH beam state: azimuth/elevation, scale (`<= 0` disables this beam), quantized weight buffer `w[SDR_MAX_RFCH*2]` of int16 Q8 values `[Re_0, Im_0, Re_1, Im_1, ...]`, and a per-RF-CH `LUT[SDR_MAX_RFCH][256]` of `sdr_cpx64_t` precomputed by `sdr_arch_set_beam()` so the IF combine path is a pure LUT-add per sample.
 <br><br>
 
 - `sdr_array_t`
-  - Antenna array state: frequency index, RF-CH count (`nrfch`), per-element enable flags and body-frame positions, calibration run flag and epoch count, EKF state `x[3+SDR_MAX_RFCH]` = {roll, pitch, yaw, bias_1..bias_n} and covariance `P`, RMS. Self-contained — no back-pointer to receiver. The number of array channels (`narch`) and per-array-CH beam states (`arch[]`) live in `sdr_rcv_t`.
+  - Antenna array state: frequency index, RF-CH count (`nrfch`), per-element enable flags and body-frame positions, calibration run flag, calibration mode (`SDR_CALIB_*`), epoch count, EKF state `x[3+SDR_MAX_RFCH]` = `{roll, pitch, yaw, bias_0..bias_{nrfch-1}}` (with `bias_0` held at 0 as the reference tie-down) and covariance `P`, RMS. Self-contained — no back-pointer to receiver. The number of array channels (`narch`) and per-array-CH beam states (`arch[]`) live in `sdr_rcv_t`.
 <br><br>
 
 - `sdr_rcv_t`
-  - SDR receiver state: run flag, device type/pointer, IF data format / sampling rate / buffer length / channel counts (`nch`, `nrfch`, `narch`), current search channel, IF cycle count, per-RF-CH config (`rfch[]`), per-array-CH beam state (`arch[]`), per-CH IF buffers (RF + array), channel threads, optional `sdr_array_t`, `sdr_pvt_t`, IF data statistics, output streams (NMEA, RTCM3 obs, RTCM3 nav, IF data log), receiver start time (UTC), file replay scale, options string, IF data thread, and mutex.
+  - SDR receiver state: run flag, device type/pointer, IF data format / sampling rate / buffer length / channel counts (`nch`, `nrfch`, `narch`), current search channel, IF cycle count, per-RF-CH config (`rfch[]`), per-array-CH beam state (`arch[]`), per-CH IF buffers (RF + array), channel threads, optional `sdr_array_t`, `sdr_pvt_t`, IF data statistics, output streams `strs[4]` = {NMEA PVT, RTCM3 OBS+NAV, log, IF data log}, receiver start time (UTC), file replay scale, options string, IF data thread, and mutex.
 <br><br>
 
 
@@ -851,17 +856,6 @@ GNSS spreading-code generators and resampling: GPS L1/L2/L5, Galileo E1/E5a/E5b/
 - **Return**: pointer to internal code (read-only); NULL on invalid input
 <br><br>
 
-**`int sdr_gen_code_cpx(const char *sig, int prn, int8_t **code_I, int8_t **code_Q, int *N)`**
-<br>
-- **Description**: Return I/Q components for complex pilot+data signals (e.g., L5, E5).
-- **Return**: 1 on success, 0 on error
-<br><br>
-
-**`int sdr_gen_code_cpx_sec(const char *sig, int prn, int sec, int8_t **code_I, int8_t **code_Q, int *N)`**
-<br>
-- **Description**: Same as above but applies the secondary code at index `sec` (e.g., 0/1).
-<br><br>
-
 **`int8_t *sdr_sec_code(const char *sig, int prn, int *N)`**
 <br>
 - **Description**: Return the secondary code for `(sig, prn)` and its length in `*N`.
@@ -893,34 +887,14 @@ GNSS spreading-code generators and resampling: GPS L1/L2/L5, Galileo E1/E5a/E5b/
 - **Description**: Return BOC modulation order (e.g., 1 for BOC(1,1)) or 0 for BPSK.
 <br><br>
 
-**`int sdr_sig_cpx(const char *sig)`**
+**`void sdr_res_code(const int8_t *code_I, const int8_t *code_Q, int len_code, double T, double coff, double fs, int N, int Nz, sdr_cpx16_t *code_res)`**
 <br>
-- **Description**: 1 if the signal has complex spreading (pilot+data), 0 otherwise.
+- **Description**: Resample a spreading code at sample rate `fs` with code offset `coff`, length-`N` output and `Nz` zero-padding. Pass `code_Q = NULL` for real (BPSK) codes; non-NULL for complex (I+Q) codes.
 <br><br>
 
-**`int sdr_sig_e5abq(const char *sig)`**
+**`void sdr_gen_code_fft(const int8_t *code_I, const int8_t *code_Q, int len_code, double T, double coff, double fs, int N, int Nz, sdr_cpx_t *code_fft)`**
 <br>
-- **Description**: 1 if the signal is Galileo E5 AltBOC (E5abQ); 0 otherwise.
-<br><br>
-
-**`void sdr_res_code(const int8_t *code, int len_code, double T, double coff, double fs, int N, int Nz, sdr_cpx16_t *code_res)`**
-<br>
-- **Description**: Resample a real spreading code at sample rate `fs` with code offset `coff`, length-`N` output and `Nz` zero-padding.
-<br><br>
-
-**`void sdr_res_code_cpx(const int8_t *code_I, const int8_t *code_Q, int len_code, double T, double coff, double fs, int N, int Nz, sdr_cpx16_t *code_res)`**
-<br>
-- **Description**: Same as above for a complex (I+Q) code.
-<br><br>
-
-**`void sdr_gen_code_fft(const int8_t *code, int len_code, double T, double coff, double fs, int N, int Nz, sdr_cpx_t *code_fft)`**
-<br>
-- **Description**: Resample a real code and produce its conjugate FFT (matched filter spectrum) of length `N` for use with `sdr_search_code()`.
-<br><br>
-
-**`void sdr_gen_code_fft_cpx(const int8_t *code_I, const int8_t *code_Q, int len_code, double T, double coff, double fs, int N, int Nz, sdr_cpx_t *code_fft)`**
-<br>
-- **Description**: Same as above for a complex code.
+- **Description**: Resample a code and produce its conjugate FFT (matched-filter spectrum) of length `N` for use with `sdr_search_code()`. `code_Q = NULL` for real codes.
 <br><br>
 
 
@@ -957,12 +931,12 @@ Per-signal baseband channel: signal acquisition (FFT search → fine Doppler), t
   - ix: read pointer (samples)
 <br><br>
 
-**`void sdr_ch_set_corr(sdr_ch_t *ch, int nposx)`**
+**`void sdr_ch_set_corr(sdr_ch_t *ch, int nposx, double width)`**
 <br>
-- **Description**: Configure the number of extra correlator positions (0..`SDR_N_CORRX`) used for diagnostics.
+- **Description**: Configure the extra correlators used for diagnostics: `nposx` positions (0..`SDR_N_CORRX`) spanning a total width of `width` seconds (centered on the prompt).
 <br><br>
 
-**`int sdr_ch_corr_stat(sdr_ch_t *ch, double *stat, double *pos, sdr_cpx_t *C, double *P)`**
+**`int sdr_ch_corr_stat(sdr_ch_t *ch, double *stat, double *pos, sdr_cpx_t *C, double *P, double *I)`**
 <br>
 - **Description**: Snapshot the current correlator state.
 - **Arguments**:
@@ -970,6 +944,7 @@ Per-signal baseband channel: signal acquisition (FFT search → fine Doppler), t
   - pos: correlator positions (chips)
   - C: complex correlator outputs
   - P: P-correlator history (length `SDR_N_HIST`)
+  - I: data-wipe-off accumulator (`I·sign(IP)` averages, length = correlator count)
 - **Return**: 1 on success, 0 if channel is idle
 <br><br>
 
@@ -1175,6 +1150,12 @@ Antenna-array calibration and beam-forming. Calibration uses a per-epoch EKF ove
 - **Return**: 1 on success, 0 on error
 <br><br>
 
+**`int sdr_array_set_mode(sdr_array_t *array, int mode)`**
+<br>
+- **Description**: Select what the EKF estimates: `SDR_CALIB_BOTH` (rpy + bias), `SDR_CALIB_BIAS` (bias only, rpy clamped to 0), or `SDR_CALIB_RPY` (rpy only, bias frozen).
+- **Return**: 1 on success, 0 on error
+<br><br>
+
 **`int sdr_array_set(sdr_array_t *array, const double *rpy, const double *bias)`**
 <br>
 - **Description**: Set calibration values into the EKF state and re-seed the covariance.
@@ -1194,6 +1175,30 @@ Antenna-array calibration and beam-forming. Calibration uses a per-epoch EKF ove
 **`void sdr_array_calib(sdr_array_t *array, const obsd_t *obs, int nobs, const nav_t *nav, const double *rr)`**
 <br>
 - **Description**: Per-epoch calibration driver. When the run flag is set and `obs`/`rr` are valid, runs one EKF init or update step and increments the epoch counter on success.
+<br><br>
+
+**`int sdr_array_save(sdr_array_t *array, const char *file)`**
+<br>
+- **Description**: Snapshot the current EKF state (rpy + per-CH biases) into `file` in the text format consumed by `sdr_array_load()` / `pocket_trk -opt`. Returns 0 (no write) when no calibration data has been produced yet.
+- **Return**: 1 on success, 0 on error / nothing to save
+<br><br>
+
+**`int sdr_array_load(sdr_array_t *array, const char *file)`**
+<br>
+- **Description**: Load attitude and per-CH biases from `file` and inject them into the EKF state, re-seeding the covariance.
+- **Return**: 1 on success, 0 on error
+<br><br>
+
+**`int sdr_array_geom_save(const char *file, const double *ant_pos, int n)`**
+<br>
+- **Description**: Write `n` body-frame antenna positions (`ant_pos`, row-major `n*3` doubles, m) to `file` as a text geometry file (one `x y z` per line). The first row must be `0 0 0` (CH1 reference).
+- **Return**: 1 on success, 0 on error
+<br><br>
+
+**`int sdr_array_geom_load(const char *file, double *ant_pos, int max_ant)`**
+<br>
+- **Description**: Read up to `max_ant` antenna positions from `file` into `ant_pos` (row-major `max_ant*3`).
+- **Return**: number of antenna positions read, 0 on error
 <br><br>
 
 **`void sdr_arch_free(sdr_arch_t *arch)`**
@@ -1241,7 +1246,7 @@ Antenna-array calibration and beam-forming. Calibration uses a per-epoch EKF ove
 ---
 
 ### Overview
-Top-level receiver lifecycle and state queries. A receiver wraps a front-end (USB / SoapySDR / file / stream), an IF data thread that demuxes raw samples into per-RF-CH `sdr_buff_t`s, multiple `sdr_ch_t` channel threads driving acquisition / tracking / nav decoding, an `sdr_pvt_t` for solutions, an optional `sdr_array_t`, and four output streams (NMEA, RTCM3 obs, RTCM3 nav, IF data log).
+Top-level receiver lifecycle and state queries. A receiver wraps a front-end (USB / SoapySDR / file / stream), an IF data thread that demuxes raw samples into per-RF-CH `sdr_buff_t`s, multiple `sdr_ch_t` channel threads driving acquisition / tracking / nav decoding, an `sdr_pvt_t` for solutions, an optional `sdr_array_t`, and four output streams: NMEA PVT solutions, RTCM3 OBS+NAV (single combined stream), event/trace log, and raw IF data log.
 <br>
 
 ### Receiver Options String
@@ -1288,7 +1293,7 @@ Top-level receiver lifecycle and state queries. A receiver wraps a front-end (US
   - rcv: receiver
   - dev: device type
   - dp: device pointer (matching `dev`: `sdr_dev_t*`, `sdr_sdev_t*`, `FILE*`, or `stream_t*`)
-  - paths: 4-element array of output stream paths (NULL/"" disables a slot): NMEA, RTCM3 obs, RTCM3 nav, IF data log
+  - paths: 4-element array of output stream paths (NULL/"" disables a slot): `[0]` NMEA PVT, `[1]` RTCM3 OBS+NAV, `[2]` log, `[3]` IF data log
 - **Return**: 1 on success, 0 on error
 <br><br>
 
@@ -1340,7 +1345,7 @@ Top-level receiver lifecycle and state queries. A receiver wraps a front-end (US
 
 **`void sdr_rcv_str_stat(sdr_rcv_t *rcv, int *stat)`**
 <br>
-- **Description**: Get per-output-stream connection state into `stat[0..3]` (NMEA, RTCM3 obs, RTCM3 nav, IF data log).
+- **Description**: Get per-output-stream connection state into `stat[0..3]` (`[0]` NMEA, `[1]` RTCM3 OBS+NAV, `[2]` log, `[3]` IF data log).
 <br><br>
 
 **`int sdr_rcv_sat_stat(sdr_rcv_t *rcv, const char *sat, char *buff, int size)`**
@@ -1362,14 +1367,14 @@ Top-level receiver lifecycle and state queries. A receiver wraps a front-end (US
 - **Return**: number of bytes written
 <br><br>
 
-**`void sdr_rcv_sel_ch(sdr_rcv_t *rcv, int ch)`**
+**`void sdr_rcv_sel_ch(sdr_rcv_t *rcv, int ch, double width)`**
 <br>
-- **Description**: Select the channel currently shown in correlator views (0 = none).
+- **Description**: Select the channel currently shown in correlator views (`ch` 1-indexed, 0 = none) and configure its extra-correlator span (`width` seconds, total). Internally drives `sdr_ch_set_corr()`.
 <br><br>
 
-**`int sdr_rcv_corr_stat(sdr_rcv_t *rcv, int ch, double *stat, double *pos, sdr_cpx_t *C, double *P)`**
+**`int sdr_rcv_corr_stat(sdr_rcv_t *rcv, int ch, double *stat, double *pos, sdr_cpx_t *C, double *P, double *I)`**
 <br>
-- **Description**: Snapshot correlator state for channel `ch` (1-indexed). Returns 1 on success.
+- **Description**: Snapshot correlator state for channel `ch` (1-indexed). `stat`, `pos`, `C`, `P`, and `I` follow the same layout as `sdr_ch_corr_stat()`. Returns 1 on success.
 <br><br>
 
 **`int sdr_rcv_corr_hist(sdr_rcv_t *rcv, int ch, double tspan, double *stat, sdr_cpx_t *P)`**
@@ -1444,6 +1449,12 @@ Top-level receiver lifecycle and state queries. A receiver wraps a front-end (US
 - **Return**: 1 on success, 0 on error
 - **Notes**:
   - To inject saved calibration values, use `sdr_rcv_array_load()`.
+<br><br>
+
+**`int sdr_rcv_array_set_mode(sdr_rcv_t *rcv, int mode)`**
+<br>
+- **Description**: Receiver-level wrapper for `sdr_array_set_mode()`. Selects what the calibration EKF estimates (`SDR_CALIB_BOTH` / `SDR_CALIB_BIAS` / `SDR_CALIB_RPY`).
+- **Return**: 1 on success, 0 on error
 <br><br>
 
 **`int sdr_rcv_array_save(sdr_rcv_t *rcv, const char *file)`**

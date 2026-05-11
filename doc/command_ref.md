@@ -5,28 +5,94 @@
 # Pocket SDR Command Reference
 
 <div style="text-align: right;">
-<strong>ver.0.15b  2026-05-09</strong>
+<strong>ver.0.15  2026-05-12</strong>
 </div>
 
 ---
 
 ## Table of Contents
 
-- [pocket_scan](#sec-pocket_scan)
-- [pocket_conf](#sec-pocket_conf)
-- [pocket_dump](#sec-pocket_dump)
-- [pocket_acq](#sec-pocket_acq)
-- [pocket_trk](#sec-pocket_trk)
-- [pocket_snap](#sec-pocket_snap)
-- [pocket_calib](#sec-pocket_calib)
-- [convbin](#sec-convbin)
-- [str2str](#sec-str2str)
+- [Signal ID](#sec-signal-id)
+- [pocket_scan](#sec-pocket_scan) - Scan and list USB devices
+- [pocket_conf](#sec-pocket_conf) - Configure Pocket SDR FE device registers
+- [pocket_dump](#sec-pocket_dump) - Capture digital IF data from Pocket SDR FE
+- [pocket_acq](#sec-pocket_acq) - GNSS signal acquisition from IF data
+- [pocket_trk](#sec-pocket_trk) - GNSS signal tracking, nav decoding, and PVT generation
+- [pocket_snap](#sec-pocket_snap) - Snapshot positioning from IF data
+- [pocket_calib](#sec-pocket_calib) - Antenna array attitude and per-CH bias calibration
+- [convbin](#sec-convbin) - Convert receiver logs / RTCM streams to RINEX
+- [str2str](#sec-str2str) - Stream converter / forwarder (RTKLIB-derived)
+
+
+<div class="pagebreak"></div>
+<a id="sec-signal-id"></a>
+
+## Signal ID
+
+GNSS signals supported by Pocket SDR and the corresponding string IDs used with the `-sig` option of `pocket_trk`, `pocket_acq`, `pocket_snap`, and related Python scripts.
+
+### Table 1. Pocket SDR Signal IDs
+
+| System | Signal | Signal ID |
+|---|---|---|
+| **GPS** | L1C/A | `L1CA` |
+| | L1C-D | `L1CD` |
+| | L1C-P | `L1CP` |
+| | L2C-M | `L2CM` |
+| | L5-I | `L5I` |
+| | L5-Q | `L5Q` |
+| **GLONASS** | L1C/A (L1OF) | `G1CA` |
+| | L2C/A (L2OF) | `G2CA` |
+| | L1OCd | `G1OCD` |
+| | L1OCp | `G1OCP` |
+| | L2OCp | `G2OCP` |
+| | L3OCd | `G3OCD` |
+| | L3OCp | `G3OCP` |
+| **Galileo** | E1-B | `E1B` |
+| | E1-C | `E1C` |
+| | E5a-I | `E5AI` |
+| | E5a-Q | `E5AQ` |
+| | E5b-I | `E5BI` |
+| | E5b-Q | `E5BQ` |
+| | E5 AltBOC (Q) | `E5ABQ` |
+| | E6-B | `E6B` |
+| | E6-C | `E6C` |
+| **QZSS** | L1C/A | `L1CA` |
+| | L1C/B | `L1CB` |
+| | L1C-D | `L1CD` |
+| | L1C-P | `L1CP` |
+| | L1S | `L1S` |
+| | L2C-M | `L2CM` |
+| | L5-I | `L5I` |
+| | L5-Q | `L5Q` |
+| | L5S-I | `L5SI` / `L5SIV`<sup>*1</sup> |
+| | L5S-Q | `L5SQ` / `L5SQV`<sup>*1</sup> |
+| | L6D | `L6D` |
+| | L6E | `L6E` |
+| **BeiDou** | B1I | `B1I` |
+| | B1C-D | `B1CD` |
+| | B1C-P | `B1CP` |
+| | B2a-D | `B2AD` |
+| | B2a-P | `B2AP` |
+| | B2I | `B2I` |
+| | B2b-I | `B2BI` |
+| | B3I | `B3I` |
+| **NavIC** | L1-SPS-D | `I1SD` |
+| | L1-SPS-P | `I1SP` |
+| | L5-SPS | `I5S` |
+| | S-SPS | `ISS`<sup>*2</sup> |
+| **SBAS** | L1C/A | `L1CA` |
+| | L5-I | `L5I` |
+| | L5-Q | `L5Q` |
+
+<sup>*1</sup> QZSS L5S verification mode signals.
+<sup>*2</sup> Pocket SDR FE currently does not support S-band signals; `ISS` is provided for software-only use with externally captured IF data.
 
 
 <div class="pagebreak"></div>
 <a id="sec-pocket_scan"></a>
 
-## pocket_scan
+## pocket_scan - Scan and list USB devices
 
 ---
 <br>
@@ -50,7 +116,7 @@ Scan and list USB devices visible to the host. On Windows the Cypress CyAPI libr
 <div class="pagebreak"></div>
 <a id="sec-pocket_conf"></a>
 
-## pocket_conf
+## pocket_conf - Configure Pocket SDR FE device registers
 
 ---
 <br>
@@ -107,7 +173,7 @@ Hexadecimal form:
 <div class="pagebreak"></div>
 <a id="sec-pocket_dump"></a>
 
-## pocket_dump
+## pocket_dump - Capture digital IF data from Pocket SDR FE
 
 ---
 <br>
@@ -147,7 +213,7 @@ Capture and dump digital IF (DIF) data from a Pocket SDR FE device to one output
 <div class="pagebreak"></div>
 <a id="sec-pocket_acq"></a>
 
-## pocket_acq
+## pocket_acq - GNSS signal acquisition from IF data
 
 ---
 <br>
@@ -190,8 +256,6 @@ If a tag file `<file>.tag` exists alongside the input, the IF format, sampling f
   - FFTW wisdom file. [`../python/fftw_wisdom.txt`]
 - `-v`
   - Print version and exit.
-- `-h`
-  - Show usage and exit.
 - `file`
   - Input digital IF data file. The format is a series of `int8_t` (I-sampling) or interleaved `int8_t` (IQ-sampling), unless overridden by the tag file.
 
@@ -199,7 +263,7 @@ If a tag file `<file>.tag` exists alongside the input, the IF format, sampling f
 <div class="pagebreak"></div>
 <a id="sec-pocket_trk"></a>
 
-## pocket_trk
+## pocket_trk - GNSS signal tracking, nav decoding, and PVT generation
 
 ---
 <br>
@@ -212,7 +276,7 @@ pocket_trk [-sig sig -prn prn[,...] [-rfch ch[,...]] ...]
            [-f freq] [-fo freq[,...]] [-IQ {1|2}[,...]] [-bits {2|3}[,...]]
            [-toff toff] [-tscale scale] [-ti tint]
            [-p bus[,port]] [-c conf_file]
-           [-driver name] [-gain gain] [-bw bw]
+           [-driver name] [-gain gain] [-bw bw] [-fd dopp]
            [-log path] [-nmea path] [-rtcm path] [-raw path]
            [-h height] [-opt file] [-debug file] [-v] [file]
 ```
@@ -254,6 +318,8 @@ The input can be a local file, a TCP stream, a Pocket SDR FE device, or a SoapyS
   - SoapySDR overall gain in dB.
 - `-bw bw`
   - SoapySDR analog filter bandwidth in MHz.
+- `-fd dopp`
+  - Maximum Doppler frequency to search signals in Hz. Overrides the `max_dop` key in `-opt file` if both are given. [from `-opt file` or default `5000`]
 - `-log path`
   - Output stream path for the tracking log (observation, navigation, PVT, events). The stream path is one of:
     - `(1)` local file path without `:`. Time keywords (`%Y`, `%m`, `%d`, `%h`, `%M`) are expanded as in RTKLIB streams.
@@ -280,7 +346,7 @@ The input can be a local file, a TCP stream, a Pocket SDR FE device, or a SoapyS
 <div class="pagebreak"></div>
 <a id="sec-pocket_snap"></a>
 
-## pocket_snap
+## pocket_snap - Snapshot positioning from IF data
 
 ---
 <br>
@@ -332,7 +398,7 @@ Snapshot positioning from a digitized IF data file. The command searches GNSS si
 <div class="pagebreak"></div>
 <a id="sec-pocket_calib"></a>
 
-## pocket_calib
+## pocket_calib - Antenna array attitude and per-CH bias calibration
 
 ---
 <br>
@@ -370,7 +436,7 @@ Estimate antenna-array hardware delays (per-element bias relative to CH1) and ar
 <div class="pagebreak"></div>
 <a id="sec-convbin"></a>
 
-## convbin
+## convbin - Convert receiver logs / RTCM streams to RINEX
 
 ---
 <br>
@@ -396,11 +462,11 @@ The full option list is long; only the most-used options are summarized below. F
 - `-ts y/m/d h:m:s`, `-te y/m/d h:m:s`, `-ti tint`
   - Start time, end time, observation interval (s).
 - `-f n`
-  - Number of frequencies to output. [`3`]
-- `-y sys`
-  - System selection (`G`/`R`/`E`/`J`/`S`/`C`/`I`).
-- `-mask code,...`
-  - Signal/code masks (`G:1C+5Q`, ...).
+  - Number of signal frequencies to output (1..5 → L1..L5). [`5`]
+- `-y sys[,...]`
+  - Excluded systems, comma-separated (`G`/`R`/`E`/`J`/`S`/`C`/`I`).
+- `-mask sig[,...]`
+  - Signal/code masks. Each `sig` is `<sys>L<code>` (e.g. `GL1C`, `EL1B`, `JL2X`). `-nomask` clears specific masks.
 - `-o file`, `-n file`, `-g file`, `-h file`, `-q file`, `-l file`, `-b file`, `-i file`, `-s file`
   - Output file paths for OBS, GPS NAV, GLO NAV, SBAS NAV, QZS NAV, GAL NAV, BDS NAV, NavIC NAV, and SBAS message files.
 - `-d dir`
@@ -422,7 +488,7 @@ The full option list is long; only the most-used options are summarized below. F
 <div class="pagebreak"></div>
 <a id="sec-str2str"></a>
 
-## str2str
+## str2str - Stream converter / forwarder (RTKLIB-derived)
 
 ---
 <br>
@@ -447,7 +513,7 @@ The full option list is long; only the most-used options are summarized below. F
 - `ntrip://[user[:passwd]@]addr[:port][/mntpnt]`
 - `ntrips://[:passwd@]addr[:port]/mntpnt[:str]` (output only)
 - `ntripc://[user:passwd@][:port]/mntpnt[:str]` (output only, caster)
-- `[file://]path[::T][::+start][::xseppd][::S=swap]`
+- `[file://]path[::T][::+start][::x<speed>][::S=swap]` (file; `T` = time-tag mode, `+start` = start offset (s), `x<speed>` = replay speed, `S=swap` = swap interval (h))
 
 ### Format Tags
 
