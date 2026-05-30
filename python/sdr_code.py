@@ -44,6 +44,8 @@
 #      Service Navigation Signal in L2 frequency band Edition 1.0, 2016
 #  [21] IS-QZSS-L1S-007, Quasi-Zenith Satellite System Interface Specification
 #      Sub-meter Level Augmentation Service, April 18, 2024
+#  [22] Galileo Open Service Signal In Space Interface Control Document -
+#      Issue 2.2, November 2025
 #
 #  Author:
 #  T.TAKASU
@@ -90,6 +92,7 @@ G2OCP      = {}
 G3OCD, G3OCP = {}, {}
 E1B , E1C  = {}, {}
 E5AI, E5AQ = {}, {}
+E5AQP      = {}
 E5BI, E5BQ = {}, {}
 E6B , E6C  = {}, {}
 B1I        = {}
@@ -405,6 +408,28 @@ E5AQ_X2_init = ( # PRN 1 - 50
     0o36270, 0o06600, 0o26773, 0o17375, 0o35267, 0o36255, 0o12044, 0o26442,
     0o21621, 0o25411)
 
+E5AQP_gen = ( # PRN 1 - 40 ([22])
+    (0x335A, 0x60A, 0x384), (0x146E, 0x1C8, 0x238),
+    (0x3876, 0x7AE, 0x4D4), (0x499A, 0x688, 0x064),
+    (0x3548, 0x2C0, 0x588), (0x052E, 0x504, 0x070),
+    (0x598C, 0x6E2, 0x530), (0x2E84, 0x064, 0x658),
+    (0x01F2, 0x298, 0x6E4), (0x3162, 0x134, 0x478),
+    (0x3E16, 0x148, 0x378), (0x2722, 0x712, 0x468),
+    (0x4E9E, 0x5EC, 0x1BC), (0x20CA, 0x046, 0x580),
+    (0x78FA, 0x74E, 0x6E0), (0x029E, 0x4D0, 0x4C0),
+    (0x3D78, 0x106, 0x770), (0x4990, 0x5C4, 0x00C),
+    (0x75D6, 0x034, 0x760), (0x03D6, 0x286, 0x20C),
+    (0x456A, 0x114, 0x49C), (0x3AE0, 0x48E, 0x658),
+    (0x4EBE, 0x2BE, 0x314), (0x7DB8, 0x67E, 0x7E4),
+    (0x1056, 0x5DE, 0x270), (0x0E76, 0x620, 0x300),
+    (0x401E, 0x63E, 0x1BC), (0x1DF2, 0x73E, 0x478),
+    (0x691E, 0x37E, 0x194), (0x25EE, 0x328, 0x668),
+    (0x4C08, 0x0A6, 0x3F8), (0x442C, 0x302, 0x580),
+    (0x0272, 0x37C, 0x450), (0x42C4, 0x7A6, 0x32C),
+    (0x25A2, 0x11A, 0x1D8), (0x5598, 0x4DE, 0x190),
+    (0x2DD6, 0x508, 0x658), (0x1D64, 0x3BA, 0x5C4),
+    (0x3E4C, 0x68E, 0x014), (0x7EC0, 0x60A, 0x5E8))
+
 E5BI_X2_init = ( # PRN 1 - 50
     0o07220, 0o26047, 0o00252, 0o17166, 0o14161, 0o02540, 0o01537, 0o26023,
     0o01725, 0o20637, 0o02364, 0o27731, 0o30640, 0o34174, 0o06464, 0o07676,
@@ -712,6 +737,8 @@ def gen_code(sig, prn):
         return gen_code_E5AI(prn)
     elif sig == 'E5AQ':
         return gen_code_E5AQ(prn)
+    elif sig == 'E5AQP':
+        return gen_code_E5AQP(prn)
     elif sig == 'E5BI':
         return gen_code_E5BI(prn)
     elif sig == 'E5BQ':
@@ -881,6 +908,8 @@ def code_cyc(sig):
        'E5BI', 'E5BQ', 'E6B', 'E6C', 'B1I', 'B2I', 'B2AD', 'B2AP', 'B2BI',
        'B3I', 'I5S', 'ISS'):
         return 1e-3
+    elif sig == 'E5AQP':
+        return 330 / 5.115e6
     elif sig == 'G1OCD':
         return 2e-3
     elif sig in ('L6D', 'L6E', 'E1B', 'E1C'):
@@ -914,6 +943,8 @@ def code_len(sig):
         'E5ABQ', 'E5BI', 'E5BQ', 'B1CD', 'B1CP', 'B2AD', 'B2AP', 'B2BI',
         'B3I', 'I1SD', 'I1SP'):
         return 10230
+    elif sig == 'E5AQP':
+        return 330
     elif sig == 'L2CL':
         return 767250
     elif sig in ('E6B', 'E6C'):
@@ -944,7 +975,7 @@ def sig_freq(sig):
     elif sig in ('L2CM', 'L2CL'):
         return 1227.60e6
     elif sig in ('L5I', 'L5Q', 'L5SI', 'L5SIV', 'L5SQ', 'L5SQV', 'E5AI', 'E5AQ',
-        'B2AD', 'B2AP', 'I5S'):
+        'E5AQP', 'B2AD', 'B2AP', 'I5S'):
         return 1176.45e6
     elif sig == 'E5ABQ':
         return 1191.795e6
@@ -1471,6 +1502,22 @@ def sec_code_E5AQ(prn):
     if prn < 1 or prn > 50:
        return NONE
     return read_code_hex(sdr_code_gal.CS100[prn-1], 100)
+
+# generate E5AQP code ([22]) ---------------------------------------------------
+def gen_code_E5AQP(prn):
+    if prn < 1 or prn > 40:
+        return NONE
+    N = 330
+    if prn not in E5AQP:
+        G = E5AQP_gen[prn-1]
+        code = np.zeros(N, dtype='int8')
+        for i in range(N):
+            # Short-code hex strings are MSB-first with zero padding at the end.
+            b = ((G[0] >> (15 - i % 15)) ^ (G[1] >> (11 - i % 11)) ^
+                 (G[2] >> (11 - i % 10))) & 1
+            code[i] = CHIP[b]
+        E5AQP[prn] = code
+    return E5AQP[prn]
 
 # generate E5BI code ([5]) -----------------------------------------------------
 def gen_code_E5BI(prn):
