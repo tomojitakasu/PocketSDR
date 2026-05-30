@@ -27,14 +27,16 @@ mpl.rcParams['font.size'] = 9
 # constants --------------------------------------------------------------------
 T_AQC = 0.010        # non-coherent integration time for acquisition (s)
 THRES_CN0 = 38.0     # threshold to lock (dB-Hz)
+T_QP_COH = 2e-3      # E5AQP coherent fold length (s) = 31 * 330/5.115e6
+NP_QP    = 660       # E5AQP folded grid size (2 bins per QP chip)
 ESC_COL = '\033[34m' # ANSI escape color = blue
 ESC_RES = '\033[0m'  # ANSI escape reset
 
 # show usage -------------------------------------------------------------------
 def show_usage():
     print('Usage: pocket_acq.py [-sig sig] [-prn prn[,...]] [-tint tint]')
-    print('       [-toff toff] [-f freq] [-fi freq] [-IQ] [-d freq] [-nz] [-np]')
-    print('       [-s] [-p] [-l] [-3d] file')
+    print('       [-toff toff] [-f freq] [-fi freq] [-IQ] [-fmt fmt] [-d freq]')
+    print('       [-nz] [-np] [-s] [-p] [-l] [-3d] file')
 
 # show signal type IDs ---------------------------------------------------------
 def show_sigid():
@@ -61,6 +63,7 @@ def show_sigid():
     print('       E1C    Galileo E1-C')
     print('       E5AI   Galileo E5a-I')
     print('       E5AQ   Galileo E5a-Q')
+    print('       E5AQP  Galileo E5a-QP (quasi-pilot, 330 chip / 64.5 us)')
     print('       E5BI   Galileo E5b-I')
     print('       E5BQ   Galileo E5b-Q')
     print('       E6B    Galileo E6-B')
@@ -108,6 +111,56 @@ def search_sig(sig, prn, data, fs, fi, max_dop, zero_pad):
     coffs = np.arange(N, dtype='float32') / fs
     dop = sdr_func.fine_dop(P.T[ix[1]], fds, ix[0])
     
+    return P / P_max, fds, coffs, ix, cn0, dop
+
+# search E5AQP signal (folded PCPS) --------------------------------------------
+def search_sig_qp(prn, data, fs, fi, max_dop, T_total):
+    Tq = 330 / 5.115e6
+    code = sdr_code.gen_code('E5AQP', prn)
+    if len(code) == 0:
+        return [], [0.0], [0.0], (0, 0), 0.0, 0.0
+
+    # build folded code replica on Np grid and its conjugated FFT
+    Np = NP_QP
+    code_res = np.zeros(Np, dtype='float32')
+    for i in range(Np):
+        code_res[i] = code[int(i * 330 / Np)]
+    code_fft = np.conj(np.fft.fft(code_res))
+
+    # one coherent fold = T_QP_COH; non-coherent count derived from T_total
+    Tcoh = T_QP_COH
+    N    = int(round(fs * Tcoh))
+    fds  = np.arange(-max_dop, max_dop + 0.5 / Tcoh, 0.5 / Tcoh)
+    nblk = max(1, int(len(data) // N))
+    if nblk * N > len(data):
+        nblk -= 1
+
+    # QP-period phase per raw sample (use absolute sample index; fs*Tq not integer)
+    n     = np.arange(N)
+
+    P = np.zeros((len(fds), Np), dtype='float32')
+    for b in range(nblk):
+        phase = ((b * N + n) / (fs * Tq)) % 1.0
+        p     = phase * Np
+        j     = p.astype(np.int64)
+        a     = (p - j).astype('float32')
+        j1    = (j + 1) % Np
+        w0    = (np.float32(1.0) - a)
+        w1    = a
+        for i, fd in enumerate(fds):
+            z = sdr_func.mix_carr(data, b * N, N, fs, fi + fd, 0.0)
+            zr, zi = z.real, z.imag
+            re = (np.bincount(j,  weights=w0 * zr, minlength=Np) +
+                  np.bincount(j1, weights=w1 * zr, minlength=Np))
+            im = (np.bincount(j,  weights=w0 * zi, minlength=Np) +
+                  np.bincount(j1, weights=w1 * zi, minlength=Np))
+            fold = (re + 1j * im).astype('complex64')
+            C = np.fft.ifft(np.fft.fft(fold) * code_fft)
+            P[i] += (C.real ** 2 + C.imag ** 2).astype('float32')
+
+    P_max, ix, cn0 = sdr_func.corr_max(P, Tcoh)
+    coffs = np.arange(Np, dtype='float32') * Tq / Np   # code offset (s), mod Tq
+    dop   = sdr_func.fine_dop(P.T[ix[1]], fds, ix[0])
     return P / P_max, fds, coffs, ix, cn0, dop
 
 # plot C/N0 --------------------------------------------------------------------
@@ -213,6 +266,15 @@ def add_text(ax, x, y, text, color='k'):
 #     -IQ
 #         IQ-sampling even if the IF frequency is not equal 0.
 #
+#     -fmt fmt
+#         On-disk IF sample format. [INT8]
+#           INT8   : signed byte, real-sampling (also IQ-sampling with -IQ /
+#                    nonzero -fi).
+#           INT8X2 : interleaved signed byte, IQ-sampling, Q stored with
+#                    PocketSDR sign convention (file Q is negated when read).
+#           CS16   : interleaved signed int16, IQ-sampling, Q polarity opposite
+#                    of INT8X2 (standard SoapySDR convention). Forces IQ=2.
+#
 #     -d freq
 #         Max Doppler frequency to search the signal in Hz. [5000.0]
 #
@@ -255,6 +317,7 @@ if __name__ == '__main__':
     size = (9, 6)
     sig, prns = 'L1CA', [1]
     fs, fi, IQ, T, toff = 12e6, 0.0, 2, T_AQC, 0.0
+    fmt = 'INT8'
     max_dop, step_dop = 5000.0, 0.5
     opt = [0, False, True, False, False]
     fc, bc = 'darkblue', 'w'
@@ -288,6 +351,11 @@ if __name__ == '__main__':
             IQ = 2 if fi == 0 else 1
         elif sys.argv[i] == '-IQ':
             IQ = 2;
+        elif sys.argv[i] == '-fmt':
+            i += 1
+            fmt = sys.argv[i].upper()
+            if fmt == 'CS16':
+                IQ = 2
         elif sys.argv[i] == '-d':
             i += 1
             max_dop = float(sys.argv[i])
@@ -327,18 +395,26 @@ if __name__ == '__main__':
         exit()
 
     # integration time (s)
-    if T < Tcode or sig[:2] == 'L6':
+    if sig == 'E5AQP':
+        pass # E5AQP keeps T as non-coherent total; coherent fold fixed at T_QP_COH
+    elif T < Tcode or sig[:2] == 'L6':
         T = Tcode
-    
+
     # Doppler bin step
     sdr_func.DOP_STEP = step_dop
-    
+
     if sig == 'G1CA' or sig == 'G2CA':
         label = 'FCN'
+
+    # code offset display unit (E5AQP code cycle is 64.5 us -> show in us)
+    if sig == 'E5AQP':
+        coff_scale, coff_unit = 1e6, 'us'
+    else:
+        coff_scale, coff_unit = 1e3, 'ms'
     
     try:
         # read IF data
-        data = sdr_func.read_data(file, fs, IQ, T + Tcode, toff)
+        data = sdr_func.read_data(file, fs, IQ, T + Tcode, toff, fmt=fmt)
         
         if not opt[3]:
             fig = plt.figure(window, figsize=size)
@@ -349,15 +425,20 @@ if __name__ == '__main__':
         if len(prns) > 1:
             cn0 = np.zeros(len(prns))
             for i in range(len(prns)):
-                P, dops, coffs, ix, cn0[i], dop = search_sig(sig, prns[i], data,
-                    fs, fi, max_dop=max_dop, zero_pad=opt[2])
-                
+                if sig == 'E5AQP':
+                    P, dops, coffs, ix, cn0[i], dop = search_sig_qp(prns[i],
+                        data, fs, fi, max_dop=max_dop, T_total=T)
+                else:
+                    P, dops, coffs, ix, cn0[i], dop = search_sig(sig, prns[i],
+                        data, fs, fi, max_dop=max_dop, zero_pad=opt[2])
+
                 if opt[4]: # short output mode
                     print('%d %.0f' % (prns[i], cn0[i]))
                 else:
-                    print('%sSIG= %-4s, %s= %3d, COFF= %8.5f ms, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz%s' % \
+                    print('%sSIG= %-4s, %s= %3d, COFF= %8.5f %-2s, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz%s' % \
                         (ESC_COL if cn0[i] >= THRES_CN0 else '',
-                         sig, label, prns[i], coffs[ix[1]] * 1e3, dop, cn0[i],
+                         sig, label, prns[i], coffs[ix[1]] * coff_scale, coff_unit,
+                         dop, cn0[i],
                          ESC_RES if cn0[i] >= THRES_CN0 else ''))
             
             if not opt[3]:
@@ -365,17 +446,26 @@ if __name__ == '__main__':
                 plot_cn0(ax1, cn0, prns, fc)
                 ax0.set_title('SIG = %s, FILE = %s' % (sig, file), fontsize=10)
         else:
-            P, dops, coffs, ix, cn0, dop = search_sig(sig, prns[0], data, fs, fi,
-                max_dop=max_dop, zero_pad=opt[2])
-            text = 'COFF=%.5fms, DOP=%.0fHz, C/N0=%.1fdB-Hz' % \
-                   (coffs[ix[1]] * 1e3, dop, cn0)
+            if sig == 'E5AQP':
+                P, dops, coffs, ix, cn0, dop = search_sig_qp(prns[0], data, fs,
+                    fi, max_dop=max_dop, T_total=T)
+                axis_f    = NP_QP / (330 / 5.115e6) / 1e6 # bins per us
+                chips_f   = NP_QP / 330                   # bins per E5AQP chip
+            else:
+                P, dops, coffs, ix, cn0, dop = search_sig(sig, prns[0], data,
+                    fs, fi, max_dop=max_dop, zero_pad=opt[2])
+                axis_f    = fs / 1e3                      # samples per ms
+                chips_f   = fs * Tcode / sdr_code.code_len(sig)
+            text = 'COFF=%.5f%s, DOP=%.0fHz, C/N0=%.1fdB-Hz' % \
+                   (coffs[ix[1]] * coff_scale, coff_unit, dop, cn0)
             if opt[3]: # text
                 if opt[4]: # short output mode
                     print('%d %.0f' % (prns[0], cn0))
                 else:
-                    print('%sSIG= %-4s, %s= %3d, COFF= %8.5f ms, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz%s' % \
+                    print('%sSIG= %-4s, %s= %3d, COFF= %8.5f %-2s, DOP= %5.0f Hz, C/N0= %4.1f dB-Hz%s' % \
                         (ESC_COL if cn0 >= THRES_CN0 else '',
-                         sig, label, prns[0], coffs[ix[1]] * 1e3, dop, cn0,
+                         sig, label, prns[0], coffs[ix[1]] * coff_scale, coff_unit,
+                         dop, cn0,
                          ESC_RES if cn0 >= THRES_CN0 else ''))
                 exit()
             elif opt[1]: # plot 3D
@@ -384,13 +474,12 @@ if __name__ == '__main__':
                 add_text(ax0, 0.98, 0.96, text, color=fc)
             elif opt[0]: # plot power + peak/doppler
                 ax1 = fig.add_axes(rect1, facecolor=bc)
-                plot_corr_pow(ax1, P[ix[0]], fs / 1e3, fc)
-                add_text(ax1, 1.04, -0.04, '(ms)')
+                plot_corr_pow(ax1, P[ix[0]], axis_f, fc)
+                add_text(ax1, 1.04, -0.04, '(%s)' % (coff_unit))
                 add_text(ax1, 0.98, 0.94, text, color=fc)
                 ax2 = fig.add_axes(rect2, facecolor=bc)
-                f = fs * Tcode / sdr_code.code_len(sig)
                 if opt[0] == 1:
-                    coff = (np.arange(len(coffs)) - ix[1]) / f
+                    coff = (np.arange(len(coffs)) - ix[1]) / chips_f
                     plot_corr_peak(ax2, coff, P[ix[0]], [-4.5, 4.5], fc)
                     ax2.vlines(0.0, 0.0, 1.0, color=fc, lw=0.4)
                     add_text(ax2, 0.98, 0.94, 'Code Offset')
@@ -402,8 +491,8 @@ if __name__ == '__main__':
                     add_text(ax2, 1.04, -0.04, '(Hz)')
             else: # plot power
                 ax1 = fig.add_axes(rect0, facecolor=bc)
-                plot_corr_pow(ax1, P[ix[0]], fs / 1e3, fc)
-                ax1.set_xlabel('Code Offset (ms)')
+                plot_corr_pow(ax1, P[ix[0]], axis_f, fc)
+                ax1.set_xlabel('Code Offset (%s)' % (coff_unit))
                 add_text(ax1, 0.98, 0.97, text)
             
             ax0.set_title('SIG = %s, %s = %d, FILE = %s' % \
@@ -415,4 +504,3 @@ if __name__ == '__main__':
     
     except KeyboardInterrupt:
         exit()
-
