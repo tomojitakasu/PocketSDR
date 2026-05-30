@@ -584,7 +584,7 @@ static int set_rfch(int fmt, double fs, const sdr_rfch_t *rfch, int nrfch_rf,
         ch[0] = freq > 1.4e9 ? 0 : 1;
     } else if (fmt == SDR_FMT_RAW16) { // FE 4CH
         for (int i = 1; i < 4; i++) {
-            if (fabs(freq - rfch[i].fo) < fabs(freq - rfch[0].fo)) ch[0] = i;
+            if (fabs(freq - rfch[i].fo) < fabs(freq - rfch[ch[0]].fo)) ch[0] = i;
         }
     } else if (fmt == SDR_FMT_RAW32) { // FE 8CH
         for (int i = 1; i < 8; i++) {
