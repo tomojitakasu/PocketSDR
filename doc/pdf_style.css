@@ -88,13 +88,25 @@ img {
 }
 
 .pagebreak {
+    display: block;
+    height: 0;
+    margin: 0;
+    padding: 0;
     page-break-before: always;
     break-before: page;
 }
 
 @page {
     size: A4 portrait;
-    margin: 25mm 18mm;
+    margin: 25mm 18mm 20mm 18mm;
+}
+
+@media print {
+    .pagebreak {
+        display: block;
+        page-break-before: always;
+        break-before: page;
+    }
 }
 
 /* Language-specific font override: when lang="ja" is present, force Yu Gothic stack */
