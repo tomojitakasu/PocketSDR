@@ -19,6 +19,7 @@ The following devices have been verified with `pocket_trk` / `pocket_sdr.py`.
 | **bladeRF X40** | `CS16` | ~ 40 Msps | Use recent SoapyBladeRF / libbladeRF packages |
 | **PlutoSDR** | `CS8` / `CS16` | ~ 6 Msps | Doppler search may exceed the default range |
 | **RTL-SDR** | `CS8` | ~ 2.4 Msps | Single-channel L1 only (RTL2832U + R820T) |
+| **Airspy Mini** | `CS16` | ~ 6 Msps | Linux only; 10 Msps mode unverified; close-time SIGSEGV on Windows (see notes) |
 
 The sampling rates above are the maximum rates verified in practice, not
 device hardware limits. Higher rates may work depending on host USB bandwidth,
@@ -131,13 +132,19 @@ The bug is in upstream libairspy itself (still present in master at the time
 of this note), not in radioconda's build, so updating the radioconda package
 does not fix it. Patching libairspy from source is the only known cure.
 
+Linux is unaffected in practice: the same code paths run cleanly with no
+SIGSEGV on close and Start / Stop / Start cycles re-open the device normally.
+The race exists in libairspy on Linux too, but the kernel usbfs backend in
+libusb cleans up orphaned URBs synchronously at the close call, so the race
+window does not lead to a crash.
+
 Recommended usage on Windows:
 
 - One-shot `pocket_trk` runs only. Accept the exit-time segfault as harmless.
 - Avoid Start / Stop cycles in `pocket_sdr.py` with the airspy driver; relaunch
   the GUI between sessions if you need to re-open the device.
 - For continuous / interactive use, prefer one of the verified devices (see
-  the table above) or run airspy on Linux where the symptom is less frequent.
+  the table above) or run airspy on Linux.
 
 ### Windows bladeRF Notes
 
