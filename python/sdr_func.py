@@ -54,29 +54,45 @@ log_lvl = 3        # log level
 log_str = None     # log stream
 
 #-------------------------------------------------------------------------------
-#  Read digitalized IF (inter-frequency) data from file. Supported file format
-#  is signed byte (int8) for I-sampling (real-sampling) or interleaved singned
-#  byte for IQ-sampling (complex-sampling).
+#  Read digitalized IF (inter-frequency) data from file. Supported file formats
+#  are INT8 (signed byte, real-sampling), INT8X2 (interleaved signed byte,
+#  IQ-sampling with PocketSDR Q-sign convention I - j*Q), and CS16 (interleaved
+#  signed int16, IQ-sampling with standard SoapySDR convention I + j*Q).
 #
 #  args:
-#      file     (I) Digitalized IF data file path
-#      fs       (I) Sampling frequency (Hz)
-#      IQ       (I) Sampling type (1: I-sampling, 2: IQ-sampling)
-#      T        (I) Sample period (s)
-#      toff=0.0 (I) Time offset from the beginning (s) (optional)
+#      file      (I) Digitalized IF data file path
+#      fs        (I) Sampling frequency (Hz)
+#      IQ        (I) Sampling type (1: I-sampling, 2: IQ-sampling)
+#      T         (I) Sample period (s)
+#      toff=0.0  (I) Time offset from the beginning (s) (optional)
+#      fmt='INT8' (I) On-disk sample format: 'INT8' / 'INT8X2' / 'CS16' (optional)
 #
 #  returns:
 #      data     Digitized IF data as complex64 ndarray (length == 0: read error)
 #
-def read_data(file, fs, IQ, T, toff=0.0):
+def read_data(file, fs, IQ, T, toff=0.0, fmt='INT8'):
+    fmt = fmt.upper()
+    if fmt == 'CS16':
+        # int16 I, int16 Q interleaved; Q polarity opposite of INT8X2
+        off = int(fs * toff) * 4
+        cnt = int(fs * T) * 2 if T > 0.0 else -1   # int16 element count
+        f = open(file, 'rb')
+        f.seek(off, os.SEEK_SET)
+        raw = np.fromfile(f, dtype=np.int16, count=cnt)
+        f.close()
+        if cnt > 0 and len(raw) < cnt:
+            return np.array([], dtype='complex64')
+        return (raw[0::2].astype('float32') +
+                raw[1::2].astype('float32') * 1j).astype('complex64')
+
     off = int(fs * toff * IQ)
     cnt = int(fs * T * IQ) if T > 0.0 else -1 # all if T=0.0
-    
+
     f = open(file, 'rb')
     f.seek(off, os.SEEK_SET)
     raw = np.fromfile(f, dtype=np.int8, count=cnt)
     f.close()
-    
+
     if len(raw) < cnt:
         return np.array([], dtype='complex64')
     elif IQ == 1: # I-sampling
