@@ -1125,6 +1125,8 @@ static void *rcv_thread(void *arg)
     return NULL;
 }
 
+static void write_raw_tag_file(sdr_rcv_t *rcv);
+
 //------------------------------------------------------------------------------
 //  Start a SDR receiver.
 //
@@ -1182,6 +1184,7 @@ int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, const char **paths)
     rcv->dev = dev;
     rcv->dp = dp;
     rcv->pvt = sdr_pvt_new(rcv);
+    rcv->start_time = utc2gpst(timeget());
     for (int i = 0; i < 4; i++) {
         if (i == 3 && (rcv->dev != SDR_DEV_USB && rcv->dev != SDR_DEV_SOAPY)) {
             continue;
@@ -1190,7 +1193,7 @@ int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, const char **paths)
             fprintf(stderr, "stream open error: %s", paths[i]);
         }
     }
-    rcv->start_time = utc2gpst(timeget());
+    write_raw_tag_file(rcv);
     rcv->state = 1;
     if (!sdr_thread_create(&rcv->thread, rcv_thread, rcv)) {
         rcv->state = 0;
@@ -1214,6 +1217,27 @@ static int get_file_path(stream_t *str, char *file, int size)
     return snprintf(file, size, "%s", p + 10) > 0;
 }
 
+// write tag file for raw IF data ---------------------------------------------
+static void write_raw_tag_file(sdr_rcv_t *rcv)
+{
+    double fo[SDR_MAX_RFCH];
+    int IQ[SDR_MAX_RFCH], bits[SDR_MAX_RFCH];
+    char file[1024];
+    
+    if ((rcv->dev != SDR_DEV_USB && rcv->dev != SDR_DEV_SOAPY) ||
+        !rcv->strs[3] || rcv->strs[3]->type != STR_FILE ||
+        !get_file_path(rcv->strs[3], file, sizeof(file))) {
+        return;
+    }
+    for (int i = 0; i < SDR_MAX_RFCH; i++) {
+        fo[i] = rcv->rfch[i].fo;
+        IQ[i] = rcv->rfch[i].IQ;
+        bits[i] = rcv->rfch[i].bits;
+    }
+    sdr_tag_write(file, SDR_DEV_NAME, rcv->start_time, rcv->fmt, rcv->fs, fo,
+        IQ, bits);
+}
+
 //------------------------------------------------------------------------------
 //  Stop a SDR receiver.
 //
@@ -1225,10 +1249,6 @@ static int get_file_path(stream_t *str, char *file, int size)
 //
 void sdr_rcv_stop(sdr_rcv_t *rcv)
 {
-    double fo[SDR_MAX_RFCH];
-    int IQ[SDR_MAX_RFCH], bits[SDR_MAX_RFCH];
-    char file[1024];
-    
     for (int i = 0; i < rcv->nch; i++) {
         ch_th_stop(rcv->th[i]);
     }
@@ -1238,18 +1258,6 @@ void sdr_rcv_stop(sdr_rcv_t *rcv)
     rcv->state = 0;
     sdr_thread_join(rcv->thread);
     
-    // write tag file for raw IF data
-    if ((rcv->dev == SDR_DEV_USB || rcv->dev == SDR_DEV_SOAPY) &&
-        rcv->strs[3] && rcv->strs[3]->type == STR_FILE &&
-        get_file_path(rcv->strs[3], file, sizeof(file))) {
-        for (int i = 0; i < SDR_MAX_RFCH; i++) {
-            fo[i] = rcv->rfch[i].fo;
-            IQ[i] = rcv->rfch[i].IQ;
-            bits[i] = rcv->rfch[i].bits;
-        }
-        sdr_tag_write(file, SDR_DEV_NAME, rcv->start_time, rcv->fmt, rcv->fs,
-            fo, IQ, bits);
-    }
     for (int i = 0; i < 4; i++) {
         sdr_str_close(rcv->strs[i]);
     }
