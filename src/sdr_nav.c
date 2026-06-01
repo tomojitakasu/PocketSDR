@@ -939,8 +939,8 @@ static void decode_glo_str(sdr_ch_t *ch, const uint8_t *syms, int rev)
             ch->tow_v = 2;
         }
         ch->nav->type = sno; // GLO string number
-        if (sno >= 1 && sno <= 5) { // GLO string w/o mark and hamming (77 bits)
-            sdr_pack_bits(bits, 77, 0, ch->nav->data + 10 * (sno - 1));
+        if (sno >= 1 && sno <= 15) { // GLO string w/o mark and hamming (77 bits)
+            sdr_pack_bits(bits, 77, 0, ch->nav->data + 10 * (sno - 1)); // str 1-5: eph/utc, 6-15: almanac
             ch->nav->lock_sf[sno-1] = ch->lock;
         }
         ch->nav->stat = 1;
@@ -1190,7 +1190,7 @@ static void decode_gal_INAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
             update_tow(ch, getbitu(data, 85, 20) + toff);
         }
         ch->nav->type = type; // I/NAV word type
-        if (type >= 0 && type <= 6) {
+        if (type >= 0 && type <= 10) { // word 0-6: eph/ion/utc, 7-10: almanac
             memcpy(ch->nav->data + 16 * type, data, 16);
             ch->nav->lock_sf[type] = ch->lock;
         }
@@ -1503,6 +1503,10 @@ static void decode_D1D2NAV(sdr_ch_t *ch, int type, const uint8_t *syms, int rev)
         ch->nav->type = pg; // D2 SF1 page
         memcpy(ch->nav->data + 38 * (pg - 1), data, 38); // D2 SF1 page (300 bits)
         ch->nav->lock_sf[pg-1] = ch->lock;
+    } else if (type == 2 && sf == 5) { // D2 SF5 page (UTC pg 102, almanac pg 37-60,95-100)
+        ch->nav->type = 100 + getbitu(data, 43, 7); // D2 SF5 page number (+100 offset)
+        memcpy(ch->nav->data + 38 * 10, data, 38); // D2 SF5 page at slot 10 (300 bits)
+        ch->nav->lock_sf[10] = ch->lock;
     } else {
         ch->nav->type = 0;
     }
