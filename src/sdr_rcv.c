@@ -27,6 +27,7 @@
 #define TH_CYC     50           // receiver channel thread cycle (ms)
 #define SCALE_CYC  1000         // scale update cycle (* SDR_CYC)
 #define TO_REACQ   60.0         // re-acquisition timeout (s)
+#define FAST_DOP   500.0        // fast acquisition Doppler half-width (Hz)
 #define MIN_LOCK   2.0          // min lock time for re-acquisition (s)
 #define NUM_COL    106          // number of channel status columns
 #define MAX_ACQ    4.0          // max code length for direct acquisition (ms)
@@ -653,6 +654,7 @@ sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
     if ((p = strstr(opt, "-BUMP_K="))) {
         sscanf(p, "-BUMP_K=%lf", &sdr_bump_k);
     }
+    rcv->fast_acq = strstr(opt, "-FAST_SRCH") ? 1 : 0;
     rcv->fmt = fmt;
     rcv->fs = fs;
     rcv->nrfch = num_rfch(fmt);
@@ -844,8 +846,19 @@ static void write_buff(sdr_rcv_t *rcv, const uint8_t *raw, int64_t ix)
     int nch_lpf = 0;
     
     if (rcv->fmt == SDR_FMT_INT8) { // int8
-        for (int j = 0; j < rcv->N; i++, j++) {
-            rcv->buff[0]->data[i] = SDR_CPX8(LUT8[raw[j]], 0);
+        if (rtoc_of(rcv, 0)) {
+            for (int j = 0; j < rcv->N; i++, j++) {
+                int ph = (ph0 + j) & 3;
+                int8_t I = LUT8[raw[j]];
+                rcv->buff[0]->data[i] =
+                    ph == 0 ? SDR_CPX8( I,  0) :
+                    ph == 1 ? SDR_CPX8( 0, -I) :
+                    ph == 2 ? SDR_CPX8(-I,  0) : SDR_CPX8( 0,  I);
+            }
+        } else {
+            for (int j = 0; j < rcv->N; i++, j++) {
+                rcv->buff[0]->data[i] = SDR_CPX8(LUT8[raw[j]], 0);
+            }
         }
     } else if (rcv->fmt == SDR_FMT_INT8X2) { // int8 x 2 complex (Q-inverted)
         for (int j = 0; j < rcv->N * 2; i++, j += 2) {
@@ -945,6 +958,175 @@ static int assist_acq(sdr_rcv_t *rcv, sdr_ch_t *ch)
         return 1;
     }
     return 0;
+}
+
+// normalize GLONASS frequency channel number ---------------------------------
+static int norm_glo_fcn(int fcn)
+{
+    return fcn > 15 ? fcn - 32 : fcn;
+}
+
+// predict Doppler from a GLONASS satellite orbit ------------------------------
+static int pred_glo_dop(const sdr_ch_t *ch, int sat, const geph_t *geph,
+    const alm_t *alm, gtime_t t, const double *rr, double dtrd, double *azel,
+    double *fd)
+{
+    double rs[6]={0}, rs1[3]={0}, dts[2]={0}, dts1[2]={0}, var=0.0;
+    double pos[3], e[3], range0, range1, range_rate, sat_dtrd;
+    gtime_t t1 = timeadd(t, 0.5);
+    int have_pos = 0;
+
+    if (geph->sat == sat && fabs(timediff(t, geph->toe)) < 3600.0) {
+        geph2pos(t,  geph, rs,  dts,  &var);
+        geph2pos(t1, geph, rs1, dts1, &var);
+        have_pos = 1;
+    } else if (alm->sat == sat) {
+        galm2pos(t,  alm, rs,  dts);
+        galm2pos(t1, alm, rs1, dts1);
+        have_pos = 1;
+    }
+    if (!have_pos) return 0;
+
+    ecef2pos(rr, pos);
+    range0 = geodist(rs, rr, e);
+    satazel(pos, e, azel);
+    if (azel[1] < 0.0) return 0; // fallback to normal search
+
+    range1     = geodist(rs1, rr, e);
+    range_rate = (range1 - range0) / 0.5;
+    sat_dtrd   = (dts1[0] - dts[0]) / 0.5;
+    *fd = -ch->fc / CLIGHT * (range_rate + CLIGHT * (dtrd - sat_dtrd));
+    return 1;
+}
+
+// fast acquisition: predict Doppler; return 1=aided, 0=skip/no data,
+// -1=satellite below elevation mask (skip without searching) -----------------
+static int fast_acq(sdr_rcv_t *rcv, sdr_ch_t *ch)
+{
+    sdr_pvt_t *pvt = rcv->pvt;
+    eph_t eph = {0};
+    geph_t geph = {0};
+    alm_t alm = {0};
+    geph_t gephs[MAXPRNGLO] = {{0}};
+    alm_t alms[MAXPRNGLO] = {{0}};
+    int sats[MAXPRNGLO] = {0};
+    double rs[6]={0}, dts[2]={0}, pos[3], e[3], azel[2];
+    double rr[3], dtrd;
+    double range0, range1, range_rate, sat_dtrd, fd;
+    gtime_t t;
+    int sat, sys, prn = 0, n_glo = 0;
+
+    if (!strcmp(ch->sig, "G1CA") || !strcmp(ch->sig, "G2CA")) {
+        sat = 0;
+        sys = SYS_GLO;
+    } else {
+        sat = satid2no(ch->sat);
+        if (sat <= 0) return 0;
+        sys = satsys(sat, &prn);
+    }
+    // current time from CPU clock
+    t = utc2gpst(timeget());
+    
+    // Snapshot aiding data under PVT lock. Position, clock rate and nav data
+    // must be from one consistent receiver state.
+    sdr_mutex_lock(&pvt->mtx);
+    if (!pvt->last_valid) {
+        sdr_mutex_unlock(&pvt->mtx);
+        return 0;
+    }
+    rr[0] = pvt->last_rr[0];
+    rr[1] = pvt->last_rr[1];
+    rr[2] = pvt->last_rr[2];
+    dtrd  = pvt->last_dtrd;
+    if (sys == SYS_GLO && sat == 0) { // GLONASS FDMA: ch->prn is FCN
+        for (int i = 1; i <= MAXPRNGLO && n_glo < MAXPRNGLO; i++) {
+            int sat_i = satno(SYS_GLO, i);
+            if (!sat_i) continue;
+            geph_t geph_i = pvt->nav->geph[i-1];
+            alm_t alm_i = pvt->nav->alm[sat_i-1];
+            if (geph_i.sat == sat_i && geph_i.frq == ch->prn) {
+                sats[n_glo] = sat_i;
+                gephs[n_glo] = geph_i;
+                alms[n_glo] = alm_i;
+                n_glo++;
+            } else if (alm_i.sat == sat_i &&
+                       norm_glo_fcn(alm_i.glo.frq) == ch->prn) {
+                sats[n_glo] = sat_i;
+                alms[n_glo] = alm_i;
+                n_glo++;
+            }
+        }
+    } else if (sys == SYS_GLO) {
+        if (prn >= 1 && prn <= MAXPRNGLO) geph = pvt->nav->geph[prn-1];
+        alm = pvt->nav->alm[sat-1];
+    } else {
+        eph = pvt->nav->eph[sat-1];
+        alm = pvt->nav->alm[sat-1];
+    }
+    sdr_mutex_unlock(&pvt->mtx);
+    
+    if (sys == SYS_GLO && sat == 0) {
+        double best_el = -PI, best_fd = 0.0, best_azel[2] = {0};
+        
+        for (int i = 0; i < n_glo; i++) {
+            int stat = pred_glo_dop(ch, sats[i], gephs + i, alms + i, t, rr,
+                dtrd, best_azel, &fd);
+            if (!stat) continue;
+            if (stat > 0 && best_azel[1] > best_el) {
+                best_el = best_azel[1];
+                best_fd = fd;
+            }
+        }
+        if (best_el < -PI / 2.0) return 0; // fallback to normal search
+        ch->acq->fd_ext = (float)best_fd;
+        return 1;
+    }
+    // compute satellite position at t and t+0.5s for range-rate
+    {
+        double rs1[3]={0}, dts1[2]={0}, var=0.0;
+        gtime_t t1 = timeadd(t, 0.5);
+        int have_pos = 0;
+        if (sys == SYS_GLO) {
+            // prefer broadcast eph if fresh, else almanac
+            if (geph.sat == sat && fabs(timediff(t, geph.toe)) < 3600.0) {
+                geph2pos(t, &geph, rs, dts, &var);
+                geph2pos(t1, &geph, rs1, dts1, &var);
+                have_pos = 1;
+            } else if (alm.sat == sat) {
+                galm2pos(t, &alm, rs, dts);
+                galm2pos(t1, &alm, rs1, dts1);
+                have_pos = 1;
+            }
+        } else {
+            // GPS/QZS/GAL/BDS: prefer eph, then almanac
+            if (eph.sat == sat && eph.A > 0.0 &&
+                fabs(timediff(t, eph.toe)) < 7200.0) {
+                eph2pos(t, &eph, rs, dts, &var);
+                eph2pos(t1, &eph, rs1, dts1, &var);
+                have_pos = 1;
+            } else if (alm.sat == sat && alm.A > 0.0) {
+                alm2pos(t, &alm, rs, dts);
+                alm2pos(t1, &alm, rs1, dts1);
+                have_pos = 1;
+            }
+        }
+        if (!have_pos) return 0;
+        // elevation check
+        ecef2pos(rr, pos);
+        range0 = geodist(rs,  rr, e);
+        satazel(pos, e, azel);
+        if (azel[1] < 0.0) {
+            return sys == SYS_GLO ? 0 : -1; // GLONASS: fallback to normal search
+        }
+        // Doppler from range rate and clock rates (finite difference)
+        range1 = geodist(rs1, rr, e);
+        range_rate = (range1 - range0) / 0.5;
+        sat_dtrd = (dts1[0] - dts[0]) / 0.5;
+        fd = -ch->fc / CLIGHT * (range_rate + CLIGHT * (dtrd - sat_dtrd));
+    }
+    // set wide search window centred on predicted Doppler
+    ch->acq->fd_ext = (float)fd;
+    return 1;
 }
 
 // update IF data rate ---------------------------------------------------------
@@ -1051,6 +1233,19 @@ static void update_srch_ch(sdr_rcv_t *rcv)
         sdr_ch_t *ch = rcv->th[rcv->ich]->ch;
         if (ch->state != SDR_STATE_IDLE) continue;
         
+        // fast acquisition: skip invisible satellites, aid visible ones
+        if (rcv->fast_acq) {
+            int w = fast_acq(rcv, ch);
+            if (w < 0) continue; // below elevation mask: skip this channel
+            if (w > 0) {
+                // set wide Doppler search window
+                int nw = (int)(2.0 * FAST_DOP * ch->T + 1);
+                if (nw < 3) nw = 3;
+                ch->acq->fd_ext_n = nw;
+                ch->state = SDR_STATE_SRCH;
+                break;
+            }
+        }
         // re-acquisition, assisted-acquisition or short code cycle
         if (re_acq(rcv, ch) || assist_acq(rcv, ch) ||
             (ch->T <= sdr_max_acq * 1e-3 && ch->sig_srch)) {
