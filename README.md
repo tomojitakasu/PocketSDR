@@ -1,8 +1,8 @@
 
-# **Pocket SDR - An Open-Source GNSS SDR,<br> ver. 0.15**
+# **Pocket SDR - An Open-Source GNSS SDR,<br> ver. 0.16**
 
 <div style="text-align: right;">
-<strong>2026-05-12</strong>
+<strong>2026-06-01</strong>
 </div>
 
 ---
@@ -181,6 +181,19 @@ $ pacman -S mingw-w64-ucrt-x86_64-python-matplotlib
   with `SOAPY_ROOT` on the make command line. See
   [SoapySDR Device Notes](https://github.com/tomojitakasu/PocketSDR/blob/master/doc/notes_soapy_dev.md#windows-build-notes)
   for details.
+
+* If SoapySDR device support is not required, build `libsdr`, `pocket_trk`,
+  and `pocket_dump` with `USE_SOAPY=0`. Pocket SDR FE USB devices and
+  IF-file based processing still work; only SoapySDR device input is
+  disabled. If you are rebuilding an existing tree, run `make clean` first.
+```
+$ cd <install_dir>/lib/build
+$ make clean && make USE_SOAPY=0 && make install
+$ cd <install_dir>/app/pocket_trk
+$ make clean && make USE_SOAPY=0 && make install
+$ cd <install_dir>/app/pocket_dump
+$ make clean && make USE_SOAPY=0 && make install
+```
 
 * Move to the library directory. The external libraries are for Forward Error
   Correction (FEC) and Low-Density Parity-Check (LDPC) decoding. Install the
@@ -418,7 +431,8 @@ $ pocket_dump -t 10 ch1.bin ch2.bin
 
 Starting from version 0.15b, Pocket SDR ships with [**PocketFFT**](https://gitlab.mpcdf.mpg.de/mtr/pocketfft) (BSD-3-Clause) as the default FFT backend, replacing [**FFTW3**](https://www.fftw.org/) (GPL). The change is licensing-driven; for most workloads PocketFFT is competitive, but FFTW3 is still slightly faster on large transforms and supports runtime wisdom (auto-tuned plans) ? `pocket_trk` / `pocket_snap` / `pocket_acq` can read `python/fftw_wisdom.txt` for further speed-up.
 
-To build with FFTW3 instead, install the library and edit four makefiles.
+To build with FFTW3 instead, install the library and build `libsdr` and the
+FFT-using applications with `USE_FFTW=1`.
 
 * Install FFTW3 (single-precision):
 ```
@@ -426,29 +440,20 @@ $ pacman -S mingw-w64-ucrt-x86_64-fftw    # MSYS2 UCRT64 (Windows)
 $ sudo apt install libfftw3-dev           # Ubuntu / Debian / Raspberry Pi OS
 $ brew install fftw                       # macOS
 ```
-* Edit [lib/build/libsdr.mk](https://github.com/tomojitakasu/PocketSDR/blob/master/lib/build/libsdr.mk): comment out the `# PocketFFT` block and uncomment the `# FFTW3` block.
-```
-# PocketFFT
-#INCLUDE = -I$(SRC) -I../RTKLIB/src -I../pocketfft
-#OPTIONS =
-#LIBS = ./librtk.a ./libfec.a ./libldpc.a ./libpocketfft.a
-
-# FFTW3
-INCLUDE = -I$(SRC) -I../RTKLIB/src
-OPTIONS = -DFFTW
-LIBS = ./librtk.a ./libfec.a ./libldpc.a -lfftw3f
-```
-* Edit the application makefiles [app/pocket_acq/makefile](https://github.com/tomojitakasu/PocketSDR/blob/master/app/pocket_acq/makefile), [app/pocket_snap/makefile](https://github.com/tomojitakasu/PocketSDR/blob/master/app/pocket_snap/makefile), and [app/pocket_trk/makefile](https://github.com/tomojitakasu/PocketSDR/blob/master/app/pocket_trk/makefile): in each `ifeq` branch (Windows / macOS / Linux), comment out the `libpocketfft.a` line and uncomment the `-lfftw3f` line. The `-DFFTW` preprocessor switch lives in `lib/build/libsdr.mk` only ? the application makefiles do not need an OPTIONS change. Example (Windows section of `pocket_trk/makefile`):
-```
-    #LDLIBS += $(LIB)/win32/libpocketfft.a
-    LDLIBS += -lfftw3f
-```
 * Rebuild from scratch:
 ```
 $ cd <install_dir>/lib/build
-$ make clean && make && make install
-$ cd <install_dir>/app
-$ make clean && make && make install
+$ make clean && make USE_FFTW=1 && make USE_FFTW=1 install
+$ cd <install_dir>/app/pocket_acq
+$ make clean && make USE_FFTW=1 && make install
+$ cd <install_dir>/app/pocket_snap
+$ make clean && make USE_FFTW=1 && make install
+$ cd <install_dir>/app/pocket_calib
+$ make clean && make USE_FFTW=1 && make install
+$ cd <install_dir>/app/pocket_dump
+$ make clean && make USE_FFTW=1 && make install
+$ cd <install_dir>/app/pocket_trk
+$ make clean && make USE_FFTW=1 && make install
 ```
 * (Optional, FFTW3 only) Generate a wisdom file tuned for the host CPU. Once present, `pocket_trk`, `pocket_snap`, and `pocket_acq` pick it up automatically.
 ```
@@ -606,5 +611,12 @@ purposes, is prohibited.
   with calibration / beam control and gain pattern overlay. Added Galileo
   E5ABQ signal support. Added SoapySDR / LimeSDR support on Windows
   (UCRT64 + radioconda). Refactored array calibration / beam-forming API.
+- **2026-06-01 (v0.16)**: Added fast acquisition using saved ephemeris /
+  almanac data, latest FIX position, and receiver clock drift rate. Added
+  `.pocket_navdata.csv` persistence for almanacs and last FIX state with
+  timestamp validation. Added SoapySDR input support to `pocket_dump`, CS8 /
+  CS16 support to `pocket_acq`, and helper scripts for SoapySDR capture /
+  tracking. Added `USE_SOAPY` and `USE_FFTW` make options. Fixed FE 2CH
+  I-sampling real-to-complex conversion and updated command/API references.
 
 --------------------------------------------------------------------------------
