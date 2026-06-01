@@ -1,7 +1,7 @@
 # Pocket SDR Command Reference
 
 <div style="text-align: right;">
-<strong>ver.0.15  2026-05-12</strong>
+<strong>ver.0.16  2026-06-01</strong>
 </div>
 
 ---
@@ -169,7 +169,7 @@ Hexadecimal form:
 <div class="pagebreak"></div>
 <a id="sec-pocket_dump"></a>
 
-## pocket_dump - Capture digital IF data from Pocket SDR FE
+## pocket_dump - Capture digital IF data from Pocket SDR FE or SoapySDR device
 
 ---
 <br>
@@ -178,12 +178,21 @@ Hexadecimal form:
 
 ```
 pocket_dump [-t tsec] [-r] [-p bus[,port]] [-c conf_file] [-q] [-v]
+            [-driver name] [-fmt {CS8|CS16}] [-f fs] [-fo freq]
+            [-gain gain] [-bw bw]
             [path [path ...]]
 ```
 
 ### Description
 
-Capture and dump digital IF (DIF) data from a Pocket SDR FE device to one output file per RF channel. Capturing stops on the configured duration (`-t`), or by Ctrl-C. A `<path>.tag` companion file is written for each output, recording the IF format, sampling rate, LO frequencies, and per-CH sampling type / bit width so downstream tools (e.g. `pocket_trk`, `pocket_acq`) can auto-configure.
+Capture and dump digital IF (DIF) data from a Pocket SDR FE device or a
+SoapySDR-supported device. Pocket SDR FE capture writes one output file per RF
+channel unless `-r` is specified. SoapySDR capture writes one complex sample
+stream to the first output path. Capturing stops on the configured duration
+(`-t`), or by Ctrl-C. A `<path>.tag` companion file is written for each output,
+recording the IF format, sampling rate, LO frequencies, and per-CH sampling type
+/ bit width so downstream tools (e.g. `pocket_trk`, `pocket_acq`) can
+auto-configure.
 
 ### Options
 
@@ -195,6 +204,22 @@ Capture and dump digital IF (DIF) data from a Pocket SDR FE device to one output
   - USB bus and port number of the target device. Without this option, the first device found is selected.
 - `-c conf_file`
   - Configure the device with a `pocket_conf`-format file before capture starts.
+- `-driver name`
+  - Use a SoapySDR device instead of a Pocket SDR FE device. Examples: `lime`,
+    `uhd`, `bladerf`, `rtlsdr`, `plutosdr`. Driver-specific arguments accepted
+    by SoapySDR can also be passed.
+- `-fmt {CS8|CS16}`
+  - SoapySDR sample format. [`CS8`]
+- `-f fs`
+  - SoapySDR sampling rate in MHz. [`12`]
+- `-fo freq`
+  - SoapySDR RF center frequency in MHz. This option is required with
+    `-driver`.
+- `-gain gain`
+  - SoapySDR RF gain in dB. Omitted or `0`: use automatic gain if the driver
+    supports it.
+- `-bw bw`
+  - SoapySDR RF bandwidth in MHz. Omitted or `0`: leave driver default.
 - `-q`
   - Suppress the runtime status display.
 - `-v`
@@ -218,7 +243,8 @@ Capture and dump digital IF (DIF) data from a Pocket SDR FE device to one output
 
 ```
 pocket_acq [-sig sig] [-prn prn[,...]] [-tint tint] [-toff toff]
-           [-fmt fmt] [-f freq] [-fi freq] [-d freq[,freq]] [-nz]
+           [-fmt {INT8|INT8X2|CS8|CS16}] [-f freq] [-fi freq]
+           [-d freq[,freq]] [-nz]
            [-w file] [-v] file
 ```
 
@@ -238,8 +264,12 @@ If a tag file `<file>.tag` exists alongside the input, the IF format, sampling f
   - Coherent integration time in ms. [code cycle]
 - `-toff toff`
   - Time offset from the start of the IF data in ms. [`0.0`]
-- `-fmt fmt`
-  - IF data format: `INT8`, `INT8X2`, `RAW8`, `RAW16`, `RAW16I`, or `RAW32`. [`INT8X2`]
+- `-fmt {INT8|INT8X2|CS8|CS16}`
+  - IF data format. `INT8` is single-channel real int8, `INT8X2` is
+    single-channel interleaved int8 IQ, and `CS8`/`CS16` are SoapySDR complex
+    int8/int16 formats. Pocket SDR FE packed RAW formats are not expanded by
+    `pocket_acq`; dump channel-separated files with `pocket_dump` first.
+    [`INT8X2`]
 - `-f freq`
   - Sampling frequency of the IF data in MHz. [`12.0`]
 - `-fi freq`
@@ -253,7 +283,9 @@ If a tag file `<file>.tag` exists alongside the input, the IF format, sampling f
 - `-v`
   - Print version and exit.
 - `file`
-  - Input digital IF data file. The format is a series of `int8_t` (I-sampling) or interleaved `int8_t` (IQ-sampling), unless overridden by the tag file.
+  - Input digital IF data file. The format is a series of `int8_t`
+    (I-sampling), interleaved `int8_t` (IQ-sampling), or SoapySDR complex
+    samples for `CS8`/`CS16`, unless overridden by the tag file.
 
 
 <div class="pagebreak"></div>
@@ -293,7 +325,9 @@ The input can be a local file, a TCP stream, a Pocket SDR FE device, or a SoapyS
 - `-f freq`
   - Sampling frequency of the IF data in MHz. [`12.0`]
 - `-fo freq[,...]`
-  - LO frequency for each RF channel in MHz, comma-separated. With `RAW8/16/32`, 2/4/8 frequencies are required.
+  - LO frequency for each RF channel in MHz, comma-separated. With
+    `RAW8/16/32`, 2/4/8 frequencies are required. With `-driver`, the first
+    frequency is the SoapySDR RF center frequency and is required.
 - `-IQ {1|2}[,...]`
   - Per-RF-CH sampling type: `1` = I, `2` = IQ. Used with `RAW8/16/32`. [`2,2,2,2,2,2,2,2`]
 - `-bits {2|3}[,...]`
@@ -330,7 +364,7 @@ The input can be a local file, a TCP stream, a Pocket SDR FE device, or a SoapyS
 - `-h height`
   - Console height (rows) for the runtime status display. [`64`]
 - `-opt file`
-  - System options file. See `app/pocket_trk/pocket_trk_default.conf` for the available keys (loop bandwidths, integration times, C/N0 thresholds, array calibration / beam-forming options, etc.). [none]
+  - System options file. See `app/pocket_trk/pocket_trk_default.conf` for the available keys (loop bandwidths, integration times, C/N0 thresholds, `max_acq`, array calibration / beam-forming options, etc.). [none]
 - `-debug file`
   - Enable RTKLIB trace output to the given file (trace level 3).
 - `-v`

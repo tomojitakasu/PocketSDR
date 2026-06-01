@@ -1,7 +1,7 @@
 # Pocket SDR C Library API Reference
 
 <div style="text-align: right;">
-<strong>ver.0.15  2026-05-12</strong>
+<strong>ver.0.16  2026-06-01</strong>
 </div>
 
 ---
@@ -68,7 +68,7 @@ This API reference describes the **Pocket SDR** C library (`libsdr`). The librar
 
 - **Library identity**
   - `SDR_LIB_NAME` = "Pocket SDR"
-  - `SDR_LIB_VER`  = library version string (e.g., "0.15b")
+  - `SDR_LIB_VER`  = library version string (e.g., "0.16")
 <br><br>
 
 - **Channel and buffer limits**
@@ -203,7 +203,7 @@ This API reference describes the **Pocket SDR** C library (`libsdr`). The librar
 <br><br>
 
 - `sdr_stats_t`
-  - IF data statistics: std-dev, data rate (MB/s), cumulative size (MB), buffer usage (%), running accumulators, sample count.
+  - IF data statistics: std-dev, data rate (MB/s), cumulative size (MB), buffer usage (%), running accumulators for 8-bit and CS16 streams, sample count.
 <br><br>
 
 - `sdr_ch_th_t`
@@ -211,7 +211,7 @@ This API reference describes the **Pocket SDR** C library (`libsdr`). The librar
 <br><br>
 
 - `sdr_pvt_t`
-  - PVT state: epoch and cycle index, satellite count, RTKLIB `obs_t`/`nav_t`/`sol_t`/`ssat_t`/`rtcm_t`, latency, sol/obs/nav counters, back-pointer to receiver.
+  - PVT state: epoch and cycle index, satellite count, RTKLIB `obs_t`/`nav_t`/`sol_t`/`ssat_t`/`rtcm_t`, latency, sol/obs/nav counters, back-pointer to receiver, and the latest FIX position / receiver clock bias / receiver clock drift rate used by fast acquisition and persisted in `.pocket_navdata.csv`.
 <br><br>
 
 - `sdr_rfch_t`
@@ -227,7 +227,7 @@ This API reference describes the **Pocket SDR** C library (`libsdr`). The librar
 <br><br>
 
 - `sdr_rcv_t`
-  - SDR receiver state: run flag, device type/pointer, IF data format / sampling rate / buffer length / channel counts (`nch`, `nrfch`, `narch`), current search channel, IF cycle count, per-RF-CH config (`rfch[]`), per-array-CH beam state (`arch[]`), per-CH IF buffers (RF + array), channel threads, optional `sdr_array_t`, `sdr_pvt_t`, IF data statistics, output streams `strs[4]` = {NMEA PVT, RTCM3 OBS+NAV, log, IF data log}, receiver start time (UTC), file replay scale, options string, IF data thread, and mutex.
+  - SDR receiver state: run flag, device type/pointer, IF data format / sampling rate / buffer length / channel counts (`nch`, `nrfch`, `narch`), current search channel, IF cycle count, per-RF-CH config (`rfch[]`), per-array-CH beam state (`arch[]`), per-CH IF buffers (RF + array), channel threads, optional `sdr_array_t`, `sdr_pvt_t`, IF data statistics, output streams `strs[4]` = {NMEA PVT, RTCM3 OBS+NAV, log, IF data log}, receiver start time (UTC), file replay scale, options string, fast-acquisition flag, IF data thread, and mutex.
 <br><br>
 
 
@@ -1255,6 +1255,14 @@ Top-level receiver lifecycle and state queries. A receiver wraps a front-end (US
 - `-ARRAY` — output one RTCM3 obs stream per array element (station ID = CH).
 - `-SCALE=<scale>` — raw-to-IF LUT scale for INT8 / CS8 / CS16 formats (0 enables AGC; default 1.0).
 - `-TRACE[=<level>]` — enable debug trace logging at `<level>`.
+- `-FAST_SRCH` — enable fast acquisition. The receiver predicts initial Doppler
+  from `.pocket_navdata.csv` navigation/almanac data plus the last FIX position
+  and receiver clock drift rate; the saved position is ignored if its timestamp
+  differs from the current GPST by more than one day.
+- `-GAIN=<dB>` / `-BW=<MHz>` — SoapySDR gain and analog bandwidth options
+  passed through `sdr_rcv_open_sdev()`.
+- `-E5AB_OFF=<ns>` — Galileo E5AltBOC code offset correction.
+- `-BUMP_K=<value>` — BOC bump-jump discriminator parameter.
 <br>
 
 ### API Functions
@@ -1330,7 +1338,10 @@ Top-level receiver lifecycle and state queries. A receiver wraps a front-end (US
 
 **`void sdr_rcv_setopt(const char *opt, double value)`**
 <br>
-- **Description**: Set a global library option. Recognized keys: "epoch", "lag_epoch", "log_lvl", "fftw_wisdom", ... (see `sdr_rcv.c`).
+- **Description**: Set a global library option. Recognized keys are:
+  `epoch`, `lag_epoch`, `el_mask`, `sp_corr`, `t_acq`, `t_dll`, `b_dll`,
+  `b_pll`, `b_fll_w`, `b_fll_n`, `max_dop`, `thres_cn0_l`,
+  `thres_cn0_u`, `bump_jump`, and `max_acq`.
 <br><br>
 
 **`int sdr_rcv_rcv_stat(sdr_rcv_t *rcv, char *buff, int size)`**
