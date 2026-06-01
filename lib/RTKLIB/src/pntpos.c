@@ -23,6 +23,9 @@
 *                           use E1-E5b for Galileo dual-freq iono-correction
 *                           use API sat2freq() to get carrier frequency
 *                           add output of velocity estimation error in estvel()
+*
+*           branch for Pocket SDR
+*           2026/06/01 0.1  add receiver clock rate in solution.
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -585,6 +588,7 @@ static void estvel(const obsd_t *obs, int n, const double *rs, const double *dts
         
         if (norm(dx,4)<1E-6) {
             matcpy(sol->rr+3,x,3,1);
+            sol->dtr[5]=x[3]/CLIGHT;  /* receiver clock drift rate (s/s) */
             sol->qv[0]=(float)Q[0];  /* xx */
             sol->qv[1]=(float)Q[5];  /* yy */
             sol->qv[2]=(float)Q[10]; /* zz */
@@ -626,6 +630,7 @@ extern int pntpos(const obsd_t *obs, int n, const nav_t *nav,
         return 0;
     }
     sol->time=obs[0].time;
+    sol->dtr[5]=0.0;
     msg[0]='\0';
     
     rs=mat(6,n); dts=mat(2,n); var=mat(1,n); azel_=zeros(2,n); resp=mat(1,n);
