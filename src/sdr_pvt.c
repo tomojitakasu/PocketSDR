@@ -22,6 +22,8 @@
 #define MAX_NOBS       256      // max number of obs data in a epoch
 #define STD_ERR        0.015    // std-dev of carrier phase noise (m)
 #define FILE_NAV       ".pocket_navdata.csv" // navigation data file
+#define MAXDTGLO       (86400.0*7.0) // max age of GLONASS almanac (s)
+#define MAXDTPOS       86400.0   // max age of last fix position (s)
 
 #define ROUND(x)   (int)floor((x) + 0.5)
 #define SQRT(x)    ((x) > 0.0 ? sqrt(x) : 0.0)
@@ -315,6 +317,72 @@ static void out_log_eph(double time, const char *sat, const char *sig,
     sdr_log(3, "$EPH,%.3f,%s,%s,%s", time, sat, sig, buff);
 }
 
+//------------------------------------------------------------------------------
+//  Output log $ALM (decoded almanac).
+//
+//  format:
+//      $ALM,time,sat,sig,svh,week,A,e,i0,OMG0,omg,M0,OMGd,toas,f0,f1
+//      (GPS,Galileo,QZSS,BeiDou)
+//          time   receiver time (s)
+//          sat    satellite ID
+//          sig    signal ID
+//          svh    SV health (0=ok)
+//          week   almanac week
+//          A      semi-major axis (m)
+//          e      eccentricity
+//          i0     inclination (rad)
+//          OMG0   RAAN (rad)
+//          omg    arg of perigee (rad)
+//          M0     mean motion (rad)
+//          OMGd   RAAN rate (rad/s)
+//          toas   toa (s)
+//          f0,f1  clock bias/drift
+//     $ALM,time,sat,sig,svh,taun,lambda,di,eps,omg,tlambda,dT,dTd,frq
+//     (GLONASS)
+//          time   receiver time (s)
+//          sat    satellite ID
+//          sig    signal ID
+//          svh    SV health (0=ok)
+//          taun   clock correction (s)
+//          lambda ascending node longitude (rad)
+//          di     inclination correction (rad)
+//          eps    eccentricity
+//          omg    arg of perigee (rad)
+//          tlambda ascending node time (s)
+//          dT,dTd period correction (s/orbit,s/orbit^2)
+//          frq    frequency channel number
+//
+static void out_log_alm(double time, const char *sig, const alm_t *alm)
+{
+    char id[8];
+
+    if (alm->sat <= 0) return;
+    satno2id(alm->sat, id);
+    if (id[0] == 'R') { // GLONASS (modified Keplerian almanac)
+        sdr_log(3, "$ALM,%.3f,%s,%s,%d,%.10E,%.10E,%.10E,%.10E,%.10E,%.10E,"
+            "%.10E,%.10E,%d", time, id, sig, alm->svh, alm->glo.taun,
+            alm->glo.lambda, alm->glo.di, alm->glo.eps, alm->glo.omg,
+            alm->glo.tlambda, alm->glo.dT, alm->glo.dTd, alm->glo.frq);
+    } else {
+        sdr_log(3, "$ALM,%.3f,%s,%s,%d,%d,%.10E,%.10E,%.10E,%.10E,%.10E,%.10E,"
+            "%.10E,%.10E,%.10E,%.10E", time, id, sig, alm->svh, alm->week,
+            alm->A, alm->e, alm->i0, alm->OMG0, alm->omg, alm->M0, alm->OMGd,
+            alm->toas, alm->f0, alm->f1);
+    }
+}
+
+// output all valid almanac of a satellite system ------------------------------
+static void out_log_alm_sys(double time, const char *sig, const nav_t *nav,
+    int sys)
+{
+    int sat, prn;
+
+    for (sat = 1; sat <= MAXSAT; sat++) {
+        if (satsys(sat, &prn) != sys) continue;
+        if (nav->alm[sat-1].sat == sat) out_log_alm(time, sig, nav->alm + sat - 1);
+    }
+}
+
 // output NMEA RMC, GGA, GSA and GSV -------------------------------------------
 static void out_nmea(const sol_t *sol, const ssat_t *ssat, stream_t *str)
 {
@@ -462,6 +530,143 @@ static void set_obs_idx(sdr_rcv_t *rcv)
     }
 }
 
+// save nav data + almanac + last fix to file -----------------------------------
+static void save_navdata(const char *file, const nav_t *nav,
+    const sdr_pvt_t *pvt)
+{
+    FILE *fp;
+    char id[8];
+    int sat, prn;
+
+    savenav(file, nav); // eph/geph/IONUTC (overwrites with "w")
+
+    if (!(fp = fopen(file, "a"))) return; // append ALM and POS
+
+    // almanac (all systems)
+    for (sat = 1; sat <= MAXSAT; sat++) {
+        if (nav->alm[sat-1].sat != sat) continue;
+        satno2id(sat, id);
+        if (id[0] == 'R') { // GLONASS
+            fprintf(fp, "ALM,%s,%d,%.14E,%.14E,%.14E,%.14E,%.14E,%.14E,"
+                "%.14E,%.14E,%d\n", id, nav->alm[sat-1].svh,
+                nav->alm[sat-1].glo.taun, nav->alm[sat-1].glo.lambda,
+                nav->alm[sat-1].glo.di,   nav->alm[sat-1].glo.eps,
+                nav->alm[sat-1].glo.omg,  nav->alm[sat-1].glo.tlambda,
+                nav->alm[sat-1].glo.dT,   nav->alm[sat-1].glo.dTd,
+                nav->alm[sat-1].glo.frq);
+        } else {
+            if (satsys(sat, &prn) == SYS_SBS) continue;
+            fprintf(fp, "ALM,%s,%d,%d,%.14E,%.14E,%.14E,%.14E,%.14E,%.14E,"
+                "%.14E,%.14E,%.14E,%.14E\n", id, nav->alm[sat-1].svh,
+                nav->alm[sat-1].week, nav->alm[sat-1].A,
+                nav->alm[sat-1].e,    nav->alm[sat-1].i0,
+                nav->alm[sat-1].OMG0, nav->alm[sat-1].omg,
+                nav->alm[sat-1].M0,   nav->alm[sat-1].OMGd,
+                nav->alm[sat-1].toas, nav->alm[sat-1].f0,
+                nav->alm[sat-1].f1);
+        }
+    }
+    // last fix position
+    if (pvt->last_valid) {
+        fprintf(fp, "POS,%ld,%.9f,%.4f,%.4f,%.4f,%.14E,%.14E\n",
+            (long)pvt->last_time.time, pvt->last_time.sec,
+            pvt->last_rr[0], pvt->last_rr[1], pvt->last_rr[2],
+            pvt->last_dtr, pvt->last_dtrd);
+    }
+    fclose(fp);
+}
+
+// resolve almanac week from current CPU time ----------------------------------
+static int resolve_alm_week(double toas)
+{
+    int week;
+    double tow = time2gpst(utc2gpst(timeget()), &week);
+
+    if      (toas < tow - 302400.0) week++;
+    else if (toas > tow + 302400.0) week--;
+    return week;
+}
+
+// test almanac week consistency with current CPU time -------------------------
+static int valid_alm_week(int week)
+{
+    int w;
+    (void)time2gpst(utc2gpst(timeget()), &w);
+    return week > 0 && abs(week - w) <= 128;
+}
+
+// normalize GLONASS frequency channel number ---------------------------------
+static int norm_glo_fcn(int fcn)
+{
+    return fcn > 15 ? fcn - 32 : fcn;
+}
+
+// load nav data + almanac + last fix from file ---------------------------------
+static void load_navdata(const char *file, nav_t *nav, sdr_pvt_t *pvt)
+{
+    FILE *fp;
+    char buff[4096], id[16];
+    int sat, svh, week, frq;
+
+    readnav(file, nav); // eph/geph/IONUTC
+
+    if (!(fp = fopen(file, "r"))) return;
+
+    while (fgets(buff, sizeof(buff), fp)) {
+        if (!strncmp(buff, "ALM,", 4)) {
+            if (sscanf(buff + 4, "%15[^,]", id) < 1) continue;
+            if (!(sat = satid2no(id))) continue;
+            if (sat < 1 || sat > MAXSAT) continue;
+            nav->alm[sat-1].sat = sat;
+            if (id[0] == 'R') { // GLONASS
+                sscanf(buff + 4, "%*[^,],%d,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%d",
+                    &svh,
+                    &nav->alm[sat-1].glo.taun,   &nav->alm[sat-1].glo.lambda,
+                    &nav->alm[sat-1].glo.di,      &nav->alm[sat-1].glo.eps,
+                    &nav->alm[sat-1].glo.omg,     &nav->alm[sat-1].glo.tlambda,
+                    &nav->alm[sat-1].glo.dT,      &nav->alm[sat-1].glo.dTd,
+                    &frq);
+                nav->alm[sat-1].svh     = svh;
+                nav->alm[sat-1].glo.frq = norm_glo_fcn(frq);
+            } else {
+                sscanf(buff + 4, "%*[^,],%d,%d,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf",
+                    &svh, &week,
+                    &nav->alm[sat-1].A,    &nav->alm[sat-1].e,
+                    &nav->alm[sat-1].i0,   &nav->alm[sat-1].OMG0,
+                    &nav->alm[sat-1].omg,  &nav->alm[sat-1].M0,
+                    &nav->alm[sat-1].OMGd, &nav->alm[sat-1].toas,
+                    &nav->alm[sat-1].f0,   &nav->alm[sat-1].f1);
+                nav->alm[sat-1].svh  = svh;
+                nav->alm[sat-1].week = valid_alm_week(week) ? week :
+                    resolve_alm_week(nav->alm[sat-1].toas);
+                nav->alm[sat-1].toa = gpst2time(nav->alm[sat-1].week,
+                    nav->alm[sat-1].toas);
+            }
+        } else if (!strncmp(buff, "POS,", 4)) {
+            long t;
+            double sec, rr[3], dtr, dtrd;
+            gtime_t time;
+            if (sscanf(buff + 4, "%ld,%lf,%lf,%lf,%lf,%lf,%lf", &t, &sec,
+                rr, rr+1, rr+2, &dtr, &dtrd) == 7) {
+                time.time = t;
+                time.sec  = sec;
+                if (fabs(timediff(utc2gpst(timeget()), time)) < MAXDTPOS) {
+                    pvt->last_time  = time;
+                    pvt->last_rr[0] = rr[0];
+                    pvt->last_rr[1] = rr[1];
+                    pvt->last_rr[2] = rr[2];
+                    pvt->last_dtr   = dtr;
+                    pvt->last_dtrd  = dtrd;
+                    pvt->last_valid = 1;
+                } else {
+                    pvt->last_valid = 0;
+                }
+            }
+        }
+    }
+    fclose(fp);
+}
+
 //------------------------------------------------------------------------------
 //  Generate a new SDR PVT.
 //
@@ -484,6 +689,8 @@ sdr_pvt_t *sdr_pvt_new(sdr_rcv_t *rcv)
     pvt->nav->ng = pvt->nav->ngmax = MAXPRNGLO;
     pvt->nav->seph = (seph_t *)sdr_malloc(sizeof(seph_t) * NSATSBS * 2);
     pvt->nav->ns = pvt->nav->nsmax = NSATSBS * 2;
+    pvt->nav->alm = (alm_t *)sdr_malloc(sizeof(alm_t) * MAXSAT);
+    pvt->nav->na = pvt->nav->namax = MAXSAT;
     pvt->sol = (sol_t *)sdr_malloc(sizeof(sol_t));
     pvt->ssat = (ssat_t *)sdr_malloc(sizeof(ssat_t) * MAXSAT);
     pvt->rtcm = (rtcm_t *)sdr_malloc(sizeof(rtcm_t));
@@ -491,7 +698,7 @@ sdr_pvt_t *sdr_pvt_new(sdr_rcv_t *rcv)
     set_obs_idx(rcv);
     pvt->rcv = rcv;
     sdr_mutex_init(&pvt->mtx);
-    readnav(FILE_NAV, pvt->nav); // load navigation data
+    load_navdata(FILE_NAV, pvt->nav, pvt); // load nav + almanac + last fix
     return pvt;
 }
 
@@ -507,7 +714,7 @@ sdr_pvt_t *sdr_pvt_new(sdr_rcv_t *rcv)
 void sdr_pvt_free(sdr_pvt_t *pvt)
 {
     if (!pvt) return;
-    savenav(FILE_NAV, pvt->nav); // save navigation data
+    save_navdata(FILE_NAV, pvt->nav, pvt); // save nav + almanac + last fix
     sdr_free(pvt->obs->data);
     sdr_free(pvt->obs);
     sdr_free(pvt->nav->eph);
@@ -724,39 +931,56 @@ void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch)
         if (sys == SYS_GPS && ch->nav->type == 4) {
             decode_frame(data, NULL, NULL, pvt->nav->ion_gps, NULL);
         }
+        if ((ch->nav->type == 4 || ch->nav->type == 5) && // almanac (SF4/SF5)
+            decode_frame(data, NULL, pvt->nav->alm, NULL, NULL)) {
+            out_log_alm_sys(ch->time, ch->sig, pvt->nav,
+                sys == SYS_QZS ? SYS_QZS : SYS_GPS);
+        }
     } else if (!strcmp(ch->sig, "G1CA") || !strcmp(ch->sig, "G2CA")) { // GLO NAV
         pvt->nav->geph[prn-1].tof = pvt->time;
         if (ch->nav->type == 4 && test_nav_glo(ch) &&
-            decode_glostr(data, pvt->nav->geph + prn - 1, NULL)) {
+            decode_glostr(data, pvt->nav->geph + prn - 1, NULL, NULL)) {
             pvt->nav->geph[prn-1].sat = sat;
             pvt->nav->geph[prn-1].frq = ch->prn; // FCN
             out_log_eph(ch->time, ch->sat, ch->sig, pvt->nav->geph + prn - 1);
             out_rtcm3_nav(pvt->rtcm, sat, 0, pvt->nav, pvt->rcv->strs[1]);
             pvt->count[2]++;
         }
+        if (ch->nav->type == 15 && // almanac (strings 6-15 complete)
+            decode_glostr(data, NULL, pvt->nav->alm, NULL)) {
+            out_log_alm_sys(ch->time, ch->sig, pvt->nav, SYS_GLO);
+        }
     } else if (!strcmp(ch->sig, "E1B") || !strcmp(ch->sig, "E5BI")) { // GAL I/NAV
         if (ch->nav->type == 4 &&
-            decode_gal_inav(data, pvt->nav->eph + sat - 1, NULL, NULL)) {
+            decode_gal_inav(data, pvt->nav->eph + sat - 1, NULL, NULL, NULL)) {
             pvt->nav->eph[sat-1].sat = sat;
             out_log_eph(ch->time, ch->sat, ch->sig, pvt->nav->eph + sat - 1);
             out_rtcm3_nav(pvt->rtcm, sat, 0, pvt->nav, pvt->rcv->strs[1]);
             pvt->count[2]++;
         }
+        if (ch->nav->type == 10 && // almanac (word types 7-10 complete)
+            decode_gal_inav(data, NULL, pvt->nav->alm, NULL, NULL)) {
+            out_log_alm_sys(ch->time, ch->sig, pvt->nav, SYS_GAL);
+        }
     } else if (!strcmp(ch->sig, "E5AI")) { // GAL F/NAV
         if (ch->nav->type == 4 &&
             decode_gal_fnav(data, pvt->nav->eph + MAXSAT + sat - 1, NULL,
-                NULL)) {
+                NULL, NULL)) {
             pvt->nav->eph[MAXSAT+sat-1].sat = sat;
             out_log_eph(ch->time, ch->sat, ch->sig, pvt->nav->eph + MAXSAT +
                 sat - 1);
             out_rtcm3_nav(pvt->rtcm, sat, 1, pvt->nav, pvt->rcv->strs[1]);
             pvt->count[2]++;
         }
+        if (ch->nav->type == 6 && // almanac (page types 5-6 complete)
+            decode_gal_fnav(data, NULL, pvt->nav->alm, NULL, NULL)) {
+            out_log_alm_sys(ch->time, ch->sig, pvt->nav, SYS_GAL);
+        }
     } else if (!strcmp(ch->sig, "B1I") || !strcmp(ch->sig, "B2I") ||
              !strcmp(ch->sig, "B3I")) {
         eph_t eph = {0};
         if (ch->prn >= 6 && ch->prn <= 58) { // BDS D1 NAV
-            if (ch->nav->type == 3 && decode_bds_d1(data, &eph, NULL, NULL)) {
+            if (ch->nav->type == 3 && decode_bds_d1(data, &eph, NULL, NULL, NULL)) {
                 if (test_match_eph(pvt->nav->eph + sat - 1, &eph)) {
                     pvt->nav->eph[sat-1].sat = sat;
                     out_log_eph(ch->time, ch->sat, ch->sig, pvt->nav->eph + sat - 1);
@@ -768,8 +992,12 @@ void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch)
                         ch->sat, ch->sig);
                 }
             }
+            if ((ch->nav->type == 4 || ch->nav->type == 5) && // almanac (SF4/SF5)
+                decode_bds_d1(data, NULL, pvt->nav->alm, NULL, NULL)) {
+                out_log_alm_sys(ch->time, ch->sig, pvt->nav, SYS_CMP);
+            }
         } else { // BDS D2 NAV
-            if (ch->nav->type == 10 && decode_bds_d2(data, &eph, NULL)) {
+            if (ch->nav->type == 10 && decode_bds_d2(data, &eph, NULL, NULL)) {
                 if (test_match_eph(pvt->nav->eph + sat - 1, &eph)) {
                     pvt->nav->eph[sat-1].sat = sat;
                     out_log_eph(ch->time, ch->sat, ch->sig, pvt->nav->eph + sat - 1);
@@ -780,6 +1008,10 @@ void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch)
                     sdr_log(3, "$LOG,%.3f,%s,%s,EPHEMERIS UNMATCH", ch->time,
                         ch->sat, ch->sig);
                 }
+            }
+            if (ch->nav->type >= 100 && // almanac (SF5 page)
+                decode_bds_d2(data, NULL, pvt->nav->alm, NULL)) {
+                out_log_alm_sys(ch->time, ch->sig, pvt->nav, SYS_CMP);
             }
         }
     } else if (!strcmp(ch->sig, "I5S") || !strcmp(ch->sig, "ISS")) { // NavIC NAV
@@ -853,6 +1085,15 @@ static void update_sol(sdr_pvt_t *pvt)
         // correct solution time
         corr_sol_time(pvt->sol);
         
+        // save last fix for fast acquisition
+        pvt->last_time  = pvt->sol->time;
+        pvt->last_rr[0] = pvt->sol->rr[0];
+        pvt->last_rr[1] = pvt->sol->rr[1];
+        pvt->last_rr[2] = pvt->sol->rr[2];
+        pvt->last_dtr   = pvt->sol->dtr[0];
+        pvt->last_dtrd  = pvt->sol->dtr[5];   // clock drift rate (s/s)
+        pvt->last_valid = 1;
+
         // output log $POS and NMEA RMC, GGA, GSA and GSV
         out_log_pos(time, pvt->sol, pvt->obs->n);
         out_nmea(pvt->sol, pvt->ssat, pvt->rcv->strs[0]);
