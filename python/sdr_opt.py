@@ -218,7 +218,7 @@ def inp_opt_new(opt_p=None):
 # generate output option variables ---------------------------------------------
 def out_opt_new(opt_p=None):
     opt = Obj()
-    opt.log = ('TIME', 'POS', 'ATT', 'OBS', 'NAV', 'SAT', 'CH', 'EPH', 'LOG')
+    opt.log = ('TIME', 'POS', 'ATT', 'OBS', 'NAV', 'SAT', 'CH', 'EPH', 'ALM', 'LOG')
     opt.path_ena = [IntVar() for i in range(4)]
     opt.path = [StringVar() for i in range(4)]
     opt.log_sel = [IntVar() for s in opt.log]
@@ -232,7 +232,7 @@ def out_opt_new(opt_p=None):
         opt.array_sep.set(opt_p.array_sep.get())
     else:
         for i in range(len(opt.log_sel)):
-            opt.log_sel[i].set(0 if i in (5, 6) else 1)
+            opt.log_sel[i].set(0 if i in (5, 6, 7, 8) else 1)
     return opt
 
 # generate signal option variables ---------------------------------------------
@@ -270,6 +270,7 @@ def sys_opt_new(opt_p=None):
     opt.epoch = StringVar()
     opt.lag_epoch = StringVar()
     opt.el_mask = StringVar()
+    opt.acq_mode = StringVar()
     opt.sp_corr = StringVar()
     opt.t_acq = StringVar()
     opt.t_dll = StringVar()
@@ -288,6 +289,7 @@ def sys_opt_new(opt_p=None):
         opt.epoch.set(opt_p.epoch.get())
         opt.lag_epoch.set(opt_p.lag_epoch.get())
         opt.el_mask.set(opt_p.el_mask.get())
+        opt.acq_mode.set(opt_p.acq_mode.get())
         opt.sp_corr.set(opt_p.sp_corr.get())
         opt.t_acq.set(opt_p.t_acq.get())
         opt.t_dll.set(opt_p.t_dll.get())
@@ -306,6 +308,7 @@ def sys_opt_new(opt_p=None):
         opt.epoch.set('1.0')
         opt.lag_epoch.set('0.5')
         opt.el_mask.set('15')
+        opt.acq_mode.set('Full-Search')
         opt.sp_corr.set('0.25')
         opt.t_acq.set('0.02')
         opt.t_dll.set('0.02')
@@ -552,11 +555,13 @@ def out_opt_dlg(root, opt):
     panel2 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     panel2.pack(fill=X, pady=2)
     ttk.Label(panel2, text=texts[5], justify=LEFT).pack(fill=X, padx=10, pady=2)
+    n = len(opt_new.log_sel)
+    cols = 8
     panel3 = Frame(panel2, bg=BG_COLOR)
-    panel3.pack(pady=4)
-    for i in range(len(opt.log_sel)):
-        ttk.Checkbutton(panel3, text=opt.log[i], variable=opt_new.log_sel[i]
-            ).pack(side=LEFT)
+    panel3.pack(anchor=W, padx=6, pady=4)
+    for i, (label, var) in enumerate(zip(opt_new.log, opt_new.log_sel)):
+        ttk.Checkbutton(panel3, text=label, variable=var
+            ).grid(row=i // cols, column=i % cols, sticky=W, padx=4)
     panel4 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     panel4.pack(fill=X, pady=2)
     ttk.Label(panel4, text=texts[6], justify=LEFT).pack(fill=X, padx=10, pady=2)
@@ -618,43 +623,46 @@ def sys_opt_dlg(root, opt):
         'Max Doppler Frequency to Search Signal (Hz)',
         'C/N0 Threshold for Signal Locked (dB-Hz)',
         'C/N0 Threshold for Signal Lost (dB-Hz)', 'Bump Jump for BOC Modulation',
+        'Signal Acquisition Mode',
         'Max Code Length for direct acquisition (ms)')
     opt_new = sys_opt_new(opt)
-    dlg = modal_dlg_new(root, 420, 560, 'System Options')
+    dlg = modal_dlg_new(root, 420, 580, 'System Options')
     panel1 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     panel1.pack(fill=X, pady=2, ipady=1)
     sel_panel_new(panel1, labels[0], sels=('0.1', '0.2', '0.5', '1.0',
-        '2.0', '5.0'), var=opt_new.epoch, width=8)
+        '2.0', '5.0'), var=opt_new.epoch, width=10)
     sel_panel_new(panel1, labels[1], sels=('0.1', '0.2', '0.3', '0.5', '0.75',
-        '1.0'), var=opt_new.lag_epoch, width=8)
+        '1.0'), var=opt_new.lag_epoch, width=10)
     sel_panel_new(panel1, labels[2], sels=('5', '10', '15', '20', '25',
-        '30'), var=opt_new.el_mask, width=8)
+        '30'), var=opt_new.el_mask, width=10)
     panel2 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     panel2.pack(fill=X, pady=2, ipady=1)
     sel_panel_new(panel2, labels[3], sels=('0.05', '0.1', '0.15', '0.2', '0.25',
-        '0.5', '0.75', '1.0'), var=opt_new.sp_corr, width=8)
+        '0.5', '0.75', '1.0'), var=opt_new.sp_corr, width=10)
     sel_panel_new(panel2, labels[4], sels=('0.005', '0.01', '0.02', '0.05',
-        '0.1', '0.2'), var=opt_new.t_acq, width=8)
+        '0.1', '0.2'), var=opt_new.t_acq, width=10)
     sel_panel_new(panel2, labels[5], sels=('0.005', '0.01', '0.02', '0.05',
-        '0.1', '0.2'), var=opt_new.t_dll, width=8)
+        '0.1', '0.2'), var=opt_new.t_dll, width=10)
     sel_panel_new(panel2, labels[6], sels=('0.1', '0.15', '0.2', '0.25',
-        '0.3', '0.4', '0.5', '0.75', '1.0'), var=opt_new.b_dll, width=8)
+        '0.3', '0.4', '0.5', '0.75', '1.0'), var=opt_new.b_dll, width=10)
     sel_panel_new(panel2, labels[7], sels=('1.0', '2.5', '5.0', '7.5', '10.0',
-        '15.0', '20.0'), var=opt_new.b_pll, width=8)
+        '15.0', '20.0'), var=opt_new.b_pll, width=10)
     sel_panel_new(panel2, labels[8], sels=('1.0', '2.5', '5.0', '7.5', '10.0',
-        '15.0', '20.0'), var=opt_new.b_fll_w, width=8)
+        '15.0', '20.0'), var=opt_new.b_fll_w, width=10)
     sel_panel_new(panel2, labels[9], sels=('0.5', '1.0', '2.0', '3.0', '4.0',
-        '5.0', '6.0'), var=opt_new.b_fll_n, width=8)
+        '5.0', '6.0'), var=opt_new.b_fll_n, width=10)
     sel_panel_new(panel2, labels[10], sels=('3000', '5000', '7000', '10000',
-        '15000', '20000'), var=opt_new.max_dop, width=8)
+        '15000', '20000'), var=opt_new.max_dop, width=10)
     sel_panel_new(panel2, labels[11], sels=('31.0', '32.0', '33.0', '34.0',
-        '35.0', '36.0', '37.0'), var=opt_new.thres_cn0_l, width=8)
+        '35.0', '36.0', '37.0'), var=opt_new.thres_cn0_l, width=10)
     sel_panel_new(panel2, labels[12], sels=('27.0', '28.0', '29.0', '30.0',
-        '31.0', '32.0', '33.0'), var=opt_new.thres_cn0_u, width=8)
+        '31.0', '32.0', '33.0'), var=opt_new.thres_cn0_u, width=10)
     sel_panel_new(panel2, labels[13], sels=('OFF', 'ON'), var=opt_new.bump_jump,
-        width=8)
-    sel_panel_new(panel2, labels[14], sels=('1.0', '2.0', '5.0', '10.0', '20.0'),
-        var=opt_new.max_acq, width=8)
+        width=10)
+    sel_panel_new(panel2, labels[14], sels=('Full-Search', 'Fast-Search'),
+        var=opt_new.acq_mode, width=10)
+    sel_panel_new(panel2, labels[15], sels=('1.0', '2.0', '5.0', '10.0', '20.0'),
+        var=opt_new.max_acq, width=10)
     path_panel_new(dlg.panel, 'FFTW Wisdom Path', out=0,
         var_path=opt_new.fftw_wisdom_path)
     ttk.Label(dlg.panel, text='Receiver Options').pack(fill=X, padx=10, pady=4)
