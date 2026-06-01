@@ -80,9 +80,9 @@ static int fftw_size[MAX_FFTW_PLAN] = {0}; // FFTW plan sizes
 static int log_lvl = 3;            // log level
 static const char *log_types[] = { // log types
     "$TIME,", "$POS,", "$ATT,", "$OBS,", "$NAV,", "$SAT,", "$CH,", "$EPH,",
-    "$LOG,", NULL
+    "$ALM,", "$LOG,", NULL
 };
-static int log_mask[16] = {1, 1, 1, 1, 1, 1, 1, 0, 1}; // log mask
+static int log_mask[16] = {1, 1, 1, 1, 1, 1, 1, 0, 0, 1}; // log mask
 static stream_t *log_str = NULL;  // log stream
 static char log_buff[MAX_LOG_BUFF]; // log buffer
 static int log_buff_p = 0;        // log buffer pointer
