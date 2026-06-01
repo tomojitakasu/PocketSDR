@@ -454,7 +454,7 @@ static int decode_glorawca(raw_t *raw)
     if (m!=4) return 0;
     
     geph.tof=raw->time;
-    if (!decode_glostr(raw->subfrm[sat-1],&geph,utc)) return 0;
+    if (!decode_glostr(raw->subfrm[sat-1],&geph,NULL,utc)) return 0;
     
     matcpy(raw->nav.utc_glo,utc,8,1);
 
@@ -526,7 +526,7 @@ static int decode_galrawfnav(raw_t *raw)
     memcpy(raw->subfrm[sat-1]+128+(type-1)*31,buff,31);
     
     if (type!=4) return 0;
-    if (!decode_gal_fnav(raw->subfrm[sat-1]+128,&eph,ion,utc)) return 0;
+    if (!decode_gal_fnav(raw->subfrm[sat-1]+128,&eph,NULL,ion,utc)) return 0;
     
     if (eph.sat!=sat) {
         trace(2,"sbf galrawfnav satellite error: sat=%d %d\n",sat,eph.sat);
@@ -613,7 +613,7 @@ static int decode_galrawinav(raw_t *raw)
         raw->subfrm[sat-1][type*16+i]=getbitu(buff,j,8);
     }
     if (type!=5) return 0;
-    if (!decode_gal_inav(raw->subfrm[sat-1],&eph,ion,utc)) return 0;
+    if (!decode_gal_inav(raw->subfrm[sat-1],&eph,NULL,ion,utc)) return 0;
     
     if (eph.sat!=sat) {
         trace(2,"sbf galrawinav satellite error: sat=%d %d\n",sat,eph.sat);
@@ -703,10 +703,10 @@ static int decode_bdsraw(raw_t *raw)
         memcpy(raw->subfrm[sat-1]+(id-1)*38,buff,38);
         
         if (id==3) {
-            if (!decode_bds_d1(raw->subfrm[sat-1],&eph,NULL,NULL)) return 0;
+            if (!decode_bds_d1(raw->subfrm[sat-1],&eph,NULL,NULL,NULL)) return 0;
         }
         else if (id==5) {
-            if (!decode_bds_d1(raw->subfrm[sat-1],NULL,ion,utc)) return 0;
+            if (!decode_bds_d1(raw->subfrm[sat-1],NULL,NULL,ion,utc)) return 0;
             matcpy(raw->nav.ion_cmp,ion,8,1);
             matcpy(raw->nav.utc_cmp,utc,8,1);
             return 9;
@@ -719,11 +719,11 @@ static int decode_bdsraw(raw_t *raw)
         if (id==1&&pgn>=1&&pgn<=10) {
             memcpy(raw->subfrm[sat-1]+(pgn-1)*38,buff,38);
             if (pgn!=10) return 0;
-            if (!decode_bds_d2(raw->subfrm[sat-1],&eph,NULL)) return 0;
+            if (!decode_bds_d2(raw->subfrm[sat-1],&eph,NULL,NULL)) return 0;
         }
         else if (id==1&&pgn==102) {
             memcpy(raw->subfrm[sat-1]+10*38,buff,38);
-            if (!decode_bds_d2(raw->subfrm[sat-1],NULL,utc)) return 0;
+            if (!decode_bds_d2(raw->subfrm[sat-1],NULL,NULL,utc)) return 0;
             matcpy(raw->nav.utc_cmp,utc,8,1);
             return 9;
         }

@@ -861,7 +861,7 @@ static int decode_enav(raw_t *raw, int sat, int off)
         raw->subfrm[sat-1][type*16+i]=getbitu(buff,j,8);
     }
     if (type!=5) return 0;
-    if (!decode_gal_inav(raw->subfrm[sat-1],&eph,ion,utc)) return 0;
+    if (!decode_gal_inav(raw->subfrm[sat-1],&eph,NULL,ion,utc)) return 0;
         
     if (eph.sat!=sat) {
         trace(2,"ubx rxmsfrbx enav satellite error: sat=%d %d\n",sat,eph.sat);
@@ -909,10 +909,10 @@ static int decode_cnav(raw_t *raw, int sat, int off)
         memcpy(raw->subfrm[sat-1]+(id-1)*38,buff,38);
         
         if (id==3) {
-            if (!decode_bds_d1(raw->subfrm[sat-1],&eph,NULL,NULL)) return 0;
+            if (!decode_bds_d1(raw->subfrm[sat-1],&eph,NULL,NULL,NULL)) return 0;
         }
         else if (id==5) {
-            if (!decode_bds_d1(raw->subfrm[sat-1],NULL,ion,utc)) return 0;
+            if (!decode_bds_d1(raw->subfrm[sat-1],NULL,NULL,ion,utc)) return 0;
             matcpy(raw->nav.ion_cmp,ion,8,1);
             matcpy(raw->nav.utc_cmp,utc,8,1);
             return 9;
@@ -925,11 +925,11 @@ static int decode_cnav(raw_t *raw, int sat, int off)
         if (id==1&&pgn>=1&&pgn<=10) {
             memcpy(raw->subfrm[sat-1]+(pgn-1)*38,buff,38);
             if (pgn!=10) return 0;
-            if (!decode_bds_d2(raw->subfrm[sat-1],&eph,NULL)) return 0;
+            if (!decode_bds_d2(raw->subfrm[sat-1],&eph,NULL,NULL)) return 0;
         }
         else if (id==5&&pgn==102) {
             memcpy(raw->subfrm[sat-1]+10*38,buff,38);
-            if (!decode_bds_d2(raw->subfrm[sat-1],NULL,utc)) return 0;
+            if (!decode_bds_d2(raw->subfrm[sat-1],NULL,NULL,utc)) return 0;
             matcpy(raw->nav.utc_cmp,utc,8,1);
             return 9;
         }
@@ -1031,7 +1031,7 @@ static int decode_gnav(raw_t *raw, int sat, int off, int frq)
     if (m==4) {
         /* decode GLONASS ephemeris strings */
         geph.tof=raw->time;
-        if (!decode_glostr(raw->subfrm[sat-1],&geph,NULL)||geph.sat!=sat) {
+        if (!decode_glostr(raw->subfrm[sat-1],&geph,NULL,NULL)||geph.sat!=sat) {
             return 0;
         }
         geph.frq=frq-7;
@@ -1045,7 +1045,7 @@ static int decode_gnav(raw_t *raw, int sat, int off, int frq)
         return 2;
     }
     else if (m==5) {
-        if (!decode_glostr(raw->subfrm[sat-1],NULL,utc_glo)) return 0;
+        if (!decode_glostr(raw->subfrm[sat-1],NULL,NULL,utc_glo)) return 0;
         matcpy(raw->nav.utc_glo,utc_glo,8,1);
         return 9;
     }
