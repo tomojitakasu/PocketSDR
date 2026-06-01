@@ -104,9 +104,7 @@ overlay code.
 At receiver baseband, a signal can be modeled as
 
 $$
-r(t) = A\,d(t)\,c(t-\tau)\,
-       \exp(j(2\pi(f_{\mathrm{IF}}+f_D)t+\phi))
-       + n(t)
+r(t) = A\,d(t)\,c(t-\tau)\,\exp(j(2\pi(f_{\mathrm{IF}}+f_D)t+\phi)) + n(t)
 $$
 
 where `c(t)` is the primary spreading code, `d(t)` is the navigation data or
@@ -2284,10 +2282,7 @@ After front-end sampling and software unpacking, one RF channel buffer contains
 samples that can be modeled as:
 
 $$
-x[k] =
-A\,b[k]\,c[k-k_{\tau}]\,
-\exp(j(2\pi f_{\mathrm{IF}}\frac{k}{f_s}+\phi))
-+ w[k]
+x[k] = A\,b[k]\,c[k-k_{\tau}]\,\exp(j(2\pi f_{\mathrm{IF}}\frac{k}{f_s}+\phi)) + w[k]
 $$
 
 where `b[k]` represents data or secondary-code polarity over the current
@@ -2299,9 +2294,7 @@ from correlations.
 Carrier wipeoff multiplies by the conjugate carrier replica:
 
 $$
-y[k] =
-x[k]\,
-\exp(-j(2\pi f_{\mathrm{rep}}\frac{k}{f_s}+\phi_{\mathrm{rep}}))
+y[k] = x[k]\,\exp(-j(2\pi f_{\mathrm{rep}}\frac{k}{f_s}+\phi_{\mathrm{rep}}))
 $$
 
 If `f_rep` is close to the true IF plus Doppler, the desired signal becomes
