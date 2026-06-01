@@ -105,7 +105,7 @@ At receiver baseband, a signal can be modeled as
 
 $$
 r(t) = A\,d(t)\,c(t-\tau)\,
-       \exp\left(j\left(2\pi(f_{\mathrm{IF}}+f_D)t+\phi\right)\right)
+       \exp\bigl(j\bigl(2\pi(f_{\mathrm{IF}}+f_D)t+\phi\bigr)\bigr)
        + n(t)
 $$
 
@@ -551,11 +551,11 @@ replaced by three bins centered on the assisted Doppler:
 
 $$
 f_d \in
-\left\{
+\bigl\{
 f_{d,\mathrm{ext}}-\frac{0.5}{T},\;
 f_{d,\mathrm{ext}},\;
 f_{d,\mathrm{ext}}+\frac{0.5}{T}
-\right\}
+\bigr\}
 $$
 
 The receiver accumulates non-coherent correlation power until
@@ -565,9 +565,9 @@ grid for the maximum power and estimates C/N0 from the peak-to-average ratio:
 $$
 C/N_0 =
 10\log_{10}
-\left(
+\biggl(
 \frac{P_{\max}-P_{\mathrm{ave}}}{P_{\mathrm{ave}}\,T}
-\right)
+\biggr)
 $$
 
 If the result exceeds the lock threshold (`sdr_thres_cn0_l`, default
@@ -609,11 +609,11 @@ The later acquisition correlator can therefore compute
 
 $$
 R =
-\operatorname{IFFT}
-\left(
-\operatorname{FFT}(x)\,
-\operatorname{conj}\left(\operatorname{FFT}(c)\right)
-\right)
+\mathrm{IFFT}
+\bigl(
+\mathrm{FFT}(x)\,
+\mathrm{conj}\bigl(\mathrm{FFT}(c)\bigr)
+\bigr)
 $$
 
 by multiplying the data FFT by `code_fft`.
@@ -858,9 +858,9 @@ correlator:
 $$
 C/N_0 =
 10\log_{10}
-\left(
+\biggl(
 \frac{P_{\mathrm{prompt}}}{P_{\mathrm{noise}}\,T}
-\right)
+\biggr)
 $$
 
 The estimate is low-pass filtered. If C/N0 falls below the loss threshold
@@ -962,8 +962,8 @@ segments around the code wrap point:
 
 $$
 \begin{aligned}
-C_1 &= \operatorname{dot}\left(IQ[0:j],\;code[N-j:N]\right) \\
-C_2 &= \operatorname{dot}\left(IQ[j:N],\;code[0:N-j]\right)
+C_1 &= \mathrm{dot}\bigl(IQ[0:j],\;code[N-j:N]\bigr) \\
+C_2 &= \mathrm{dot}\bigl(IQ[j:N],\;code[0:N-j]\bigr)
 \end{aligned}
 $$
 
@@ -1040,7 +1040,7 @@ $$
 e_{\phi} =
 \begin{cases}
 \dfrac{\tan^{-1}(Q_P/I_P)}{2\pi}, & \text{Costas mode} \\
-\dfrac{\operatorname{atan2}(Q_P,I_P)}{2\pi}, & \text{non-Costas mode}
+\dfrac{\mathrm{atan2}(Q_P,I_P)}{2\pi}, & \text{non-Costas mode}
 \end{cases}
 $$
 
@@ -1091,7 +1091,7 @@ i_{\mathrm{code}} &\leftarrow
     i_{\mathrm{code}} + W^2 e_{\mathrm{code}}\Delta t \\
 \mathrm{coff} &\leftarrow
     \mathrm{coff}
-    - \left(1.414W e_{\mathrm{code}} + i_{\mathrm{code}}\right)\Delta t
+    - \bigl(1.414W e_{\mathrm{code}} + i_{\mathrm{code}}\bigr)\Delta t
 \end{aligned}
 $$
 
@@ -1529,12 +1529,12 @@ $$
 \begin{aligned}
 i_{\mathrm{pvt}} &=
 i_x +
-\operatorname{round}
-\left(
+\mathrm{round}
+\biggl(
 \frac{t_{\mathrm{epoch}}-t_{\mathrm{ch}}-0.07}{T_{\mathrm{cyc}}}
-\right) \\
+\biggr) \\
 i_{\mathrm{pvt}} &\leftarrow
-20\left\lfloor\frac{i_{\mathrm{pvt}}}{20}\right\rfloor
+20\biggl\lfloor\frac{i_{\mathrm{pvt}}}{20}\biggr\rfloor
 \end{aligned}
 $$
 
@@ -1602,10 +1602,10 @@ observation output. C/N0 is converted to RTKLIB SNR units:
 
 $$
 \mathrm{SNR} =
-\operatorname{round}
-\left(
+\mathrm{round}
+\biggl(
 \frac{C/N_0}{\mathrm{SNR\_UNIT}}
-\right)
+\biggr)
 $$
 
 The observation also carries loss-of-lock indicators. The implementation sets
@@ -1819,7 +1819,7 @@ while data FFTs are generated for each Doppler bin or each L6 tracking epoch.
 The PCPS acquisition complexity for one coherent integration is roughly:
 
 $$
-O\left(N_{\mathrm{dop}}\left(\operatorname{FFT}(2N)+2N\right)\right)
+O\bigl(N_{\mathrm{dop}}\bigl(\mathrm{FFT}(2N)+2N\bigr)\bigr)
 $$
 
 where `Ndop` is the number of Doppler bins. This is why Doppler assistance and
@@ -2293,7 +2293,7 @@ samples that can be modeled as:
 $$
 x[k] =
 A\,b[k]\,c[k-k_{\tau}]\,
-\exp\left(j\left(2\pi f_{\mathrm{IF}}\frac{k}{f_s}+\phi\right)\right)
+\exp\bigl(j\bigl(2\pi f_{\mathrm{IF}}\frac{k}{f_s}+\phi\bigr)\bigr)
 + w[k]
 $$
 
@@ -2308,7 +2308,7 @@ Carrier wipeoff multiplies by the conjugate carrier replica:
 $$
 y[k] =
 x[k]\,
-\exp\left(-j\left(2\pi f_{\mathrm{rep}}\frac{k}{f_s}+\phi_{\mathrm{rep}}\right)\right)
+\exp\bigl(-j\bigl(2\pi f_{\mathrm{rep}}\frac{k}{f_s}+\phi_{\mathrm{rep}}\bigr)\bigr)
 $$
 
 If `f_rep` is close to the true IF plus Doppler, the desired signal becomes
@@ -2321,18 +2321,18 @@ For a fixed Doppler bin, acquisition computes the circular correlation between
 the carrier-wiped data and the local code:
 
 $$
-R[m] = \sum_k y[k]\,\operatorname{conj}\left(c[k-m]\right)
+R[m] = \sum_k y[k]\,\mathrm{conj}\bigl(c[k-m]\bigr)
 $$
 
 Direct evaluation for all `m` would be expensive. The PCPS method uses the FFT:
 
 $$
 R =
-\operatorname{IFFT}
-\left(
-\operatorname{FFT}(y)\,
-\operatorname{conj}\left(\operatorname{FFT}(c)\right)
-\right)
+\mathrm{IFFT}
+\bigl(
+\mathrm{FFT}(y)\,
+\mathrm{conj}\bigl(\mathrm{FFT}(c)\bigr)
+\bigr)
 $$
 
 The implementation stores `conj(FFT(c))` in `code_fft`. During acquisition it
@@ -2362,9 +2362,9 @@ background correlation power. The peak excess is interpreted as signal power:
 $$
 (C/N_0)_{\mathrm{acq}} =
 10\log_{10}
-\left(
+\biggl(
 \frac{P_{\max}-P_{\mathrm{ave}}}{P_{\mathrm{ave}}\,T}
-\right)
+\biggr)
 $$
 
 In tracking, the receiver has a prompt correlator and a deliberately displaced
@@ -2373,9 +2373,9 @@ noise correlator. The prompt/noise power ratio is accumulated over 0.5 s:
 $$
 (C/N_0)_{\mathrm{trk}} =
 10\log_{10}
-\left(
+\biggl(
 \frac{\sum |P|^2}{T\sum |N|^2}
-\right)
+\biggr)
 $$
 
 Both are practical receiver metrics. They are not identical estimators and
