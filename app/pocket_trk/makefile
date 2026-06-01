@@ -5,34 +5,54 @@
 SRC = ../../src
 LIB = ../../lib
 BIN = ../../bin
+USE_SOAPY ?= 1
+USE_FFTW ?= 0
 
 INCLUDE = -I$(SRC) -I$(LIB)/RTKLIB/src
 
 ifeq ($(OS),Windows_NT)
     CC = g++
-    INCLUDE += -I$(LIB)/cyusb -I$(LIB)/SoapySDR/include
+    INCLUDE += -I$(LIB)/cyusb
     LDLIBS = $(LIB)/win32/libsdr.a $(LIB)/win32/librtk.a $(LIB)/win32/libfec.a \
              $(LIB)/win32/libldpc.a $(LIB)/cyusb/CyAPI.a -lsetupapi -lavrt -lwinmm \
-             -lws2_32 -lpthread \
-             -static -L$(LIB)/SoapySDR/lib -Wl,-Bdynamic -lSoapySDR -Wl,-Bstatic
+             -lws2_32 -lpthread -static
+    ifeq ($(USE_SOAPY),1)
+        INCLUDE += -I$(LIB)/SoapySDR/include
+        LDLIBS += -L$(LIB)/SoapySDR/lib -Wl,-Bdynamic -lSoapySDR -Wl,-Bstatic
+    endif
     
-    LDLIBS += $(LIB)/win32/libpocketfft.a
-    #LDLIBS += -lfftw3f
+    ifeq ($(USE_FFTW),1)
+        LDLIBS += -lfftw3f
+    else
+        LDLIBS += $(LIB)/win32/libpocketfft.a
+    endif
 else ifeq ($(shell uname -sm),Darwin arm64)
     CC = clang++
     INCLUDE += -I/opt/homebrew/include
     LDLIBS = -L/opt/homebrew/lib $(LIB)/macos/libsdr.a $(LIB)/macos/librtk.a $(LIB)/macos/libfec.a \
-             $(LIB)/macos/libldpc.a -lpthread -lm -lusb-1.0 -lSoapySDR
+             $(LIB)/macos/libldpc.a -lpthread -lm -lusb-1.0
+    ifeq ($(USE_SOAPY),1)
+        LDLIBS += -lSoapySDR
+    endif
     
-    LDLIBS += $(LIB)/macos/libpocketfft.a
-    #LDLIBS += -lfftw3f
+    ifeq ($(USE_FFTW),1)
+        LDLIBS += -lfftw3f
+    else
+        LDLIBS += $(LIB)/macos/libpocketfft.a
+    endif
 else
     CC = g++
     LDLIBS = $(LIB)/linux/libsdr.a $(LIB)/linux/librtk.a $(LIB)/linux/libfec.a \
-             $(LIB)/linux/libldpc.a -lpthread -lm -lusb-1.0 -lSoapySDR
+             $(LIB)/linux/libldpc.a -lpthread -lm -lusb-1.0
+    ifeq ($(USE_SOAPY),1)
+        LDLIBS += -lSoapySDR
+    endif
     
-    LDLIBS += $(LIB)/linux/libpocketfft.a
-    #LDLIBS += -lfftw3f
+    ifeq ($(USE_FFTW),1)
+        LDLIBS += -lfftw3f
+    else
+        LDLIBS += $(LIB)/linux/libpocketfft.a
+    endif
 endif
 
 WARNOPT = -Wall -Wextra -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function
@@ -55,4 +75,3 @@ clean:
 
 install:
 	cp $(TARGET) $(BIN)
-
