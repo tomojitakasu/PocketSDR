@@ -52,11 +52,16 @@
 *           branch for Pocket SDR
 *           2024/04/03 0.1  delete receiver dependent functions
 *           2025/03/05 0.2  support binex, novatel, ublox, septentrio
+*           2026/06/01 0.3  add almanac decoder functions for GLO,GAL,BDS
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
 #define P2_8        0.00390625            /* 2^-8 */
+#define P2_9        1.953125000000000E-03 /* 2^-9 */
+#define P2_14       6.103515625000000E-05 /* 2^-14 */
 #define P2_15       3.051757812500000E-05 /* 2^-15 */
+#define P2_16       1.525878906250000E-05 /* 2^-16 */
+#define P2_18       3.814697265625000E-06 /* 2^-18 */
 #define P2_28       3.725290298461914E-09 /* 2^-28 */
 #define P2_34       5.820766091346740E-11 /* 2^-34 */
 #define P2_41       4.547473508864641E-13 /* 2^-41 */
@@ -115,6 +120,22 @@ static double getbitg(const uint8_t *buff, int pos, int len)
 {
     double value=getbitu(buff,pos+1,len-1);
     return getbitu(buff,pos,1)?-value:value;
+}
+/* adjust 8-bit GPS/QZSS almanac week number ---------------------------------*/
+static int adj_alm_week(int week)
+{
+    int w;
+    (void)time2gpst(utc2gpst(timeget()),&w);
+    if (w<1560) w=1560; /* use 2009/12/1 if time is earlier than 2009/12/1 */
+    return week+(w-week+128)/256*256;
+}
+/* adjust 2-bit Galileo almanac week number and convert to GPS week ----------*/
+static int adj_gal_alm_week(int wna)
+{
+    int w;
+    (void)time2gst(utc2gpst(timeget()),&w);
+    if (w<536) w=536; /* GST week corresponding to 2009/12/1 */
+    return wna+(w-wna+2)/4*4+1024;
 }
 /* decode NavIC/IRNSS ephemeris ----------------------------------------------*/
 static int decode_irn_eph(const uint8_t *buff, eph_t *eph)
@@ -183,7 +204,7 @@ static int decode_irn_ion(const uint8_t *buff, double *ion)
     /* subframe 3 and 4 message ids */
     id3=getbitu(buff,8*37*2+30,6);
     id4=getbitu(buff,8*37*3+30,6);
-
+    
     /* 11: eop and ionosphere coefficients */
     if      (id3==11) i=8*37*2+174;
     else if (id4==11) i=8*37*3+174;
@@ -345,7 +366,7 @@ static int decode_gal_inav_eph(const uint8_t *buff, eph_t *eph)
 static int decode_gal_inav_ion(const uint8_t *buff, double *ion)
 {
     int i=128*5; /* word type 5 */
-
+    
     trace(4,"decode_gal_inav_ion:\n");
     
     if (getbitu(buff,i,6)!=5) return 0;
@@ -375,17 +396,126 @@ static int decode_gal_inav_utc(const uint8_t *buff, double *utc)
     utc[7]=getbits(buff,i, 8);               /* dt_LSF */
     return 1;
 }
+/* set Galileo reduced almanac parameters (ref [5] 5.1.10) -------------------*/
+static void set_gal_alm(alm_t *alm, int sat, int dA, int e, int omg, int di,
+                        int OMG0, int OMGd, int M0, int af0, int af1, int svh,
+                        int wna, int t0a)
+{
+    double sqrtA=5440.588203494+dA*P2_9; /* sqrt(29600000) + Delta(sqrtA) */
+    int week=adj_gal_alm_week(wna);
+    
+    alm->sat =sat;
+    alm->A   =sqrtA*sqrtA;
+    alm->e   =e*P2_16;
+    alm->i0  =(di*P2_14+56.0/180.0)*SC2RAD; /* i_ref = 56 deg */
+    alm->OMG0=OMG0*P2_15*SC2RAD;
+    alm->omg =omg*P2_15*SC2RAD;
+    alm->M0  =M0*P2_15*SC2RAD;
+    alm->OMGd=OMGd*P2_33*SC2RAD;
+    alm->f0  =af0*P2_19;
+    alm->f1  =af1*P2_38;
+    alm->toas=t0a*600.0;
+    alm->svh =svh;
+    alm->week=week;
+    alm->toa =gst2time(week-1024,alm->toas);
+}
+/* decode Galileo I/NAV almanac (ref [5] 4.3.10) -----------------------------*/
+static int decode_gal_inav_alm(const uint8_t *buff, alm_t *alm)
+{
+    int i,k,type[4],ioda[4],wna,t0a,svid[3],sat;
+    int dA[3],e[3],omg[3],di[3],OMG0[3],OMGd[3],M0[3],af0[3],af1[3];
+    int e5b_hs[3],e1b_hs[3];
+    
+    trace(4,"decode_gal_inav_alm:\n");
+    
+    i=128*7; /* word type 7: almanac SVID1(1/2) */
+    type[0] =getbitu(buff,i, 6); i+= 6;
+    ioda[0] =getbitu(buff,i, 4); i+= 4;
+    wna     =getbitu(buff,i, 2); i+= 2;
+    t0a     =getbitu(buff,i,10); i+=10;
+    svid[0] =getbitu(buff,i, 6); i+= 6;
+    dA[0]   =getbits(buff,i,13); i+=13;
+    e[0]    =getbitu(buff,i,11); i+=11;
+    omg[0]  =getbits(buff,i,16); i+=16;
+    di[0]   =getbits(buff,i,11); i+=11;
+    OMG0[0] =getbits(buff,i,16); i+=16;
+    OMGd[0] =getbits(buff,i,11); i+=11;
+    M0[0]   =getbits(buff,i,16);
+    
+    i=128*8; /* word type 8: almanac SVID1(2/2) + SVID2(1/2) */
+    type[1] =getbitu(buff,i, 6); i+= 6;
+    ioda[1] =getbitu(buff,i, 4); i+= 4;
+    af0[0]  =getbits(buff,i,16); i+=16;
+    af1[0]  =getbits(buff,i,13); i+=13;
+    e5b_hs[0]=getbitu(buff,i,2); i+= 2;
+    e1b_hs[0]=getbitu(buff,i,2); i+= 2;
+    svid[1] =getbitu(buff,i, 6); i+= 6;
+    dA[1]   =getbits(buff,i,13); i+=13;
+    e[1]    =getbitu(buff,i,11); i+=11;
+    omg[1]  =getbits(buff,i,16); i+=16;
+    di[1]   =getbits(buff,i,11); i+=11;
+    OMG0[1] =getbits(buff,i,16); i+=16;
+    OMGd[1] =getbits(buff,i,11);
+    
+    i=128*9; /* word type 9: almanac SVID2(2/2) + SVID3(1/2) */
+    type[2] =getbitu(buff,i, 6); i+= 6;
+    ioda[2] =getbitu(buff,i, 4); i+= 4+2+10; /* skip WNa,t0a (= word type 7) */
+    M0[1]   =getbits(buff,i,16); i+=16;
+    af0[1]  =getbits(buff,i,16); i+=16;
+    af1[1]  =getbits(buff,i,13); i+=13;
+    e5b_hs[1]=getbitu(buff,i,2); i+= 2;
+    e1b_hs[1]=getbitu(buff,i,2); i+= 2;
+    svid[2] =getbitu(buff,i, 6); i+= 6;
+    dA[2]   =getbits(buff,i,13); i+=13;
+    e[2]    =getbitu(buff,i,11); i+=11;
+    omg[2]  =getbits(buff,i,16); i+=16;
+    di[2]   =getbits(buff,i,11);
+    
+    i=128*10; /* word type 10: almanac SVID3(2/2) */
+    type[3] =getbitu(buff,i, 6); i+= 6;
+    ioda[3] =getbitu(buff,i, 4); i+= 4;
+    OMG0[2] =getbits(buff,i,16); i+=16;
+    OMGd[2] =getbits(buff,i,11); i+=11;
+    M0[2]   =getbits(buff,i,16); i+=16;
+    af0[2]  =getbits(buff,i,16); i+=16;
+    af1[2]  =getbits(buff,i,13); i+=13;
+    e5b_hs[2]=getbitu(buff,i,2); i+= 2;
+    e1b_hs[2]=getbitu(buff,i,2);
+    
+    if (type[0]!=7||type[1]!=8||type[2]!=9||type[3]!=10) {
+        trace(3,"decode_gal_inav_alm error: type=%d %d %d %d\n",type[0],type[1],
+              type[2],type[3]);
+        return 0;
+    }
+    if (ioda[0]!=ioda[1]||ioda[0]!=ioda[2]||ioda[0]!=ioda[3]) {
+        trace(3,"decode_gal_inav_alm error: ioda=%d %d %d %d\n",ioda[0],ioda[1],
+              ioda[2],ioda[3]);
+        return 0;
+    }
+    for (k=0;k<3;k++) {
+        if (!svid[k]||!(sat=satno(SYS_GAL,svid[k]))) continue;
+        set_gal_alm(alm+sat-1,sat,dA[k],e[k],omg[k],di[k],OMG0[k],OMGd[k],M0[k],
+            af0[k],af1[k],(e5b_hs[k]<<7)|(e1b_hs[k]<<1),wna,t0a);
+    }
+    return 1;
+}
 /* decode Galileo I/NAV navigation data ----------------------------------------
 * decode Galileo I/NAV navigation data (ref [5] 4.3)
 * args   : uint8_t *buff    I   Galileo I/NAV subframe data (CRC checked)
-*                                 buff[ 0- 15]: word type 0 (128 bits)
-*                                 buff[16- 31]: word type 1
-*                                 buff[32- 47]: word type 2
-*                                 buff[48- 63]: word type 3
-*                                 buff[64- 79]: word type 4
-*                                 buff[80- 95]: word type 5
-*                                 buff[96-111]: word type 6
+*                                 buff[  0- 15]: word type 0 (128 bits)
+*                                 buff[ 16- 31]: word type 1
+*                                 buff[ 32- 47]: word type 2
+*                                 buff[ 48- 63]: word type 3
+*                                 buff[ 64- 79]: word type 4
+*                                 buff[ 80- 95]: word type 5
+*                                 buff[ 96-111]: word type 6
+*                                 buff[112-127]: word type 7  (almanac)
+*                                 buff[128-143]: word type 8  (almanac)
+*                                 buff[144-159]: word type 9  (almanac)
+*                                 buff[160-175]: word type 10 (almanac)
 *          eph_t    *eph    IO  Galileo I/NAV ephemeris       (NULL: not output)
+*          alm_t    *alm    IO  Galileo I/NAV almanac         (NULL: not output)
+*                                 alm[sat-1]: almanac (sat=sat no)
 *          double   *ion    IO  Galileo I/NAV iono parameters (NULL: not output)
 *                                 ion[0-3]: a_i0,a_i1,a_i2,flags
 *          double   *utc    IO  Galileo I/NAV UTC parameters  (NULL: not output)
@@ -393,12 +523,13 @@ static int decode_gal_inav_utc(const uint8_t *buff, double *utc)
 *                                 utc[4-7]: dt_LS,WN_LSF,DN,dt_LSF
 * return : status (1:ok,0:error)
 *-----------------------------------------------------------------------------*/
-extern int decode_gal_inav(const uint8_t *buff, eph_t *eph, double *ion,
-                           double *utc)
+extern int decode_gal_inav(const uint8_t *buff, eph_t *eph, alm_t *alm,
+                           double *ion, double *utc)
 {
-    trace(4,"decode_gal_fnav:\n");
+    trace(4,"decode_gal_inav:\n");
     
     if (eph&&!decode_gal_inav_eph(buff,eph)) return 0;
+    if (alm&&!decode_gal_inav_alm(buff,alm)) return 0;
     if (ion&&!decode_gal_inav_ion(buff,ion)) return 0;
     if (utc&&!decode_gal_inav_utc(buff,utc)) return 0;
     return 1;
@@ -458,7 +589,7 @@ static int decode_gal_fnav_eph(const uint8_t *buff, eph_t *eph)
     iod_nav[3]  =getbitu(buff,i,10);              i+=10;
     eph_gal.cic =getbits(buff,i,16)*P2_29;        i+=16;
     eph_gal.cis =getbits(buff,i,16)*P2_29;
-
+    
     /* test page types */
     if (type[0]!=1||type[1]!=2||type[2]!=3||type[3]!=4) {
         trace(3,"decode_gal_fnav error: svid=%d type=%d %d %d %d\n",svid,
@@ -524,6 +655,48 @@ static int decode_gal_fnav_utc(const uint8_t *buff, double *utc)
     utc[7]=getbits(buff,i, 8);               /* dt_LSF */
     return 1;
 }
+/* decode Galileo F/NAV almanac (ref [5] 4.2.8) ------------------------------*/
+static int decode_gal_fnav_alm(const uint8_t *buff, alm_t *alm)
+{
+    int p5=124*8,p6=155*8; /* page type 5/6 bit offset */
+    int wna,t0a,svid,sat;
+    
+    trace(4,"decode_gal_fnav_alm:\n");
+    
+    if (getbitu(buff,p5,6)!=5||getbitu(buff,p6,6)!=6) return 0;
+    
+    wna=getbitu(buff,p5+10,2);
+    t0a=getbitu(buff,p5+12,10);
+    
+    /* SVID1 (page type 5) */
+    if ((svid=getbitu(buff,p5+22,6))&&(sat=satno(SYS_GAL,svid))) {
+        set_gal_alm(alm+sat-1,sat,
+            getbits(buff,p5+ 28,13),getbitu(buff,p5+ 41,11),
+            getbits(buff,p5+ 52,16),getbits(buff,p5+ 68,11),
+            getbits(buff,p5+ 79,16),getbits(buff,p5+ 95,11),
+            getbits(buff,p5+106,16),getbits(buff,p5+122,16),
+            getbits(buff,p5+138,13),getbitu(buff,p5+151,2)<<4,wna,t0a);
+    }
+    /* SVID2 (page type 5/6, OMEGA0 split over the two pages) */
+    if ((svid=getbitu(buff,p5+153,6))&&(sat=satno(SYS_GAL,svid))) {
+        set_gal_alm(alm+sat-1,sat,
+            getbits (buff,p5+159,13),getbitu(buff,p5+172,11),
+            getbits (buff,p5+183,16),getbits(buff,p5+199,11),
+            getbits2(buff,p5+210, 4,p6+10,12),getbits(buff,p6+ 22,11),
+            getbits (buff,p6+ 33,16),getbits(buff,p6+ 49,16),
+            getbits (buff,p6+ 65,13),getbitu(buff,p6+ 78,2)<<4,wna,t0a);
+    }
+    /* SVID3 (page type 6) */
+    if ((svid=getbitu(buff,p6+80,6))&&(sat=satno(SYS_GAL,svid))) {
+        set_gal_alm(alm+sat-1,sat,
+            getbits(buff,p6+ 86,13),getbitu(buff,p6+ 99,11),
+            getbits(buff,p6+110,16),getbits(buff,p6+126,11),
+            getbits(buff,p6+137,16),getbits(buff,p6+153,11),
+            getbits(buff,p6+164,16),getbits(buff,p6+180,16),
+            getbits(buff,p6+196,13),getbitu(buff,p6+209,2)<<4,wna,t0a);
+    }
+    return 1;
+}
 /* decode Galileo F/NAV navigation data ----------------------------------------
 * decode Galileo F/NAV navigation data (ref [5] 4.2)
 * args   : uint8_t *buff    I   Galileo F/NAV subframe data (CRC checked)
@@ -531,9 +704,11 @@ static int decode_gal_fnav_utc(const uint8_t *buff, double *utc)
 *                                 buff[ 31- 61]: page type 2
 *                                 buff[ 62- 92]: page type 3
 *                                 buff[ 93-123]: page type 4
-*                                 buff[124-154]: page type 5
-*                                 buff[155-185]: page type 6 
+*                                 buff[124-154]: page type 5 (almanac)
+*                                 buff[155-185]: page type 6 (almanac)
 *          eph_t    *eph    IO  Galileo F/NAV ephemeris       (NULL: not output)
+*          alm_t    *alm    IO  Galileo F/NAV almanac         (NULL: not output)
+*                                 alm[sat-1]: almanac (sat=sat no)
 *          double   *ion    IO  Galileo F/NAV iono parameters (NULL: not output)
 *                                 ion[0-3]: a_i0,a_i1,a_i2,flags
 *          double   *utc    IO  Galileo F/NAV UTC parameters  (NULL: not output)
@@ -541,15 +716,16 @@ static int decode_gal_fnav_utc(const uint8_t *buff, double *utc)
 *                                 utc[4-7]: dt_LS,WN_LSF,DN,dt_LSF
 * return : status (1:ok,0:error)
 *-----------------------------------------------------------------------------*/
-extern int decode_gal_fnav(const uint8_t *buff, eph_t *eph, double *ion,
-                           double *utc)
+extern int decode_gal_fnav(const uint8_t *buff, eph_t *eph, alm_t *alm,
+                           double *ion, double *utc)
 {
     trace(4,"decode_gal_fnav:\n");
 
-    if (eph&&!decode_gal_fnav_eph(buff,eph)) return 0;    
-    if (ion&&!decode_gal_fnav_ion(buff,ion)) return 0;    
+    if (eph&&!decode_gal_fnav_eph(buff,eph)) return 0;
+    if (alm&&!decode_gal_fnav_alm(buff,alm)) return 0;
+    if (ion&&!decode_gal_fnav_ion(buff,ion)) return 0;
     if (utc&&!decode_gal_fnav_utc(buff,utc)) return 0;
-    return 1; 
+    return 1;
 }
 /* decode BDS D1 navigation data ---------------------------------------------*/
 static int decode_bds_d1_eph(const uint8_t *buff, eph_t *eph)
@@ -667,15 +843,59 @@ static int decode_bds_d1_utc(const uint8_t *buff, double *utc)
     utc[3]=getbitu (buff,60,13);             /* WN */
     return 1;
 }
+/* decode BDS almanac block (ref [3] 5.2.4.10) -------------------------------*/
+static int decode_bds_alm(const uint8_t *buff, int i, int prn, alm_t *alm)
+{
+    double sqrtA;
+    int sat;
+    
+    if (!(sat=satno(SYS_CMP,prn))) return 0;
+    sqrtA=getbitu2(buff,i+50,2,i+60,22)*P2_11;
+    if (sqrtA<=0.0) return 0; /* empty almanac slot */
+    
+    alm[sat-1].sat =sat;
+    alm[sat-1].A   =sqrtA*sqrtA;
+    alm[sat-1].f1  =getbits (buff,i+ 90,11)*P2_38;
+    alm[sat-1].f0  =getbits (buff,i+101,11)*P2_20;
+    alm[sat-1].OMG0=getbits2(buff,i+120,22,i+150, 2)*P2_23*SC2RAD;
+    alm[sat-1].e   =getbitu (buff,i+152,17)*P2_21;
+    alm[sat-1].i0  =(getbits2(buff,i+169,3,i+180,13)*P2_19+0.30)*SC2RAD;
+    alm[sat-1].toas=getbitu (buff,i+193, 8)*P2P12;
+    alm[sat-1].OMGd=getbits2(buff,i+201,1,i+210,16)*P2_38*SC2RAD;
+    alm[sat-1].omg =getbits2(buff,i+226,6,i+240,18)*P2_23*SC2RAD;
+    alm[sat-1].M0  =getbits2(buff,i+258,4,i+270,20)*P2_23*SC2RAD;
+    return 1;
+}
+/* decode BDS D1 almanac (ref [3] 5.2.4.10) ----------------------------------*/
+static int decode_bds_d1_alm(const uint8_t *buff, alm_t *alm)
+{
+    int i,pnum,ret=0;
+
+    trace(4,"decode_bds_d1_alm:\n");
+
+    i=8*38*3; /* subframe 4 page 1-24: almanac of PRN 1-24 */
+    if (getbitu(buff,i+15,3)==4) {
+        pnum=getbitu(buff,i+43,7);
+        if (pnum>=1&&pnum<=24) ret|=decode_bds_alm(buff,i,pnum,alm);
+    }
+    i=8*38*4; /* subframe 5 page 1-6: almanac of PRN 25-30 */
+    if (getbitu(buff,i+15,3)==5) {
+        pnum=getbitu(buff,i+43,7);
+        if (pnum>=1&&pnum<=6) ret|=decode_bds_alm(buff,i,pnum+24,alm);
+    }
+    return ret;
+}
 /* decode BDS D1 navigation data -----------------------------------------------
 * decode BDS D1 navigation data (IGSO/MEO) (ref [3] 5.2)
 * args   : uint8_t *buff    I   BDS D1 subframe data (CRC checked with parity)
 *                                  buff[  0- 37]: subframe 1 (300 bits)
 *                                  buff[ 38- 75]: subframe 2
 *                                  buff[ 76-113]: subframe 3
-*                                  buff[114-141]: subframe 4
-*                                  buff[152-189]: subframe 5
+*                                  buff[114-151]: subframe 4 (almanac PRN 1-24)
+*                                  buff[152-189]: subframe 5 (almanac PRN 25-30)
 *          eph_t    *eph    IO  BDS D1 ephemeris       (NULL: not output)
+*          alm_t    *alm    IO  BDS D1 almanac         (NULL: not output)
+*                                 alm[sat-1]: almanac (sat=sat no)
 *          double   *ion    IO  BDS D1 iono parameters (NULL: not output)
 *                                 ion[0-3]: alpha_0,...,alpha_3
 *                                 ion[4-7]: beta_0,...,beta_3
@@ -684,12 +904,13 @@ static int decode_bds_d1_utc(const uint8_t *buff, double *utc)
 *                                 utc[4-7]: dt_LS,WN_LSF,DN,dt_LSF
 * return : status (1:ok,0:error)
 *-----------------------------------------------------------------------------*/
-extern int decode_bds_d1(const uint8_t *buff, eph_t *eph, double *ion,
-                         double *utc)
+extern int decode_bds_d1(const uint8_t *buff, eph_t *eph, alm_t *alm,
+                         double *ion, double *utc)
 {
     trace(4,"decode_bds_d1:\n");
     
     if (eph&&!decode_bds_d1_eph(buff,eph)) return 0;
+    if (alm&&!decode_bds_d1_alm(buff,alm)) return 0;
     if (ion&&!decode_bds_d1_ion(buff,ion)) return 0;
     if (utc&&!decode_bds_d1_utc(buff,utc)) return 0;
     return 1;
@@ -836,6 +1057,21 @@ static int decode_bds_d2_utc(const uint8_t *buff, double *utc)
     utc[3]=getbitu (buff,64,13);             /* WN */
     return 1;
 }
+/* decode BDS D2 almanac (ref [3] 5.3.4) -------------------------------------*/
+static int decode_bds_d2_alm(const uint8_t *buff, alm_t *alm)
+{
+    int i=8*38*10,pnum; /* subframe 5 page (stored at slot 10) */
+
+    trace(4,"decode_bds_d2_alm:\n");
+
+    if (getbitu(buff,i+15,3)!=5) return 0;
+    pnum=getbitu(buff,i+43,7);
+    /* note: D2 SF5 almanac page->PRN mapping and block layout assumed same as
+       D1; to be verified with live BDS GEO data */
+    if (pnum>= 37&&pnum<= 60) return decode_bds_alm(buff,i,pnum-36,alm); /* PRN 1-24 */
+    if (pnum>= 95&&pnum<=100) return decode_bds_alm(buff,i,pnum-70,alm); /* PRN 25-30 */
+    return 0;
+}
 /* decode BDS D2 navigation data -----------------------------------------------
 * decode BDS D2 navigation data (GEO) (ref [3] 5.3)
 * args   : uint8_t *buff    I   BDS D2 subframe data (CRC checked with parity)
@@ -843,18 +1079,23 @@ static int decode_bds_d2_utc(const uint8_t *buff, double *utc)
 *                                 buff[ 38- 75]: subframe 1 page 2
 *                                 ...
 *                                 buff[342-379]: subframe 1 page 10
-*                                 buff[380-417]: subframe 5 page 102
+*                                 buff[380-417]: subframe 5 page (UTC pg 102 or
+*                                                almanac pg 37-60, 95-100)
 *          eph_t    *eph    IO  BDS D2 ephemeris       (NULL: not output)
+*          alm_t    *alm    IO  BDS D2 almanac         (NULL: not output)
+*                                 alm[sat-1]: almanac (sat=sat no)
 *          double   *utc    IO  BDS D2 UTC parameters  (NULL: not output)
 *                                 utc[0-2]: A0,A1,tot,WNt
 *                                 utc[4-7]: dt_LS,WN_LSF,DN,dt_LSF
 * return : status (1:ok,0:error)
 *-----------------------------------------------------------------------------*/
-extern int decode_bds_d2(const uint8_t *buff, eph_t *eph, double *utc)
+extern int decode_bds_d2(const uint8_t *buff, eph_t *eph, alm_t *alm,
+                         double *utc)
 {
     trace(4,"decode_bds_d2:\n");
     
     if (eph&&!decode_bds_d2_eph(buff,eph)) return 0;
+    if (alm&&!decode_bds_d2_alm(buff,alm)) return 0;
     if (utc&&!decode_bds_d2_utc(buff,utc)) return 0;
     return 1;
 }
@@ -989,16 +1230,53 @@ static int decode_glostr_utc(const uint8_t *buff, double *utc)
     utc[2]=utc[3]=utc[4]=utc[5]=utc[6]=utc[7]=0.0;
     return 1;
 }
+/* decode GLONASS almanac (ref [2] 4.5) --------------------------------------*/
+static int decode_glostr_alm(const uint8_t *buff, alm_t *alm)
+{
+    int sat,slot,k,be,bo;
+    
+    trace(4,"decode_glostr_alm:\n");
+    
+    /* almanac is carried by string pairs (6,7),(8,9),...,(14,15) */
+    for (k=0;k<5;k++) {
+        be=80*(2*k+5); /* even string (6,8,..): string N -> bit 80*(N-1) */
+        bo=be+80;      /* odd string  (7,9,..) */
+        if (getbitu(buff,be+1,4)!=2*k+6) continue; /* check string number */
+        slot=getbitu(buff,be+8,5);                 /* n_A (slot number) */
+        if (!slot||!(sat=satno(SYS_GLO,slot))) continue;
+        /* GLONASS almanac uses modified Keplerian elements stored in the
+           GLONASS-specific alm_t members (glo_*); the Keplerian members are
+           left 0 (use glo_* for GLONASS orbit computation) */
+        alm[sat-1].sat        =sat;
+        alm[sat-1].svh        =getbitu(buff,be+ 5, 1)?0:1; /* C_n: 1=healthy */
+        alm[sat-1].glo.taun   =getbitg(buff,be+13,10)*P2_18;
+        alm[sat-1].glo.lambda =getbitg(buff,be+23,21)*P2_20*SC2RAD;
+        alm[sat-1].glo.di     =getbitg(buff,be+44,18)*P2_20*SC2RAD;
+        alm[sat-1].glo.eps    =getbitu(buff,be+62,15)*P2_20;
+        alm[sat-1].glo.omg    =getbitg(buff,bo+ 5,16)*P2_15*SC2RAD;
+        alm[sat-1].glo.tlambda=getbitu(buff,bo+21,21)/32.0;
+        alm[sat-1].glo.dT     =getbitg(buff,bo+42,22)*P2_9;
+        alm[sat-1].glo.dTd    =getbitg(buff,bo+64, 7)*P2_14;
+        alm[sat-1].glo.frq    =getbits(buff,bo+71, 5);
+    }
+    return 1;
+}
 /* decode GLONASS navigation data strings --------------------------------------
 * decode GLONASS navigation data string (ref [2])
 * args   : uint8_t *buff    I   GLONASS navigation data string
 *                               (w/o hamming and time mark)
-*                                 buff[ 0- 9]: string 1 (77 bits)
-*                                 buff[10-19]: string 2
-*                                 buff[20-29]: string 3
-*                                 buff[30-39]: string 4
-*                                 buff[40-49]: string 5
+*                                 buff[  0-  9]: string 1 (77 bits)
+*                                 buff[ 10- 19]: string 2
+*                                 buff[ 20- 29]: string 3
+*                                 buff[ 30- 39]: string 4
+*                                 buff[ 40- 49]: string 5
+*                                 buff[ 50- 59]: string 6  (almanac)
+*                                 buff[ 60- 69]: string 7  (almanac)
+*                                 ...            ...
+*                                 buff[140-149]: string 15 (almanac)
 *          geph_t *geph     IO  GLONASS ephemeris      (NULL: not output)
+*          alm_t  *alm      IO  GLONASS almanac        (NULL: not output)
+*                                 alm[sat-1]: almanac (sat=sat no)
 *          double *utc      IO  GLONASS UTC parameters (NULL: not output)
 *                                 utc[0]  : A0 (=-tau_C)
 *                                 utc[1-7]: reserved
@@ -1006,11 +1284,13 @@ static int decode_glostr_utc(const uint8_t *buff, double *utc)
 * notes  : geph->tof should be set to frame time within 1/2 day before calling
 *          geph->frq is set to 0
 *-----------------------------------------------------------------------------*/
-extern int decode_glostr(const uint8_t *buff, geph_t *geph, double *utc)
+extern int decode_glostr(const uint8_t *buff, geph_t *geph, alm_t *alm,
+                         double *utc)
 {
     trace(4,"decode_glostr:\n");
     
     if (geph&&!decode_glostr_eph(buff,geph)) return 0;
+    if (alm &&!decode_glostr_alm(buff,alm )) return 0;
     if (utc &&!decode_glostr_utc(buff,utc )) return 0;
     return 1;
 }
@@ -1093,10 +1373,11 @@ static int decode_frame_eph(const uint8_t *buff, eph_t *eph)
 /* decode GPS/QZSS satellite almanac -----------------------------------------*/
 static void decode_alm_sat(const uint8_t *buff, int type, alm_t *alm)
 {
-    gtime_t toa0={0};
     double deltai,sqrtA,i_ref,e_ref;
-    int i=50,f0;
-
+    double tow;
+    int week;
+    int i=56,f0;
+    
     trace(4,"decode_alm_sat:\n");
     
     /* type=0:GPS,1:QZS-QZO,2:QZS-GEO */
@@ -1117,8 +1398,11 @@ static void decode_alm_sat(const uint8_t *buff, int type, alm_t *alm)
     alm->f0  =getbitu(buff,i, 3)*P2_17+f0*P2_20;
     alm->A   =sqrtA*sqrtA;
     alm->i0  =(i_ref+deltai)*SC2RAD;
-    alm->week=0;
-    alm->toa=toa0;
+    tow=time2gpst(utc2gpst(timeget()),&week);
+    if      (alm->toas<tow-302400.0) week++;
+    else if (alm->toas>tow+302400.0) week--;
+    alm->week=week;
+    alm->toa=gpst2time(week,alm->toas);
 }
 /* decode GPS almanac/health -------------------------------------------------*/
 static int decode_alm_gps(const uint8_t *buff, int frm, alm_t *alm)
@@ -1130,7 +1414,7 @@ static int decode_alm_gps(const uint8_t *buff, int frm, alm_t *alm)
     if ((frm==5&&svid>=1&&svid<=24)||(frm==4&&svid>=25&&svid<=32)) {
         if (!(sat=satno(SYS_GPS,svid))) return 0;
         alm[sat-1].sat=sat;
-        decode_alm_sat(buff,0,alm+sat);
+        decode_alm_sat(buff,0,alm+sat-1);
         return 1;
     }
     else if (frm==5&&svid==51) { /* subframe 5 page 25 */
@@ -1144,7 +1428,7 @@ static int decode_alm_gps(const uint8_t *buff, int frm, alm_t *alm)
         for (j=0;j<32;j++) {
             if (!(sat=satno(SYS_GPS,j+1))||alm[sat-1].sat!=sat||
                 alm[sat-1].toas!=toas) continue;
-            alm[sat-1].week=adjgpsweek(week);
+            alm[sat-1].week=adj_alm_week(week);
             alm[sat-1].toa=gpst2time(alm[sat-1].week,toas);
         }
         return 1;
@@ -1169,7 +1453,7 @@ static int decode_alm_qzs(const uint8_t *buff, alm_t *alm)
     if (svid>=1&&svid<=9) {
         if (!(sat=satno(SYS_QZS,192+svid))) return 0;
         alm[sat-1].sat=sat;
-        decode_alm_sat(buff,(svid<=6)?1:2,alm+sat);
+        decode_alm_sat(buff,(svid<=6)?1:2,alm+sat-1);
         return 1;
     }
     else if (svid==51) {
@@ -1183,7 +1467,7 @@ static int decode_alm_qzs(const uint8_t *buff, alm_t *alm)
         for (j=0;j<10;j++) {
             if (!(sat=satno(SYS_QZS,193+j))||alm[sat-1].sat!=sat||
                 alm[sat-1].toas!=toas) continue;
-            alm[sat-1].week=adjgpsweek(week);
+            alm[sat-1].week=adj_alm_week(week);
             alm[sat-1].toa=gpst2time(alm[sat-1].week,toas);
         }
         return 1;
