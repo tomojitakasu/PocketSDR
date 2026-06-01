@@ -3,18 +3,20 @@
 #
 
 SRC = ../../src
+USE_SOAPY ?= 1
+USE_FFTW ?= 0
 
 INCLUDE = -I$(SRC) -I../RTKLIB/src
 OPTIONS =
 LIBS = ./librtk.a ./libfec.a ./libldpc.a
 
-# PocketFFT
-INCLUDE += -I../pocketfft
-LIBS += ./libpocketfft.a
-
-# FFTW3
-#OPTIONS += -DFFTW
-#LIBS += -lfftw3f
+ifeq ($(USE_FFTW),1)
+    OPTIONS += -DFFTW
+    LIBS += -lfftw3f
+else
+    INCLUDE += -I../pocketfft
+    LIBS += ./libpocketfft.a
+endif
 
 ifeq ($(OS),Windows_NT)
     CC = gcc
@@ -23,12 +25,14 @@ ifeq ($(OS),Windows_NT)
     INSTALL = ../win32
     INCLUDE += -I../cyusb
     OPTIONS += -DWIN32 -DAVX2 -mavx2 -mfma
-    LDLIBS = $(LIBS) -lpthread ../cyusb/CyAPI.a -lsetupapi -lavrt -lwsock32 -lwinmm
+    LDLIBS = $(LIBS) ../cyusb/CyAPI.a -lpthread -lsetupapi -lavrt -lwsock32 -lwinmm
     LDLIBS += -static
     
-    OPTIONS += -DSOAPYSDR
-    INCLUDE += -I../SoapySDR/include
-    LDLIBS += -L../SoapySDR/lib -Wl,-Bdynamic -lSoapySDR -Wl,-Bstatic
+    ifeq ($(USE_SOAPY),1)
+        OPTIONS += -DSOAPYSDR
+        INCLUDE += -I../SoapySDR/include
+        LDLIBS += -L../SoapySDR/lib -Wl,-Bdynamic -lSoapySDR -Wl,-Bstatic
+    endif
 else ifeq ($(shell uname -sm),Darwin arm64)
     CC = clang
     CX = clang++
@@ -38,8 +42,10 @@ else ifeq ($(shell uname -sm),Darwin arm64)
     OPTIONS += -DMACOS -DNEON -Wno-deprecated
     LDLIBS = -L/opt/homebrew/lib $(LIBS) -lusb-1.0 -lpthread
     
-    OPTIONS += -DSOAPYSDR
-    LDLIBS += -lSoapySDR
+    ifeq ($(USE_SOAPY),1)
+        OPTIONS += -DSOAPYSDR
+        LDLIBS += -lSoapySDR
+    endif
 else
     CC = gcc
     CX = g++
@@ -53,8 +59,10 @@ else
     endif
     LDLIBS = $(LIBS) -lpthread -lusb-1.0 -lm -lpthread
     
-    OPTIONS += -DSOAPYSDR
-    LDLIBS += -lSoapySDR
+    ifeq ($(USE_SOAPY),1)
+        OPTIONS += -DSOAPYSDR
+        LDLIBS += -lSoapySDR
+    endif
 endif
 
 #CFLAGS = -O3 -march=native $(INCLUDE) $(OPTIONS) -Wall -fPIC -g
