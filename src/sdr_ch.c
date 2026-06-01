@@ -44,6 +44,7 @@
 #define POS_CORR_N -120.0   // N-correlator position (samples)
 #define FILT_CN0   0.5      // filter parameter for C/N0
 #define BUMP_K     1.3      // bump-jump threshold
+#define ACQ_INT    10       // acquisition interval (ms)
 
 #define DPI        (2.0 * PI)
 #define SQR(x)     ((x) * (x))
@@ -387,16 +388,22 @@ static void start_track(sdr_ch_t *ch, double time, double fd, double coff,
 static void search_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff,
     int ix)
 {
-    float *fds = ch->acq->fds, fd_ext[3];
+    float *fds = ch->acq->fds;
+    float *fd_ext_bins = NULL;
     int n = ch->acq->len_fds;
-    
+
     if (ch->acq->fd_ext != 0.0) { // assist by external Doppler
-        for (n = 0; n < 3; n++) {
-            fd_ext[n] = (float)(ch->acq->fd_ext + (n - 1) * 0.5 / ch->T);
+        int nw = (ch->acq->fd_ext_n > 0) ? ch->acq->fd_ext_n : 3;
+        fd_ext_bins = (float *)sdr_malloc(sizeof(float) * nw);
+        for (int k = 0; k < nw; k++) {
+            fd_ext_bins[k] = (float)(ch->acq->fd_ext
+                + (k - nw/2) * 0.5 / ch->T);
         }
-        fds = fd_ext;
+        fds = fd_ext_bins;
+        n   = nw;
     }
-    if (!ch->acq->P_sum) {
+    if (!ch->acq->P_sum || ch->acq->n_sum == 0) {
+        sdr_free(ch->acq->P_sum);
         ch->acq->P_sum = (float *)sdr_malloc(sizeof(float) * 2 * ch->N * n);
     }
     // parallel code search and non-coherent integration
@@ -418,7 +425,7 @@ static void search_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff,
             sdr_log(3, "$LOG,%.3f,%s,%d,SIGNAL FOUND (%.1f,%.1f,%.7f)", ch->time,
                 ch->sig, ch->prn, cn0, fd, coff * 1e3);
         } else {
-            sdr_sleep_msec(100);
+            sdr_sleep_msec(ACQ_INT);
             ch->state = SDR_STATE_IDLE;
             sdr_log(4, "$LOG,%.3f,%s,%d,SIGNAL NOT FOUND (%.1f)", time, ch->sig,
                 ch->prn, cn0);
@@ -426,7 +433,10 @@ static void search_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff,
         sdr_free(ch->acq->P_sum);
         ch->acq->P_sum = NULL;
         ch->acq->n_sum = 0;
+        ch->acq->fd_ext   = 0.0;
+        ch->acq->fd_ext_n = 0;
     }
+    sdr_free(fd_ext_bins);
 }
 
 // sync and remove secondary code ----------------------------------------------
