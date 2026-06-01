@@ -3,7 +3,7 @@
 # generate package
 #
 PRG=PocketSDR
-VER=0.15
+VER=0.16
 
 cd ..
 
