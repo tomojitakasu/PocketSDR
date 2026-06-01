@@ -105,7 +105,7 @@ At receiver baseband, a signal can be modeled as
 
 $$
 r(t) = A\,d(t)\,c(t-\tau)\,
-       \exp\bigl(j\bigl(2\pi(f_{\mathrm{IF}}+f_D)t+\phi\bigr)\bigr)
+       \exp(j(2\pi(f_{\mathrm{IF}}+f_D)t+\phi))
        + n(t)
 $$
 
@@ -551,11 +551,11 @@ replaced by three bins centered on the assisted Doppler:
 
 $$
 f_d \in
-\bigl\{
+\{
 f_{d,\mathrm{ext}}-\frac{0.5}{T},\;
 f_{d,\mathrm{ext}},\;
 f_{d,\mathrm{ext}}+\frac{0.5}{T}
-\bigr\}
+\}
 $$
 
 The receiver accumulates non-coherent correlation power until
@@ -565,9 +565,9 @@ grid for the maximum power and estimates C/N0 from the peak-to-average ratio:
 $$
 C/N_0 =
 10\log_{10}
-\biggl(
+(
 \frac{P_{\max}-P_{\mathrm{ave}}}{P_{\mathrm{ave}}\,T}
-\biggr)
+)
 $$
 
 If the result exceeds the lock threshold (`sdr_thres_cn0_l`, default
@@ -610,10 +610,10 @@ The later acquisition correlator can therefore compute
 $$
 R =
 \mathrm{IFFT}
-\bigl(
+(
 \mathrm{FFT}(x)\,
-\mathrm{conj}\bigl(\mathrm{FFT}(c)\bigr)
-\bigr)
+\mathrm{conj}(\mathrm{FFT}(c))
+)
 $$
 
 by multiplying the data FFT by `code_fft`.
@@ -858,9 +858,9 @@ correlator:
 $$
 C/N_0 =
 10\log_{10}
-\biggl(
+(
 \frac{P_{\mathrm{prompt}}}{P_{\mathrm{noise}}\,T}
-\biggr)
+)
 $$
 
 The estimate is low-pass filtered. If C/N0 falls below the loss threshold
@@ -962,8 +962,8 @@ segments around the code wrap point:
 
 $$
 \begin{aligned}
-C_1 &= \mathrm{dot}\bigl(IQ[0:j],\;code[N-j:N]\bigr) \\
-C_2 &= \mathrm{dot}\bigl(IQ[j:N],\;code[0:N-j]\bigr)
+C_1 &= \mathrm{dot}(IQ[0:j],\;code[N-j:N]) \\
+C_2 &= \mathrm{dot}(IQ[j:N],\;code[0:N-j])
 \end{aligned}
 $$
 
@@ -1091,7 +1091,7 @@ i_{\mathrm{code}} &\leftarrow
     i_{\mathrm{code}} + W^2 e_{\mathrm{code}}\Delta t \\
 \mathrm{coff} &\leftarrow
     \mathrm{coff}
-    - \bigl(1.414W e_{\mathrm{code}} + i_{\mathrm{code}}\bigr)\Delta t
+    - (1.414W e_{\mathrm{code}} + i_{\mathrm{code}})\Delta t
 \end{aligned}
 $$
 
@@ -1530,11 +1530,11 @@ $$
 i_{\mathrm{pvt}} &=
 i_x +
 \mathrm{round}
-\biggl(
+(
 \frac{t_{\mathrm{epoch}}-t_{\mathrm{ch}}-0.07}{T_{\mathrm{cyc}}}
-\biggr) \\
+) \\
 i_{\mathrm{pvt}} &\leftarrow
-20\biggl\lfloor\frac{i_{\mathrm{pvt}}}{20}\biggr\rfloor
+20\lfloor\frac{i_{\mathrm{pvt}}}{20}\rfloor
 \end{aligned}
 $$
 
@@ -1603,9 +1603,9 @@ observation output. C/N0 is converted to RTKLIB SNR units:
 $$
 \mathrm{SNR} =
 \mathrm{round}
-\biggl(
+(
 \frac{C/N_0}{\mathrm{SNR\_UNIT}}
-\biggr)
+)
 $$
 
 The observation also carries loss-of-lock indicators. The implementation sets
@@ -1819,7 +1819,7 @@ while data FFTs are generated for each Doppler bin or each L6 tracking epoch.
 The PCPS acquisition complexity for one coherent integration is roughly:
 
 $$
-O\bigl(N_{\mathrm{dop}}\bigl(\mathrm{FFT}(2N)+2N\bigr)\bigr)
+O(N_{\mathrm{dop}}(\mathrm{FFT}(2N)+2N))
 $$
 
 where `Ndop` is the number of Doppler bins. This is why Doppler assistance and
@@ -2293,7 +2293,7 @@ samples that can be modeled as:
 $$
 x[k] =
 A\,b[k]\,c[k-k_{\tau}]\,
-\exp\bigl(j\bigl(2\pi f_{\mathrm{IF}}\frac{k}{f_s}+\phi\bigr)\bigr)
+\exp(j(2\pi f_{\mathrm{IF}}\frac{k}{f_s}+\phi))
 + w[k]
 $$
 
@@ -2308,7 +2308,7 @@ Carrier wipeoff multiplies by the conjugate carrier replica:
 $$
 y[k] =
 x[k]\,
-\exp\bigl(-j\bigl(2\pi f_{\mathrm{rep}}\frac{k}{f_s}+\phi_{\mathrm{rep}}\bigr)\bigr)
+\exp(-j(2\pi f_{\mathrm{rep}}\frac{k}{f_s}+\phi_{\mathrm{rep}}))
 $$
 
 If `f_rep` is close to the true IF plus Doppler, the desired signal becomes
@@ -2321,7 +2321,7 @@ For a fixed Doppler bin, acquisition computes the circular correlation between
 the carrier-wiped data and the local code:
 
 $$
-R[m] = \sum_k y[k]\,\mathrm{conj}\bigl(c[k-m]\bigr)
+R[m] = \sum_k y[k]\,\mathrm{conj}(c[k-m])
 $$
 
 Direct evaluation for all `m` would be expensive. The PCPS method uses the FFT:
@@ -2329,10 +2329,10 @@ Direct evaluation for all `m` would be expensive. The PCPS method uses the FFT:
 $$
 R =
 \mathrm{IFFT}
-\bigl(
+(
 \mathrm{FFT}(y)\,
-\mathrm{conj}\bigl(\mathrm{FFT}(c)\bigr)
-\bigr)
+\mathrm{conj}(\mathrm{FFT}(c))
+)
 $$
 
 The implementation stores `conj(FFT(c))` in `code_fft`. During acquisition it
@@ -2362,9 +2362,9 @@ background correlation power. The peak excess is interpreted as signal power:
 $$
 (C/N_0)_{\mathrm{acq}} =
 10\log_{10}
-\biggl(
+(
 \frac{P_{\max}-P_{\mathrm{ave}}}{P_{\mathrm{ave}}\,T}
-\biggr)
+)
 $$
 
 In tracking, the receiver has a prompt correlator and a deliberately displaced
@@ -2373,9 +2373,9 @@ noise correlator. The prompt/noise power ratio is accumulated over 0.5 s:
 $$
 (C/N_0)_{\mathrm{trk}} =
 10\log_{10}
-\biggl(
+(
 \frac{\sum |P|^2}{T\sum |N|^2}
-\biggr)
+)
 $$
 
 Both are practical receiver metrics. They are not identical estimators and
