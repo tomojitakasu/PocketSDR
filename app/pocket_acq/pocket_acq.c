@@ -8,6 +8,7 @@
 //  2022-07-05  1.0  port pocket_acq.py to C
 //  2022-08-08  1.1  add option -w, modify option -d
 //  2024-07-02  1.2  support tag file input for auto-configuration
+//  2026-06-01  1.3  support CS8 and CS16 formats
 //
 #include "pocket_sdr.h"
 
@@ -18,6 +19,7 @@
 #define ESC_COL   "\033[34m" // ANSI escape color = blue
 #define ESC_RES   "\033[0m"  // ANSI escape reset
 #define FFTW_WISDOM "../python/fftw_wisdom.txt"
+#define AGC_LEVEL 2.3
 
 // print version ---------------------------------------------------------------
 static void print_ver(void)
@@ -30,8 +32,120 @@ static void print_ver(void)
 static void show_usage(void)
 {
     printf("Usage: pocket_acq [-sig sig] [-prn prn[,...]] [-tint tint]\n");
-    printf("       [-toff toff] [-f freq] [-fi freq] [-d freq[,freq]] [-nz] file\n");
+    printf("       [-toff toff] [-fmt fmt] [-f freq] [-fi freq] [-d freq[,freq]]\n");
+    printf("       [-nz] file\n");
     exit(0);
+}
+
+// sample bytes per IF sample --------------------------------------------------
+static int sample_byte(int fmt, int IQ)
+{
+    switch (fmt) {
+        case SDR_FMT_CS8   : return 2;
+        case SDR_FMT_CS16  : return 4;
+        default            : return IQ;
+    }
+}
+
+// clip int to 4-bit IF sample -------------------------------------------------
+static int8_t clip4(double x)
+{
+    int v = (int)floor(x + (x >= 0.0 ? 0.5 : -0.5));
+    if (v < -7) return -7;
+    if (v >  7) return  7;
+    return (int8_t)v;
+}
+
+// read CS8/CS16 IF data -------------------------------------------------------
+static sdr_buff_t *read_cs_data(const char *file, int fmt, double fs, double T,
+    double toff)
+{
+    int bs = sample_byte(fmt, 2);
+    size_t cnt = (T > 0.0) ? (size_t)(fs * T) : 0;
+    size_t off = (size_t)(fs * toff) * bs, size;
+    FILE *fp;
+
+    if (!(fp = fopen(file, "rb"))) {
+        fprintf(stderr, "data read error %s\n", file);
+        return NULL;
+    }
+#if defined(WIN32)
+    _fseeki64(fp, 0, SEEK_END);
+    size = (size_t)_ftelli64(fp);
+    _fseeki64(fp, 0, SEEK_SET);
+#else
+    fseeko(fp, 0, SEEK_END);
+    size = (size_t)ftello(fp);
+    fseeko(fp, 0, SEEK_SET);
+#endif
+    if (off > size) {
+        fclose(fp);
+        return NULL;
+    }
+    if (cnt <= 0) cnt = (size - off) / bs;
+    if (cnt * bs > size - off) {
+        fclose(fp);
+        return NULL;
+    }
+    uint8_t *raw = (uint8_t *)sdr_malloc(cnt * bs);
+#if defined(WIN32)
+    _fseeki64(fp, (long long)off, SEEK_SET);
+#else
+    fseeko(fp, (off_t)off, SEEK_SET);
+#endif
+    if (fread(raw, bs, cnt, fp) < cnt) {
+        fprintf(stderr, "data read error %s\n", file);
+        fclose(fp);
+        sdr_free(raw);
+        return NULL;
+    }
+    fclose(fp);
+
+    double sum[2] = {0}, sumsq[2] = {0}, ave[2], std[2], scale[2];
+    for (size_t i = 0; i < cnt; i++) {
+        double I, Q;
+        if (fmt == SDR_FMT_CS8) {
+            I = (int8_t)raw[i*2];
+            Q = (int8_t)raw[i*2+1];
+        } else {
+            I = *(int16_t *)(raw + i*4);
+            Q = *(int16_t *)(raw + i*4 + 2);
+        }
+        sum[0] += I;
+        sum[1] += Q;
+        sumsq[0] += I * I;
+        sumsq[1] += Q * Q;
+    }
+    for (int i = 0; i < 2; i++) {
+        ave[i] = cnt > 0 ? sum[i] / cnt : 0.0;
+        std[i] = cnt > 0 ? sqrt(sumsq[i] / cnt - ave[i] * ave[i]) : 0.0;
+        scale[i] = std[i] > 0.0 ? std[i] / AGC_LEVEL : 1.0;
+    }
+    sdr_buff_t *buff = sdr_buff_new((int)cnt, 2);
+    for (int i = 0; i < buff->N; i++) {
+        double I, Q;
+        if (fmt == SDR_FMT_CS8) {
+            I = (int8_t)raw[i*2];
+            Q = (int8_t)raw[i*2+1];
+        } else {
+            I = *(int16_t *)(raw + i*4);
+            Q = *(int16_t *)(raw + i*4 + 2);
+        }
+        buff->data[i] = SDR_CPX8(clip4((I - ave[0]) / scale[0]),
+            clip4((Q - ave[1]) / scale[1]));
+    }
+    sdr_free(raw);
+    return buff;
+}
+
+// read IF data ----------------------------------------------------------------
+static sdr_buff_t *read_data(const char *file, int fmt, double fs, int IQ,
+    double T, double toff)
+{
+    if (fmt == SDR_FMT_CS8 || fmt == SDR_FMT_CS16) {
+        return read_cs_data(file, fmt, fs, T, toff);
+    }
+    return sdr_read_data(file, fs, IQ, T, toff);
 }
 
 // search signal ---------------------------------------------------------------
@@ -106,6 +220,8 @@ int main(int argc, char **argv)
             else if (!strcmp(format, "RAW16" )) fmt = SDR_FMT_RAW16;
             else if (!strcmp(format, "RAW16I")) fmt = SDR_FMT_RAW16I;
             else if (!strcmp(format, "RAW32" )) fmt = SDR_FMT_RAW32;
+            else if (!strcmp(format, "CS8"   )) fmt = SDR_FMT_CS8;
+            else if (!strcmp(format, "CS16"  )) fmt = SDR_FMT_CS16;
             else {
                 fprintf(stderr, "unrecognized format: %s\n", format);
                 exit(-1);
@@ -157,7 +273,8 @@ int main(int argc, char **argv)
     double fo[SDR_MAX_RFCH];
     int IQ_t[SDR_MAX_RFCH], bits_t[SDR_MAX_RFCH];
     if (sdr_tag_read(file, NULL, NULL, &fmt, &fs, fo, IQ_t, bits_t)) {
-        if (fmt != SDR_FMT_INT8 && fmt != SDR_FMT_INT8X2) {
+        if (fmt != SDR_FMT_INT8 && fmt != SDR_FMT_INT8X2 &&
+            fmt != SDR_FMT_CS8 && fmt != SDR_FMT_CS16) {
             fprintf(stderr, "Unsupported format: %s\n", file);
             exit(-1);
         }
@@ -166,7 +283,7 @@ int main(int argc, char **argv)
     }
     // read IF data
     sdr_buff_t *buff;
-    if (!(buff = sdr_read_data(file, fs, IQ, T + Tcode, toff))) {
+    if (!(buff = read_data(file, fmt, fs, IQ, T + Tcode, toff))) {
         exit(-1);
     }
     uint32_t tick = sdr_get_tick();
