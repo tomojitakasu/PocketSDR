@@ -936,11 +936,7 @@ the accumulated phase observable would not be meaningful.
 Before correlation, the tracking loop applies carrier aiding to the code offset:
 
 $$
-\mathrm{coff}
-\leftarrow
-\mathrm{coff}
--
-\frac{f_d}{f_{\mathrm{RF}}}\,\tau
+\mathrm{coff} \leftarrow \mathrm{coff} - \frac{f_d}{f_{\mathrm{RF}}}\,\tau
 $$
 
 where `fc_RF` is the RF carrier frequency stored in `ch->fc`. This reflects the
@@ -1051,10 +1047,7 @@ $$
 \begin{aligned}
 W &= \frac{B_{\mathrm{PLL}}}{0.7845} \\
 a_{\phi} &\leftarrow a_{\phi} + W^3 e_{\phi} T \\
-f_d &\leftarrow f_d
- + 2.4W(e_{\phi}-e_{\phi,\mathrm{prev}})
- + 1.1W^2 e_{\phi}T
- + a_{\phi}T
+f_d &\leftarrow f_d + 2.4W(e_{\phi}-e_{\phi,\mathrm{prev}}) + 1.1W^2 e_{\phi}T + a_{\phi}T
 \end{aligned}
 $$
 
