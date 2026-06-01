@@ -27,6 +27,9 @@
 *           2011/05/27 1.9  rtklib ver.2.4.1
 *           2013/03/28 1.10 rtklib ver.2.4.2
 *           2020/11/30 1.11 rtklib ver.2.4.3 b34
+*
+*           branch for Pocket SDR
+*           2026/06/01 0.1  add almanac decoder functions
 *-----------------------------------------------------------------------------*/
 #ifndef RTKLIB_H
 #define RTKLIB_H
@@ -587,6 +590,18 @@ typedef struct {        /* antenna parameters type */
     pcv_t *pcv;         /* antenna parameters data */
 } pcvs_t;
 
+typedef struct {        /* GLONASS almanac parameters type */
+    int frq;            /* frequency channel number (H_n^A) */
+    double taun;        /* coarse clock correction tau_n^A (s) */
+    double lambda;      /* longitude of 1st ascending node lambda_n^A (rad) */
+    double di;          /* inclination correction delta_i_n^A (rad) */
+    double eps;         /* eccentricity epsilon_n^A */
+    double omg;         /* argument of perigee omega_n^A (rad) */
+    double tlambda;     /* time of 1st ascending node t_lambda_n^A (s) */
+    double dT;          /* Draconian period correction delta_T_n^A (s/orbit) */
+    double dTd;         /* Draconian period rate delta_T'_n^A (s/orbit^2) */
+} galm_t;
+
 typedef struct {        /* almanac type */
     int sat;            /* satellite number */
     int svh;            /* sv health (0:ok) */
@@ -597,6 +612,7 @@ typedef struct {        /* almanac type */
     double A,e,i0,OMG0,omg,M0,OMGd;
     double toas;        /* Toa (s) in week */
     double f0,f1;       /* SV clock parameters (af0,af1) */
+    galm_t glo;         /* GLONASS almanac parameters (GLONASS only) */
 } alm_t;
 
 typedef struct {        /* GPS/QZS/GAL broadcast ephemeris type */
@@ -859,7 +875,7 @@ typedef struct {        /* solution type */
                         /* {c_xx,c_yy,c_zz,c_xy,c_yz,c_zx} or */
                         /* {c_ee,c_nn,c_uu,c_en,c_nu,c_ue} */
     float  qv[6];       /* velocity variance/covariance (m^2/s^2) */
-    double dtr[6];      /* receiver clock bias to time systems (s) */
+    double dtr[6];      /* receiver clock bias to time systems (s), dtr[5]: drift rate */
     uint8_t type;       /* type (0:xyz-ecef,1:enu-baseline) */
     uint8_t stat;       /* solution status (SOLQ_???) */
     uint8_t ns;         /* number of valid satellites */
@@ -1533,7 +1549,8 @@ EXPORT void readsp3(const char *file, nav_t *nav, int opt);
 EXPORT int  readsap(const char *file, gtime_t time, nav_t *nav);
 EXPORT int  readdcb(const char *file, nav_t *nav, const sta_t *sta);
 EXPORT int  readfcb(const char *file, nav_t *nav);
-EXPORT void alm2pos(gtime_t time, const alm_t *alm, double *rs, double *dts);
+EXPORT void alm2pos (gtime_t time, const alm_t  *alm,  double *rs, double *dts);
+EXPORT void galm2pos(gtime_t time, const alm_t  *alm,  double *rs, double *dts);
 
 EXPORT int tle_read(const char *file, tle_t *tle);
 EXPORT int tle_name_read(const char *file, tle_t *tle);
@@ -1553,14 +1570,16 @@ EXPORT int decode_word (uint32_t word, uint8_t *data);
 EXPORT int decode_frame(const uint8_t *buff, eph_t *eph, alm_t *alm,
                         double *ion, double *utc);
 EXPORT int test_glostr(const uint8_t *buff);
-EXPORT int decode_glostr(const uint8_t *buff, geph_t *geph, double *utc);
-EXPORT int decode_bds_d1(const uint8_t *buff, eph_t *eph, double *ion,
+EXPORT int decode_glostr(const uint8_t *buff, geph_t *geph, alm_t *alm,
                          double *utc);
-EXPORT int decode_bds_d2(const uint8_t *buff, eph_t *eph, double *utc);
-EXPORT int decode_gal_inav(const uint8_t *buff, eph_t *eph, double *ion,
-                           double *utc);
-EXPORT int decode_gal_fnav(const uint8_t *buff, eph_t *eph, double *ion,
-                           double *utc);
+EXPORT int decode_bds_d1(const uint8_t *buff, eph_t *eph, alm_t *alm,
+                         double *ion, double *utc);
+EXPORT int decode_bds_d2(const uint8_t *buff, eph_t *eph, alm_t *alm,
+                         double *utc);
+EXPORT int decode_gal_inav(const uint8_t *buff, eph_t *eph, alm_t *alm,
+                           double *ion, double *utc);
+EXPORT int decode_gal_fnav(const uint8_t *buff, eph_t *eph, alm_t *alm,
+                           double *ion, double *utc);
 EXPORT int decode_irn_nav(const uint8_t *buff, eph_t *eph, double *ion,
                           double *utc);
 
