@@ -5,6 +5,7 @@
 SRC = ../../src
 LIB = ../../lib
 BIN = ../../bin
+USE_FFTW ?= 0
 
 INCLUDE = -I$(SRC) -I$(LIB)/RTKLIB/src
 
@@ -13,23 +14,29 @@ ifeq ($(OS),Windows_NT)
     INCLUDE += -I$(LIB)/cyusb
     LDLIBS = $(LIB)/win32/libsdr.a $(LIB)/win32/librtk.a -lwinmm -lws2_32
     OPTIONS =
-    
-    LDLIBS += $(LIB)/win32/libpocketfft.a
-    #LDLIBS += -lfftw3f
+    ifeq ($(USE_FFTW),1)
+        LDLIBS += -lfftw3f
+    else
+        LDLIBS += $(LIB)/win32/libpocketfft.a
+    endif
 else ifeq ($(shell uname -sm),Darwin arm64)
     CC = clang++
     LDLIBS = -L/opt/homebrew/lib $(LIB)/macos/libsdr.a $(LIB)/macos/librtk.a -lpthread -lm
     OPTIONS = -I/opt/homebrew/include
-    
-    LDLIBS += $(LIB)/macos/libpocketfft.a
-    #LDLIBS += -lfftw3f
+    ifeq ($(USE_FFTW),1)
+        LDLIBS += -lfftw3f
+    else
+        LDLIBS += $(LIB)/macos/libpocketfft.a
+    endif
 else
     CC = g++
     LDLIBS = $(LIB)/linux/libsdr.a $(LIB)/linux/librtk.a -lpthread -lm
     OPTIONS =
-    
-    LDLIBS += $(LIB)/linux/libpocketfft.a
-    #LDLIBS += -lfftw3f
+    ifeq ($(USE_FFTW),1)
+        LDLIBS += -lfftw3f
+    else
+        LDLIBS += $(LIB)/linux/libpocketfft.a
+    endif
 endif
 
 WARNOPT = -Wall -Wextra -Wno-unused-parameter -Wno-unused-but-set-variable
@@ -50,4 +57,3 @@ clean:
 
 install:
 	cp $(TARGET) $(BIN)
-
