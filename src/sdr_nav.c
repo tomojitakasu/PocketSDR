@@ -930,7 +930,7 @@ static void decode_glo_str(sdr_ch_t *ch, const uint8_t *syms, int rev)
         ch->nav->rev = rev;
         int sno = getbitu(data, 1, 4);
         if (sno == 4) {
-            sprintf(ch->sat, "R%02d", getbitu(data, 70, 5)); // set sat ID
+            snprintf(ch->sat, sizeof(ch->sat), "R%02d", getbitu(data, 70, 5)); // set sat ID
         }
         if (sno == 1) {
             double tod = getbitu(data, 9, 5) * 3600.0 +
@@ -1190,7 +1190,7 @@ static void decode_gal_INAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
             update_tow(ch, getbitu(data, 85, 20) + toff);
         }
         ch->nav->type = type; // I/NAV word type
-        if (type >= 0 && type <= 10) { // word 0-6: eph/ion/utc, 7-10: almanac
+        if (type >= 0 && type <= 10 && 16 * type + 16 <= SDR_MAX_DATA) { // word 0-6: eph/ion/utc, 7-10: almanac
             memcpy(ch->nav->data + 16 * type, data, 16);
             ch->nav->lock_sf[type] = ch->lock;
         }
