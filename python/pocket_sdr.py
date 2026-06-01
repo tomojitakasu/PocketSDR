@@ -9,6 +9,7 @@
 #  2024-06-29  1.0  ver.0.13
 #  2025-03-19  1.1  ver.0.14
 #  2026-05-02  1.2  ver.0.15
+#  2026-06-01  1.3  ver.0.16
 #
 import sys, os, platform, time, re, shutil
 from collections import deque
@@ -60,6 +61,20 @@ CLIGHT = 299792458.0
 D2R = np.pi / 180
 SYSTEMS = ('ALL', 'GPS', 'GLONASS', 'Galileo', 'QZSS', 'BeiDou', 'NavIC', 'SBAS')
 
+# setup SoapySDR paths ---------------------------------------------------------
+def setup_soapy_paths(soapy_dir, win32=False):
+    bin_dir = os.path.join(soapy_dir, 'bin')
+    mod_dir = os.path.join(soapy_dir, 'lib', 'SoapySDR', 'modules0.8')
+    
+    if win32:
+        if os.path.isdir(bin_dir) and hasattr(os, 'add_dll_directory'):
+            os.add_dll_directory(bin_dir)
+    elif os.path.isdir(bin_dir):
+        os.environ['PATH'] = bin_dir + os.pathsep + os.environ.get('PATH', '')
+    
+    if os.path.isdir(mod_dir):
+        os.environ['SOAPY_SDR_PLUGIN_PATH'] = mod_dir
+
 # platform dependent settings --------------------------------------------------
 env = platform.platform()
 if 'Windows' in env:
@@ -69,8 +84,7 @@ if 'Windows' in env:
     
     # setup SoapySDR paths (radioconda)
     soapy_dir = os.path.expandvars(r'%USERPROFILE%\radioconda\Library')
-    os.add_dll_directory(soapy_dir + r'\bin')
-    os.environ['SOAPY_SDR_PLUGIN_PATH'] = soapy_dir + r'\lib\SoapySDR\modules0.8'
+    setup_soapy_paths(soapy_dir, win32=True)
 
 elif 'macOS' in env:
     LIBSDR = AP_DIR + '/../lib/macos/libsdr.so'
@@ -79,8 +93,7 @@ elif 'macOS' in env:
     
     # setup SoapySDR paths (radioconda)
     soapy_dir = os.path.expanduser('~/radioconda')
-    os.environ['PATH'] = soapy_dir + '/bin' + os.pathsep + os.environ.get('PATH', '')
-    os.environ['SOAPY_SDR_PLUGIN_PATH'] = soapy_dir + '/lib/SoapySDR/modules0.8'
+    setup_soapy_paths(soapy_dir)
 else: # Linux or Raspberry Pi OS
     LIBSDR = AP_DIR + '/../lib/linux/libsdr.so'
     FONT = ('DejaVu Sans', 'DejaVu Sans Mono')
@@ -166,6 +179,8 @@ def rcv_opt_str(sys_opt, inp_opt, sig_opt, array_opt):
     opt += ' ' + inp_opt.dev_opt.get()
     opt += ' ' + lpf_opt_str(inp_opt)
     opt += ' ' + '-RFCH ' + sig_opt.sig_rfch.get()
+    if sys_opt.acq_mode.get() == 'Fast-Search':
+        opt += ' -FAST_SRCH'
     if out_opt.array_sep.get():
         opt += ' -ARRAY'
     narch = to_int(array_opt.no_array.get())
@@ -1951,7 +1966,7 @@ def on_beam_update(e, p, i):
 # generate Log page ------------------------------------------------------------
 def log_page_new(parent):
     filts = ('', '$TIME', '$POS', '$ATT', '$OBS', '$NAV', '$SAT', '$CH', '$EPH',
-        '$LOG')
+        '$ALM', '$LOG')
     p = Obj()
     p.parent = parent
     p.panel = Frame(parent)
