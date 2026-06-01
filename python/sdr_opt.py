@@ -232,7 +232,7 @@ def out_opt_new(opt_p=None):
         opt.array_sep.set(opt_p.array_sep.get())
     else:
         for i in range(len(opt.log_sel)):
-            opt.log_sel[i].set(0 if i in (5, 6, 7, 8) else 1)
+            opt.log_sel[i].set(0 if i in (2, 6, 7, 8) else 1)
     return opt
 
 # generate signal option variables ---------------------------------------------
