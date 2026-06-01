@@ -18,6 +18,7 @@
 //  2024-06-29  1.7  support API change in sdr_dev.c
 //  2024-07-02  1.8  support tag file output
 //  2024-11-23  1.9  support Pocket SDR FE 8CH
+//  2026-06-01  1.10 support SoapySDR devices
 //
 #include <signal.h>
 #ifdef WIN32
@@ -53,7 +54,8 @@ static void print_ver(void)
 static void print_usage(void)
 {
     printf("Usage: %s [-t tsec] [-r] [-p bus[,port]] [-c conf_file] [-q]\n"
-        "    [path [path ...]]\n", PROG_NAME);
+        "    [-driver name] [-fmt {CS8|CS16}] [-f fs] [-fo freq]\n"
+        "    [-gain gain] [-bw bw] [path [path ...]]\n", PROG_NAME);
     exit(0);
 }
 
@@ -61,8 +63,11 @@ static void print_usage(void)
 static int sample_byte(int fmt)
 {
     switch (fmt) {
+        case SDR_FMT_INT8X2:
+        case SDR_FMT_CS8   :
         case SDR_FMT_RAW16 :
         case SDR_FMT_RAW16I: return 2;
+        case SDR_FMT_CS16  :
         case SDR_FMT_RAW32 : return 4;
     }
     return 1;
@@ -126,30 +131,31 @@ static void print_head(int raw, int fmt, int nfile, const int *IQ, FILE **fp)
 {
     static const char *str_IQ[] = {"- ", "I ", "IQ", "I "};
     static const char *str_fmt[] = {
-        "-", "-", "RAW8", "RAW16", "RAW16I", "RAW32"
+        "-", "INT8", "INT8X2", "RAW8", "RAW16", "RAW16I", "RAW32", "CS8",
+        "CS16"
     };
-    fprintf(stderr, "%8s", "TIME(s)");
+    printf("%8s", "TIME(s)");
     if (raw) {
-        if (fp[0]) fprintf(stderr, "    %6s(B)", str_fmt[fmt-1]);
+        if (fp[0]) printf("    %6s(B)", str_fmt[fmt]);
     } else {
         for (int i = 0; i < nfile; i++) {
-            if (fp[i]) fprintf(stderr, "    CH%d:%s(B)", i + 1, str_IQ[IQ[i]]);
+            if (fp[i]) printf("    CH%d:%s(B)", i + 1, str_IQ[IQ[i]]);
         }
     }
-    fprintf(stderr, " %10s\n", "RATE(Ks/s)");
+    printf(" %10s\n", "RATE(Ks/s)");
 }
 
 // print status ----------------------------------------------------------------
 static void print_stat(int nch, const int *IQ, FILE **fp, double time,
     const double *byte, double rate)
 {
-    fprintf(stderr, "%8.1f", time);
+    printf("%8.1f", time);
     for (int i = 0; i < nch; i++) {
         if (!fp[i]) continue;
-        fprintf(stderr, "%13.0f", byte[i]);
+        printf("%13.0f", byte[i]);
     }
-    fprintf(stderr, " %10.1f\r", rate * 1e-3);
-    fflush(stderr);
+    printf(" %10.1f\r", rate * 1e-3);
+    fflush(stdout);
 }
 
 // dump digital IF data --------------------------------------------------------
@@ -169,9 +175,7 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int raw, int fmt,
     if (!sdr_dev_start(dev)) return;
     
     for (int i = 0; !intr && (tsec <= 0.0 || time < tsec); i++) {
-        if (!quiet) {
-            time = (sdr_get_tick() - tick) * 1e-3;
-        }
+        time = (sdr_get_tick() - tick) * 1e-3;
         while (sdr_dev_read(dev, buff, SDR_SIZE_UBUFF * ns) && !intr) {
             for (int j = 0; j < nfile; j++) {
                 if (!fp[j]) continue;
@@ -199,7 +203,57 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int raw, int fmt,
     if (!quiet) {
         rate = time > 0.0 ? sample / time : 0.0;
         print_stat(nfile, IQ, fp, time, byte, rate);
-        fprintf(stderr, "\n");
+        printf("\n");
+    }
+    sdr_free(buff);
+}
+
+// dump SoapySDR device IF data -----------------------------------------------
+static void dump_sdev_data(sdr_sdev_t *sdev, double tsec, int quiet, int fmt,
+    FILE **fp)
+{
+    double time = 0.0, time_p = 0.0, sample = 0.0, sample_p = 0.0;
+    double rate = 0.0, byte[1] = {0};
+    int ns = sample_byte(fmt), size = SDR_SIZE_UBUFF * ns;
+    int IQ[1] = {2};
+    uint8_t *buff = (uint8_t *)sdr_malloc(size);
+    
+    if (!quiet) {
+        print_head(1, fmt, 1, IQ, fp);
+    }
+    uint32_t tick = sdr_get_tick();
+    
+    if (!sdr_sdev_start(sdev)) {
+        sdr_free(buff);
+        return;
+    }
+    
+    for (int i = 0; !intr && (tsec <= 0.0 || time < tsec); i++) {
+        int n;
+        time = (sdr_get_tick() - tick) * 1e-3;
+        while ((n = sdr_sdev_read(sdev, buff, size)) > 0 && !intr) {
+            if (fp[0]) {
+                byte[0] += fwrite(buff, 1, n, fp[0]);
+            }
+            sample += n / ns;
+        }
+        if (n < 0) break;
+        if (!quiet && time - time_p > RATE_CYC * 1e-3) {
+            rate = (sample - sample_p) / (time - time_p);
+            time_p = time;
+            sample_p = sample;
+        }
+        if (!quiet && i % (STAT_CYC / DATA_CYC) == 0) {
+            print_stat(1, IQ, fp, time, byte, rate);
+        }
+        sdr_sleep_msec(DATA_CYC);
+    }
+    sdr_sdev_stop(sdev);
+    
+    if (!quiet) {
+        rate = time > 0.0 ? sample / time : 0.0;
+        print_stat(1, IQ, fp, time, byte, rate);
+        printf("\n");
     }
     sdr_free(buff);
 }
@@ -225,13 +279,15 @@ static void write_tag_files(gtime_t time, int raw, int fmt, double fs,
 int main(int argc, char **argv)
 {
     FILE *fp[SDR_MAX_RFCH] = {0};
-    sdr_dev_t *dev;
+    sdr_dev_t *dev = NULL;
+    sdr_sdev_t *sdev = NULL;
     char *files[SDR_MAX_RFCH] = {0}, path[SDR_MAX_RFCH][64];
-    const char *conf_file = "";
+    const char *conf_file = "", *driver = "";
     gtime_t dump_time;
-    double tsec = 0.0, fs, fo[SDR_MAX_RFCH];
+    double tsec = 0.0, fs = 12e6, fo[SDR_MAX_RFCH] = {0};
+    double gain = 0.0, bw = 0.0;
     int n = 0, bus = -1, port = -1, raw = 0, quiet = 0;
-    int nch, fmt, IQ[SDR_MAX_RFCH], bits[SDR_MAX_RFCH], nfile;
+    int nch, fmt = SDR_FMT_CS8, IQ[SDR_MAX_RFCH], bits[SDR_MAX_RFCH], nfile;
     
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-t") && i + 1 < argc) {
@@ -242,6 +298,25 @@ int main(int argc, char **argv)
             sscanf(argv[++i], "%d,%d", &bus, &port);
         } else if (!strcmp(argv[i], "-c") && i + 1 < argc) {
             conf_file = argv[++i];
+        } else if (!strcmp(argv[i], "-driver") && i + 1 < argc) {
+            driver = argv[++i];
+        } else if (!strcmp(argv[i], "-fmt") && i + 1 < argc) {
+            const char *str = argv[++i];
+            if      (!strcmp(str, "CS8" )) fmt = SDR_FMT_CS8;
+            else if (!strcmp(str, "CS16")) fmt = SDR_FMT_CS16;
+            else {
+                fprintf(stderr, "unrecognized format: %s\n", str);
+                return -1;
+            }
+        } else if (!strcmp(argv[i], "-f") && i + 1 < argc) {
+            fs = atof(argv[++i]) * 1e6;
+        } else if (!strcmp(argv[i], "-fo") && i + 1 < argc) {
+            sscanf(argv[++i], "%lf", fo);
+            fo[0] *= 1e6;
+        } else if (!strcmp(argv[i], "-gain") && i + 1 < argc) {
+            gain = atof(argv[++i]);
+        } else if (!strcmp(argv[i], "-bw") && i + 1 < argc) {
+            bw = atof(argv[++i]);
         } else if (!strcmp(argv[i], "-q")) {
             quiet = 1;
         } else if (!strcmp(argv[i], "-v")) {
@@ -252,21 +327,33 @@ int main(int argc, char **argv)
             files[n++] = argv[i];
         }
     }
-    if (!(dev = sdr_dev_open(bus, port))) {
-        return -1;
-    }
-    if (*conf_file) {
-        if (!sdr_conf_write(dev, conf_file, 0)) {
+    if (*driver) {
+        if (fo[0] <= 0.0) {
+            fprintf(stderr, "option error: -fo is required for SoapySDR\n");
+            return -1;
+        }
+        if (!(sdev = sdr_sdev_open(driver, fmt, fs, fo[0], bw * 1e6, gain))) {
+            return -1;
+        }
+        nch = nfile = 1;
+        raw = 1;
+        IQ[0] = 2;
+        bits[0] = fmt == SDR_FMT_CS16 ? 16 : 8;
+    } else {
+        if (!(dev = sdr_dev_open(bus, port))) {
+            return -1;
+        }
+        if (*conf_file && !sdr_conf_write(dev, conf_file, 0)) {
             sdr_dev_close(dev);
             return -1;
         }
-        sdr_sleep_msec(50);
+        if (*conf_file) sdr_sleep_msec(50);
+        if (!(nch = sdr_dev_get_info(dev, &fmt, &fs, fo, IQ, bits))) {
+            sdr_dev_close(dev);
+            return -1;
+        }
+        nfile = raw ? 1 : nch;
     }
-    if (!(nch = sdr_dev_get_info(dev, &fmt, &fs, fo, IQ, bits))) {
-        sdr_dev_close(dev);
-        return -1;
-    }
-    nfile = raw ? 1 : nch;
     dump_time = utc2gpst(timeget());
     
     if (n == 0) { // set default file paths
@@ -290,23 +377,27 @@ int main(int argc, char **argv)
             fp[i] = stdout;
         } else if (*files[i] && !(fp[i] = fopen(files[i], "wb"))) {
             fprintf(stderr, "file open error %s\n", files[i]);
-            sdr_dev_close(dev);
+            if (dev) sdr_dev_close(dev);
+            if (sdev) sdr_sdev_close(sdev);
             return -1;
         }
     }
     signal(SIGTERM, sig_func);
     signal(SIGINT, sig_func);
     
-    dump_data(dev, tsec, quiet, raw, fmt, nfile, IQ, bits, fp);
+    if (sdev) {
+        dump_sdev_data(sdev, tsec, quiet, fmt, fp);
+    } else {
+        dump_data(dev, tsec, quiet, raw, fmt, nfile, IQ, bits, fp);
+    }
     
     for (int i = 0; i < nfile; i++) {
         if (fp[i]) fclose(fp[i]);
     }
-    sdr_dev_close(dev);
+    if (dev) sdr_dev_close(dev);
+    if (sdev) sdr_sdev_close(sdev);
     
     write_tag_files(dump_time, raw, fmt, fs, fo, IQ, bits, nch, files);
     
     return 0;
 }
-
-
