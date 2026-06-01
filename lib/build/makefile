@@ -5,17 +5,17 @@
 #!
 #! $ git clone https://github.com/quiet/libfec libfec
 #! $ git clone https://github.com/radfordneal/LDPC-codes LDPC-codes
-#!
-#! You need to install external shared libary LIBFFTW3 as follows.
-#!
-#! $ pacman -S mingw-w64-x86_64-fftw (MINGW64)
-#! $ sudo apt install libfftw3-dev   (Ubuntu)
+#! To use FFTW3 instead of PocketFFT, install FFTW3 and build with USE_FFTW=1.
+
+USE_FFTW ?= 0
 
 all:
 	make -f librtk.mk
 	make -f libldpc.mk
 	make -f libfec.mk
+ifneq ($(USE_FFTW),1)
 	make -f libpocketfft.mk
+endif
 	make -f libsdr.mk
 clean:
 	make -f librtk.mk clean
@@ -27,6 +27,7 @@ install:
 	make -f librtk.mk install
 	make -f libldpc.mk install
 	make -f libfec.mk install
+ifneq ($(USE_FFTW),1)
 	make -f libpocketfft.mk install
+endif
 	make -f libsdr.mk install
-
