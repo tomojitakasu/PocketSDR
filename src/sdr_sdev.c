@@ -44,10 +44,12 @@ static void soapy_log_handler(const SoapySDRLogLevel level, const char *msg)
 #endif
 
 // elapsed time in seconds -----------------------------------------------------
+#ifdef SOAPYSDR
 static double ts_elapsed(uint32_t tick)
 {
     return (sdr_get_tick() - tick) * 1e-3;
 }
+#endif
 
 // list SoapySDR devices -------------------------------------------------------
 int sdr_sdev_list(void)
@@ -256,6 +258,7 @@ static void raise_pri(void)
 #endif
 
 // zero-fill dropped samples ---------------------------------------------------
+#ifdef SOAPYSDR
 static void fill_gap(sdr_sdev_t *sdev, int pos, int data_samples,
     int64_t gap_samples, uint8_t *scratch)
 {
@@ -283,6 +286,7 @@ static void fill_gap(sdr_sdev_t *sdev, int pos, int data_samples,
         dst = (dst + chunk) % buf_size;
     }
 }
+#endif
 
 // Soapy device reader thread --------------------------------------------------
 #ifdef SOAPYSDR
