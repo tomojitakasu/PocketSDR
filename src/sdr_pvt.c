@@ -754,7 +754,8 @@ static double gen_prng(gtime_t time, const sdr_ch_t *ch)
     // for debug
     trace(3, "%s %-5s %3d %4d %10.3f %10.3f %12.9f %12.9f\n", ch->sat, ch->sig,
         ch->prn, ch->week, tow, ch->tow * 1e-3, ch->coff, tau);
-    return CLIGHT * tau;
+    
+    return CLIGHT * (tau + 0.5 * ch->T * ch->fd / ch->fc);
 }
 
 // generate carrier-phase ------------------------------------------------------
