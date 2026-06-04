@@ -3,7 +3,7 @@
 #  unit test driver for sdr_rtk.py
 #
 import sys, time, math
-sys.path.append('../python')
+sys.path.append('../../python')
 import numpy as np
 import sdr_rtk
 
