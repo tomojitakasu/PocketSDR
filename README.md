@@ -117,7 +117,11 @@ PocketSDR
 ├── doc         # Documents (incl. api_ref.md, command_ref.md)
 ├── image       # Image files for documents
 ├── sample      # Sample digital IF data captured by Pocket SDR FE
-└── test        # Test codes and data
+└── test        # Test codes, scripts and data
+    ├── python       # Python scripts for tests
+    ├── script       # Shell scripts for tests
+    ├── src          # source programs for tests
+    └── utest        # makefile for unit tests
 
 Note: Items in parentheses () are not included in the package and are
 fetched by lib/clone_lib.sh.
