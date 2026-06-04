@@ -100,9 +100,7 @@ PocketSDR
 │   ├── win32        # Built libraries for Windows (UCRT64)
 │   ├── macos        # Built libraries for macOS
 │   ├── linux        # Built libraries for Linux or Raspberry Pi OS
-│   ├── win32_msvc   # Built libraries for Windows (MSVC, optional)
 │   ├── build        # Makefiles to build libraries (UCRT64 / Linux / macOS)
-│   ├── build_msvc   # Makefiles to build libraries with MSVC (optional)
 │   ├── cyusb        # Cypress EZ-USB API (CyAPI.a) and includes
 │   ├── RTKLIB       # RTKLIB source programs based on 2.4.3 b34
 │   ├── pocketfft    # PocketFFT (header-only FFT, used internally)
