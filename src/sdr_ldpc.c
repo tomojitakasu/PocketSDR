@@ -2,9 +2,6 @@
 //  Pocket SDR C Library - LDPC Decoding Functions
 //
 //  References:
-//  [1] Software for Low Density Parity Check Codes
-//      (https://shubhamchandak94.github.io/LDPC-codes)
-//  [2] https://github.com/radfordneal/LDPC-codes
 //  [3] IS-GPS-800E, NAVSTAR GPS Space Segment/Navigation User Segment
 //      L1C Interfaces, March 4, 2019
 //  [4] BeiDou Navigation Satellite System Signal In Space Interface Control
@@ -24,39 +21,28 @@
 //  2023-01-07  1.1  support IRNV1_SF2 and IRNV1_SF3 in decode_LDPC()
 //  2023-01-09  1.2  support BCNV1_SF2, BCNV1_SF3, BCNV2, BCNV3 in decode_LDPC()
 //  2023-01-16  1.3  fix memory leak and unable decoding of LDPC
+//  2026-06-05  1.4  remove LDPC-codes dependency
 //
 #include "pocket_sdr.h"
 
 // constants -------------------------------------------------------------------
-#define MAX_ITER  250
-#define ERR_PROB  1e-5
+#define MAX_ITER   250
+#define INIT_LLR   10.0f
+#define MIN_SUM_S  0.75f
 
-// function prototypes of LDPC-codes ([1],[2]) ---------------------------------
-#ifdef __cplusplus
-extern "C" {
-#endif
-extern int max_iter;
-void *mod2sparse_allocate(int, int);
-void *mod2sparse_insert(void *, int, int);
-void mod2sparse_free(void *);
-void prprp_decode_setup(void);
-unsigned int prprp_decode(void *, double *, char *, char *, double *);
-int check(void *, char *, char *);
-double changed(double *, char *, int);
-#ifdef __cplusplus
-}
-#endif
-
-// global variables ------------------------------------------------------------
-static const double RATIO[] = {
-    (1.0 - ERR_PROB) / ERR_PROB, ERR_PROB / (1.0 - ERR_PROB)
-};
+// type definitions ------------------------------------------------------------
+typedef struct {
+    int m, n, ne;
+    int *row_ptr, *row_edges;
+    int *col_ptr, *col_edges;
+    int *edge_rows, *edge_cols;
+} ldpc_graph_t;
 
 // LDPC H-matrix cache ---------------------------------------------------------
-static void *H_CNV2_SF2  = NULL;
-static void *H_CNV2_SF3  = NULL;
-static void *H_IRNV1_SF2 = NULL;
-static void *H_IRNV1_SF3 = NULL;
+static ldpc_graph_t *H_CNV2_SF2  = NULL;
+static ldpc_graph_t *H_CNV2_SF3  = NULL;
+static ldpc_graph_t *H_IRNV1_SF2 = NULL;
+static ldpc_graph_t *H_IRNV1_SF3 = NULL;
 
 // CNAV-2 LDPC H-matrix table ([3]) --------------------------------------------
 
@@ -2192,105 +2178,216 @@ static const uint16_t H_IRNV1_SF3_T[][2] = { // [7] table 41
     {179,179}, {212,189}, {200,200}, {233,210}, {221,221}, {234,234}
 };
 
-// generate binary LDPC parity check matrix ------------------------------------
-static void *gen_B_LDPC_H(int m, int n, int g, const uint16_t H_A[][2],
-    const uint16_t H_B[][2], const uint16_t H_C[][2], const uint16_t H_D[][2],
-    const uint16_t H_E[][2], const uint16_t H_T[][2], int na, int nb, int nc,
-    int nd, int ne, int nt)
+// add one binary LDPC graph edge ----------------------------------------------
+static void add_edge(int row, int col, int *ne, int *rows, int *cols)
 {
-    void *H = mod2sparse_allocate(m, n);
+    rows[*ne] = row;
+    cols[*ne] = col;
+    (*ne)++;
+}
+
+// add binary LDPC graph edges from table --------------------------------------
+static void add_edges_tbl(const uint16_t H[][2], int nH, int roff, int coff,
+    int *ne, int *rows, int *cols)
+{
+    for (int i = 0; i < nH; i++) {
+        add_edge(roff + H[i][0] - 1, coff + H[i][1] - 1, ne, rows, cols);
+    }
+}
+
+// allocate binary LDPC graph --------------------------------------------------
+static ldpc_graph_t *alloc_ldpc_graph(int m, int n, int ne)
+{
+    ldpc_graph_t *H = (ldpc_graph_t *)sdr_malloc(sizeof(ldpc_graph_t));
     
-    for (int i = 0; i < na; i++) {
-        mod2sparse_insert(H, H_A[i][0] - 1, H_A[i][1] - 1);
-    }
-    for (int i = 0; i < nb; i++) {
-        mod2sparse_insert(H, H_B[i][0] - 1, m + H_B[i][1] - 1);
-    }
-    for (int i = 0; i < nc; i++) {
-        mod2sparse_insert(H, m - g + H_C[i][0] - 1, H_C[i][1] - 1);
-    }
-    for (int i = 0; i < nd; i++) {
-        mod2sparse_insert(H, m - g + H_D[i][0] - 1, m + H_D[i][1] - 1);
-    }
-    for (int i = 0; i < ne; i++) {
-        mod2sparse_insert(H, m - g + H_E[i][0] - 1, m + g + H_E[i][1] - 1);
-    }
-    for (int i = 0; i < nt; i++) {
-        mod2sparse_insert(H, H_T[i][0] - 1, m + g + H_T[i][1] - 1);
-    }
+    H->m = m;
+    H->n = n;
+    H->ne = ne;
+    H->row_ptr = (int *)sdr_malloc(sizeof(int) * (m + 1));
+    H->col_ptr = (int *)sdr_malloc(sizeof(int) * (n + 1));
+    H->row_edges = (int *)sdr_malloc(sizeof(int) * ne);
+    H->col_edges = (int *)sdr_malloc(sizeof(int) * ne);
+    H->edge_rows = (int *)sdr_malloc(sizeof(int) * ne);
+    H->edge_cols = (int *)sdr_malloc(sizeof(int) * ne);
     return H;
 }
 
-// free binary LDPC parity check matrix ----------------------------------------
-#if 0
-static void free_B_LDPC_H(void *H)
+// generate binary LDPC parity check graph -------------------------------------
+static ldpc_graph_t *gen_B_LDPC_H(int m, int n, int g,
+    const uint16_t H_A[][2], const uint16_t H_B[][2],
+    const uint16_t H_C[][2], const uint16_t H_D[][2],
+    const uint16_t H_E[][2], const uint16_t H_T[][2],
+    int na, int nb, int nc, int nd, int ne0, int nt)
 {
-    mod2sparse_free(H);
+    int ne_max = na + nb + nc + nd + ne0 + nt, ne = 0;
+    int *rows = (int *)sdr_malloc(sizeof(int) * ne_max);
+    int *cols = (int *)sdr_malloc(sizeof(int) * ne_max);
+    
+    add_edges_tbl(H_A, na, 0, 0, &ne, rows, cols);
+    add_edges_tbl(H_B, nb, 0, m, &ne, rows, cols);
+    add_edges_tbl(H_C, nc, m - g, 0, &ne, rows, cols);
+    add_edges_tbl(H_D, nd, m - g, m, &ne, rows, cols);
+    add_edges_tbl(H_E, ne0, m - g, m + g, &ne, rows, cols);
+    add_edges_tbl(H_T, nt, 0, m + g, &ne, rows, cols);
+    
+    ldpc_graph_t *H = alloc_ldpc_graph(m, n, ne);
+    memset(H->row_ptr, 0, sizeof(int) * (m + 1));
+    memset(H->col_ptr, 0, sizeof(int) * (n + 1));
+    for (int e = 0; e < ne; e++) {
+        H->row_ptr[rows[e]+1]++;
+        H->col_ptr[cols[e]+1]++;
+        H->edge_rows[e] = rows[e];
+        H->edge_cols[e] = cols[e];
+    }
+    for (int i = 0; i < m; i++) H->row_ptr[i+1] += H->row_ptr[i];
+    for (int i = 0; i < n; i++) H->col_ptr[i+1] += H->col_ptr[i];
+    
+    int *rp = (int *)sdr_malloc(sizeof(int) * m);
+    int *cp = (int *)sdr_malloc(sizeof(int) * n);
+    memcpy(rp, H->row_ptr, sizeof(int) * m);
+    memcpy(cp, H->col_ptr, sizeof(int) * n);
+    for (int e = 0; e < ne; e++) {
+        H->row_edges[rp[rows[e]]++] = e;
+        H->col_edges[cp[cols[e]]++] = e;
+    }
+    sdr_free(rp);
+    sdr_free(cp);
+    sdr_free(rows);
+    sdr_free(cols);
+    return H;
 }
-#endif
 
-// decode binary LDPC ----------------------------------------------------------
-static int decode_B_LDPC(void *H, int m, int n, const uint8_t *syms,
-    uint8_t *syms_dec)
+// check binary LDPC parity ----------------------------------------------------
+static int check_B_LDPC(const ldpc_graph_t *H, const uint8_t *bits)
 {
-    double *lratio = (double *)sdr_malloc(sizeof(double) * n);
-    char   *dblk   = (char   *)sdr_malloc(sizeof(char)   * n);
-    char   *pchk   = (char   *)sdr_malloc(sizeof(char)   * n);
-    double *bitpr  = (double *)sdr_malloc(sizeof(double) * n);
+    for (int r = 0; r < H->m; r++) {
+        uint8_t s = 0;
+        for (int k = H->row_ptr[r]; k < H->row_ptr[r+1]; k++) {
+            s ^= bits[H->edge_cols[H->row_edges[k]]];
+        }
+        if (s) return 0;
+    }
+    return 1;
+}
+
+// count changed binary LDPC bits ----------------------------------------------
+static int count_changed_bits(const uint8_t *bits, const uint8_t *syms, int n)
+{
+    int nerr = 0;
     
     for (int i = 0; i < n; i++) {
-        lratio[i] = RATIO[syms[i]];
+        if (bits[i] != ((syms[i] ^ 1) & 1)) nerr++;
     }
-    // setup decoder
-    max_iter = MAX_ITER;
-    prprp_decode_setup();
+    return nerr;
+}
+
+// decode binary LDPC ----------------------------------------------------------
+static int decode_B_LDPC(const ldpc_graph_t *H, const uint8_t *syms,
+    uint8_t *syms_dec)
+{
+    float *Lch = (float *)sdr_malloc(sizeof(float) * H->n);
+    float *V2C = (float *)sdr_malloc(sizeof(float) * H->ne);
+    float *C2V = (float *)sdr_malloc(sizeof(float) * H->ne);
+    uint8_t *bits = (uint8_t *)sdr_malloc(sizeof(uint8_t) * H->n);
+    int nerr = -1;
     
-    // decode LDPC by probability propagation
-    prprp_decode(H, lratio, dblk, pchk, bitpr);
-    int valid = check(H, dblk, pchk) == 0;
-    int nerr = (int)changed(lratio, dblk, n);
-    
-    memcpy(syms_dec, dblk, m);
-    
-    sdr_free(lratio);
-    sdr_free(dblk);
-    sdr_free(pchk);
-    sdr_free(bitpr);
-    return valid ? nerr : -1;
+    for (int i = 0; i < H->n; i++) {
+        Lch[i] = (syms[i] & 1) ? INIT_LLR : -INIT_LLR;
+    }
+    for (int e = 0; e < H->ne; e++) {
+        V2C[e] = Lch[H->edge_cols[e]];
+        C2V[e] = 0.0f;
+    }
+    for (int iter = 0; iter <= MAX_ITER; iter++) {
+        for (int c = 0; c < H->n; c++) {
+            float L = Lch[c];
+            for (int k = H->col_ptr[c]; k < H->col_ptr[c+1]; k++) {
+                L += C2V[H->col_edges[k]];
+            }
+            bits[c] = L < 0.0f ? 1 : 0;
+        }
+        if (check_B_LDPC(H, bits)) {
+            nerr = count_changed_bits(bits, syms, H->n);
+            memcpy(syms_dec, bits, H->m);
+            break;
+        }
+        if (iter == MAX_ITER) break;
+        
+        // update check nodes by normalized min-sum
+        for (int r = 0; r < H->m; r++) {
+            int sign = 1, min_e = -1;
+            float min1 = 1e30f, min2 = 1e30f;
+            
+            for (int k = H->row_ptr[r]; k < H->row_ptr[r+1]; k++) {
+                int e = H->row_edges[k];
+                float a = V2C[e] < 0.0f ? -V2C[e] : V2C[e];
+                if (V2C[e] < 0.0f) sign = -sign;
+                if (a < min1) {
+                    min2 = min1;
+                    min1 = a;
+                    min_e = e;
+                } else if (a < min2) {
+                    min2 = a;
+                }
+            }
+            for (int k = H->row_ptr[r]; k < H->row_ptr[r+1]; k++) {
+                int e = H->row_edges[k];
+                int s = V2C[e] < 0.0f ? -sign : sign;
+                C2V[e] = (s < 0 ? -1.0f : 1.0f) * MIN_SUM_S *
+                    (e == min_e ? min2 : min1);
+            }
+        }
+        // update variable nodes
+        for (int c = 0; c < H->n; c++) {
+            float L = Lch[c];
+            for (int k = H->col_ptr[c]; k < H->col_ptr[c+1]; k++) {
+                L += C2V[H->col_edges[k]];
+            }
+            for (int k = H->col_ptr[c]; k < H->col_ptr[c+1]; k++) {
+                int e = H->col_edges[k];
+                V2C[e] = L - C2V[e];
+            }
+        }
+    }
+    sdr_free(Lch);
+    sdr_free(V2C);
+    sdr_free(C2V);
+    sdr_free(bits);
+    return nerr;
 }
 
 // decode LDPC(1200,600) of CNAV-2 subframe 2 ----------------------------------
 static int decode_LDPC_CNV2_SF2(const uint8_t *syms, uint8_t *syms_dec)
 {
     if (!H_CNV2_SF2) {
-        int na = (int)sizeof(H_CNV2_SF2_A) / 4;
-        int nb = (int)sizeof(H_CNV2_SF2_B) / 4;
-        int nc = (int)sizeof(H_CNV2_SF2_C) / 4;
-        int nd = (int)sizeof(H_CNV2_SF2_D) / 4;
-        int ne = (int)sizeof(H_CNV2_SF2_E) / 4;
-        int nt = (int)sizeof(H_CNV2_SF2_T) / 4;
+        int na = (int)(sizeof(H_CNV2_SF2_A) / sizeof(H_CNV2_SF2_A[0]));
+        int nb = (int)(sizeof(H_CNV2_SF2_B) / sizeof(H_CNV2_SF2_B[0]));
+        int nc = (int)(sizeof(H_CNV2_SF2_C) / sizeof(H_CNV2_SF2_C[0]));
+        int nd = (int)(sizeof(H_CNV2_SF2_D) / sizeof(H_CNV2_SF2_D[0]));
+        int ne = (int)(sizeof(H_CNV2_SF2_E) / sizeof(H_CNV2_SF2_E[0]));
+        int nt = (int)(sizeof(H_CNV2_SF2_T) / sizeof(H_CNV2_SF2_T[0]));
         H_CNV2_SF2 = gen_B_LDPC_H(600, 1200, 1, H_CNV2_SF2_A, H_CNV2_SF2_B,
             H_CNV2_SF2_C, H_CNV2_SF2_D, H_CNV2_SF2_E, H_CNV2_SF2_T, na, nb, nc,
             nd, ne, nt);
     }
-    return decode_B_LDPC(H_CNV2_SF2, 600, 1200, syms, syms_dec);
+    return decode_B_LDPC(H_CNV2_SF2, syms, syms_dec);
 }
 
 // decode LDPC(548,274) of CNAV-2 subframe 3 -----------------------------------
 static int decode_LDPC_CNV2_SF3(const uint8_t *syms, uint8_t *syms_dec)
 {
     if (!H_CNV2_SF3) {
-        int na = (int)sizeof(H_CNV2_SF3_A) / 4;
-        int nb = (int)sizeof(H_CNV2_SF3_B) / 4;
-        int nc = (int)sizeof(H_CNV2_SF3_C) / 4;
-        int nd = (int)sizeof(H_CNV2_SF3_D) / 4;
-        int ne = (int)sizeof(H_CNV2_SF3_E) / 4;
-        int nt = (int)sizeof(H_CNV2_SF3_T) / 4;
+        int na = (int)(sizeof(H_CNV2_SF3_A) / sizeof(H_CNV2_SF3_A[0]));
+        int nb = (int)(sizeof(H_CNV2_SF3_B) / sizeof(H_CNV2_SF3_B[0]));
+        int nc = (int)(sizeof(H_CNV2_SF3_C) / sizeof(H_CNV2_SF3_C[0]));
+        int nd = (int)(sizeof(H_CNV2_SF3_D) / sizeof(H_CNV2_SF3_D[0]));
+        int ne = (int)(sizeof(H_CNV2_SF3_E) / sizeof(H_CNV2_SF3_E[0]));
+        int nt = (int)(sizeof(H_CNV2_SF3_T) / sizeof(H_CNV2_SF3_T[0]));
         H_CNV2_SF3 = gen_B_LDPC_H(274, 548, 1, H_CNV2_SF3_A, H_CNV2_SF3_B,
             H_CNV2_SF3_C, H_CNV2_SF3_D, H_CNV2_SF3_E, H_CNV2_SF3_T, na, nb, nc,
             nd, ne, nt);
     }
-    return decode_B_LDPC(H_CNV2_SF3, 274, 548, syms, syms_dec);
+    return decode_B_LDPC(H_CNV2_SF3, syms, syms_dec);
 }
 
 // decode NB-LDPC(200,100) of B-CNAV1 subframe 2 -------------------------------
@@ -2334,34 +2431,46 @@ static int decode_LDPC_BCNV3(const uint8_t *syms, uint8_t *syms_dec)
 static int decode_LDPC_IRNV1_SF2(const uint8_t *syms, uint8_t *syms_dec)
 {
     if (!H_IRNV1_SF2) {
-        int na = (int)sizeof(H_IRNV1_SF2_A) / 4;
-        int nb = (int)sizeof(H_IRNV1_SF2_B) / 4;
-        int nc = (int)sizeof(H_IRNV1_SF2_C) / 4;
-        int nd = (int)sizeof(H_IRNV1_SF2_D) / 4;
-        int ne = (int)sizeof(H_IRNV1_SF2_E) / 4;
-        int nt = (int)sizeof(H_IRNV1_SF2_T) / 4;
+        int na = (int)(sizeof(H_IRNV1_SF2_A) / sizeof(H_IRNV1_SF2_A[0]));
+        int nb = (int)(sizeof(H_IRNV1_SF2_B) / sizeof(H_IRNV1_SF2_B[0]));
+        int nc = (int)(sizeof(H_IRNV1_SF2_C) / sizeof(H_IRNV1_SF2_C[0]));
+        int nd = (int)(sizeof(H_IRNV1_SF2_D) / sizeof(H_IRNV1_SF2_D[0]));
+        int ne = (int)(sizeof(H_IRNV1_SF2_E) / sizeof(H_IRNV1_SF2_E[0]));
+        int nt = (int)(sizeof(H_IRNV1_SF2_T) / sizeof(H_IRNV1_SF2_T[0]));
         H_IRNV1_SF2 = gen_B_LDPC_H(600, 1200, 50, H_IRNV1_SF2_A, H_IRNV1_SF2_B,
             H_IRNV1_SF2_C, H_IRNV1_SF2_D, H_IRNV1_SF2_E, H_IRNV1_SF2_T, na, nb,
             nc, nd, ne, nt);
     }
-    return decode_B_LDPC(H_IRNV1_SF2, 600, 1200, syms, syms_dec);
+    return decode_B_LDPC(H_IRNV1_SF2, syms, syms_dec);
 }
 
 // decode LDPC(548,274) of NavIC L1-SPS NAV subframe 3 -------------------------
 static int decode_LDPC_IRNV1_SF3(const uint8_t *syms, uint8_t *syms_dec)
 {
     if (!H_IRNV1_SF3) {
-        int na = (int)sizeof(H_IRNV1_SF3_A) / 4;
-        int nb = (int)sizeof(H_IRNV1_SF3_B) / 4;
-        int nc = (int)sizeof(H_IRNV1_SF3_C) / 4;
-        int nd = (int)sizeof(H_IRNV1_SF3_D) / 4;
-        int ne = (int)sizeof(H_IRNV1_SF3_E) / 4;
-        int nt = (int)sizeof(H_IRNV1_SF3_T) / 4;
+        int na = (int)(sizeof(H_IRNV1_SF3_A) / sizeof(H_IRNV1_SF3_A[0]));
+        int nb = (int)(sizeof(H_IRNV1_SF3_B) / sizeof(H_IRNV1_SF3_B[0]));
+        int nc = (int)(sizeof(H_IRNV1_SF3_C) / sizeof(H_IRNV1_SF3_C[0]));
+        int nd = (int)(sizeof(H_IRNV1_SF3_D) / sizeof(H_IRNV1_SF3_D[0]));
+        int ne = (int)(sizeof(H_IRNV1_SF3_E) / sizeof(H_IRNV1_SF3_E[0]));
+        int nt = (int)(sizeof(H_IRNV1_SF3_T) / sizeof(H_IRNV1_SF3_T[0]));
         H_IRNV1_SF3 = gen_B_LDPC_H(274, 548, 23, H_IRNV1_SF3_A, H_IRNV1_SF3_B,
             H_IRNV1_SF3_C, H_IRNV1_SF3_D, H_IRNV1_SF3_E, H_IRNV1_SF3_T, na, nb,
             nc, nd, ne, nt);
     }
-    return decode_B_LDPC(H_IRNV1_SF3, 274, 548, syms, syms_dec);
+    return decode_B_LDPC(H_IRNV1_SF3, syms, syms_dec);
+}
+
+// get expected LDPC code length -----------------------------------------------
+static int LDPC_code_len(const char *type)
+{
+    if (!strcmp(type, "CNV2_SF2" ) || !strcmp(type, "BCNV1_SF2") ||
+        !strcmp(type, "IRNV1_SF2")) return 1200;
+    if (!strcmp(type, "CNV2_SF3" ) || !strcmp(type, "IRNV1_SF3")) return 548;
+    if (!strcmp(type, "BCNV1_SF3")) return 528;
+    if (!strcmp(type, "BCNV2")) return 576;
+    if (!strcmp(type, "BCNV3")) return 972;
+    return 0;
 }
 
 //------------------------------------------------------------------------------
@@ -2387,6 +2496,11 @@ static int decode_LDPC_IRNV1_SF3(const uint8_t *syms, uint8_t *syms_dec)
 int sdr_decode_LDPC(const char *type, const uint8_t *syms, int N,
     uint8_t *syms_dec)
 {
+    int len = LDPC_code_len(type);
+    
+    if (len <= 0 || N != len) {
+        return -1;
+    }
     if (!strcmp(type, "CNV2_SF2")) {
         return decode_LDPC_CNV2_SF2(syms, syms_dec);
     }
@@ -2413,4 +2527,3 @@ int sdr_decode_LDPC(const char *type, const uint8_t *syms, int N,
     }
     return -1;
 }
-
