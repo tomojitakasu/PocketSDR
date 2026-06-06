@@ -42,7 +42,7 @@ typedef struct {
     sdr_cpx16_t *IQ;
     sdr_cpx16_t *code;
     sdr_cpx_t corr[SDR_MAX_CORR], C[2];
-    double pos[3];
+    double pos[4];
     int N;
 } corr_std_ctx_t;
 
@@ -211,7 +211,7 @@ static void bench_mix_carr(void *ctx)
 static void bench_corr_std(void *ctx)
 {
     corr_std_ctx_t *p = (corr_std_ctx_t *)ctx;
-    sdr_corr_std(p->IQ, p->code, p->N, 0.35, p->pos, 3, p->corr, p->C);
+    sdr_corr_std(p->IQ, p->code, p->N, 0.35, p->pos, 4, p->corr, p->C);
     perf_sink += p->corr[0][0];
 }
 
@@ -219,7 +219,7 @@ static void bench_corr_std(void *ctx)
 static void bench_corr_std_cpx_code(void *ctx)
 {
     corr_std_ctx_t *p = (corr_std_ctx_t *)ctx;
-    sdr_corr_std_cpx_code(p->IQ, p->code, p->N, 0.35, p->pos, 3, p->corr,
+    sdr_corr_std_cpx_code(p->IQ, p->code, p->N, 0.35, p->pos, 4, p->corr,
         p->C);
     perf_sink += p->corr[0][0];
 }
@@ -364,6 +364,7 @@ static void run_main_size_case(const char *api, int N, int8_t *code_I,
         ctx.pos[0] = -0.5;
         ctx.pos[1] = 0.0;
         ctx.pos[2] = 0.5;
+        ctx.pos[3] = 1.0;
         run_bench(api, N, N, cpx ? bench_corr_std_cpx_code : bench_corr_std,
             &ctx);
         sdr_free(ctx.code);
