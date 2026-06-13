@@ -26,8 +26,9 @@
 #endif
 
 // constants and macros --------------------------------------------------------
-#define BUFF_SIZE       (SDR_SIZE_UBUFF * SDR_MAX_UBUFF)
-#define TO_TRANSFER     3000    // USB transfer timeout (ms)
+#define BUFF_SIZE     (SDR_SIZE_UBUFF * SDR_MAX_UBUFF)
+#define TO_TRANSFER   3000    // USB transfer timeout (ms)
+#define TIMER_RES     1       // timer resolution for Windows (ms)
 
 // read MAX2771 status ---------------------------------------------------------
 static int read_MAX2771_stat(sdr_dev_t *dev, int ch, double fx, double *fs,
@@ -161,6 +162,11 @@ static void *event_handler(void *arg)
     // rise process/thread priority
     rise_pri();
     
+#ifdef WIN32 // raise timer resolution
+    if (timeBeginPeriod(TIMER_RES)) {
+        fprintf(stderr, "sdev: timeBeginPeriod (%d)\n", (int)GetLastError());
+    }
+#endif
     if (!(ep = get_bulk_ep(dev->usb, SDR_DEV_EP))) {
         fprintf(stderr, "bulk endpoint get error ep=0x%02X\n", SDR_DEV_EP);
         return 0;
