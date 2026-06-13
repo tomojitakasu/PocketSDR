@@ -12,6 +12,7 @@
 //
 //  History:
 //  2024-01-25  1.0  port sdr_nb_ldpc.py to C
+//  2026-06-13  1.1  hard-decision -> soft-decision
 //
 #include <math.h>
 #include "pocket_sdr.h"
@@ -86,14 +87,14 @@ static void init_table(void)
     }
 }
 
-// convert binary codes to GF(q) codes -----------------------------------------
-static void bin2gf(const uint8_t *syms, int n, uint8_t *code)
+// convert soft binary codes to GF(q) hard-decision codes ----------------------
+static void soft2gf(const uint8_t *syms, int n, uint8_t *code)
 {
     memset(code, 0, n);
     
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < N_GF; j++) {
-            code[i] = (code[i] << 1) + (syms[i*N_GF+j] & 1);
+            code[i] = (code[i] << 1) + (syms[i*N_GF+j] >= 128 ? 1 : 0);
         }
     }
 }
@@ -150,16 +151,21 @@ static void norm_LLR(float *L)
     }
 }
 
-// initialize LLR --------------------------------------------------------------
-static void init_LLR(const uint8_t *code, int n, float err_prob, float **L)
+// initialize LLR by soft binary codes -----------------------------------------
+static void init_LLR_soft(const uint8_t *syms, int n, float **L)
 {
+    const float scale = -logf((float)ERR_PROB) / 255.0f;
+    
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < Q_GF; j++) {
-            int nerr = 0;
+            float cost = 0.0f;
+            
             for (int k = 0; k < N_GF; k++) {
-                if ((code[i] ^ j) & (1<<k)) nerr++;
+                int bit = (j >> (N_GF - 1 - k)) & 1;
+                uint8_t sym = syms[i*N_GF+k];
+                cost += (float)(bit ? 255 - sym : sym) * scale;
             }
-            L[i][j] = -logf(err_prob) * nerr;
+            L[i][j] = cost;
         }
     }
 }
@@ -223,7 +229,7 @@ static void ext_min_sum(float *L1, const float *L2)
     copy_LLR(L1, Ls);
 }
 
-// decode NB-LDPC --------------------------------------------------------------
+// decode NB-LDPC by soft-decision input ---------------------------------------
 int sdr_decode_NB_LDPC(const uint8_t H_idx[][4], const uint8_t H_ele[][4],
     int m, int n, const uint8_t *syms, uint8_t *syms_dec)
 {
@@ -234,8 +240,8 @@ int sdr_decode_NB_LDPC(const uint8_t H_idx[][4], const uint8_t H_ele[][4],
     // initialize GF(q) tables
     init_table();
     
-    // convert binary codes to GF(q) codes
-    bin2gf(syms, n, code);
+    // convert soft binary codes to GF(q) hard-decision codes
+    soft2gf(syms, n, code);
     
     // Tanner graph edges
     ne = graph_edge(H_idx, H_ele, m, ie, je, he);
@@ -247,7 +253,7 @@ int sdr_decode_NB_LDPC(const uint8_t H_idx[][4], const uint8_t H_ele[][4],
     for (int i = 0; i < n; i++) {
         L[i] = (float *)sdr_malloc(sizeof(float) * Q_GF);
     }
-    init_LLR(code, n, (float)ERR_PROB, L);
+    init_LLR_soft(syms, n, L);
     
     for (int i = 0; i < ne; i++) {
         permute_V2C(he[i], L[je[i]], V2C[i]);
@@ -258,7 +264,7 @@ int sdr_decode_NB_LDPC(const uint8_t H_idx[][4], const uint8_t H_ele[][4],
             nerr = 0;
             for (int i = 0; i < n * N_GF; i++) {
                 uint8_t sym = (code[i/N_GF] >> (N_GF-1-i%N_GF)) & 1;
-                if (sym != syms[i]) nerr++;
+                if (sym != (syms[i] >= 128 ? 1 : 0)) nerr++;
             }
             gf2bin(code, m, syms_dec);
             break;
