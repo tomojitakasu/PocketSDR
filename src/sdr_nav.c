@@ -54,12 +54,18 @@
 //                   $BCNV2, $BCNV3, $IRNV1, $IRNV5
 //  2025-02-18  1.7  flip symbol polarity
 //  2025-03-28  1.8  fix symbol table access violation problem
+//  2026-06-13  1.9  update symbol-sync algorithm in symb_sync()
 //
 #include "pocket_sdr.h"
 
 // constants -------------------------------------------------------------------
-#define THRES_SYNC  0.05      // threshold for symbol sync
-#define THRES_LOST  0.001     // threshold for symbol lost
+#define SYNC_NMAX    20       // max symbol length for bit/symbol sync (ms)
+#define K_SYNC_MIN   20       // min symbols accumulated for bit/symbol sync
+#define K_SYNC_MAX   100      // max symbols accumulated for bit/symbol sync
+#define THRES_SYNC_R 1.4f     // threshold for bit/symbol sync energy ratio
+#define THRES_LOST_R 0.5f     // threshold for symbol-lost coherency ratio
+#define T_SYNC_START 1.5      // bit/symbol sync history start time (s) (=T_NPULLIN)
+#define SOFT_SCALE  1024.0f   // scale factor for soft nav symbols
 #if 0
 #define GPST_OFF_W  1024      // GPST offset (week) (1999-08-22 ~ 2019-04-06)
 #else
@@ -118,10 +124,38 @@ static uint8_t BCNV1_SF1A[ 63][21]; // BDS B-CNAV1 subframe 1A symbols
 static uint8_t BCNV1_SF1B[200][51]; // BDS B-CNAV1 subframe 1B symbols
 static uint8_t IRNV1_SF1 [400][52]; // NavIC L1-SPS subframe 1 symbols
 
-// convert IP correlation to symbol --------------------------------------------
+// convert correlation value to soft binary symbol ------------------------------
+static uint8_t corr2soft(float P)
+{
+    float sym = 128.0f - P * SOFT_SCALE;
+    
+    if (sym <= 0.0f) return 0;
+    if (sym >= 255.0f) return 255;
+    return (uint8_t)(sym + 0.5f);
+}
+
+// convert soft binary symbol to hard symbol -----------------------------------
+static uint8_t hard_sym(uint8_t sym)
+{
+    return sym >= 128 ? 1 : 0;
+}
+
+// reverse soft binary symbol polarity -----------------------------------------
+static uint8_t rev_soft_sym(uint8_t sym, int rev)
+{
+    return rev ? (uint8_t)(255 - sym) : sym;
+}
+
+// reverse and hard-decision soft binary symbol --------------------------------
+static uint8_t rev_hard_sym(uint8_t sym, int rev)
+{
+    return hard_sym(rev_soft_sym(sym, rev));
+}
+
+// convert IP correlation to soft binary symbol --------------------------------
 static uint8_t IP2sym(const sdr_ch_t *ch)
 {
-    return (ch->trk->P[SDR_N_HIST-1][0] > 0.0) ? 0 : 1; // {+, -} <-> {0, 1}
+    return corr2soft(ch->trk->P[SDR_N_HIST-1][0]); // {+, -} <-> {0, 1}
 }
 
 // average of IP correlation ---------------------------------------------------
@@ -135,33 +169,57 @@ static float mean_IP(const sdr_ch_t *ch, int N)
     return P;
 }
 
-// sync nav symbols by bit transition ------------------------------------------
+// sync nav symbols (ref: doc/update_sym_sync.pdf) -----------------------------
 static int sync_symb(sdr_ch_t *ch, int N)
 {
     if (ch->nav->ssync == 0) {
-        float P = mean_IP(ch, N);
-        int n = 200 / N, R[100] = {0};
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < N; j++) {
-                R[i] += ch->trk->P[SDR_N_HIST-(i+1)*N+j][0] >= 0.0 ? 1 : -1;
-            }
-            if (R[i] != N && R[i] != -N) return 0;
+        // accumulated symbols per boundary phase (history floored after pull-in)
+        int Lmin = (int)(T_SYNC_START / ch->T);
+        int K = (ch->lock - Lmin - (N - 1)) / N;
+        if (K < K_SYNC_MIN) return 0;
+        if (K > K_SYNC_MAX) K = K_SYNC_MAX;
+        
+        // prefix sums of IP history over the accumulation window
+        int L = K * N + N - 1;
+        int base = SDR_N_HIST - L;
+        float ps[K_SYNC_MAX * SYNC_NMAX + SYNC_NMAX];
+        ps[0] = 0.0f;
+        for (int i = 0; i < L; i++) {
+            ps[i+1] = ps[i] + ch->trk->P[base+i][0];
         }
-        if (R[0] * R[1] == -N * N && fabsf(P) >= THRES_SYNC) {
-            ch->nav->ssync = ch->lock - N;
-            sdr_log(4, "$LOG,%.3f,%s,%s,%d,SYMBOL SYNC (%.3f)", ch->time,
-                ch->sat, ch->sig, ch->prn, P);
+        // accumulate |coherent symbol sum| for each of N boundary phases
+        float E[SYNC_NMAX] = {0};
+        for (int m = 0; m < N; m++) {
+            for (int k = 0; k < K; k++) {
+                int e = L - 1 - m - k * N;
+                E[m] += fabsf(ps[e+1] - ps[e-N+1]);
+            }
+        }
+        int m0 = 0;
+        for (int m = 1; m < N; m++) {
+            if (E[m] > E[m0]) m0 = m;
+        }
+        // confirm a clear peak vs the opposite (half-bit-shifted) phase
+        float Eopp = E[(m0 + N / 2) % N];
+        if (Eopp > 0.0f && E[m0] >= THRES_SYNC_R * Eopp) {
+            ch->nav->ssync = ch->lock - m0 - N;
+            sdr_log(4, "$LOG,%.3f,%s,%s,%d,SYMBOL SYNC (%.2f)", ch->time,
+                ch->sat, ch->sig, ch->prn, E[m0] / Eopp);
         }
     } else if ((ch->lock - ch->nav->ssync) % N == 0) {
-        float P = mean_IP(ch, N);
-        if (fabsf(P) >= THRES_LOST) {
-            uint8_t sym = (P > 0.0) ? 0 : 1;
+        // symbol lost by collapse of coherent vs incoherent symbol energy
+        float P = mean_IP(ch, N), R = 0.0f;
+        for (int i = 0; i < N; i++) {
+            R += fabsf(ch->trk->P[SDR_N_HIST-N+i][0]) / N;
+        }
+        if (fabsf(P) >= THRES_LOST_R * R) {
+            uint8_t sym = corr2soft(P);
             sdr_add_buff(ch->nav->syms, SDR_MAX_NSYM, &sym, sizeof(sym));
             return 1;
         } else {
             ch->nav->ssync = ch->nav->rev = 0;
-            sdr_log(4, "$LOG,%.3f,%s,%s,%d,SYMBOL LOST (%.3f)", ch->time,
-                ch->sat, ch->sig, ch->prn, P);
+            sdr_log(4, "$LOG,%.3f,%s,%s,%d,SYMBOL LOST", ch->time,
+                ch->sat, ch->sig, ch->prn);
         }
     }
     return 0;
@@ -176,7 +234,7 @@ static int sync_sec_code(sdr_ch_t *ch)
        (ch->lock - ch->trk->sec_sync) % N != 0) {
         return 0;
     }
-    uint8_t sym = (mean_IP(ch, N) > 0.0) ? 0 : 1;
+    uint8_t sym = corr2soft(mean_IP(ch, N));
     sdr_add_buff(ch->nav->syms, SDR_MAX_NSYM, &sym, sizeof(sym));
     return 1;
 }
@@ -199,6 +257,49 @@ static int bmatch_r(const uint8_t *bits0, const uint8_t *bits1, int n, int m)
     return 1;
 }
 
+// score soft symbol match -----------------------------------------------------
+static int smatch_score(const uint8_t *syms, const uint8_t *bits, int n,
+    int rev)
+{
+    int score = 0;
+    
+    for (int i = 0; i < n; i++) {
+        int bit = bits[i] ^ rev;
+        score += bit ? (int)syms[i] - 127 : 128 - (int)syms[i];
+    }
+    return score;
+}
+
+// threshold soft symbol match -------------------------------------------------
+static int smatch_thres(int n, int m)
+{
+    return 128 * n - 255 * (m + 1) + 1;
+}
+
+// match soft symbols ----------------------------------------------------------
+static int smatch(const uint8_t *syms, const uint8_t *bits, int n, int m,
+    int rev, int *score)
+{
+    *score = smatch_score(syms, bits, n, rev);
+    
+    if (m <= 0) {
+        for (int i = 0; i < n; i++) {
+            if (hard_sym(syms[i]) != (bits[i] ^ rev)) return 0;
+        }
+        return 1;
+    }
+    return *score >= smatch_thres(n, m);
+}
+
+#ifdef SDR_NAV_TEST
+// test soft symbol match ------------------------------------------------------
+int test_nav_smatch(const uint8_t *syms, const uint8_t *bits, int n, int m,
+    int rev, int *score)
+{
+    return smatch(syms, bits, n, m, rev, score);
+}
+#endif
+
 // sync nav frame by 2 preambles -----------------------------------------------
 static int sync_frame(sdr_ch_t *ch, const uint8_t *preamb, int n, int m,
     const uint8_t *bits, int N)
@@ -211,6 +312,29 @@ static int sync_frame(sdr_ch_t *ch, const uint8_t *preamb, int n, int m,
     if (bmatch_r(preamb, bits, n, m) && bmatch_r(preamb, bits + N, n, m)) {
         sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (R)", ch->time, ch->sat,
             ch->sig, ch->prn);
+        return 1; // reversed
+    }
+    return -1;
+}
+
+// sync nav frame by 2 soft-symbol preambles -----------------------------------
+static int sync_frame_soft(sdr_ch_t *ch, const uint8_t *preamb, int n, int m,
+    const uint8_t *syms, int N)
+{
+    int sn1, sn2, sr1, sr2;
+    int ok_n = smatch(syms, preamb, n, m, 0, &sn1) &&
+        smatch(syms + N, preamb, n, m, 0, &sn2);
+    int ok_r = smatch(syms, preamb, n, m, 1, &sr1) &&
+        smatch(syms + N, preamb, n, m, 1, &sr2);
+    
+    if (ok_n && (!ok_r || sn1 + sn2 >= sr1 + sr2)) {
+        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (N) S=%d", ch->time,
+            ch->sat, ch->sig, ch->prn, sn1 + sn2);
+        return 0; // normal
+    }
+    if (ok_r) {
+        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (R) S=%d", ch->time,
+            ch->sat, ch->sig, ch->prn, sr1 + sr2);
         return 1; // reversed
     }
     return -1;
@@ -412,13 +536,13 @@ static void decode_SBAS_msgs(sdr_ch_t *ch, const uint8_t *bits, int rev)
 // search SBAS message ---------------------------------------------------------
 static void search_SBAS_msgs(sdr_ch_t *ch)
 {
-    uint8_t syms[544], bits[266];
+    uint8_t syms[560], bits[274];
     
-    // decode 1/2 FEC (544 syms -> 258 + 8 bits)
-    for (int i = 0; i < 544; i++) {
-        syms[i] = ch->nav->syms[SDR_MAX_NSYM-544+i] * 255;
+    // decode 1/2 FEC (560 syms -> 258 + 16 bits)
+    for (int i = 0; i < 560; i++) {
+        syms[i] = ch->nav->syms[SDR_MAX_NSYM-560+i];
     }
-    sdr_decode_conv(syms, 544, bits);
+    sdr_decode_conv(syms, 560, bits);
     
     // search and decode SBAS message
     int rev = sync_SBAS_msgs(bits, 250);
@@ -476,7 +600,7 @@ static void decode_LNAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
     uint8_t buff[300], data[30];
     
     for (int i = 0; i < 300; i++) {
-        buff[i] = syms[i] ^ (uint8_t)rev;
+        buff[i] = rev_hard_sym(syms[i], rev);
     }
     if (test_LNAV_parity(buff, data)) {
         ch->nav->fsync = ch->lock;
@@ -518,7 +642,7 @@ static void decode_L1CA(sdr_ch_t *ch)
     
     if (ch->nav->fsync > 0) { // sync LNAV subframe
         if (ch->lock == ch->nav->fsync + 6000) {
-            int rev = sync_frame(ch, preamb, 8, 0, syms, 300);
+            int rev = sync_frame_soft(ch, preamb, 8, 0, syms, 300);
             if (rev == ch->nav->rev) {
                 decode_LNAV(ch, syms, rev);
             }
@@ -527,7 +651,7 @@ static void decode_L1CA(sdr_ch_t *ch)
         }
     } else if (ch->lock >= 20 * 308 + 1000) {
         // sync and decode LNAV subframe
-        int rev = sync_frame(ch, preamb, 8, 0, syms, 300);
+        int rev = sync_frame_soft(ch, preamb, 8, 0, syms, 300);
         if (rev >= 0) {
             decode_LNAV(ch, syms, rev);
         }
@@ -551,15 +675,20 @@ static int sync_CNV2_frame(sdr_ch_t *ch, const uint8_t *syms, int toi)
 {
     uint8_t *SF1 = CNV2_SF1[toi];
     uint8_t *SFn = CNV2_SF1[(toi + 1) % 400];
+    int sn1, sn2, sr1, sr2;
+    int ok_n = smatch(syms, SF1, 52, 2, 0, &sn1) &&
+        smatch(syms + 1800, SFn, 52, 2, 0, &sn2);
+    int ok_r = smatch(syms, SF1, 52, 2, 1, &sr1) &&
+        smatch(syms + 1800, SFn, 52, 2, 1, &sr2);
     
-    if (bmatch_n(syms, SF1, 52, 2) && bmatch_n(syms + 1800, SFn, 52, 2)) {
-        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (N) TOI=%d", ch->time,
-            ch->sat, ch->sig, ch->prn, toi);
+    if (ok_n && (!ok_r || sn1 + sn2 >= sr1 + sr2)) {
+        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (N) TOI=%d S=%d",
+            ch->time, ch->sat, ch->sig, ch->prn, toi, sn1 + sn2);
         return 1; // normal
     }
-    if (bmatch_r(syms, SF1, 52, 2) && bmatch_r(syms + 1800, SFn, 52, 2)) {
-        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (R) TOI=%d", ch->time,
-            ch->sat, ch->sig, ch->prn, toi);
+    if (ok_r) {
+        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (R) TOI=%d S=%d",
+            ch->time, ch->sat, ch->sig, ch->prn, toi, sr1 + sr2);
         return 0; // reversed
     }
     return -1;
@@ -574,12 +703,13 @@ static void decode_CNV2(sdr_ch_t *ch, const uint8_t *syms, int rev, int toi)
     // decode block-interleave (38 x 46 = 1748 syms)
     for (int i = 0, k = 0; i < 38; i++) {
         for (int j = 0; j < 46; j++) {
-            buff[k++] = syms[52+j*38+i] ^ (uint8_t)rev;
+            buff[k++] = rev_soft_sym(syms[52+j*38+i], rev);
         }
     }
     // decode LDPC (1200 + 548 syms -> 600 + 274 bits)
     int nerr1 = sdr_decode_LDPC("CNV2_SF2", buff, 1200, bits + 9);
-    int nerr2 = sdr_decode_LDPC("CNV2_SF3", buff + 1200, 548, bits + 609);
+    int nerr2 = sdr_decode_LDPC("CNV2_SF3", buff + 1200, 548,
+        bits + 609);
     
     if (nerr1 >= 0 && nerr2 >= 0 && test_CRC(bits + 9, 600) &&
         test_CRC(bits + 609, 274)) {
@@ -617,7 +747,7 @@ static void decode_L1CD(sdr_ch_t *ch)
         if (ch->lock == ch->nav->fsync + 1800) {
             int toi = (ch->nav->seq + 1) % 400;
             int rev = sync_CNV2_frame(ch, syms, toi);
-            uint8_t sym = syms[52]; // WN MSB in SF2
+            uint8_t sym = hard_sym(syms[52]); // WN MSB in SF2
             if (rev == ch->nav->rev && (sym ^ rev)) {
                 decode_CNV2(ch, syms, rev, toi);
             }
@@ -628,7 +758,7 @@ static void decode_L1CD(sdr_ch_t *ch)
         // search and decode CNAV-2 frame
         for (int toi = 0; toi < 400; toi++) {
             int rev = sync_CNV2_frame(ch, syms, toi);
-            uint8_t sym = syms[52];
+            uint8_t sym = hard_sym(syms[52]);
             if (rev >= 0 && (sym ^ rev)) {
                 decode_CNV2(ch, syms, rev, toi);
                 break;
@@ -689,7 +819,7 @@ static void search_CNAV_frame(sdr_ch_t *ch)
     
     // decode 1/2 FEC (644 syms -> 308 + 8 bits)
     for (int i = 0; i < 644; i++) {
-        buff[i] = ch->nav->syms[SDR_MAX_NSYM-644+i] * 255;
+        buff[i] = ch->nav->syms[SDR_MAX_NSYM-644+i];
     }
     sdr_decode_conv(buff, 644, bits);
     
@@ -750,7 +880,7 @@ static void search_L5_SBAS_msgs(sdr_ch_t *ch)
     
     // decode 1/2 FEC (1546 syms -> 758 + 8 bits)
     for (int i = 0; i < 1546; i++) {
-        syms[i] = ch->nav->syms[SDR_MAX_NSYM-1546+i] * 255;
+        syms[i] = ch->nav->syms[SDR_MAX_NSYM-1546+i];
     }
     sdr_decode_conv(syms, 1546, bits);
     
@@ -921,7 +1051,7 @@ static void decode_glo_str(sdr_ch_t *ch, const uint8_t *syms, int rev)
     
     for (int i = 1; i < 85; i++) {
         // handle meander and relative code transformation ([14] fig.3.4)
-        bits[i] = syms[(i-1)*2] ^ syms[i*2];
+        bits[i] = hard_sym(syms[(i-1)*2]) ^ hard_sym(syms[i*2]);
     }
     sdr_pack_bits(bits, 85, 0, data); // GLO string (85 bits, packed)
     
@@ -968,7 +1098,7 @@ static void decode_G1CA(sdr_ch_t *ch)
     
     if (ch->nav->fsync > 0) { // sync GLONASS nav string
         if (ch->lock == ch->nav->fsync + 2000) {
-            int rev = sync_frame(ch, time_mark, 30, 2, syms, 200);
+            int rev = sync_frame_soft(ch, time_mark, 30, 2, syms, 200);
             if (rev == ch->nav->rev) {
                 decode_glo_str(ch, syms + 30, rev);
             }
@@ -977,7 +1107,7 @@ static void decode_G1CA(sdr_ch_t *ch)
         }
     } else if (ch->lock >= 2300 + 2000) {
         // sync and decode GLONASS nav string
-        int rev = sync_frame(ch, time_mark, 30, 2, syms, 200);
+        int rev = sync_frame_soft(ch, time_mark, 30, 2, syms, 200);
         if (rev >= 0) {
             decode_glo_str(ch, syms + 30, rev);
         }
@@ -1026,8 +1156,8 @@ static void search_glo_L1OCD_str(sdr_ch_t *ch)
     
     // swap convolutional code G1 and G2
     for (int i = 0; i < 552; i += 2) {
-        syms[i  ] = ch->nav->syms[SDR_MAX_NSYM-552+i+1] * 255;
-        syms[i+1] = ch->nav->syms[SDR_MAX_NSYM-552+i  ] * 255;
+        syms[i  ] = ch->nav->syms[SDR_MAX_NSYM-552+i+1];
+        syms[i+1] = ch->nav->syms[SDR_MAX_NSYM-552+i  ];
     }
     // decode 1/2 FEC (552 syms -> 262 + 8 bits)
     sdr_decode_conv(syms, 552, bits);
@@ -1100,8 +1230,8 @@ static void search_glo_L3OCD_str(sdr_ch_t *ch)
     
     // swap convolutional code G1 and G2
     for (int i = 0; i < 668; i += 2) {
-        syms[i  ] = ch->nav->syms[SDR_MAX_NSYM-668+i+1] * 255;
-        syms[i+1] = ch->nav->syms[SDR_MAX_NSYM-668+i  ] * 255;
+        syms[i  ] = ch->nav->syms[SDR_MAX_NSYM-668+i+1];
+        syms[i+1] = ch->nav->syms[SDR_MAX_NSYM-668+i  ];
     }
     // decode 1/2 FEC (668 syms -> 320 + 8 bits)
     sdr_decode_conv(syms, 668, bits);
@@ -1151,7 +1281,7 @@ static void decode_gal_syms(const uint8_t *syms, int ncol, int nrow,
     // decode block-interleave and invert G2
     for (int i = 0, k = 0; i < ncol; i++) {
         for (int j = 0; j < nrow; j++) {
-            buff[k++] = (syms[j*ncol+i] ^ ((j % 2) ? 1 : 0)) * 255;
+            buff[k++] = rev_soft_sym(syms[j*ncol+i], j % 2);
         }
     }
     // decode 1/2 FEC
@@ -1168,7 +1298,7 @@ static void decode_gal_INAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
     uint8_t buff[500], bits[114*2], data[16];
     
     for (int i = 0; i < 500; i++) {
-        buff[i] = syms[i] ^ (uint8_t)rev;
+        buff[i] = rev_soft_sym(syms[i], rev);
     }
     // decode Galileo symbols (240 syms x 2 -> 114 bits x 2)
     decode_gal_syms(buff +  10, 30, 8, bits);
@@ -1217,7 +1347,7 @@ static void decode_E1B(sdr_ch_t *ch)
     
     if (ch->nav->fsync > 0) { // sync frame
         if (ch->lock == ch->nav->fsync + 500) {
-            int rev = sync_frame(ch, preamb, 10, 0, syms, 500);
+            int rev = sync_frame_soft(ch, preamb, 10, 0, syms, 500);
             if (rev == ch->nav->rev) {
                 decode_gal_INAV(ch, syms, rev);
             }
@@ -1226,7 +1356,7 @@ static void decode_E1B(sdr_ch_t *ch)
         }
     } else if (ch->lock >= 510 + 250) {
         // sync and decode Galileo I/NAV pages
-        int rev = sync_frame(ch, preamb, 10, 0, syms, 500);
+        int rev = sync_frame_soft(ch, preamb, 10, 0, syms, 500);
         if (rev >= 0) {
             decode_gal_INAV(ch, syms, rev);
         }
@@ -1252,7 +1382,7 @@ static void decode_gal_FNAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
     uint8_t buff[500], bits[238], data[30];
     
     for (int i = 0; i < 500; i++) {
-        buff[i] = syms[i] ^ (uint8_t)rev;
+        buff[i] = rev_soft_sym(syms[i], rev);
     }
     // decode Galileo symbols (488 syms -> 238 bits)
     decode_gal_syms(buff + 12, 61, 8, bits);
@@ -1298,7 +1428,7 @@ static void decode_E5AI(sdr_ch_t *ch)
     
     if (ch->nav->fsync > 0) { // sync Galileo F/NAV page
         if (ch->lock == ch->nav->fsync + 10000) {
-            int rev = sync_frame(ch, preamb, 12, 0, syms, 500);
+            int rev = sync_frame_soft(ch, preamb, 12, 0, syms, 500);
             if (rev == ch->nav->rev) {
                 decode_gal_FNAV(ch, syms, rev);
             }
@@ -1307,7 +1437,7 @@ static void decode_E5AI(sdr_ch_t *ch)
         }
     } else if (ch->lock >= ch->len_sec_code * 512 + 250) {
         // sync and decode Galileo F/NAV page
-        int rev = sync_frame(ch, preamb, 12, 0, syms, 500);
+        int rev = sync_frame_soft(ch, preamb, 12, 0, syms, 500);
         if (rev >= 0) {
             decode_gal_FNAV(ch, syms, rev);
         }
@@ -1338,7 +1468,7 @@ static void decode_E5BI(sdr_ch_t *ch)
     
     if (ch->nav->fsync > 0) { // sync frame
         if (ch->lock == ch->nav->fsync + 2000) {
-            int rev = sync_frame(ch, preamb, 10, 0, syms, 500);
+            int rev = sync_frame_soft(ch, preamb, 10, 0, syms, 500);
             if (rev == ch->nav->rev) {
                 decode_gal_INAV(ch, syms, rev);
             }
@@ -1347,7 +1477,7 @@ static void decode_E5BI(sdr_ch_t *ch)
         }
     } else if (ch->lock >= ch->len_sec_code * 510 + 250) {
         // sync and decode Galileo I/NAV pages
-        int rev = sync_frame(ch, preamb, 10, 0, syms, 500);
+        int rev = sync_frame_soft(ch, preamb, 10, 0, syms, 500);
         if (rev >= 0) {
             decode_gal_INAV(ch, syms, rev);
         }
@@ -1373,7 +1503,7 @@ static void decode_gal_CNAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
     uint8_t buff[1000], bits[486], data[61];
     
     for (int i = 0; i < 1000; i++) {
-        buff[i] = syms[i] ^ (uint8_t)rev;
+        buff[i] = rev_soft_sym(syms[i], rev);
     }
     // decode Galileo symbols (984 syms -> 486 bits)
     decode_gal_syms(buff + 16, 123, 8, bits);
@@ -1410,7 +1540,7 @@ static void decode_E6B(sdr_ch_t *ch)
     
     if (ch->nav->fsync > 0) { // sync Galileo C/NAV page
         if (ch->lock == ch->nav->fsync + 1000) {
-            int rev = sync_frame(ch, preamb, 16, 0, syms, 1000);
+            int rev = sync_frame_soft(ch, preamb, 16, 0, syms, 1000);
             if (rev == ch->nav->rev) {
                 decode_gal_CNAV(ch, syms, rev);
             }
@@ -1419,7 +1549,7 @@ static void decode_E6B(sdr_ch_t *ch)
         }
     } else if (ch->lock >= 1016 + 1000) {
         // sync and decode Galileo C/NAV page
-        int rev = sync_frame(ch, preamb, 16, 0, syms, 1000);
+        int rev = sync_frame_soft(ch, preamb, 16, 0, syms, 1000);
         if (rev >= 0) {
             decode_gal_CNAV(ch, syms, rev);
         }
@@ -1465,7 +1595,7 @@ static void decode_D1D2NAV(sdr_ch_t *ch, int type, const uint8_t *syms, int rev)
     int nerr = 0;
     
     for (int i = 0; i < 300; i++) {
-        bits[i] = syms[i] ^ (uint8_t)rev;
+        bits[i] = rev_hard_sym(syms[i], rev);
     }
     nerr += decode_D1D2_BCH(bits + 15);
     
@@ -1527,7 +1657,7 @@ static void decode_B1I_D1(sdr_ch_t *ch)
     
     if (ch->nav->fsync > 0) { // sync frame
         if (ch->lock == ch->nav->fsync + 6000) {
-            int rev = sync_frame(ch, preamb, 11, 0, syms, 300);
+            int rev = sync_frame_soft(ch, preamb, 11, 0, syms, 300);
             if (rev == ch->nav->rev) {
                 decode_D1D2NAV(ch, 1, syms, rev);
             }
@@ -1536,7 +1666,7 @@ static void decode_B1I_D1(sdr_ch_t *ch)
         }
     } else if (ch->lock >= ch->len_sec_code * 311 + 1000) {
         // sync and decode BDS D1 NAV subframe
-        int rev = sync_frame(ch, preamb, 11, 0, syms, 300);
+        int rev = sync_frame_soft(ch, preamb, 11, 0, syms, 300);
         if (rev >= 0) {
             decode_D1D2NAV(ch, 1, syms, rev);
         }
@@ -1555,7 +1685,7 @@ static void decode_B1I_D2(sdr_ch_t *ch)
     
     if (ch->nav->fsync > 0) { // sync frame
         if (ch->lock == ch->nav->fsync + 600) {
-            int rev = sync_frame(ch, preamb, 11, 0, syms, 300);
+            int rev = sync_frame_soft(ch, preamb, 11, 0, syms, 300);
             if (rev == ch->nav->rev) {
                 decode_D1D2NAV(ch, 2, syms, rev);
             }
@@ -1564,7 +1694,7 @@ static void decode_B1I_D2(sdr_ch_t *ch)
         }
     } else if (ch->lock >= 2 * 311 + 1000) {
         // sync and decode BDS D2 NAV subframe
-        int rev = sync_frame(ch, preamb, 11, 0, syms, 300);
+        int rev = sync_frame_soft(ch, preamb, 11, 0, syms, 300);
         if (rev >= 0) {
             decode_D1D2NAV(ch, 2, syms, rev);
         }
@@ -1585,19 +1715,24 @@ static void decode_B1I(sdr_ch_t *ch)
 static int sync_BCNV1_frame(sdr_ch_t *ch, const uint8_t *syms, int soh)
 {
     uint8_t SF1[72], SFn[72];
+    int sn1, sn2, sr1, sr2;
     memcpy(SF1, BCNV1_SF1A[ch->prn-1], 21);
     memcpy(SFn, BCNV1_SF1A[ch->prn-1], 21);
     memcpy(SF1 + 21, BCNV1_SF1B[soh], 51);
     memcpy(SFn + 21, BCNV1_SF1B[(soh + 1) % 200], 51);
+    int ok_n = smatch(syms, SF1, 72, 3, 0, &sn1) &&
+        smatch(syms + 1800, SFn, 72, 3, 0, &sn2);
+    int ok_r = smatch(syms, SF1, 72, 3, 1, &sr1) &&
+        smatch(syms + 1800, SFn, 72, 3, 1, &sr2);
     
-    if (bmatch_n(syms, SF1, 72, 3) && bmatch_n(syms + 1800, SFn, 72, 3)) {
-        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (N) SOH=%d", ch->time,
-            ch->sat, ch->sig, ch->prn, soh);
+    if (ok_n && (!ok_r || sn1 + sn2 >= sr1 + sr2)) {
+        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (N) SOH=%d S=%d",
+            ch->time, ch->sat, ch->sig, ch->prn, soh, sn1 + sn2);
         return 1; // normal
     }
-    if (bmatch_r(syms, SF1, 72, 3) && bmatch_r(syms + 1800, SFn, 72, 3)) {
-        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (R) SOH=%d", ch->time,
-            ch->sat, ch->sig, ch->prn, soh);
+    if (ok_r) {
+        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (R) SOH=%d S=%d",
+            ch->time, ch->sat, ch->sig, ch->prn, soh, sr1 + sr2);
         return 0; // reversed
     }
     return -1;
@@ -1612,7 +1747,7 @@ static void decode_BCNV1(sdr_ch_t *ch, const uint8_t *syms, int rev, int soh)
     // decode block interleave of SF2,3 (36 x 48 = 1728 syms)
     for (int i = 0, k = 0; i < 36; i++) {
         for (int j = 0; j < 48; j++) {
-            symsr[k++] = syms[72+j*36+i] ^ (uint8_t)rev;
+            symsr[k++] = rev_soft_sym(syms[72+j*36+i], rev);
         }
     }
     for (int i = 0; i < 11; i++) {
@@ -1625,7 +1760,7 @@ static void decode_BCNV1(sdr_ch_t *ch, const uint8_t *syms, int rev, int soh)
     }
     // decode LDPC (1200 + 528 syms -> 600 + 264 bits)
     int nerr1 = sdr_decode_LDPC("BCNV1_SF2", syms2, 1200, bits + 14);
-    int nerr2 = sdr_decode_LDPC("BCNV1_SF3", syms3, 528 , bits + 614);
+    int nerr2 = sdr_decode_LDPC("BCNV1_SF3", syms3, 528, bits + 614);
     sdr_unpack_data(ch->prn, 6, bits);
     sdr_unpack_data(soh, 8, bits + 6);
     
@@ -1707,7 +1842,7 @@ static void decode_BCNV2(sdr_ch_t *ch, const uint8_t *syms, int rev)
     uint8_t buff[600], bits[288], data[36];
     
     for (int i = 0; i < 600; i++) {
-        buff[i] = syms[i] ^ (uint8_t)rev;
+        buff[i] = rev_soft_sym(syms[i], rev);
     }
     // decode LDPC (576 syms -> 288 bits)
     int nerr = sdr_decode_LDPC("BCNV2", buff + 24, 576, bits);
@@ -1749,7 +1884,7 @@ static void decode_B2AD(sdr_ch_t *ch)
     if (ch->nav->fsync > 0) { // sync frame
         if (ch->lock == ch->nav->fsync + 3000) {
             // sync and decode B-CNAV2 frame
-            int rev = sync_frame(ch, preamb, 24, 1, syms, 600);
+            int rev = sync_frame_soft(ch, preamb, 24, 1, syms, 600);
             if (rev == ch->nav->rev) {
                 decode_BCNV2(ch, syms, rev);
             }
@@ -1758,7 +1893,7 @@ static void decode_B2AD(sdr_ch_t *ch)
         }
     } else if (ch->lock >= ch->len_sec_code * 624 + 1000) {
         // sync and decode B-CNAV2 frame
-        int rev = sync_frame(ch, preamb, 24, 1, syms, 600);
+        int rev = sync_frame_soft(ch, preamb, 24, 1, syms, 600);
         if (rev >= 0) {
             decode_BCNV2(ch, syms, rev);
         }
@@ -1784,7 +1919,7 @@ static void decode_BCNV3(sdr_ch_t *ch, const uint8_t *syms, int rev)
     uint8_t buff[1000], bits[486], data[61];
     
     for (int i = 0; i < 1000; i++) {
-        buff[i] = syms[i] ^ (uint8_t)rev;
+        buff[i] = rev_soft_sym(syms[i], rev);
     }
     // decode LDPC (972 syms -> 486 bits)
     int nerr = sdr_decode_LDPC("BCNV3", buff + 28, 972, bits);
@@ -1829,7 +1964,7 @@ static void decode_B2BI(sdr_ch_t *ch)
     
     if (ch->nav->fsync > 0) { // sync frame
         if (ch->lock == ch->nav->fsync + 1000) {
-            int rev = sync_frame(ch, preamb, 16, 0, syms, 1000);
+            int rev = sync_frame_soft(ch, preamb, 16, 0, syms, 1000);
             if (rev == ch->nav->rev) {
                 decode_BCNV3(ch, syms, rev);
             }
@@ -1838,7 +1973,7 @@ static void decode_B2BI(sdr_ch_t *ch)
         }
     } else if (ch->lock >= 1022 + 1000) {
         // sync and decode B-CNAV3 frame
-        int rev = sync_frame(ch, preamb, 16, 0, syms, 1000);
+        int rev = sync_frame_soft(ch, preamb, 16, 0, syms, 1000);
         if (rev >= 0) {
             decode_BCNV3(ch, syms, rev);
         }
@@ -1856,15 +1991,20 @@ static int sync_IRNV1_frame(sdr_ch_t *ch, const uint8_t *syms, int toi)
 {
     uint8_t *SF1 = IRNV1_SF1[toi];
     uint8_t *SFn = IRNV1_SF1[(toi + 1) % 400];
+    int sn1, sn2, sr1, sr2;
+    int ok_n = smatch(syms, SF1, 52, 2, 0, &sn1) &&
+        smatch(syms + 1800, SFn, 52, 2, 0, &sn2);
+    int ok_r = smatch(syms, SF1, 52, 2, 1, &sr1) &&
+        smatch(syms + 1800, SFn, 52, 2, 1, &sr2);
     
-    if (bmatch_n(syms, SF1, 52, 2) && bmatch_n(syms + 1800, SFn, 52, 2)) {
-        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (N) TOI=%d", ch->time,
-            ch->sat, ch->sig, ch->prn, toi+1);
+    if (ok_n && (!ok_r || sn1 + sn2 >= sr1 + sr2)) {
+        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (N) TOI=%d S=%d",
+            ch->time, ch->sat, ch->sig, ch->prn, toi+1, sn1 + sn2);
         return 1; // normal
     }
-    if (bmatch_r(syms, SF1, 52, 2) && bmatch_r(syms + 1800, SFn, 52, 2)) {
-        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (R) TOI=%d", ch->time,
-            ch->sat, ch->sig, ch->prn, toi+1);
+    if (ok_r) {
+        sdr_log(4, "$LOG,%.3f,%s,%s,%d,FRAME SYNC (R) TOI=%d S=%d",
+            ch->time, ch->sat, ch->sig, ch->prn, toi+1, sr1 + sr2);
         return 0; // reversed
     }
     return -1;
@@ -1879,12 +2019,13 @@ static void decode_IRNV1(sdr_ch_t *ch, const uint8_t *syms, int rev, int toi)
     // decode block-interleave (38 x 46 = 1748 syms)
     for (int i = 0, k = 0; i < 38; i++) {
         for (int j = 0; j < 46; j++) {
-            buff[k++] = syms[52+j*38+i] ^ (uint8_t)rev;
+            buff[k++] = rev_soft_sym(syms[52+j*38+i], rev);
         }
     }
     // decode LDPC (1200 + 548 syms -> 600 + 274 bits)
     int nerr1 = sdr_decode_LDPC("IRNV1_SF2", buff, 1200, bits + 9);
-    int nerr2 = sdr_decode_LDPC("IRNV1_SF3", buff + 1200, 548, bits + 609);
+    int nerr2 = sdr_decode_LDPC("IRNV1_SF3", buff + 1200, 548,
+        bits + 609);
     sdr_unpack_data(toi, 9, bits);
     
     if (nerr1 >= 0 && nerr2 >= 0 && test_CRC(bits + 9, 600) &&
@@ -1953,7 +2094,7 @@ static void decode_IRN_NAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
     // decode block-interleave (73 x 8)
     for (int i = 0, k = 0; i < 73; i++) {
         for (int j = 0; j < 8; j++) {
-            buff[k++] = (syms[16+j*73+i] ^ (uint8_t)rev) * 255;
+            buff[k++] = rev_soft_sym(syms[16+j*73+i], rev);
         }
     }
     // decode 1/2 FEC (584 syms -> 297 bits -> 286 bits)
@@ -1997,7 +2138,7 @@ static void decode_I5S(sdr_ch_t *ch)
     
     if (ch->nav->fsync > 0) { // sync IRNSS SPS NAV subframe
         if (ch->lock == ch->nav->fsync + 12000) {
-            int rev = sync_frame(ch, preamb, 16, 0, syms, 600);
+            int rev = sync_frame_soft(ch, preamb, 16, 0, syms, 600);
             if (rev == ch->nav->rev) {
                 decode_IRN_NAV(ch, syms, rev);
             }
@@ -2006,7 +2147,7 @@ static void decode_I5S(sdr_ch_t *ch)
         }
     } else if (ch->lock >= 20 * 616 + 1000) {
         // sync and decode IRNSS SPS NAV subframe
-        int rev = sync_frame(ch, preamb, 16, 0, syms, 600);
+        int rev = sync_frame_soft(ch, preamb, 16, 0, syms, 600);
         if (rev >= 0) {
             decode_IRN_NAV(ch, syms, rev);
         }
