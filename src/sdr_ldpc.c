@@ -22,6 +22,7 @@
 //  2023-01-09  1.2  support BCNV1_SF2, BCNV1_SF3, BCNV2, BCNV3 in decode_LDPC()
 //  2023-01-16  1.3  fix memory leak and unable decoding of LDPC
 //  2026-06-05  1.4  remove LDPC-codes dependency
+//  2026-06-13  1.5  hard-decision -> soft-decision
 //
 #include "pocket_sdr.h"
 
@@ -2276,9 +2277,15 @@ static int count_changed_bits(const uint8_t *bits, const uint8_t *syms, int n)
     int nerr = 0;
     
     for (int i = 0; i < n; i++) {
-        if (bits[i] != ((syms[i] ^ 1) & 1)) nerr++;
+        if (bits[i] != (syms[i] < 128 ? 1 : 0)) nerr++;
     }
     return nerr;
+}
+
+// convert soft binary symbol to binary LDPC channel LLR -----------------------
+static float soft_LLR(uint8_t sym)
+{
+    return ((float)sym - 128.0f) * (INIT_LLR / 128.0f);
 }
 
 // decode binary LDPC ----------------------------------------------------------
@@ -2292,7 +2299,7 @@ static int decode_B_LDPC(const ldpc_graph_t *H, const uint8_t *syms,
     int nerr = -1;
     
     for (int i = 0; i < H->n; i++) {
-        Lch[i] = (syms[i] & 1) ? INIT_LLR : -INIT_LLR;
+        Lch[i] = soft_LLR(syms[i]);
     }
     for (int e = 0; e < H->ne; e++) {
         V2C[e] = Lch[H->edge_cols[e]];
@@ -2396,7 +2403,7 @@ static int decode_LDPC_BCNV1_SF2(const uint8_t *syms, uint8_t *syms_dec)
     uint8_t syms_rev[1200];
     
     for (int i = 0; i < 1200; i++) {
-        syms_rev[i] = syms[i] ^ (uint8_t)1;
+        syms_rev[i] = (uint8_t)(255 - syms[i]);
     }
     return sdr_decode_NB_LDPC(H_BCNV1_SF2_idx, H_BCNV1_SF2_ele, 100, 200,
         syms_rev, syms_dec);
@@ -2408,7 +2415,7 @@ static int decode_LDPC_BCNV1_SF3(const uint8_t *syms, uint8_t *syms_dec)
     uint8_t syms_rev[528];
     
     for (int i = 0; i < 528; i++) {
-        syms_rev[i] = syms[i] ^ (uint8_t)1;
+        syms_rev[i] = (uint8_t)(255 - syms[i]);
     }
     return sdr_decode_NB_LDPC(H_BCNV1_SF3_idx, H_BCNV1_SF3_ele, 44, 88,
         syms_rev, syms_dec);
@@ -2417,7 +2424,8 @@ static int decode_LDPC_BCNV1_SF3(const uint8_t *syms, uint8_t *syms_dec)
 // decode NB-LDPC(96,48) of B-CNAV2 frame --------------------------------------
 static int decode_LDPC_BCNV2(const uint8_t *syms, uint8_t *syms_dec)
 {
-    return sdr_decode_NB_LDPC(H_BCNV2_idx, H_BCNV2_ele, 48, 96, syms, syms_dec);
+    return sdr_decode_NB_LDPC(H_BCNV2_idx, H_BCNV2_ele, 48, 96, syms,
+        syms_dec);
 }
 
 // decode NB-LDPC(162,81) of B-CNAV3 frame -------------------------------------
@@ -2474,7 +2482,8 @@ static int LDPC_code_len(const char *type)
 }
 
 //------------------------------------------------------------------------------
-//  Decode LDPC (Low Density Parity Check) codes and correct errors.
+//  Decode LDPC (Low Density Parity Check) codes and correct errors by
+//  soft-decision input.
 //
 //  args:
 //      type     (I) LDPC type
@@ -2486,7 +2495,7 @@ static int LDPC_code_len(const char *type)
 //                     'BCNV3'    : BDS B2b-I BCNAV-3/B2b-PPP SF
 //                     'IRNV1_SF2': NavIC L1-SPS-D NAV SF2
 //                     'IRNV1_SF3': NavIC L1-SPS-D NAV SF3
-//      syms     (I) Binary codes with LDPC parity as uint8_t array (0 or 1)
+//      syms     (I) Binary codes with LDPC parity as uint8_t array (0 to 255)
 //      N        (I) Size of binary codes
 //      syms_dec (O) Decoded binary codes w/o parity as uint8_t array (0 or 1)
 //
