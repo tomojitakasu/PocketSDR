@@ -4,7 +4,8 @@
 #  Intended environment: MSYS2 UCRT64
 #
 
-CC = g++
+USE_FFTW ?= 0
+USE_AVX2 ?= 1
 
 SRC = ../../src
 LIB = ../../lib
@@ -32,25 +33,73 @@ PERF_TESTS = \
     test_sdr_perf
 
 ifeq ($(OS),Windows_NT)
+    CC = g++
     EXE = .exe
+    LIB_DIR = $(LIB)/win32
 else
+    UNAME_S := $(shell uname -s)
+    UNAME_M := $(shell uname -m)
     EXE =
+    ifeq ($(UNAME_S),Darwin)
+        CC = clang++
+        LIB_DIR = $(LIB)/macos
+    else
+        CC = g++
+        LIB_DIR = $(LIB)/linux
+    endif
 endif
 
-INCLUDE = -I$(TEST_SRC) -I$(SRC) -I$(LIB)/RTKLIB/src -I$(LIB)/cyusb \
-          -I$(LIB)/cyusb/inc -I$(LIB)/pocketfft
+INCLUDE = -I$(TEST_SRC) -I$(SRC) -I$(LIB)/RTKLIB/src
 
 WARNOPT = -Wall -Wextra -Wno-unused-parameter -Wno-unused-variable \
           -Wno-unused-function -Wno-missing-field-initializers
 
-OPTIONS = -DWIN32 -DAVX2 -mavx2 -mfma
+OPTIONS =
+LDFLAGS =
+SYS_LIBS =
+STATIC_OPT =
+
+ifeq ($(OS),Windows_NT)
+    INCLUDE += -I$(LIB)/cyusb -I$(LIB)/cyusb/inc
+    OPTIONS += -DWIN32
+    LDFLAGS += -Wl,--gc-sections
+    SYS_LIBS += -lwinmm -lws2_32
+    STATIC_OPT = -static
+    ifeq ($(USE_AVX2),1)
+        OPTIONS += -DAVX2 -mavx2 -mfma
+    endif
+else ifeq ($(UNAME_S),Darwin)
+    OPTIONS += -DMACOS -Wno-deprecated
+    LDFLAGS += -Wl,-dead_strip
+    SYS_LIBS += -lpthread
+    ifeq ($(UNAME_M),arm64)
+        INCLUDE += -I/opt/homebrew/include
+        OPTIONS += -DNEON
+    else ifeq ($(USE_AVX2),1)
+        OPTIONS += -DAVX2 -mavx2 -mfma
+    endif
+else
+    LDFLAGS += -Wl,--gc-sections
+    SYS_LIBS += -lm -lpthread
+    ifeq ($(UNAME_M),aarch64)
+        OPTIONS += -DNEON
+    else ifeq ($(USE_AVX2),1)
+        OPTIONS += -DAVX2 -mavx2 -mfma
+    endif
+endif
+
+ifeq ($(USE_FFTW),1)
+    OPTIONS += -DFFTW
+    FFT_LIBS = -lfftw3f
+else
+    INCLUDE += -I$(LIB)/pocketfft
+    FFT_LIBS = $(LIB_DIR)/libpocketfft.a
+endif
+
 CFLAGS = -O2 -g $(INCLUDE) $(WARNOPT) $(OPTIONS) \
          -ffunction-sections -fdata-sections
-LDFLAGS = -Wl,--gc-sections
 
-LDLIBS = -static $(LIB)/win32/librtk.a $(LIB)/win32/libfec.a \
-         $(LIB)/win32/libldpc.a $(LIB)/win32/libpocketfft.a \
-         -lwinmm -lws2_32
+LDLIBS = $(STATIC_OPT) $(LIB_DIR)/librtk.a $(FFT_LIBS) $(SYS_LIBS)
 
 TARGETS = $(addsuffix $(EXE),$(TESTS))
 PERF_TARGETS = $(addsuffix $(EXE),$(PERF_TESTS))
@@ -95,16 +144,22 @@ SRC_test_sdr_rcv      = $(SRC)/sdr_rcv.c $(SRC)/sdr_ch.c $(SRC)/sdr_nav.c \
 SRC_test_sdr_sdev     = $(STUB_SDEV) $(SRC)/sdr_cmn.c
 SRC_test_sdr_usb      = $(STUB_USB) $(SRC)/sdr_cmn.c
 
+CFLAGS_test_sdr_perf  = -O3 $(filter-out -O2,$(CFLAGS))
+CFLAGS_test_sdr_ch    = $(CFLAGS) -DSDR_CH_TEST
+CFLAGS_test_sdr_nav   = $(CFLAGS) -DSDR_NAV_TEST
+
 all: $(TARGETS)
 
 define BUILD_TEST
 $(1)$(EXE): $(TEST_SRC)/$(1).c $$(SRC_$(1)) $(TEST_SRC)/test_sdr.h
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $$@ $(TEST_SRC)/$(1).c $$(SRC_$(1)) $(LDLIBS)
+	$(CC) $$(or $$(CFLAGS_$(1)),$$(CFLAGS)) $(LDFLAGS) -o $$@ $(TEST_SRC)/$(1).c $$(SRC_$(1)) $(LDLIBS)
 endef
 
 $(foreach T,$(TESTS) $(PERF_TESTS),$(eval $(call BUILD_TEST,$(T))))
 
+ifneq ($(EXE),)
 $(TESTS) $(PERF_TESTS): %: %$(EXE)
+endif
 
 test: all
 	@set -e; for t in $(TARGETS); do echo "==> $$t"; ./$$t; done
@@ -115,5 +170,4 @@ perf: test_sdr_perf$(EXE)
 clean:
 	rm -rf build
 	rm -f $(TARGETS) $(PERF_TARGETS) sdr_func_c_test sdr_func_c_test.exe \
-	    *.o *.stackdump
-
+	    $(TESTS) $(PERF_TESTS) *.o *.stackdump
