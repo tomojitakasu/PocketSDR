@@ -16,14 +16,14 @@
 #define CONV_THRES_A 1e-6       // angle update convergence (rad)
 #define CONV_THRES_B 1e-5       // bias update convergence (m)
 #define MIN_EL      15.0        // elevation mask (deg)
-#define MAX_RMS     0.015       // max RMS of residuals (m)
+#define MAX_RMS     0.020       // max RMS of residuals (m)
 #define NX          (3+SDR_MAX_RFCH)
 #define MAX_NV      ((SDR_MAX_RFCH-1)*MAXOBS)
-#define VAR_INIT_RPY  (1.0)     // initial covariance for rpy (rad^2)
-#define VAR_INIT_BIAS (1.0)     // initial covariance for bias (m^2)
-#define VAR_PROC_RPY  (1e-4)    // process noise variance per epoch (rad^2)
-#define VAR_PROC_BIAS (1e-8)    // process noise variance per epoch (m^2)
-#define VAR_MEAS      (1e-4)    // measurement variance (m^2)
+#define VAR_INIT_RPY  1.0       // initial covariance for rpy (rad^2)
+#define VAR_INIT_BIAS 1.0       // initial covariance for bias (m^2)
+#define VAR_PROC_RPY  1e-4      // process noise variance per epoch (rad^2)
+#define VAR_PROC_BIAS 1e-8      // process noise variance per epoch (m^2)
+#define VAR_MEAS      1e-4      // measurement variance (m^2)
 #define ARRAY_W_SCALE 256       // array weight Q-factor (Q8)
 #define ARRAY_FREQ    1.57542e9 // array L1 frequency (Hz)
 #define ARRAY_FREQ_TOL 1e6      // RF CH center freq tolerance (Hz)
@@ -576,3 +576,4 @@ void sdr_arch_combine(const sdr_arch_t *arch, const sdr_rcv_t *rcv, int base)
         out[i] = SDR_CPX8(CLIP(I, -8, 7), CLIP(Q, -8, 7));
     }
 }
+
