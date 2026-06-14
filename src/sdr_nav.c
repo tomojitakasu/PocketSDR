@@ -63,7 +63,7 @@
 #define K_SYNC_MIN   20       // min symbols accumulated for bit/symbol sync
 #define K_SYNC_MAX   100      // max symbols accumulated for bit/symbol sync
 #define THRES_SYNC_R 1.4f     // threshold for bit/symbol sync energy ratio
-#define THRES_LOST_R 0.5f     // threshold for symbol-lost coherency ratio
+#define THRES_LOST  0.001     // threshold for symbol lost
 #define T_SYNC_START 1.5      // bit/symbol sync history start time (s) (=T_NPULLIN)
 #define SOFT_SCALE  1024.0f   // scale factor for soft nav symbols
 #if 0
@@ -169,57 +169,55 @@ static float mean_IP(const sdr_ch_t *ch, int N)
     return P;
 }
 
-// sync nav symbols (ref: doc/update_sym_sync.pdf) -----------------------------
+// sync nav symbols (see doc/update_sym_sync.pdf) ------------------------------
 static int sync_symb(sdr_ch_t *ch, int N)
 {
     if (ch->nav->ssync == 0) {
-        // accumulated symbols per boundary phase (history floored after pull-in)
         int Lmin = (int)(T_SYNC_START / ch->T);
         int K = (ch->lock - Lmin - (N - 1)) / N;
         if (K < K_SYNC_MIN) return 0;
         if (K > K_SYNC_MAX) K = K_SYNC_MAX;
-        
-        // prefix sums of IP history over the accumulation window
         int L = K * N + N - 1;
         int base = SDR_N_HIST - L;
         float ps[K_SYNC_MAX * SYNC_NMAX + SYNC_NMAX];
-        ps[0] = 0.0f;
+        float pa[K_SYNC_MAX * SYNC_NMAX + SYNC_NMAX];
+        ps[0] = pa[0] = 0.0f;
         for (int i = 0; i < L; i++) {
-            ps[i+1] = ps[i] + ch->trk->P[base+i][0];
+            float p = ch->trk->P[base+i][0];
+            ps[i+1] = ps[i] + p;
+            pa[i+1] = pa[i] + fabsf(p);
         }
-        // accumulate |coherent symbol sum| for each of N boundary phases
-        float E[SYNC_NMAX] = {0};
+        float E[SYNC_NMAX] = {0}, A[SYNC_NMAX] = {0};
         for (int m = 0; m < N; m++) {
             for (int k = 0; k < K; k++) {
                 int e = L - 1 - m - k * N;
                 E[m] += fabsf(ps[e+1] - ps[e-N+1]);
+                A[m] += pa[e+1] - pa[e-N+1];
             }
         }
         int m0 = 0;
+        float coh = (A[0] > 0.0f) ? E[0] / A[0] : 0.0f;
         for (int m = 1; m < N; m++) {
-            if (E[m] > E[m0]) m0 = m;
+            float c = (A[m] > 0.0f) ? E[m] / A[m] : 0.0f;
+            if (c > coh) { coh = c; m0 = m; }
         }
-        // confirm a clear peak vs the opposite (half-bit-shifted) phase
         float Eopp = E[(m0 + N / 2) % N];
-        if (Eopp > 0.0f && E[m0] >= THRES_SYNC_R * Eopp) {
+        float thr_coh = 0.5f * (1.0f + 1.0f / sqrtf((float)N));
+        if (Eopp > 0.0f && E[m0] >= THRES_SYNC_R * Eopp && coh >= thr_coh) {
             ch->nav->ssync = ch->lock - m0 - N;
-            sdr_log(4, "$LOG,%.3f,%s,%s,%d,SYMBOL SYNC (%.2f)", ch->time,
-                ch->sat, ch->sig, ch->prn, E[m0] / Eopp);
+            sdr_log(4, "$LOG,%.3f,%s,%s,%d,SYMBOL SYNC (%.2f,%.2f)", ch->time,
+                ch->sat, ch->sig, ch->prn, E[m0] / Eopp, coh);
         }
     } else if ((ch->lock - ch->nav->ssync) % N == 0) {
-        // symbol lost by collapse of coherent vs incoherent symbol energy
-        float P = mean_IP(ch, N), R = 0.0f;
-        for (int i = 0; i < N; i++) {
-            R += fabsf(ch->trk->P[SDR_N_HIST-N+i][0]) / N;
-        }
-        if (fabsf(P) >= THRES_LOST_R * R) {
+        float P = mean_IP(ch, N);
+        if (fabsf(P) >= THRES_LOST) {
             uint8_t sym = corr2soft(P);
             sdr_add_buff(ch->nav->syms, SDR_MAX_NSYM, &sym, sizeof(sym));
             return 1;
         } else {
             ch->nav->ssync = ch->nav->rev = 0;
-            sdr_log(4, "$LOG,%.3f,%s,%s,%d,SYMBOL LOST", ch->time,
-                ch->sat, ch->sig, ch->prn);
+            sdr_log(4, "$LOG,%.3f,%s,%s,%d,SYMBOL LOST (%.3f)", ch->time,
+                ch->sat, ch->sig, ch->prn, P);
         }
     }
     return 0;
@@ -270,35 +268,18 @@ static int smatch_score(const uint8_t *syms, const uint8_t *bits, int n,
     return score;
 }
 
-// threshold soft symbol match -------------------------------------------------
-static int smatch_thres(int n, int m)
-{
-    return 128 * n - 255 * (m + 1) + 1;
-}
-
 // match soft symbols ----------------------------------------------------------
 static int smatch(const uint8_t *syms, const uint8_t *bits, int n, int m,
     int rev, int *score)
 {
-    *score = smatch_score(syms, bits, n, rev);
+    int nerr = 0; // hard symbol-error count
     
-    if (m <= 0) {
-        for (int i = 0; i < n; i++) {
-            if (hard_sym(syms[i]) != (bits[i] ^ rev)) return 0;
-        }
-        return 1;
+    *score = smatch_score(syms, bits, n, rev);
+    for (int i = 0; i < n; i++) {
+        if (hard_sym(syms[i]) != (bits[i] ^ rev) && ++nerr > m) return 0;
     }
-    return *score >= smatch_thres(n, m);
+    return 1;
 }
-
-#ifdef SDR_NAV_TEST
-// test soft symbol match ------------------------------------------------------
-int test_nav_smatch(const uint8_t *syms, const uint8_t *bits, int n, int m,
-    int rev, int *score)
-{
-    return smatch(syms, bits, n, m, rev, score);
-}
-#endif
 
 // sync nav frame by 2 preambles -----------------------------------------------
 static int sync_frame(sdr_ch_t *ch, const uint8_t *preamb, int n, int m,
