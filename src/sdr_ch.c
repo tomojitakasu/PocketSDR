@@ -41,6 +41,7 @@
 #define THRES_CN0_L6 33.0   // C/N0 threshold (dB-Hz) (L6D/E lost)
 #define THRES_SYNC 0.02     // threshold for sec-code sync
 #define THRES_LOST 0.002    // threshold for sec-code lost
+#define THRES_SEC_RATIO 0.8 // threshold for sec-code soft correlation ratio
 #define POS_CORR_N -120.0   // N-correlator position (samples)
 #define FILT_CN0   0.5      // filter parameter for C/N0
 #define BUMP_K     1.3      // bump-jump threshold
@@ -147,7 +148,7 @@ static sdr_cpx16_t *gen_e5abq_banks(int prn, double T, double fs, int N)
         return banks;
     }
     sdr_cpx16_t *buf_b = (sdr_cpx16_t *)sdr_malloc(sizeof(sdr_cpx16_t) * N);
-
+    
     for (int i = 0; i < SDR_N_CODES; i++) {
         double coff = -i / fs / SDR_N_CODES;
         sdr_cpx16_t *p0 = banks + (0 * SDR_N_CODES + i) * N;
@@ -391,7 +392,7 @@ static void search_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff,
     float *fds = ch->acq->fds;
     float *fd_ext_bins = NULL;
     int n = ch->acq->len_fds;
-
+    
     if (ch->acq->fd_ext != 0.0) { // assist by external Doppler
         int nw = (ch->acq->fd_ext_n > 0) ? ch->acq->fd_ext_n : 3;
         fd_ext_bins = (float *)sdr_malloc(sizeof(float) * nw);
@@ -433,7 +434,7 @@ static void search_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff,
         sdr_free(ch->acq->P_sum);
         ch->acq->P_sum = NULL;
         ch->acq->n_sum = 0;
-        ch->acq->fd_ext   = 0.0;
+        ch->acq->fd_ext = 0.0;
         ch->acq->fd_ext_n = 0;
     }
     sdr_free(fd_ext_bins);
@@ -449,7 +450,7 @@ static void sync_sec_code(sdr_ch_t *ch, int N)
             P += ch->trk->P[SDR_N_HIST-N+i][0] * ch->sec_code[j] / N;
             R += fabsf(ch->trk->P[SDR_N_HIST-N+i][0]) / N;
         }
-        if (fabsf(P) >= R && R >= THRES_SYNC) {
+        if (fabsf(P) >= THRES_SEC_RATIO * R && R >= THRES_SYNC) {
             ch->trk->sec_sync = ch->lock;
             ch->trk->sec_pol = (P > 0.0f) ? 1 : -1;
         }
@@ -550,7 +551,6 @@ static void bump_jump(sdr_ch_t *ch)
     } else {
         step = ch->T / ch->len_code;
     }
-
     if (ch->trk->sumVL > sdr_bump_k * ch->trk->sumP &&
         ch->trk->sumP > sdr_bump_k * ch->trk->sumVE) {
         ch->coff += step;
