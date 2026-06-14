@@ -36,6 +36,7 @@
 #define SAMPLES_STATS 100       // samples for stats
 #define AGC_LEVEL  2.3          // target std-dev for auto gain control
 #define LPF_AUTO_BW 0.9         // auto LPF bandwidth ratio (* fs/2) for IQ=1
+#define LOG_LEVEL  3            // default log level
 #define TRACE_FILE "./pocket_sdr.trace" // debug trace file
 #define TRACE_LEVEL 3           // default debug trace level
 
@@ -1262,9 +1263,11 @@ static void *rcv_thread(void *arg)
     int ns = sample_byte(rcv->fmt), size, sum_size = 0;
     uint32_t tick = sdr_get_tick(), tick_r = tick;
     uint8_t *raw = (uint8_t *)sdr_malloc(ns * rcv->N);
+    char tstr[32];
     
-    sdr_log(3, "$LOG,%.3f,%s,%d,START NCH=%d FMT=%d", 0.0, "", 0, rcv->nch,
-        rcv->fmt);
+    time2str(utc2gpst(timeget()), tstr, 1); // GPST
+    sdr_log(3, "$LOG,%.3f,%s,%d,START %s VER=%s NCH=%d FMT=%d", 0.0, "", 0,
+        tstr, SDR_LIB_VER, rcv->nch, rcv->fmt);
     
     if (rcv->dev == SDR_DEV_USB) {
         sdr_dev_start((sdr_dev_t *)rcv->dp);
@@ -1315,7 +1318,9 @@ static void *rcv_thread(void *arg)
     } else if (rcv->dev == SDR_DEV_SOAPY) {
         sdr_sdev_stop((sdr_sdev_t *)rcv->dp);
     }
-    sdr_log(3, "$LOG,%.3f,%s,%d,STOP", get_buff_ix(rcv) * SDR_CYC, "", 0);
+    time2str(utc2gpst(timeget()), tstr, 1); // GPST
+    sdr_log(3, "$LOG,%.3f,%s,%d,STOP %s", get_buff_ix(rcv) * SDR_CYC, "", 0,
+        tstr);
     sdr_free(raw);
     return NULL;
 }
@@ -1342,7 +1347,7 @@ int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, const char **paths)
 {
     char *p;
     double scale = 1.0;
-    int level = TRACE_LEVEL, IQ[8] = {0}, bits[8] = {0};
+    int level = TRACE_LEVEL, log_level = LOG_LEVEL, IQ[8] = {0}, bits[8] = {0};
     
     if (!rcv || rcv->state) return 0;
     
@@ -1354,6 +1359,10 @@ int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, const char **paths)
         traceopen(TRACE_FILE);
         tracelevel(level);
     }
+    if ((p = strstr(rcv->opt, "-LOG_LEVEL"))) {
+        sscanf(p, "-LOG_LEVEL=%d", &log_level);
+    }
+    sdr_log_level(log_level);
     sdr_log_open(paths[2]);
     
     for (int i = 0; i < rcv->nrfch; i++) {
