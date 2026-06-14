@@ -54,7 +54,7 @@ MAX_RFCH   = 8               # max number of RF CH
 MAX_ARCH   = 8               # max number of array CH
 GAIN_OVL_M = 100             # array gain overlay grid size (M x M)
 UD_CYCLE1  = 50              # update cycle (ms) RF channels/Correlator pages
-UD_CYCLE2  = 100             # update cycle (ms) other pages
+UD_CYCLE2  = 200             # update cycle (ms) other pages
 UD_CYCLE3  = 1000            # update cycle (ms) receiver stopped
 LOG_BUFF_SIZE = 262144       # receiver log buffer size
 CLIGHT = 299792458.0
@@ -110,6 +110,7 @@ except OSError as e:
 
 # global variables -------------------------------------------------------------
 rcv_body = None
+rcv_page = None
 array_page = None
 sol_log = deque(maxlen=MAX_SOLLOG)
 rcv_log = deque(maxlen=MAX_RCVLOG)
@@ -689,6 +690,13 @@ def status_bar_show(text):
     stat_bar.msg1.configure(text=text)
     stat_bar.msg1.update()
 
+# set Receiver settings buttons state -----------------------------------------
+def set_settings_btn_state(page, state):
+    if page:
+        page.label_opt.configure(state=state)
+        page.btn_load.configure(state=state)
+        page.btn_save.configure(state=state)
+
 # generate selection box -------------------------------------------------------
 def sel_box_new(parent, vals=[], val='', width=8):
     box = ttk.Combobox(parent, width=width, state='readonly', justify=CENTER,
@@ -716,6 +724,14 @@ def rcv_page_new(parent):
     p.parent = parent
     p.panel = Frame(parent)
     p.toolbar = tool_bar_new(p.panel)
+    p.label_opt = ttk.Label(p.toolbar, text='Options')
+    p.label_opt.pack(side=LEFT, padx=(8, 2))
+    p.btn_load = ttk.Button(p.toolbar, width=8, text='Load',
+        command=on_settings_load)
+    p.btn_load.pack(side=LEFT)
+    p.btn_save = ttk.Button(p.toolbar, width=8, text='Save',
+        command=on_settings_save)
+    p.btn_save.pack(side=LEFT)
     p.txt1 = ttk.Label(p.toolbar)
     p.txt1.pack(side=LEFT, fill=X, padx=4)
     p.ind = []
@@ -1363,7 +1379,7 @@ def corr_page_new(parent):
         '1', 3)
     p.box2.pack(side=RIGHT, padx=1)
     p.box5 = sel_box_new(p.toolbar, ['0.2', '0.3', '0.5', '1', '1.5', '2', '3',
-        '5', '10'], '2', 3)
+        '5', '10', '20'], '5', 3)
     p.box5.pack(side=RIGHT, padx=1)
     p.box4 = sel_box_new(p.toolbar, ['I', 'Q', 'IQ', 'AveI', 'AveIQ'], 'I', 5)
     p.box4.pack(side=RIGHT, padx=1)
@@ -2039,6 +2055,7 @@ def on_btn_start_push(bar):
         status_bar_show('Receiver started. ' + info)
         for i, btn in enumerate(bar.panel.winfo_children()):
             btn.configure(state=NORMAL if i in (1, 7) else DISABLED)
+        set_settings_btn_state(rcv_page, DISABLED)
 
 # Stop button push callback ----------------------------------------------------
 def on_btn_stop_push(bar):
@@ -2051,7 +2068,33 @@ def on_btn_stop_push(bar):
         rcv_body = None
         for i, btn in enumerate(bar.panel.winfo_children()):
             btn.configure(state=DISABLED if i in (1,) else NORMAL)
+        set_settings_btn_state(rcv_page, NORMAL)
         status_bar_show('Receiver stopped.')
+
+# Load settings button push callback -------------------------------------------
+def on_settings_load():
+    if rcv_body:
+        return
+    file = filedialog.askopenfilename(parent=root, title='Load Settings',
+        initialdir=AP_DIR, initialfile='pocket_sdr_settings.ini',
+        filetypes=(('INI files', '*.ini'), ('All files', '*.*')))
+    if file == '':
+        return
+    sdr_opt.load_opts(file, inp_opt, out_opt, sig_opt, sys_opt, array_opt)
+    status_bar_show('Settings loaded. ' + file)
+
+# Save settings button push callback -------------------------------------------
+def on_settings_save():
+    if rcv_body:
+        return
+    file = filedialog.asksaveasfilename(parent=root, title='Save Settings',
+        initialdir=AP_DIR, initialfile='pocket_sdr_settings.ini',
+        defaultextension='.ini',
+        filetypes=(('INI files', '*.ini'), ('All files', '*.*')))
+    if file == '':
+        return
+    sdr_opt.save_opts(file, inp_opt, out_opt, sig_opt, sys_opt, array_opt)
+    status_bar_show('Settings saved. ' + file)
 
 # Input button push callback ---------------------------------------------------
 def on_btn_input_push(bar):
@@ -2217,10 +2260,11 @@ def main():
         'Solution', 'Array', 'Log')
     note = ttk.Notebook(root, padding=0)
     note.pack(fill=BOTH)
-    global array_page
+    global rcv_page, array_page
     pages = (rcv_page_new(note), rfch_page_new(note),  bbch_page_new(note),
         corr_page_new(note), sats_page_new(note), sol_page_new(note),
         array_page_new(note), log_page_new(note))
+    rcv_page = pages[0]  # used by settings load/save state control
     array_page = pages[6]  # used by skyplot click handler
     for i, page in enumerate(pages):
         note.add(page.panel, text=labels[i])
