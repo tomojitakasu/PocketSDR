@@ -47,13 +47,13 @@ def modal_dlg_new(root, width, height, title='', nocancel=0):
     dlg.win.title(title)
     dlg.panel = Frame(dlg.win, bg=BG_COLOR)
     dlg.panel.pack(fill=BOTH, expand=1, padx=DLG_MARGIN[0], pady=DLG_MARGIN[1])
-    btns = Frame(dlg.panel, bg=BG_COLOR)
-    btns.pack(side=BOTTOM, fill=X)
+    dlg.btns = Frame(dlg.panel, bg=BG_COLOR)
+    dlg.btns.pack(side=BOTTOM, fill=X)
     if not nocancel:
-        btn2 = ttk.Button(btns, width=12, padding=(2, 2), text='Cancel')
+        btn2 = ttk.Button(dlg.btns, width=12, padding=(2, 2), text='Cancel')
         btn2.bind('<Button-1>', lambda e: on_modal_dlg_cancel(e, dlg))
         btn2.pack(side=RIGHT, padx=1)
-    btn1 = ttk.Button(btns, width=12, padding=(2, 2), text='OK')
+    btn1 = ttk.Button(dlg.btns, width=12, padding=(2, 2), text='OK')
     btn1.bind('<Button-1>', lambda e: on_modal_dlg_ok(e, dlg))
     btn1.pack(side=TOP if nocancel else RIGHT, padx=1)
     dlg.win.update()
@@ -312,16 +312,23 @@ def sys_opt_new(opt_p=None):
         opt.sp_corr.set('0.25')
         opt.t_acq.set('0.02')
         opt.t_dll.set('0.02')
-        opt.b_dll.set('0.25')
-        opt.b_pll.set('5.0')
-        opt.b_fll_w.set('5.0')
-        opt.b_fll_n.set('2.0')
+        opt.b_dll.set('0.5')
+        opt.b_pll.set('10.0')
+        opt.b_fll_w.set('10.0')
+        opt.b_fll_n.set('5.0')
         opt.max_dop.set('5000')
         opt.thres_cn0_l.set('34.0')
         opt.thres_cn0_u.set('30.0')
         opt.bump_jump.set('OFF')
         opt.max_acq.set('4.0')
     return opt
+
+# set system options to default values -----------------------------------------
+def sys_opt_set_default(opt):
+    opt_def = sys_opt_new()
+    
+    for key, val in vars(opt_def).items():
+        getattr(opt, key).set(val.get())
 
 # generate array option variables ----------------------------------------------
 def array_opt_new(opt_p=None):
@@ -575,12 +582,21 @@ def sig_opt_dlg(root, opt):
     opt_new = sig_opt_new(opt)
     dlg = modal_dlg_new(root, 480, 600, 'Signal Options')
     panel1 = Frame(dlg.panel, width=450, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
+    sig_panels = []
+    ttk.Button(dlg.btns, width=12, padding=(2, 2), text='Set All',
+        command=lambda: sig_opt_set_all(sig_panels, opt_new, 1)).pack(side=LEFT,
+        padx=1)
+    ttk.Button(dlg.btns, width=12, padding=(2, 2), text='Unset All',
+        command=lambda: sig_opt_set_all(sig_panels, opt_new, 0)).pack(side=LEFT,
+        padx=1)
     panel1.pack(pady=2)
     labels_panel(panel1, ('System', 'Satellite No'), (20, 90)).pack(fill=X, pady=(4, 2))
     link_label_new(panel1, text='GNSS Signals', link=SIG_LINK, font=FONT).place(x=265, y=4)
     for i in range(len(opt_new.sys)):
         ttk.Separator(panel1, orient=HORIZONTAL).pack(fill=X, pady=(0, 2))
-        sig_opt_panel(panel1, opt_new, i).pack(padx=(10, 4), pady=(4, 2))
+        panel = sig_opt_panel(panel1, opt_new, i)
+        panel.pack(padx=(10, 4), pady=(4, 2))
+        sig_panels.append(panel)
     panel2 = Frame(dlg.panel, width=450, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     panel2.pack(fill=X, pady=2)
     ttk.Label(panel2, text='RF CH Assignments (<sig>:<ch>[-<ch>][,...][ ...])').pack(
@@ -612,6 +628,14 @@ def on_sig_opt_change(p, var):
     for c in p.winfo_children()[1:]:
         c.configure(state=NORMAL if var.get() else DISABLED)
 
+# set all signal options on/off ------------------------------------------------
+def sig_opt_set_all(panels, opt, state):
+    for sig_sel in opt.sig_sel:
+        for var in sig_sel:
+            var.set(state)
+    for i, panel in enumerate(panels):
+        on_sig_opt_change(panel, opt.sys_sel[i])
+
 # show System Options dialog ---------------------------------------------------
 def sys_opt_dlg(root, opt):
     labels = ('Epoch Interval for PVT (s)', 'Max Epoch Lag for PVT (s)',
@@ -627,6 +651,8 @@ def sys_opt_dlg(root, opt):
         'Max Code Length for direct acquisition (ms)')
     opt_new = sys_opt_new(opt)
     dlg = modal_dlg_new(root, 420, 580, 'System Options')
+    ttk.Button(dlg.btns, width=12, padding=(2, 2), text='Set Default',
+        command=lambda: sys_opt_set_default(opt_new)).pack(side=LEFT, padx=1)
     panel1 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     panel1.pack(fill=X, pady=2, ipady=1)
     sel_panel_new(panel1, labels[0], sels=('0.1', '0.2', '0.5', '1.0',
