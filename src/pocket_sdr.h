@@ -178,6 +178,7 @@ typedef struct {                // signal tracking type
     double phas_acc;            // 3rd-order PLL acceleration accumulator (Hz/s)
     double code_int;            // 2nd-order DLL integrator (s/s)
     double sumP, sumN, sumVE, sumVL; // sum of correlations
+    double sumD;                // sum of (IP^2-QP^2) for carrier lock detector
     double sumC[SDR_MAX_CORR];  // sum of correlations DLL
     double sumI[SDR_MAX_CORR];  // sum of I*sign(IP) DLL (data-wipe-off)
     double aveP[SDR_MAX_CORR];  // average of correlation powers
@@ -220,10 +221,13 @@ typedef struct {                // SDR receiver channel type
     double fd;                  // Doppler frequency (Hz) 
     double coff;                // code offset (s) 
     double adr;                 // accumulated Doppler range (cyc) 
-    double cn0;                 // C/N0 (dB-Hz) 
+    double cn0;                 // C/N0 (dB-Hz)
+    double pli;                 // carrier lock indicator (cos 2*phi, [-1,1])
     int week, tow;              // week number (week), TOW (ms)
     int tow_v;                  // TOW flag (0:invalid,1:valid,2:amb-unresolved)
-    int lock, lost;             // lock and lost counts 
+    int lock, lost;             // lock and lost counts
+    int lost_cnt;               // lost decision counter (C/N0/PLI windows)
+    int pli_valid;              // PLI valid flag (0: before first C/N0 window)
     int costas;                 // Costas PLL flag 
     int obs_idx;                // observation data index
     sdr_acq_t *acq;             // signal acquisition 
@@ -324,7 +328,7 @@ typedef struct sdr_rcv_tag {    // SDR receiver type
     sdr_array_t *array;         // antenna array state (NULL if narch == 0)
     sdr_pvt_t *pvt;             // SDR PVT
     sdr_stats_t stats;          // IF data statistics
-    stream_t *strs[4];          // NMEA, RTCM3 and IF data log streams
+    stream_t *strs[4];          // NMEA, RTCM3, log and IF data log streams
     gtime_t start_time;         // receiver start time (UTC)
     double tscale;              // time scale to replay IF data file
     char opt[1024];             // receiver options
