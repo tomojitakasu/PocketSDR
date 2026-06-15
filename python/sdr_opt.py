@@ -281,6 +281,8 @@ def sys_opt_new(opt_p=None):
     opt.max_dop = StringVar()
     opt.thres_cn0_l = StringVar()
     opt.thres_cn0_u = StringVar()
+    opt.thres_pli = StringVar()
+    opt.lost_th = StringVar()
     opt.bump_jump = StringVar()
     opt.max_acq = StringVar()
     opt.fftw_wisdom_path = StringVar()
@@ -300,6 +302,8 @@ def sys_opt_new(opt_p=None):
         opt.max_dop.set(opt_p.max_dop.get())
         opt.thres_cn0_l.set(opt_p.thres_cn0_l.get())
         opt.thres_cn0_u.set(opt_p.thres_cn0_u.get())
+        opt.thres_pli.set(opt_p.thres_pli.get())
+        opt.lost_th.set(opt_p.lost_th.get())
         opt.bump_jump.set(opt_p.bump_jump.get())
         opt.max_acq.set(opt_p.max_acq.get())
         opt.fftw_wisdom_path.set(opt_p.fftw_wisdom_path.get())
@@ -319,6 +323,8 @@ def sys_opt_new(opt_p=None):
         opt.max_dop.set('5000')
         opt.thres_cn0_l.set('34.0')
         opt.thres_cn0_u.set('30.0')
+        opt.thres_pli.set('0.35')
+        opt.lost_th.set('3')
         opt.bump_jump.set('OFF')
         opt.max_acq.set('4.0')
     return opt
@@ -630,6 +636,8 @@ def on_sig_opt_change(p, var):
 
 # set all signal options on/off ------------------------------------------------
 def sig_opt_set_all(panels, opt, state):
+    for var in opt.sys_sel:
+        var.set(state)
     for sig_sel in opt.sig_sel:
         for var in sig_sel:
             var.set(state)
@@ -648,9 +656,10 @@ def sys_opt_dlg(root, opt):
         'C/N0 Threshold for Signal Locked (dB-Hz)',
         'C/N0 Threshold for Signal Lost (dB-Hz)', 'Bump Jump for BOC Modulation',
         'Signal Acquisition Mode',
-        'Max Code Length for direct acquisition (ms)')
+        'Max Code Length for direct acquisition (ms)',
+        'Carrier Lock Threshold (PLI)', 'Lost Decision Count (windows)')
     opt_new = sys_opt_new(opt)
-    dlg = modal_dlg_new(root, 420, 580, 'System Options')
+    dlg = modal_dlg_new(root, 420, 620, 'System Options')
     ttk.Button(dlg.btns, width=12, padding=(2, 2), text='Set Default',
         command=lambda: sys_opt_set_default(opt_new)).pack(side=LEFT, padx=1)
     panel1 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
@@ -683,6 +692,10 @@ def sys_opt_dlg(root, opt):
         '35.0', '36.0', '37.0'), var=opt_new.thres_cn0_l, width=10)
     sel_panel_new(panel2, labels[12], sels=('27.0', '28.0', '29.0', '30.0',
         '31.0', '32.0', '33.0'), var=opt_new.thres_cn0_u, width=10)
+    sel_panel_new(panel2, labels[16], sels=('0.1', '0.15', '0.2', '0.25',
+        '0.3', '0.35', '0.4'), var=opt_new.thres_pli, width=10)
+    sel_panel_new(panel2, labels[17], sels=('1', '2', '3', '4', '5', '6'),
+        var=opt_new.lost_th, width=10)
     sel_panel_new(panel2, labels[13], sels=('OFF', 'ON'), var=opt_new.bump_jump,
         width=10)
     sel_panel_new(panel2, labels[14], sels=('Full-Search', 'Fast-Search'),
