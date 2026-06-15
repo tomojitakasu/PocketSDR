@@ -332,6 +332,8 @@ def set_rcv_opts(sys_opt):
     libsdr.sdr_rcv_setopt('max_dop'.encode()  , float(sys_opt.max_dop.get()))
     libsdr.sdr_rcv_setopt('thres_cn0_l'.encode(), float(sys_opt.thres_cn0_l.get()))
     libsdr.sdr_rcv_setopt('thres_cn0_u'.encode(), float(sys_opt.thres_cn0_u.get()))
+    libsdr.sdr_rcv_setopt('thres_pli'.encode(), float(sys_opt.thres_pli.get()))
+    libsdr.sdr_rcv_setopt('lost_th'.encode()  , float(sys_opt.lost_th.get()))
     libsdr.sdr_rcv_setopt('bump_jump'.encode(), float(sys_opt.bump_jump.get() == 'ON'))
     libsdr.sdr_rcv_setopt('max_acq'.encode(), float(sys_opt.max_acq.get()))
 
