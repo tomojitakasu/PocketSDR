@@ -1263,11 +1263,6 @@ static void *rcv_thread(void *arg)
     int ns = sample_byte(rcv->fmt), size, sum_size = 0;
     uint32_t tick = sdr_get_tick(), tick_r = tick;
     uint8_t *raw = (uint8_t *)sdr_malloc(ns * rcv->N);
-    char tstr[32];
-    
-    time2str(utc2gpst(timeget()), tstr, 1); // GPST
-    sdr_log(3, "$LOG,%.3f,%s,%d,START %s VER=%s NCH=%d FMT=%d", 0.0, "", 0,
-        tstr, SDR_LIB_VER, rcv->nch, rcv->fmt);
     
     if (rcv->dev == SDR_DEV_USB) {
         sdr_dev_start((sdr_dev_t *)rcv->dp);
@@ -1318,9 +1313,6 @@ static void *rcv_thread(void *arg)
     } else if (rcv->dev == SDR_DEV_SOAPY) {
         sdr_sdev_stop((sdr_sdev_t *)rcv->dp);
     }
-    time2str(utc2gpst(timeget()), tstr, 1); // GPST
-    sdr_log(3, "$LOG,%.3f,%s,%d,STOP %s", get_buff_ix(rcv) * SDR_CYC, "", 0,
-        tstr);
     sdr_free(raw);
     return NULL;
 }
@@ -1351,6 +1343,8 @@ int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, const char **paths)
     
     if (!rcv || rcv->state) return 0;
     
+    gtime_t start_time = utc2gpst(timeget()); // GPST
+    
     if ((p = strstr(rcv->opt, "-SCALE"))) {
         sscanf(p, "-SCALE=%lf", &scale);
     }
@@ -1364,6 +1358,10 @@ int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, const char **paths)
     }
     sdr_log_level(log_level);
     sdr_log_open(paths[2]);
+    char tstr[32];
+    time2str(start_time, tstr, 1);
+    sdr_log(3, "$LOG,%.3f,%s,%d,START %s VER=%s DEV=%d FMT=%d FS=%.3f NCH=%d",
+        0.0, "", 0, tstr, SDR_LIB_VER, dev, rcv->fmt, rcv->fs * 1e-6, rcv->nch);
     
     for (int i = 0; i < rcv->nrfch; i++) {
         IQ[i] = rcv->rfch[i].IQ;
@@ -1388,7 +1386,7 @@ int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, const char **paths)
     rcv->dev = dev;
     rcv->dp = dp;
     rcv->pvt = sdr_pvt_new(rcv);
-    rcv->start_time = utc2gpst(timeget());
+    rcv->start_time = start_time;
     for (int i = 0; i < 4; i++) {
         if (i == 3 && (rcv->dev != SDR_DEV_USB && rcv->dev != SDR_DEV_SOAPY)) {
             continue;
@@ -1453,6 +1451,8 @@ static void write_raw_tag_file(sdr_rcv_t *rcv)
 //
 void sdr_rcv_stop(sdr_rcv_t *rcv)
 {
+    gtime_t stop_time = utc2gpst(timeget()); // GPST
+    
     for (int i = 0; i < rcv->nch; i++) {
         ch_th_stop(rcv->th[i]);
     }
@@ -1470,6 +1470,10 @@ void sdr_rcv_stop(sdr_rcv_t *rcv)
         rcv->rfch[i].LUT = NULL;
     }
     sdr_pvt_free(rcv->pvt);
+    char tstr[32];
+    time2str(stop_time, tstr, 1);
+    sdr_log(3, "$LOG,%.3f,%s,%d,STOP %s", get_buff_ix(rcv) * SDR_CYC, "", 0,
+        tstr);
     sdr_log_close();
     if (strstr(rcv->opt, "-TRACE")) {
         traceclose();
@@ -1880,8 +1884,8 @@ void sdr_rcv_setopt(const char *opt, double value)
 {
     extern double sdr_epoch, sdr_lag_epoch, sdr_el_mask, sdr_sp_corr, sdr_t_acq;
     extern double sdr_t_dll, sdr_b_dll, sdr_b_pll, sdr_b_fll_w, sdr_b_fll_n;
-    extern double sdr_max_dop, sdr_thres_cn0_l, sdr_thres_cn0_u;
-    extern int sdr_bump_jump;
+    extern double sdr_max_dop, sdr_thres_cn0_l, sdr_thres_cn0_u, sdr_thres_pli;
+    extern int sdr_bump_jump, sdr_lost_th;
     if      (!strcmp(opt, "epoch"      )) sdr_epoch       = value;
     else if (!strcmp(opt, "lag_epoch"  )) sdr_lag_epoch   = value;
     else if (!strcmp(opt, "el_mask"    )) sdr_el_mask     = value;
@@ -1895,6 +1899,8 @@ void sdr_rcv_setopt(const char *opt, double value)
     else if (!strcmp(opt, "max_dop"    )) sdr_max_dop     = value;
     else if (!strcmp(opt, "thres_cn0_l")) sdr_thres_cn0_l = value;
     else if (!strcmp(opt, "thres_cn0_u")) sdr_thres_cn0_u = value;
+    else if (!strcmp(opt, "thres_pli"  )) sdr_thres_pli   = value;
+    else if (!strcmp(opt, "lost_th"    )) sdr_lost_th     = (int)value;
     else if (!strcmp(opt, "bump_jump"  )) sdr_bump_jump = (int)value;
     else if (!strcmp(opt, "max_acq"    )) sdr_max_acq     = value;
     else fprintf(stderr, "sdr_rcv_setopt error opt=%s\n", opt);
