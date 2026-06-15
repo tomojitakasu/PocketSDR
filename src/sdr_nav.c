@@ -63,6 +63,7 @@
 #define K_SYNC_MIN   20       // min symbols accumulated for bit/symbol sync
 #define K_SYNC_MAX   100      // max symbols accumulated for bit/symbol sync
 #define THRES_SYNC_R 1.4f     // threshold for bit/symbol sync energy ratio
+#define THRES_SYNC_M 0.03f    // threshold for bit/symbol sync adjacent-phase margin
 #define THRES_LOST  0.001     // threshold for symbol lost
 #define T_SYNC_START 1.5      // bit/symbol sync history start time (s) (=T_NPULLIN)
 #define SOFT_SCALE  1024.0f   // scale factor for soft nav symbols
@@ -201,12 +202,20 @@ static int sync_symb(sdr_ch_t *ch, int N)
             float c = (A[m] > 0.0f) ? E[m] / A[m] : 0.0f;
             if (c > coh) { coh = c; m0 = m; }
         }
+        // reject the 1 ms adjacent-phase ambiguity (issue #83)
+        int mL = (m0 + N - 1) % N, mR = (m0 + 1) % N;
+        float cohL = (A[mL] > 0.0f) ? E[mL] / A[mL] : 0.0f;
+        float cohR = (A[mR] > 0.0f) ? E[mR] / A[mR] : 0.0f;
+        float margin = coh - (cohL > cohR ? cohL : cohR);
         float Eopp = E[(m0 + N / 2) % N];
         float thr_coh = 0.5f * (1.0f + 1.0f / sqrtf((float)N));
-        if (Eopp > 0.0f && E[m0] >= THRES_SYNC_R * Eopp && coh >= thr_coh) {
+        if (coh >= thr_coh && margin >= THRES_SYNC_M &&
+            E[m0] >= THRES_SYNC_R * Eopp) {
+            float ratio = Eopp > 0.0f ? E[m0] / Eopp : 99.99f;
+            if (ratio > 99.99f) ratio = 99.99f;
             ch->nav->ssync = ch->lock - m0 - N;
-            sdr_log(4, "$LOG,%.3f,%s,%s,%d,SYMBOL SYNC (%.2f,%.2f)", ch->time,
-                ch->sat, ch->sig, ch->prn, E[m0] / Eopp, coh);
+            sdr_log(4, "$LOG,%.3f,%s,%s,%d,SYMBOL SYNC (%.2f,%.2f,%.2f)",
+                ch->time, ch->sat, ch->sig, ch->prn, ratio, coh, margin);
         }
     } else if ((ch->lock - ch->nav->ssync) % N == 0) {
         float P = mean_IP(ch, N);
@@ -215,7 +224,7 @@ static int sync_symb(sdr_ch_t *ch, int N)
             sdr_add_buff(ch->nav->syms, SDR_MAX_NSYM, &sym, sizeof(sym));
             return 1;
         } else {
-            ch->nav->ssync = ch->nav->rev = 0;
+            ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
             sdr_log(4, "$LOG,%.3f,%s,%s,%d,SYMBOL LOST (%.3f)", ch->time,
                 ch->sat, ch->sig, ch->prn, P);
         }
@@ -1040,8 +1049,8 @@ static void decode_glo_str(sdr_ch_t *ch, const uint8_t *syms, int rev)
         ch->nav->fsync = ch->lock;
         ch->nav->rev = rev;
         int sno = getbitu(data, 1, 4);
-        if (sno == 4) {
-            sprintf(ch->sat, "R%02d", getbitu(data, 70, 5)); // set sat ID
+        if (sno == 4) { // set sat ID
+            snprintf(ch->sat, sizeof(ch->sat), "R%02d", getbitu(data, 70, 5));
         }
         if (sno == 1) {
             double tod = getbitu(data, 9, 5) * 3600.0 +
@@ -1051,7 +1060,8 @@ static void decode_glo_str(sdr_ch_t *ch, const uint8_t *syms, int rev)
         }
         ch->nav->type = sno; // GLO string number
         if (sno >= 1 && sno <= 15) { // GLO string w/o mark and hamming (77 bits)
-            sdr_pack_bits(bits, 77, 0, ch->nav->data + 10 * (sno - 1)); // str 1-5: eph/utc, 6-15: almanac
+            // str 1-5: eph/utc, 6-15: almanac
+            sdr_pack_bits(bits, 77, 0, ch->nav->data + 10 * (sno - 1));
             ch->nav->lock_sf[sno-1] = ch->lock;
         }
         ch->nav->stat = 1;
@@ -1301,7 +1311,8 @@ static void decode_gal_INAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
             update_tow(ch, getbitu(data, 85, 20) + toff);
         }
         ch->nav->type = type; // I/NAV word type
-        if (type >= 0 && type <= 10) { // word 0-6: eph/ion/utc, 7-10: almanac
+        if (type >= 0 && type <= 10 && 16 * type + 16 <= SDR_MAX_DATA) {
+            // word 0-6: eph/ion/utc, 7-10: almanac
             memcpy(ch->nav->data + 16 * type, data, 16);
             ch->nav->lock_sf[type] = ch->lock;
         }
