@@ -19,6 +19,7 @@
 //  2024-12-30  1.11 support Bump-jump for BOC modulation
 //  2025-11-19  1.12 improve carrier-phase coherency
 //  2026-05-02  1.13 support E5 AltBOC
+//  2026-06-15  1.14 update loss-of-lock detection logic
 //
 #include <ctype.h>
 #include <math.h>
@@ -39,6 +40,8 @@
 #define THRES_CN0_L 34.0    // C/N0 threshold (dB-Hz) (lock)
 #define THRES_CN0_U 30.0    // C/N0 threshold (dB-Hz) (lost)
 #define THRES_CN0_L6 33.0   // C/N0 threshold (dB-Hz) (L6D/E lost)
+#define THRES_PLI  0.35     // carrier lock detector threshold (cos 2*phi)
+#define LOST_TH    3        // lost decision count (C/N0/PLI windows of T_CN0)
 #define THRES_SYNC 0.02     // threshold for sec-code sync
 #define THRES_LOST 0.002    // threshold for sec-code lost
 #define THRES_SEC_RATIO 0.8 // threshold for sec-code soft correlation ratio
@@ -64,6 +67,8 @@ double sdr_b_fll_n = B_FLL_N;
 double sdr_max_dop = MAX_DOP;
 double sdr_thres_cn0_l = THRES_CN0_L;
 double sdr_thres_cn0_u = THRES_CN0_U;
+double sdr_thres_pli = THRES_PLI; // carrier lock detector threshold
+int sdr_lost_th = LOST_TH; // lost decision count
 int sdr_bump_jump = 0;
 double sdr_e5ab_off = 0.0;  // E5b-E5a group-delay (s)
 double sdr_bump_k = BUMP_K; // bump-jump threshold
@@ -241,7 +246,7 @@ static sdr_trk_t *trk_new(const char *sig, int prn, const int8_t *code,
     trk->sec_sync = trk->sec_pol = 0;
     trk->err_phas = trk->err_code = 0.0;
     trk->phas_acc = trk->code_int = 0.0;
-    trk->sumP = trk->sumN = trk->sumVE = trk->sumVL = 0.0;
+    trk->sumP = trk->sumN = trk->sumVE = trk->sumVL = trk->sumD = 0.0;
     memset(trk->sumC, 0, sizeof(double) * SDR_MAX_CORR);
     memset(trk->sumI, 0, sizeof(double) * SDR_MAX_CORR);
     memset(trk->aveP, 0, sizeof(double) * SDR_MAX_CORR);
@@ -315,8 +320,8 @@ sdr_ch_t *sdr_ch_new(const char *sig, int prn, double fs, double fi)
     ch->fi = sdr_shift_freq(sig, prn, fi);
     ch->T = sdr_code_cyc(sig);
     ch->N = (int)(fs * ch->T);
-    ch->fd = ch->coff = ch->adr = ch->cn0 = 0.0;
-    ch->lock = ch->lost = 0;
+    ch->fd = ch->coff = ch->adr = ch->cn0 = ch->pli = 0.0;
+    ch->lock = ch->lost = ch->lost_cnt = ch->pli_valid = 0;
     ch->costas = strcmp(ch->sig, "L6D") && strcmp(ch->sig, "L6E");
     ch->obs_idx = -1;
     ch->acq = acq_new(ch->sig, ch->prn, ch->code, ch->len_code, ch->T, fs,
@@ -357,7 +362,7 @@ static void trk_init(sdr_trk_t *trk)
     trk->err_phas = trk->err_code = 0.0;
     trk->phas_acc = trk->code_int = 0.0;
     trk->sec_sync = trk->sec_pol = 0;
-    trk->sumP = trk->sumN = trk->sumVE = trk->sumVL = 0.0;
+    trk->sumP = trk->sumN = trk->sumVE = trk->sumVL = trk->sumD = 0.0;
     memset(trk->C, 0, sizeof(sdr_cpx_t) * SDR_MAX_CORR);
     trk->C0[0] = trk->C0[1] = trk->C1[0] = trk->C1[1] = 0.0;
     memset(trk->P, 0, sizeof(sdr_cpx_t) * SDR_N_HIST);
@@ -378,6 +383,9 @@ static void start_track(sdr_ch_t *ch, double time, double fd, double coff,
     ch->coff = coff;
     ch->adr = 0.0;
     ch->cn0 = cn0;
+    ch->pli = 1.0;
+    ch->lost_cnt = 0;
+    ch->pli_valid = 0;
     ch->week = 0;
     ch->tow = -1;
     ch->tow_v = 0;
@@ -566,26 +574,52 @@ static void bump_jump(sdr_ch_t *ch)
     ch->trk->sumVE = ch->trk->sumVL = 0.0;
 }
 
-// update C/N0 -----------------------------------------------------------------
-static void CN0(sdr_ch_t *ch)
+// update C/N0 and carrier lock indicator (returns 1 at decision window) --------
+static int CN0(sdr_ch_t *ch)
 {
     ch->trk->sumP +=
         SQR(ch->trk->P[SDR_N_HIST-1][0]) + SQR(ch->trk->P[SDR_N_HIST-1][1]);
+    ch->trk->sumD += // IP^2 - QP^2 for carrier lock detector (cos 2*phi)
+        SQR(ch->trk->P[SDR_N_HIST-1][0]) - SQR(ch->trk->P[SDR_N_HIST-1][1]);
     ch->trk->sumN += SQR(ch->trk->C[3][0]) + SQR(ch->trk->C[3][1]);
     if (ch->trk->npos >= 6) {
         ch->trk->sumVE += SQR(ch->trk->C[4][0]) + SQR(ch->trk->C[4][1]);
         ch->trk->sumVL += SQR(ch->trk->C[5][0]) + SQR(ch->trk->C[5][1]);
     }
-    if (ch->lock % (int)(T_CN0 / ch->T) == 0) {
-        if (ch->trk->sumN > 0.0) {
-            double cn0 = 10.0 * log10(ch->trk->sumP / ch->trk->sumN / ch->T);
-            ch->cn0 += FILT_CN0 * (cn0 - ch->cn0);
-        }
-        if (ch->trk->npos >= 6) {
-            bump_jump(ch);
-        }
-        ch->trk->sumP = ch->trk->sumN = 0.0;
+    if (ch->lock % (int)(T_CN0 / ch->T) != 0) return 0;
+
+    if (ch->trk->sumP > 0.0) {
+        ch->pli = ch->trk->sumD / ch->trk->sumP; // cos 2*phi in [-1,1]
+        ch->pli_valid = 1;
     }
+    if (ch->trk->sumN > 0.0) {
+        double cn0 = 10.0 * log10(ch->trk->sumP / ch->trk->sumN / ch->T);
+        ch->cn0 += FILT_CN0 * (cn0 - ch->cn0);
+    }
+    if (ch->trk->npos >= 6) {
+        bump_jump(ch);
+    }
+    ch->trk->sumP = ch->trk->sumN = ch->trk->sumD = 0.0;
+    return 1;
+}
+
+// test signal lost (see doc/update_lost_decision.md) --------------------------
+static void test_lost(sdr_ch_t *ch)
+{
+    double t_cn0 = !strncmp(ch->sig, "L6", 2) ? THRES_CN0_L6 : sdr_thres_cn0_u;
+    int bad = ch->cn0 < t_cn0 ||
+        (ch->costas && ch->pli_valid && ch->pli < sdr_thres_pli);
+    ch->lost_cnt = bad ? ch->lost_cnt + 1 : 0;
+    if (ch->lost_cnt < sdr_lost_th) return;
+    
+    ch->state = SDR_STATE_IDLE;
+    ch->lock = 0;
+    ch->trk->sec_sync = ch->trk->sec_pol = 0;
+    ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
+    ch->lost++;
+    sdr_sat_id(ch->sig, ch->prn, ch->sat); // for GLONASS FDMA
+    sdr_log(3, "$LOG,%.3f,%s,%d,SIGNAL LOST (%.1f,%.2f)", ch->time, ch->sig,
+        ch->prn, ch->cn0, ch->pli);
 }
 
 // interpolate correlation -----------------------------------------------------
@@ -717,23 +751,15 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
         PLL(ch);
     }
     DLL(ch);
-    CN0(ch);
-    
-    // decode navigation data 
+    int cn0_upd = CN0(ch);
+
+    // decode navigation data
     if (ch->lock * ch->T >= T_NPULLIN) {
         sdr_nav_decode(ch);
     }
-    // test signal lost 
-    double t_cn0 = !strncmp(ch->sig, "L6", 2) ? THRES_CN0_L6 : sdr_thres_cn0_u;
-    if (ch->cn0 < t_cn0) {
-        ch->state = SDR_STATE_IDLE;
-        ch->lock = 0;
-        ch->trk->sec_sync = ch->trk->sec_pol = 0;
-        ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;
-        ch->lost++;
-        sdr_sat_id(ch->sig, ch->prn, ch->sat); // for GLONASS FDMA
-        sdr_log(3, "$LOG,%.3f,%s,%d,SIGNAL LOST (%.1f)", ch->time, ch->sig,
-            ch->prn, ch->cn0);
+    // test signal lost (only on a C/N0/PLI decision window)
+    if (cn0_upd) {
+        test_lost(ch);
     }
 }
 
