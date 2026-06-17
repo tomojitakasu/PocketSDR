@@ -78,14 +78,12 @@ def setup_soapy_paths(soapy_dir, win32=False):
 # platform dependent settings --------------------------------------------------
 env = platform.platform()
 if 'Windows' in env:
-    #LIBSDR = AP_DIR + '/../lib/win32_msvc/libsdr.dll' # MSVC DLL
     LIBSDR = AP_DIR + '/../lib/win32/libsdr.so' # UCRT64 DLL
     FONT = ('Tahoma', 'Consolas')
     
     # setup SoapySDR paths (radioconda)
     soapy_dir = os.path.expandvars(r'%USERPROFILE%\radioconda\Library')
     setup_soapy_paths(soapy_dir, win32=True)
-
 elif 'macOS' in env:
     LIBSDR = AP_DIR + '/../lib/macos/libsdr.so'
     #FONT = ('Arial Narrow', 'Monaco')
@@ -1383,7 +1381,7 @@ def corr_page_new(parent):
     p.box5 = sel_box_new(p.toolbar, ['0.2', '0.3', '0.5', '1', '1.5', '2', '3',
         '5', '10', '20'], '5', 3)
     p.box5.pack(side=RIGHT, padx=1)
-    p.box4 = sel_box_new(p.toolbar, ['I', 'Q', 'IQ', 'AveI', 'AveIQ'], 'I', 5)
+    p.box4 = sel_box_new(p.toolbar, ['I', 'Q', 'IQ', 'AveI', 'AveIQ'], 'AveI', 5)
     p.box4.pack(side=RIGHT, padx=1)
     ttk.Label(p.toolbar, text='IQ/W(μs)/T(s)/Range').pack(side=RIGHT, padx=2)
     p.plt3 = plt.plot_new(p.panel, 800, 245, [0, 1], [-0.6, 0.6], title=ti[2])
@@ -1473,9 +1471,9 @@ def update_corr_text(p, ch, time):
         '  #NAV: %s') % (ss[6], ss[8], ss[9], ss[10], ss[11], ss[12])
     plt.plot_text(p.plt3, p.plt3.xl[0] + 12 / xs, p.plt3.yl[1] - 15 / ys,
         text, anchor=W)
-    text = ('ERR_P: %7s cyc  ERR_C: %7s m  NAV: %2s-%2s-%2s  WEEK: %4s  TOW: %6s') % (
-        ss[16], ss[17], ss[19], ss[20], ss[21], ss[22],
-        ss[23] if int(ss[24]) else '------')
+    text = ('ERR_P: %7s cyc  ERR_C: %7s m  PLI: %5s  NAV: %2s-%2s-%2s' +
+        '  WEEK: %4s  TOW: %6s') % (ss[16], ss[17], ss[18], ss[20], ss[21],
+        ss[22], ss[23], ss[24] if int(ss[25]) else '------')
     plt.plot_text(p.plt3, p.plt3.xl[0] + 12 / xs, p.plt3.yl[0] + 15 / ys,
         text, anchor=W)
 
