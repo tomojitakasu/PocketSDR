@@ -787,7 +787,8 @@ def gen_code(sig, prn):
 def sec_code(sig, prn):
     sig = sig.upper()
     if sig in ('L1CA', 'L1S', 'L1CB','L1CD', 'L2CM', 'L2CL', 'L6D', 'L6E',
-       'G1OCP', 'E1B', 'E6B', 'B1CD', 'B2BI', 'I1SD', 'I5S', 'ISS'):
+       'G1CA', 'G2CA', 'G1OCP', 'E1B', 'E6B', 'B1CD', 'B2BI', 'I1SD',
+       'I5S', 'ISS'):
         return np.array([1], dtype='int8') # no secondary code
     elif sig == 'L1CP':
         return sec_code_L1CP(prn)
@@ -809,10 +810,6 @@ def sec_code(sig, prn):
         return sec_code_L5SQ(prn)
     elif sig == 'L5SQV':
         return sec_code_L5SQV(prn)
-    elif sig == 'G1CA':
-        return sec_code_G1CA(prn)
-    elif sig == 'G2CA':
-        return sec_code_G2CA(prn)
     elif sig == 'G1OCD':
         return sec_code_G1OCD(prn)
     elif sig == 'G2OCP':
@@ -1409,19 +1406,6 @@ def gen_code_G3OC_DC1(N):
    if len(G3OC_D1) == 0:
        G3OC_D1 = LFSR(N, 0b00110100111000, 0b00010001000011, 14)
    return G3OC_D1
-
-# generate G1CA secondary code -------------------------------------------------
-def sec_code_G1CA(prn):
-    if prn < -7 or prn > 6: # FCN
-        return NONE
-    if prn % 2 == 0:
-        return np.array([1], dtype='int8')
-    else:
-        return np.array(MC, dtype='int8')
-
-# generate G2CA secondary code -------------------------------------------------
-def sec_code_G2CA(prn):
-    return sec_code_G1CA(prn)
 
 # generate G1OCD secondary code ([19]) -----------------------------------------
 def sec_code_G1OCD(prn):
