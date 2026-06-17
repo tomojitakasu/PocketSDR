@@ -68,6 +68,7 @@ def ch_new(sig, prn, fs, fi, max_dop=MAX_DOP, sp_corr=SP_CORR, add_corr=0,
     ch.N = int(fs * ch.T)           # number of samples in a code cycle
     ch.fd = 0.0                     # Doppler frequency (Hz)
     ch.coff = 0.0                   # code offset (s)
+    ch.phi = 0.0                    # carrier phase (cyc)
     ch.adr = 0.0                    # accumulated Doppler (cyc)
     ch.cn0 = 0.0                    # C/N0 (dB-Hz)
     ch.lock = 0                     # lock count
@@ -181,6 +182,7 @@ def start_track(ch, fd, coff, cn0):
     ch.lock = 0
     ch.fd = fd
     ch.coff = coff
+    ch.phi = 0.0
     ch.adr = 0.0
     ch.cn0 = cn0
     trk_init(ch.trk)
@@ -192,12 +194,14 @@ def track_sig(ch, time, buff, ix):
     fc = ch.fi + ch.fd     # IF carrier frequency with Doppler (Hz)
     ch.adr += ch.fd * tau  # accumulated Doppler (cyc)
     ch.coff -= ch.fd / ch.fc * tau # carrier-aided code offset (s)
+    ch.phi += fc * tau
+    ch.phi -= floor(ch.phi)
     ch.time = time
     
     # code position (samples) and carrier phase (cyc)
     i = int(ch.coff * ch.fs) % ch.N
     j = int(fmod(ch.coff * ch.fs, 1.0) * N_CODE) # index of code bank
-    phi = ch.fi * tau + ch.adr + fc * i / ch.fs
+    phi = ch.phi + fc * i / ch.fs
     
     if ch.sig == 'L6D' or ch.sig == 'L6E':
         # FFT correlator
