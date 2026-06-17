@@ -692,14 +692,14 @@ def sys_opt_dlg(root, opt):
         'DLL Loop Filter Bandwidth (Hz)', 'PLL Loop Filter Bandwidth (Hz)',
         'FLL Loop Filter Bandwidth Wide (Hz)',
         'FLL Loop Filter Bandwidth Narrow (Hz)',
-        'Max Doppler Frequency to Search Signal (Hz)',
+        'Max Doppler Freq. to Search Signal (Hz)',
         'C/N0 Threshold for Signal Locked (dB-Hz)',
         'C/N0 Threshold for Signal Lost (dB-Hz)', 'Bump Jump for BOC Modulation',
         'Signal Acquisition Mode',
         'Max Code Length for direct acquisition (ms)',
         'Carrier Lock Threshold (PLI)', 'Lost Decision Count (windows)')
     opt_new = sys_opt_new(opt)
-    dlg = modal_dlg_new(root, 420, 620, 'System Options')
+    dlg = modal_dlg_new(root, 420, 640, 'System Options')
     ttk.Button(dlg.btns, width=12, padding=(2, 2), text='Set Default',
         command=lambda: sys_opt_set_default(opt_new)).pack(side=LEFT, padx=1)
     panel1 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
