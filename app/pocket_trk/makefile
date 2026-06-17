@@ -13,8 +13,8 @@ INCLUDE = -I$(SRC) -I$(LIB)/RTKLIB/src
 ifeq ($(OS),Windows_NT)
     CC = g++
     INCLUDE += -I$(LIB)/cyusb
-    LDLIBS = $(LIB)/win32/libsdr.a $(LIB)/win32/librtk.a $(LIB)/win32/libfec.a \
-             $(LIB)/win32/libldpc.a $(LIB)/cyusb/CyAPI.a -lsetupapi -lavrt -lwinmm \
+    LDLIBS = $(LIB)/win32/libsdr.a $(LIB)/win32/librtk.a \
+             $(LIB)/cyusb/CyAPI.a -lsetupapi -lavrt -lwinmm \
              -lws2_32 -lpthread -static
     ifeq ($(USE_SOAPY),1)
         INCLUDE += -I$(LIB)/SoapySDR/include
@@ -29,8 +29,8 @@ ifeq ($(OS),Windows_NT)
 else ifeq ($(shell uname -sm),Darwin arm64)
     CC = clang++
     INCLUDE += -I/opt/homebrew/include
-    LDLIBS = -L/opt/homebrew/lib $(LIB)/macos/libsdr.a $(LIB)/macos/librtk.a $(LIB)/macos/libfec.a \
-             $(LIB)/macos/libldpc.a -lpthread -lm -lusb-1.0
+    LDLIBS = -L/opt/homebrew/lib $(LIB)/macos/libsdr.a $(LIB)/macos/librtk.a \
+             -lpthread -lm -lusb-1.0
     ifeq ($(USE_SOAPY),1)
         LDLIBS += -lSoapySDR
     endif
@@ -42,8 +42,7 @@ else ifeq ($(shell uname -sm),Darwin arm64)
     endif
 else
     CC = g++
-    LDLIBS = $(LIB)/linux/libsdr.a $(LIB)/linux/librtk.a $(LIB)/linux/libfec.a \
-             $(LIB)/linux/libldpc.a -lpthread -lm -lusb-1.0
+    LDLIBS = $(LIB)/linux/libsdr.a $(LIB)/linux/librtk.a -lpthread -lm -lusb-1.0
     ifeq ($(USE_SOAPY),1)
         LDLIBS += -lSoapySDR
     endif
