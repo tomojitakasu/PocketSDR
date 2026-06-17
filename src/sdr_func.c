@@ -1045,7 +1045,7 @@ void sdr_corr_std_cpx_code(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code,
         dot_EPL += corr1[i][0] * corr2[i][0] + corr1[i][1] * corr2[i][1];
     }
     sign = dot_EPL < 0.0f ? -1.0f : 1.0f;
-
+    
     for (int i = 0; i < n; i++) {
         corr[i][0] = (corr1[i][0] + sign * corr2[i][0]) / N;
         corr[i][1] = (corr1[i][1] + sign * corr2[i][1]) / N;
