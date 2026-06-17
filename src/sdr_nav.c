@@ -311,7 +311,7 @@ static int sync_frame(sdr_ch_t *ch, const uint8_t *preamb, int n, int m,
 static int sync_frame_soft(sdr_ch_t *ch, const uint8_t *preamb, int n, int m,
     const uint8_t *syms, int N)
 {
-    int sn1, sn2, sr1, sr2;
+    int sn1 = 0, sn2 = 0, sr1 = 0, sr2 = 0;
     int ok_n = smatch(syms, preamb, n, m, 0, &sn1) &&
         smatch(syms + N, preamb, n, m, 0, &sn2);
     int ok_r = smatch(syms, preamb, n, m, 1, &sr1) &&
@@ -665,7 +665,7 @@ static int sync_CNV2_frame(sdr_ch_t *ch, const uint8_t *syms, int toi)
 {
     uint8_t *SF1 = CNV2_SF1[toi];
     uint8_t *SFn = CNV2_SF1[(toi + 1) % 400];
-    int sn1, sn2, sr1, sr2;
+    int sn1 = 0, sn2 = 0, sr1 = 0, sr2 = 0;
     int ok_n = smatch(syms, SF1, 52, 2, 0, &sn1) &&
         smatch(syms + 1800, SFn, 52, 2, 0, &sn2);
     int ok_r = smatch(syms, SF1, 52, 2, 1, &sr1) &&
@@ -1707,7 +1707,7 @@ static void decode_B1I(sdr_ch_t *ch)
 static int sync_BCNV1_frame(sdr_ch_t *ch, const uint8_t *syms, int soh)
 {
     uint8_t SF1[72], SFn[72];
-    int sn1, sn2, sr1, sr2;
+    int sn1 = 0, sn2 = 0, sr1 = 0, sr2 = 0;
     memcpy(SF1, BCNV1_SF1A[ch->prn-1], 21);
     memcpy(SFn, BCNV1_SF1A[ch->prn-1], 21);
     memcpy(SF1 + 21, BCNV1_SF1B[soh], 51);
@@ -1983,7 +1983,7 @@ static int sync_IRNV1_frame(sdr_ch_t *ch, const uint8_t *syms, int toi)
 {
     uint8_t *SF1 = IRNV1_SF1[toi];
     uint8_t *SFn = IRNV1_SF1[(toi + 1) % 400];
-    int sn1, sn2, sr1, sr2;
+    int sn1 = 0, sn2 = 0, sr1 = 0, sr2 = 0;
     int ok_n = smatch(syms, SF1, 52, 2, 0, &sn1) &&
         smatch(syms + 1800, SFn, 52, 2, 0, &sn2);
     int ok_r = smatch(syms, SF1, 52, 2, 1, &sr1) &&
