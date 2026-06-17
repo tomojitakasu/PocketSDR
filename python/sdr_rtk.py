@@ -52,7 +52,6 @@ OMGE          = 7.2921151467E-5
 RE_WGS84      = 6378137.0
 NFREQ         = get_const_int('NFREQ')
 NEXOBS        = get_const_int('NEXOBS')
-SNR_UNIT      = get_const_int('SNR_UNIT')
 MAXSAT        = get_const_int('MAXSAT')
 MAXSTA        = get_const_int('MAXSTA')
 MAXANT        = get_const_int('MAXANT')
