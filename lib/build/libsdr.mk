@@ -5,10 +5,11 @@
 SRC = ../../src
 USE_SOAPY ?= 1
 USE_FFTW ?= 0
+USE_AVX2 ?= 1
 
 INCLUDE = -I$(SRC) -I../RTKLIB/src
 OPTIONS =
-LIBS = ./librtk.a ./libfec.a ./libldpc.a
+LIBS = ./librtk.a
 
 ifeq ($(USE_FFTW),1)
     OPTIONS += -DFFTW
@@ -24,7 +25,10 @@ ifeq ($(OS),Windows_NT)
     LD = g++
     INSTALL = ../win32
     INCLUDE += -I../cyusb
-    OPTIONS += -DWIN32 -DAVX2 -mavx2 -mfma
+    OPTIONS += -DWIN32
+    ifeq ($(USE_AVX2),1)
+        OPTIONS += -DAVX2 -mavx2 -mfma
+    endif
     LDLIBS = $(LIBS) ../cyusb/CyAPI.a -lpthread -lsetupapi -lavrt -lwsock32 -lwinmm
     LDLIBS += -static
     
@@ -54,7 +58,7 @@ else
     INCLUDE +=
     ifeq ($(shell uname -m),aarch64)
         OPTIONS += -DNEON
-    else
+    else ifeq ($(USE_AVX2),1)
         OPTIONS += -DAVX2 -mavx2 -mfma
     endif
     LDLIBS = $(LIBS) -lpthread -lusb-1.0 -lm -lpthread
