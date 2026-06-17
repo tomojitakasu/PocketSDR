@@ -311,7 +311,7 @@ def sys_opt_new(opt_p=None):
         opt.rcv_options.set(opt_p.rcv_options.get())
     else:
         opt.epoch.set('1.0')
-        opt.lag_epoch.set('0.5')
+        opt.lag_epoch.set('0.8')
         opt.el_mask.set('15')
         opt.acq_mode.set('Full-Search')
         opt.sp_corr.set('0.25')
