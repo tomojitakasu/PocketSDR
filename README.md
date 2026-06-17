@@ -1,8 +1,8 @@
 
-# **Pocket SDR - An Open-Source GNSS SDR,<br> ver. 0.16**
+# **Pocket SDR - An Open-Source GNSS SDR,<br> ver. 0.17**
 
 <div style="text-align: right;">
-<strong>2026-06-01</strong>
+<strong>2026-06-17</strong>
 </div>
 
 ---
@@ -104,9 +104,7 @@ PocketSDR
 │   ├── cyusb        # Cypress EZ-USB API (CyAPI.a) and includes
 │   ├── RTKLIB       # RTKLIB source programs based on 2.4.3 b34
 │   ├── pocketfft    # PocketFFT (header-only FFT, used internally)
-│   ├── SoapySDR     # SoapySDR headers + import lib for SDR device support
-│   ├── (libfec)     # Library for FEC (forward error corrections) ([1])
-│   └── (LDPC-codes) # Library for LDPC-decoder ([2])
+│   └── SoapySDR     # SoapySDR headers + import lib for SDR device support
 ├── conf        # Configuration files for Pocket SDR FE
 ├── FE_2CH      # Pocket SDR FE 2CH H/W and F/W
 ├── FE_4CH      # Pocket SDR FE 4CH H/W and F/W
@@ -121,8 +119,6 @@ PocketSDR
     ├── src          # source programs for tests
     └── utest        # makefile for unit tests
 
-Note: Items in parentheses () are not included in the package and are
-fetched by lib/clone_lib.sh.
 ```
 
 --------------------------------------------------------------------------------
@@ -197,13 +193,6 @@ $ cd <install_dir>/app/pocket_dump
 $ make clean && make USE_SOAPY=0 && make install
 ```
 
-* Move to the library directory. The external libraries are for Forward Error
-  Correction (FEC) and Low-Density Parity-Check (LDPC) decoding. Install the
-  external library source trees ([1], [2]) as follows:
-```
-$ cd <install_dir>/lib
-$ ./clone_lib.sh
-```
 * Move to the library build directory and build libraries.
 ```
 $ cd <install_dir>/lib/build
@@ -215,11 +204,24 @@ $ make install
 ```
 $ make SOAPY_ROOT=/c/path/to/radioconda/Library
 ```
+
 * Move to the application program directory and build utilities and APs.
 ```
 $ cd <install_dir>/app
 $ make
 $ make install
+```
+
+* To run unit tests for the libraries:
+```
+$ cd <install_dir>/test/utest
+$ make
+$ make test
+==> test_sdr_array.exe
+test_sdr_array_new_free_api ... OK
+test_sdr_array_ant_pos_api ... OK
+t...
+test_sdr_usb_req_control ... OK
 ```
 
 --------------------------------------------------------------------------------
@@ -251,12 +253,6 @@ $ sudo apt install libsoapysdr-dev soapysdr-tools soapysdr-module-all
 $ unzip PocketSDR.zip
 or
 $ git clone https://github.com/tomojitakasu/PocketSDR
-```
-* Move to the library directory and install the external library source trees ([1], [2]) as follows:
-```
-$ cd <install_dir>/lib
-$ chmod +x clone_lib.sh
-$ ./clone_lib.sh
 ```
 * Move to the library build directory and build libraries.
 ```
@@ -393,12 +389,6 @@ $ bash Radioconda-MacOSX-arm64.sh
 $ unzip PocketSDR.zip
 or
 $ git clone https://github.com/tomojitakasu/PocketSDR
-```
-* Move to the library directory, install external library source trees ([1], [2]):
-```
-$ cd <install_dir>/lib
-$ chmod +x clone_lib.sh
-$ ./clone_lib.sh
 ```
 * Build libraries and applications. The Makefiles auto-detect Apple
   Silicon (`Darwin arm64`) and use `clang++` for C++ sources and pull
@@ -580,13 +570,9 @@ purposes, is prohibited.
 
 ## **References**
 
-[1] [**libfec**](https://github.com/quiet/libfec): A library for forward error correction (FEC).
+[1] *NMEA 0183: Standard for Interfacing Marine Electronic Devices*, National Marine Electronics Association and International Marine Electronics Association, 2013.
 
-[2] [**LDPC-codes**](https://github.com/radfordneal/LDPC-codes): A library for LDPC (Low-Density Parity-Check) decoding.
-
-[3] *NMEA 0183: Standard for Interfacing Marine Electronic Devices*, National Marine Electronics Association and International Marine Electronics Association, 2013.
-
-[4] *RTCM 10403.4 with Amendment 1: Differential GNSS (Global Navigation Satellite Systems) Service - Version 3*, Radio Technical Commission for Maritime Services, November 1, 2024
+[2] *RTCM 10403.4 with Amendment 1: Differential GNSS (Global Navigation Satellite Systems) Service - Version 3*, Radio Technical Commission for Maritime Services, November 1, 2024
 
 --------------------------------------------------------------------------------
 <div class="pagebreak"></div>
@@ -620,5 +606,10 @@ purposes, is prohibited.
   CS16 support to `pocket_acq`, and helper scripts for SoapySDR capture /
   tracking. Added `USE_SOAPY` and `USE_FFTW` make options. Fixed FE 2CH
   I-sampling real-to-complex conversion and updated command/API references.
+- **2026-06-15 (v0.17)**: Improved signal-loss decision with a carrier lock
+  detector (PLI) and pessimistic counter in addition to C/N0 (`thres_pli`,
+  `lost_th` options). Replaced external Viterbi / Reed-Solomon / LDPC decoders
+  with internal implementations. Improved the symbol-sync algorithm. Improved
+  the `pocket_sdr.py` UI (options Load / Save, etc.).
 
 --------------------------------------------------------------------------------
