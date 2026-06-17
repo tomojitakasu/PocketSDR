@@ -19,27 +19,18 @@ int get_const_int(const char *name)
 {
     if (!strcmp(name, "MAXSAT")) {
         return MAXSAT;
-    }
-    else if (!strcmp(name, "MAXSTA")) {
+    } else if (!strcmp(name, "MAXSTA")) {
         return MAXSTA;
-    }
-    else if (!strcmp(name, "MAXANT")) {
+    } else if (!strcmp(name, "MAXANT")) {
         return MAXANT;
-    }
-    else if (!strcmp(name, "MAXOBS")) {
+    } else if (!strcmp(name, "MAXOBS")) {
         return MAXOBS;
-    }
-    else if (!strcmp(name, "NFREQ")) {
+    } else if (!strcmp(name, "NFREQ")) {
         return NFREQ;
-    }
-    else if (!strcmp(name, "NEXOBS")) {
+    } else if (!strcmp(name, "NEXOBS")) {
         return NEXOBS;
-    }
-    else if (!strcmp(name, "NSYS")) {
+    } else if (!strcmp(name, "NSYS")) {
         return NSYS;
-    }
-    else if (!strcmp(name, "SNR_UNIT")) {
-        return SNR_UNIT;
     }
     return 0;
 }
