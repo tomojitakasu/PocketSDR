@@ -22,12 +22,23 @@ static void gf_to_bits(uint8_t val, uint8_t *bits)
     }
 }
 
-// set repetition-code symbols -------------------------------------------------
+// convert hard bits to soft symbols ------------------------------------------
+static void bits_to_soft(const uint8_t *bits, int n, uint8_t *soft)
+{
+    for (int i = 0; i < n; i++) {
+        soft[i] = bits[i] ? 255 : 0;
+    }
+}
+
+// set repetition-code soft symbols -------------------------------------------
 static void set_rep_code(uint8_t val, uint8_t *syms)
 {
+    uint8_t bits[24];
+    
     for (int i = 0; i < 4; i++) {
-        gf_to_bits(val, syms + i * 6);
+        gf_to_bits(val, bits + i * 6);
     }
+    bits_to_soft(bits, 24, syms);
 }
 
 // assert decoded repetition-code symbols --------------------------------------
@@ -43,11 +54,11 @@ static void assert_rep_decoded(uint8_t val, const uint8_t *dec)
     }
 }
 
-// flip bit positions ----------------------------------------------------------
-static void flip_bits(uint8_t *bits, const int *pos, int npos)
+// flip soft symbol positions --------------------------------------------------
+static void flip_bits(uint8_t *syms, const int *pos, int npos)
 {
     for (int i = 0; i < npos; i++) {
-        bits[pos[i]] ^= 1;
+        syms[pos[i]] = (uint8_t)(255 - syms[pos[i]]);
     }
 }
 

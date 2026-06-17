@@ -14,8 +14,30 @@ static void set_l1ca_symbol_history(sdr_ch_t *ch, double latest,
         int block = i / 20;
         double v = block == 0 ? latest : (block == 1 ? previous : latest);
         int ix = SDR_N_HIST - 1 - i;
-        
+
         ch->trk->P[ix][0] = (float)v;
+        ch->trk->P[ix][1] = 0.0f;
+    }
+}
+
+// fill IP history with a constant level over nsamp samples --------------------
+static void set_flat_history(sdr_ch_t *ch, double v, int nsamp)
+{
+    for (int i = 0; i < nsamp; i++) {
+        int ix = SDR_N_HIST - 1 - i;
+
+        ch->trk->P[ix][0] = (float)v;
+        ch->trk->P[ix][1] = 0.0f;
+    }
+}
+
+// fill IP history with a square wave aligned to N-ms symbol boundaries --------
+static void set_square_history(sdr_ch_t *ch, int N, int nsamp)
+{
+    for (int i = 0; i < nsamp; i++) {
+        int ix = SDR_N_HIST - 1 - i;
+
+        ch->trk->P[ix][0] = (i / N) % 2 ? -1.0f : 1.0f;
         ch->trk->P[ix][1] = 0.0f;
     }
 }
@@ -89,22 +111,103 @@ static void test_sdr_nav_decode_l1ca_symbol_sync(void)
     ch.prn = 1;
     ch.trk = &trk;
     ch.nav = &nav;
-    ch.lock = 200;
-    ch.time = 1.0;
+    ch.T = 1e-3;
+    ch.lock = 2000;
+    ch.time = 2.0;
     sdr_nav_init(ch.nav);
     memset(ch.nav->syms, 0xAA, sizeof(ch.nav->syms));
-    set_l1ca_symbol_history(&ch, 1.0, -1.0);
-    
+    set_square_history(&ch, 20, 2000);  // 20 ms boundaries (K-P sync)
+
     sdr_nav_decode(&ch);
-    
-    TEST_ASSERT_EQ_INT(180, ch.nav->ssync);
+
+    TEST_ASSERT_EQ_INT(1980, ch.nav->ssync);
     TEST_ASSERT_EQ_INT(0, ch.nav->fsync);
     TEST_ASSERT_EQ_INT(0, ch.nav->stat);
-    
+
     sdr_nav_decode(&ch);
-    
+
     TEST_ASSERT_EQ_INT(0, ch.nav->syms[SDR_MAX_NSYM-1]);
     TEST_ASSERT_EQ_INT(0xAA, ch.nav->syms[SDR_MAX_NSYM-2]);
+}
+
+// test sdr_nav_decode() G1CA (N=10) symbol sync -------------------------------
+static void test_sdr_nav_decode_g1ca_symbol_sync(void)
+{
+    sdr_ch_t ch;
+    sdr_trk_t trk;
+    sdr_nav_t nav;
+
+    memset(&ch, 0, sizeof(ch));
+    memset(&trk, 0, sizeof(trk));
+    memset(&nav, 0, sizeof(nav));
+    strcpy(ch.sig, "G1CA");
+    strcpy(ch.sat, "R01");
+    ch.prn = 1;
+    ch.trk = &trk;
+    ch.nav = &nav;
+    ch.T = 1e-3;
+    ch.lock = 2000;
+    ch.time = 2.0;
+    sdr_nav_init(ch.nav);
+    set_square_history(&ch, 10, 2000);  // 10 ms boundaries (GLONASS meander)
+
+    sdr_nav_decode(&ch);
+
+    TEST_ASSERT_EQ_INT(1990, ch.nav->ssync);  // lock - m0 - N = 2000 - 0 - 10
+    TEST_ASSERT_EQ_INT(0, ch.nav->fsync);
+}
+
+// test sdr_nav_decode() SBAS (N=2) symbol sync --------------------------------
+static void test_sdr_nav_decode_sbas_symbol_sync(void)
+{
+    sdr_ch_t ch;
+    sdr_trk_t trk;
+    sdr_nav_t nav;
+
+    memset(&ch, 0, sizeof(ch));
+    memset(&trk, 0, sizeof(trk));
+    memset(&nav, 0, sizeof(nav));
+    strcpy(ch.sig, "L1S");
+    strcpy(ch.sat, "S37");
+    ch.prn = 137;
+    ch.trk = &trk;
+    ch.nav = &nav;
+    ch.T = 1e-3;
+    ch.lock = 2000;
+    ch.time = 2.0;
+    sdr_nav_init(ch.nav);
+    set_square_history(&ch, 2, 2000);  // 2 ms boundaries
+
+    sdr_nav_decode(&ch);
+
+    TEST_ASSERT_EQ_INT(1998, ch.nav->ssync);  // lock - m0 - N = 2000 - 0 - 2
+    TEST_ASSERT_EQ_INT(0, ch.nav->fsync);
+}
+
+// test sdr_nav_decode() flat history is rejected (adjacent-phase margin) ------
+static void test_sdr_nav_decode_l1ca_symbol_sync_reject(void)
+{
+    sdr_ch_t ch;
+    sdr_trk_t trk;
+    sdr_nav_t nav;
+
+    memset(&ch, 0, sizeof(ch));
+    memset(&trk, 0, sizeof(trk));
+    memset(&nav, 0, sizeof(nav));
+    strcpy(ch.sig, "L1CA");
+    strcpy(ch.sat, "G01");
+    ch.prn = 1;
+    ch.trk = &trk;
+    ch.nav = &nav;
+    ch.T = 1e-3;
+    ch.lock = 2000;
+    ch.time = 2.0;
+    sdr_nav_init(ch.nav);
+    set_flat_history(&ch, 1.0, 2000);  // no transitions: all phases coherent
+
+    sdr_nav_decode(&ch);
+
+    TEST_ASSERT_EQ_INT(0, ch.nav->ssync);  // no peak -> no boundary declared
 }
 
 // test sdr_nav_decode() L1CA symbol lost --------------------------------------
@@ -215,6 +318,9 @@ int main(void)
     TEST_RUN(test_sdr_nav_new_free_init_api);
     TEST_RUN(test_crc_helpers);
     TEST_RUN(test_sdr_nav_decode_l1ca_symbol_sync);
+    TEST_RUN(test_sdr_nav_decode_g1ca_symbol_sync);
+    TEST_RUN(test_sdr_nav_decode_sbas_symbol_sync);
+    TEST_RUN(test_sdr_nav_decode_l1ca_symbol_sync_reject);
     TEST_RUN(test_sdr_nav_decode_l1ca_symbol_lost);
     TEST_RUN(test_sdr_nav_decode_pilot_tow_api);
     TEST_RUN(test_sdr_nav_decode_unknown_and_empty_api);
