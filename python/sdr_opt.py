@@ -8,11 +8,12 @@
 #  2024-06-10  1.0  new
 #  2024-12-30  1.1  update input options, output options, system options
 #
-import os, webbrowser
+import os, webbrowser, subprocess
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
 import sdr_plot as plt
+import sdr_rtk
 
 # constants --------------------------------------------------------------------
 MAX_RFCH = 8           # max number of RF channels
@@ -323,8 +324,8 @@ def sys_opt_new(opt_p=None):
         opt.max_dop.set('5000')
         opt.thres_cn0_l.set('34.0')
         opt.thres_cn0_u.set('30.0')
-        opt.thres_pli.set('0.35')
-        opt.lost_th.set('3')
+        opt.thres_pli.set('0.25')
+        opt.lost_th.set('4')
         opt.bump_jump.set('OFF')
         opt.max_acq.set('4.0')
     return opt
@@ -542,6 +543,40 @@ def rfch_opt_panel_new(parent, ch, opt):
     panel.pack(fill=X, padx=(4, 2))
     return panel
 
+# expand time keywords in a path with the current GPST -------------------------
+def rep_path_time(path):
+    if '%' not in path:
+        return path
+    ep = [int(e) for e in sdr_rtk.time2epoch(sdr_rtk.utc2gpst(sdr_rtk.timeget()))]
+    reps = (('%Y', '%04d' % ep[0]), ('%y', '%02d' % (ep[0] % 100)),
+        ('%m', '%02d' % ep[1]), ('%d', '%02d' % ep[2]), ('%h', '%02d' % ep[3]),
+        ('%M', '%02d' % ep[4]), ('%S', '%02d' % ep[5]))
+    for k, v in reps:
+        path = path.replace(k, v)
+    return path
+
+# convert RTCM3 file to RINEX with convbin -------------------------------------
+def rtcm3_to_rinex(status, file):
+    convbin = os.path.join(os.path.dirname(__file__), '..', 'bin', 'convbin')
+    if os.name == 'nt':
+        convbin += '.exe'
+    status.config(text='Converting: ' + file + ' ...')
+    status.update_idletasks()
+    try:
+        subprocess.run([convbin, '-r', 'rtcm3', file], check=True)
+        status.config(text='Generated: ' + os.path.splitext(file)[0] + '.obs/.nav')
+    except Exception as e:
+        status.config(text='Conversion failed: ' + file)
+
+# callback on button To RINEX --------------------------------------------------
+def on_to_rinex(e, path, status):
+    init_dir = os.path.dirname(rep_path_time(path.split('::')[0]))
+    file = filedialog.askopenfilename(parent=e.widget.master,
+        title='RTCM3 File to Convert to RINEX', initialdir=init_dir,
+        filetypes=[('RTCM3 File', '*.rtcm3'), ('All', '*.*')])
+    if file != '':
+        rtcm3_to_rinex(status, file)
+
 # show Output Options dialog ---------------------------------------------------
 def out_opt_dlg(root, opt):
     texts = ('Output Paths (File: local_path[::S=tint], TCP: [addr]:port)',
@@ -580,6 +615,11 @@ def out_opt_dlg(root, opt):
     ttk.Label(panel4, text=texts[6], justify=LEFT).pack(fill=X, padx=10, pady=2)
     ttk.Label(panel4, text=texts[7], justify=LEFT).pack(fill=X, padx=26, pady=2)
     ttk.Label(panel4, text=texts[8], justify=LEFT).pack(fill=X, padx=26, pady=(2, 8))
+    status = ttk.Label(dlg.panel, text='', foreground='blue', anchor=N)
+    status.pack(fill=X, expand=1, pady=(4,12))
+    btn_rnx = ttk.Button(dlg.btns, width=12, padding=(2, 2), text='To RINEX')
+    btn_rnx.pack(side=LEFT, padx=1)
+    btn_rnx.bind('<Button-1>', lambda e: on_to_rinex(e, opt_new.path[1].get(), status))
     root.wait_window(dlg.win)
     return opt_new if dlg.ok else opt
 
