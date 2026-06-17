@@ -1,7 +1,7 @@
 # Pocket SDR C Library API Reference
 
 <div style="text-align: right;">
-<strong>ver.0.16  2026-06-01</strong>
+<strong>ver.0.17  2026-06-17</strong>
 </div>
 
 ---
@@ -191,7 +191,7 @@ This API reference describes the **Pocket SDR** C library (`libsdr`). The librar
 <br><br>
 
 - `sdr_nav_t`
-  - Navigation decoder state: symbol/frame sync flags, polarity, error count, sequence/type/status, code offset (CSK), symbol/data buffers, subframe lock times, OK/error counters.
+  - Navigation decoder state: symbol/frame sync flags, polarity, error count, sequence/type/status, code offset (CSK), soft-symbol/data buffers, subframe lock times, OK/error counters. The navigation symbol buffer stores binary soft symbols in the range 0 to 255 except for L6 CSK paths, which store CSK symbol numbers.
 <br><br>
 
 - `sdr_ch_t`
@@ -936,17 +936,20 @@ Per-signal baseband channel: signal acquisition (FFT search → fine Doppler), t
 <br>
 - **Description**: Snapshot the current correlator state.
 - **Arguments**:
-  - stat: scalar stats {fd, coff, adr, cn0, lock, lost, ...}
-  - pos: correlator positions (chips)
+  - stat: scalar stats {state, fs, lock time (s), C/N0 (dB-Hz), code offset (ms), Doppler (Hz), base correlator count}
+  - pos: correlator positions (samples)
   - C: complex correlator outputs
-  - P: P-correlator history (length `SDR_N_HIST`)
+  - P: average correlator powers (`aveP`, length = correlator count)
   - I: data-wipe-off accumulator (`I·sign(IP)` averages, length = correlator count)
-- **Return**: 1 on success, 0 if channel is idle
+- **Return**: number of correlator positions (`npos + nposx`)
 <br><br>
 
 **`int sdr_ch_corr_hist(sdr_ch_t *ch, double tspan, double *stat, sdr_cpx_t *P)`**
 <br>
 - **Description**: Return P-correlator history covering the past `tspan` seconds.
+- **Arguments**:
+  - stat: scalar stats {receiver time (s), code period `T` (s)}
+  - P: prompt-correlation history (most recent last)
 - **Return**: number of samples returned
 <br><br>
 
@@ -958,7 +961,7 @@ Per-signal baseband channel: signal acquisition (FFT search → fine Doppler), t
 ---
 
 ### Overview
-Top-level navigation message decoders. Each call to `sdr_nav_decode()` consumes new symbols from the channel's tracking output, performs frame sync, runs the appropriate FEC, and emits decoded ephemerides / almanacs to the receiver's `nav_t`.
+Top-level navigation message decoders. Each call to `sdr_nav_decode()` consumes new soft symbols from the channel's tracking output, performs frame sync, runs the appropriate FEC, and emits decoded ephemerides / almanacs to the receiver's `nav_t`. Binary navigation soft symbols use `0` for a strong 0, `128` for the hard-decision boundary, and `255` for a strong 1. Hard-only parity, BCH, CRC, and table-matching paths derive hard bits locally.
 <br>
 
 ### API Functions
@@ -980,7 +983,7 @@ Top-level navigation message decoders. Each call to `sdr_nav_decode()` consumes 
 
 **`void sdr_nav_decode(sdr_ch_t *ch)`**
 <br>
-- **Description**: Decode navigation symbols for the channel's signal type. Updates `ch->nav` and emits to the parent receiver's `nav_t` when a frame is complete.
+- **Description**: Decode navigation soft symbols for the channel's signal type. Updates `ch->nav` and emits to the parent receiver's `nav_t` when a frame is complete.
 <br><br>
 
 
@@ -998,7 +1001,7 @@ Convolutional decoder (rate-1/2, k=7, generator [171, 133]) and Reed-Solomon dec
 
 **`void sdr_decode_conv(const uint8_t *data, int N, uint8_t *dec_data)`**
 <br>
-- **Description**: Viterbi decode `N` rate-1/2 soft symbols (uint8 in [0,255]) into `N/2` hard bits.
+- **Description**: Viterbi decode `N` rate-1/2 soft symbols (`uint8_t` in the range 0 to 255, with 128 as the hard-decision boundary) into `N/2` hard bits.
 <br><br>
 
 **`int sdr_decode_rs(uint8_t *syms)`**
@@ -1014,14 +1017,14 @@ Convolutional decoder (rate-1/2, k=7, generator [171, 133]) and Reed-Solomon dec
 ---
 
 ### Overview
-Belief-propagation LDPC decoder for BeiDou B1C, B2a, B2b, GPS L1C, etc.
+Belief-propagation LDPC decoder for BeiDou B1C, B2a, B2b, GPS L1C, etc. The decoder interface is soft-decision input; callers that only have hard decisions should pass 0/255 symbols.
 <br>
 
 ### API Functions
 
 **`int sdr_decode_LDPC(const char *type, const uint8_t *syms, int N, uint8_t *syms_dec)`**
 <br>
-- **Description**: Decode `N` LDPC soft symbols using the parity-check matrix selected by `type` (e.g., "B1C", "B2a", "L1C").
+- **Description**: Decode `N` binary LDPC soft symbols using the parity-check matrix selected by `type` (for example, "CNV2_SF2", "BCNV2", "IRNV1_SF2"). Input `syms` uses `uint8_t` soft values in the range 0 to 255, where 0 is a strong 0, 128 is the hard-decision boundary, and 255 is a strong 1. Output `syms_dec` contains decoded hard bits as 0 or 1, without parity bits.
 - **Return**: number of corrected errors or -1 on decode failure
 <br><br>
 
@@ -1033,14 +1036,14 @@ Belief-propagation LDPC decoder for BeiDou B1C, B2a, B2b, GPS L1C, etc.
 ---
 
 ### Overview
-Non-binary LDPC decoder (used by some new GNSS signals). The parity-check matrix is supplied by the caller.
+Non-binary LDPC decoder (used by some new GNSS signals). The parity-check matrix is supplied by the caller. The decoder interface is soft-decision input; callers that only have hard decisions should pass 0/255 symbols.
 <br>
 
 ### API Functions
 
 **`int sdr_decode_NB_LDPC(const uint8_t H_idx[][4], const uint8_t H_ele[][4], int m, int n, const uint8_t *syms, uint8_t *syms_dec)`**
 <br>
-- **Description**: Decode a non-binary LDPC codeword with parity-check matrix described by `H_idx`/`H_ele` (m × n).
+- **Description**: Decode a non-binary LDPC codeword with parity-check matrix described by `H_idx`/`H_ele` (m x n). Input `syms` contains `n * 6` binary soft symbols (`uint8_t` in the range 0 to 255, with 128 as the hard-decision boundary). Output `syms_dec` contains decoded hard bits as 0 or 1.
 - **Return**: 1 on success, 0 on failure
 <br><br>
 
@@ -1341,7 +1344,7 @@ Top-level receiver lifecycle and state queries. A receiver wraps a front-end (US
 - **Description**: Set a global library option. Recognized keys are:
   `epoch`, `lag_epoch`, `el_mask`, `sp_corr`, `t_acq`, `t_dll`, `b_dll`,
   `b_pll`, `b_fll_w`, `b_fll_n`, `max_dop`, `thres_cn0_l`,
-  `thres_cn0_u`, `bump_jump`, and `max_acq`.
+  `thres_cn0_u`, `thres_pli`, `lost_th`, `bump_jump`, and `max_acq`.
 <br><br>
 
 **`int sdr_rcv_rcv_stat(sdr_rcv_t *rcv, char *buff, int size)`**
@@ -1381,7 +1384,7 @@ Top-level receiver lifecycle and state queries. A receiver wraps a front-end (US
 
 **`int sdr_rcv_corr_stat(sdr_rcv_t *rcv, int ch, double *stat, double *pos, sdr_cpx_t *C, double *P, double *I)`**
 <br>
-- **Description**: Snapshot correlator state for channel `ch` (1-indexed). `stat`, `pos`, `C`, `P`, and `I` follow the same layout as `sdr_ch_corr_stat()`. Returns 1 on success.
+- **Description**: Snapshot correlator state for channel `ch` (1-indexed). `stat`, `pos`, `C`, `P`, and `I` follow the same layout as `sdr_ch_corr_stat()`. Returns the number of correlator positions on success, 0 for an invalid/idle channel.
 <br><br>
 
 **`int sdr_rcv_corr_hist(sdr_rcv_t *rcv, int ch, double tspan, double *stat, sdr_cpx_t *P)`**

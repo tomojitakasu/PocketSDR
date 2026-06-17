@@ -1,7 +1,7 @@
 # Pocket SDR Command Reference
 
 <div style="text-align: right;">
-<strong>ver.0.16  2026-06-01</strong>
+<strong>ver.0.17  2026-06-17</strong>
 </div>
 
 ---
@@ -364,7 +364,7 @@ The input can be a local file, a TCP stream, a Pocket SDR FE device, or a SoapyS
 - `-h height`
   - Console height (rows) for the runtime status display. [`64`]
 - `-opt file`
-  - System options file. See `app/pocket_trk/pocket_trk_default.conf` for the available keys (loop bandwidths, integration times, C/N0 thresholds, `max_acq`, array calibration / beam-forming options, etc.). [none]
+  - System options file. See `app/pocket_trk/pocket_trk_default.conf` for the available keys (loop bandwidths, integration times, C/N0 and carrier-lock thresholds, signal-loss debounce count, `max_acq`, array calibration / beam-forming options, etc.). [none]
 - `-debug file`
   - Enable RTKLIB trace output to the given file (trace level 3).
 - `-v`
