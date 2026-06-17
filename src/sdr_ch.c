@@ -31,6 +31,7 @@
 #define T_DLL      0.02     // non-coherent integration time for DLL (s)
 #define T_CN0      0.5      // averaging time for C/N0 (s)
 #define T_FPULLIN  1.0      // frequency pull-in time (s)
+#define T_FPULLIN_W 0.5     // wide-band FLL time (s) (narrow-band FLL afterwards)
 #define T_NPULLIN  1.5      // navigation data pull-in time (s)
 #define B_DLL      0.25     // band-width of DLL filter (Hz)
 #define B_PLL      5.0      // band-width of PLL filter (Hz)
@@ -40,8 +41,8 @@
 #define THRES_CN0_L 34.0    // C/N0 threshold (dB-Hz) (lock)
 #define THRES_CN0_U 30.0    // C/N0 threshold (dB-Hz) (lost)
 #define THRES_CN0_L6 33.0   // C/N0 threshold (dB-Hz) (L6D/E lost)
-#define THRES_PLI  0.35     // carrier lock detector threshold (cos 2*phi)
-#define LOST_TH    3        // lost decision count (C/N0/PLI windows of T_CN0)
+#define THRES_PLI  0.25     // carrier lock detector threshold (cos 2*phi)
+#define LOST_TH    4        // lost decision count (C/N0/PLI windows of T_CN0)
 #define THRES_SYNC 0.02     // threshold for sec-code sync
 #define THRES_LOST 0.002    // threshold for sec-code lost
 #define THRES_SEC_RATIO 0.8 // threshold for sec-code soft correlation ratio
@@ -320,7 +321,7 @@ sdr_ch_t *sdr_ch_new(const char *sig, int prn, double fs, double fi)
     ch->fi = sdr_shift_freq(sig, prn, fi);
     ch->T = sdr_code_cyc(sig);
     ch->N = (int)(fs * ch->T);
-    ch->fd = ch->coff = ch->adr = ch->cn0 = ch->pli = 0.0;
+    ch->fd = ch->coff = ch->phi = ch->adr = ch->cn0 = ch->pli = 0.0;
     ch->lock = ch->lost = ch->lost_cnt = ch->pli_valid = 0;
     ch->costas = strcmp(ch->sig, "L6D") && strcmp(ch->sig, "L6E");
     ch->obs_idx = -1;
@@ -381,7 +382,7 @@ static void start_track(sdr_ch_t *ch, double time, double fd, double coff,
     ch->lock = 0;
     ch->fd = fd;
     ch->coff = coff;
-    ch->adr = 0.0;
+    ch->phi = ch->adr = 0.0;
     ch->cn0 = cn0;
     ch->pli = 1.0;
     ch->lost_cnt = 0;
@@ -409,7 +410,7 @@ static void search_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff,
                 + (k - nw/2) * 0.5 / ch->T);
         }
         fds = fd_ext_bins;
-        n   = nw;
+        n = nw;
     }
     if (!ch->acq->P_sum || ch->acq->n_sum == 0) {
         sdr_free(ch->acq->P_sum);
@@ -494,7 +495,7 @@ static void FLL(sdr_ch_t *ch)
         double dot   = IP1 * IP2 + QP1 * QP2;
         double cross = IP1 * QP2 - QP1 * IP2;
         if (dot != 0.0) {
-            double B = ch->lock * ch->T < T_FPULLIN ? sdr_b_fll_w : sdr_b_fll_n;
+            double B = ch->lock * ch->T < T_FPULLIN_W ? sdr_b_fll_w : sdr_b_fll_n;
             double err_freq = ch->costas ? atan(cross / dot) : atan2(cross, dot);
             ch->fd -= B / 0.25 * err_freq / DPI;
         }
@@ -587,7 +588,7 @@ static int CN0(sdr_ch_t *ch)
         ch->trk->sumVL += SQR(ch->trk->C[5][0]) + SQR(ch->trk->C[5][1]);
     }
     if (ch->lock % (int)(T_CN0 / ch->T) != 0) return 0;
-
+    
     if (ch->trk->sumP > 0.0) {
         ch->pli = ch->trk->sumD / ch->trk->sumP; // cos 2*phi in [-1,1]
         ch->pli_valid = 1;
@@ -691,11 +692,12 @@ static void adj_coff(sdr_ch_t *ch)
 static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
 {
     double tau = time - ch->time;   // time interval (s) 
-    double fc = ch->fi + ch->fd;    // IF carrier frequency with Doppler (Hz) 
+    double fc = ch->fi + ch->fd;    // IF carrier frequency with Doppler (Hz)
     ch->adr += ch->fd * tau;        // accumulated Doppler (cyc)
-    ch->coff -= ch->fd / ch->fc * tau; // carrier-aided code offset (s) 
+    ch->coff -= ch->fd / ch->fc * tau; // carrier-aided code offset (s)
+    ch->phi += fc * tau;
+    ch->phi -= floor(ch->phi); // 0 <= phi < 1 (cyc)
     ch->time = time;
-    double phi = ch->fi * tau + ch->adr; // carrier phase
     
     // adjust code offset
     adj_coff(ch);
@@ -705,7 +707,7 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
         int j = (int)((ch->coff * ch->fs - i) * SDR_N_CODES);
         
         // mix carrier
-        sdr_mix_carr(buff, ix + i, ch->N, ch->fs, fc, phi + fc * i / ch->fs,
+        sdr_mix_carr(buff, ix + i, ch->N, ch->fs, fc, ch->phi + fc * i / ch->fs,
             ch->data);
         
         // FFT correlator 
@@ -720,7 +722,7 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
         sdr_cpx_t C1[2];
         
         // mix carrier
-        sdr_mix_carr(buff, ix, ch->N, ch->fs, fc, phi, ch->data);
+        sdr_mix_carr(buff, ix, ch->N, ch->fs, fc, ch->phi, ch->data);
         
         // standard correlator
         if (!strcmp(ch->sig, "E5ABQ")) {
@@ -752,7 +754,7 @@ static void track_sig(sdr_ch_t *ch, double time, const sdr_buff_t *buff, int ix)
     }
     DLL(ch);
     int cn0_upd = CN0(ch);
-
+    
     // decode navigation data
     if (ch->lock * ch->T >= T_NPULLIN) {
         sdr_nav_decode(ch);
