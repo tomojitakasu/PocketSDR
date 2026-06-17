@@ -1349,29 +1349,6 @@ static int8_t *gen_code_G3OCP(int prn, int *N)
    return G3OCP[prn];
 }
 
-// generate G1CA secondary code ------------------------------------------------
-static int8_t *sec_code_G1CA(int prn, int *N)
-{
-    static int8_t code[] = {1};
-    
-    if (prn < -7 || prn > 6) { // FCN
-        return NULL;
-    }
-    if (prn % 2 == 0) { // even FCN
-        *N = 1;
-        return code;
-    } else { // odd FCN
-        *N = 2;
-        return MC;
-    }
-}
-
-// generate G2CA secondary code ------------------------------------------------
-static int8_t *sec_code_G2CA(int prn, int *N)
-{
-    return sec_code_G1CA(prn, N);
-}
-
 // generate G1OCD secondary code [19] ------------------------------------------
 static int8_t *sec_code_G1OCD(int prn, int *N)
 {
@@ -2214,10 +2191,10 @@ static int8_t *sec_code(const char *sig, int prn, int *N)
     
     if (!strcmp(Sig, "L1CA") || !strcmp(Sig, "L1S" ) || !strcmp(Sig, "L1CB") ||
         !strcmp(Sig, "L1CD") || !strcmp(Sig, "L2CM") || !strcmp(Sig, "L2CL") ||
-        !strcmp(Sig, "L6D" ) || !strcmp(Sig, "G1OCP") || !strcmp(Sig, "L6E" ) ||
-        !strcmp(Sig, "E1B" ) || !strcmp(Sig, "E6B" ) || !strcmp(Sig, "B1CD") ||
-        !strcmp(Sig, "B2BI") || !strcmp(Sig, "I1SD") || !strcmp(Sig, "I5S" ) ||
-        !strcmp(Sig, "ISS" )) {
+        !strcmp(Sig, "L6D" ) || !strcmp(Sig, "G1CA") || !strcmp(Sig, "G2CA" ) ||
+        !strcmp(Sig, "G1OCP") || !strcmp(Sig, "L6E" ) || !strcmp(Sig, "E1B" ) ||
+        !strcmp(Sig, "E6B" ) || !strcmp(Sig, "B1CD") || !strcmp(Sig, "B2BI") ||
+        !strcmp(Sig, "I1SD") || !strcmp(Sig, "I5S" ) || !strcmp(Sig, "ISS" )) {
         *N = 1;
         return code;
     } else if (!strcmp(Sig, "L1CP")) {
@@ -2242,10 +2219,6 @@ static int8_t *sec_code(const char *sig, int prn, int *N)
         return sec_code_L5SQ(prn, N);
     } else if (!strcmp(Sig, "L5SQV")) {
         return sec_code_L5SQV(prn, N);
-    } else if (!strcmp(Sig, "G1CA")) {
-        return sec_code_G1CA(prn, N);
-    } else if (!strcmp(Sig, "G2CA")) {
-        return sec_code_G2CA(prn, N);
     } else if (!strcmp(Sig, "G1OCD")) {
         return sec_code_G1OCD(prn, N);
     } else if (!strcmp(Sig, "G2OCP")) {
