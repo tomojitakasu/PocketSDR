@@ -118,7 +118,7 @@ static int sample_byte(int fmt)
 // C/N0 bar --------------------------------------------------------------------
 static void cn0_bar(float cn0, char *buff, int max_bar)
 {
-    int n = CLIP((int)(max_bar / 20.0 * (cn0 - 30.0)) + 1, 0, max_bar);
+    int n = CLIP((int)(max_bar / 20.0 * (cn0 - 30.0)) + 1, 1, max_bar);
     for (int i = 0; i < n; i++) {
         buff[i] = '|';
     }
@@ -185,10 +185,10 @@ static int print_ch_stat(sdr_ch_t *ch, int opt, char *buff, int size)
         bar, ch->coff * 1e3, ch->fd, ch->adr, stat, ch->nav->count[0],
         ch->nav->count[1], ch->lost, ch->nav->nerr);
     if (opt) {
-        n += ap_str(buff + n, size - n, " %8.3f %8.3f %1d %5d %1d %1d %4d "
+        n += ap_str(buff + n, size - n, " %8.3f %8.3f %5.2f %1d %5d %1d %1d %4d "
             "%6.0f %1d", ch->trk->err_phas, ch->trk->err_code * CLIGHT,
-            ch->sig_srch, ch->nav->seq, ch->nav->type, ch->nav->stat, ch->week,
-            ch->tow * 1e-3, ch->tow_v);
+            ch->pli, ch->sig_srch, ch->nav->seq, ch->nav->type, ch->nav->stat,
+            ch->week, ch->tow * 1e-3, ch->tow_v);
     }
     n += ap_str(buff + n, size - n, "\n");
     return n;
