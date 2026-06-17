@@ -750,6 +750,8 @@ static double gen_prng(gtime_t time, const sdr_ch_t *ch)
         tau = tow - ch->tow * 1e-3 + ch->coff + ch->nav->coff;
         tau -= floor(tau / 0.1) * 0.1;
         if (tau < 0.05) tau += 0.1;
+    } else {
+        return 0.0;
     }
     // for debug
     trace(3, "%s %-5s %3d %4d %10.3f %10.3f %12.9f %12.9f\n", ch->sat, ch->sig,
