@@ -78,15 +78,15 @@
 #define GPST_BDT    14.0      // GPST - BDT (s)
 #define GPST_UTC    18.0      // GPST - UTC (s) (2017-1-1 ~ )
 #define TOFF_L1CA   0.160     // time offset (s) L1CA
-#define TOFF_L1CA_S 1.088     // time offset (s) L1CA SBAS
+#define TOFF_L1CA_S 1.019     // time offset (s) L1CA SBAS
 #define TOFF_L1CD  18.520     // time offset (s) L1CD
-#define TOFF_L1CP  18.000     // time offset (s) L1CP
-#define TOFF_L2CM   0.880     // time offset (s) L2CM
-#define TOFF_L5I    0.440     // time offset (s) L5I
-#define TOFF_L5Q    0.440     // time offset (s) L5Q
-#define TOFF_L5I_S  1.092     // time offset (s) L5I SBAS (BDSBAS)
+#define TOFF_L1CP  17.999     // time offset (s) L1CP
+#define TOFF_L2CM   0.879     // time offset (s) L2CM
+#define TOFF_L5I    0.439     // time offset (s) L5I
+#define TOFF_L5Q    0.439     // time offset (s) L5Q
+#define TOFF_L5I_S  1.090     // time offset (s) L5I SBAS (BDSBAS)
 #define TOFF_L5SI   1.088     // time offset (s) L5SI
-#define TOFF_L6DE   1.0165    // time offset (s) L6D/E
+#define TOFF_L6DE   1.0155    // time offset (s) L6D/E
 #define TOFF_G1CA   2.000     // time offset (s) G1CA
 #define TOFF_G1OCD  2.208     // time offset (s) G1OCD
 #define TOFF_G3OCD  0.340     // time offset (s) G3OCD
@@ -102,10 +102,10 @@
 #define TOFF_B1I_D1 6.220     // time offset (s) B1I D1
 #define TOFF_B1I_D2 0.622     // time offset (s) B1I D2
 #define TOFF_B1CD  18.720     // time offset (s) B1CD
-#define TOFF_B1CP  14.000     // time offset (s) B1CP
-#define TOFF_B2AD   3.120     // time offset (s) B2AD
-#define TOFF_B2AP   0.900     // time offset (s) B2AP
-#define TOFF_B2BI   1.016     // time offset (s) B2BI
+#define TOFF_B1CP  13.999     // time offset (s) B1CP
+#define TOFF_B2AD   3.119     // time offset (s) B2AD
+#define TOFF_B2AP   0.899     // time offset (s) B2AP
+#define TOFF_B2BI   1.015     // time offset (s) B2BI
 #define TOFF_I1SD  18.511     // time offset (s) I1SD
 #define TOFF_I5S    0.320     // time offset (s) I5S
 
@@ -997,7 +997,7 @@ static void decode_L6_frame(sdr_ch_t *ch, const uint8_t *syms, int N)
         ch->nav->ssync = ch->nav->fsync = ch->lock;
         ch->tow = (int)(TOFF_L6DE / 1e-3);
         ch->tow_v = 2;
-        ch->nav->coff = off * ch->T / 10230;
+        ch->nav->coff = (off - 1) * ch->T / 10230;
         ch->nav->type = getbitu(data, 40, 5); // L6 vender + facility ID
         memcpy(ch->nav->data, data, 250); // L6 frame (2000 bits)
         ch->nav->stat = 1;
