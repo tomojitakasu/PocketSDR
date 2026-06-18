@@ -164,7 +164,7 @@ static void out_log_obs(double time, const obs_t *obs, const nav_t *nav)
             fcn = nav->geph[prn-1].frq;
         }
         for (int j = 0; j < NFREQ + NEXOBS; j++) {
-            if (!data->code[j]) continue;
+            if (!data->code[j] || data->P[j] == 0.0) continue;
             sdr_log(3, "$OBS,%.3f,%.0f,%.0f,%.0f,%.0f,%.0f,%.3f,%s,%s,%.1f,"
                 "%.3f,%.3f,%.3f,%d,%d,%d", time, ep[0], ep[1], ep[2], ep[3],
                 ep[4], ep[5], sat, code2obs(data->code[j]),
@@ -607,11 +607,11 @@ static void load_navdata(const char *file, nav_t *nav, sdr_pvt_t *pvt)
     FILE *fp;
     char buff[4096], id[16];
     int sat, svh, week, frq;
-
+    
     readnav(file, nav); // eph/geph/IONUTC
-
+    
     if (!(fp = fopen(file, "r"))) return;
-
+    
     while (fgets(buff, sizeof(buff), fp)) {
         if (!strncmp(buff, "ALM,", 4)) {
             if (sscanf(buff + 4, "%15[^,]", id) < 1) continue;
@@ -1096,7 +1096,7 @@ static void update_sol(sdr_pvt_t *pvt)
         pvt->last_dtr   = pvt->sol->dtr[0];
         pvt->last_dtrd  = pvt->sol->dtr[5];   // clock drift rate (s/s)
         pvt->last_valid = 1;
-
+        
         // output log $POS and NMEA RMC, GGA, GSA and GSV
         out_log_pos(time, pvt->sol, pvt->obs->n);
         out_nmea(pvt->sol, pvt->ssat, pvt->rcv->strs[0]);
