@@ -59,21 +59,32 @@ installation notes, and device-specific caveats.
   <b>GUI-based Real-Time GNSS SDR Receiver AP</b>
 </p>
 
-The introduction to Pocket SDR is available in the following slides:
+--------------------------------------------------------------------------------
+<div class="pagebreak"></div>
 
-T.Takasu, An Open Source GNSS SDR: Development and Application, IPNTJ Next GNSS
+## **Documents**
+
+- Pocket SDR C Library API Reference
+(https://github.com/tomojitakasu/PocketSDR/doc/api_ref.md)
+
+- Pocket SDR Command Reference
+(https://github.com/tomojitakasu/PocketSDR/doc/command_ref.pdf)
+
+- Pocket SDR GNSS SDR Algorithm Description
+(https://github.com/tomojitakasu/PocketSDR/doc/algo_desc.pdf)
+
+- Pocket SDR GNSS SDR アルゴリズム解説
+(https://github.com/tomojitakasu/PocketSDR/doc/algo_desc_jp.pdf)
+
+- T.Takasu, An Open Source GNSS SDR: Development and Application, IPNTJ Next GNSS
 Technology WG, February 21, 2022
 (https://gpspp.sakura.ne.jp/paper2005/IPNTJ_NEXTWG_202202.pdf)
 
-For an application of Pocket SDR, refer to the following slides:
-
-T.Takasu, Development of QZSS L6 Receiver without Pilot Signal by using SDR,
+- T.Takasu, Development of QZSS L6 Receiver without Pilot Signal by using SDR,
 IPNTJ Annual Conference, June 10, 2022
 (https://gpspp.sakura.ne.jp/paper2005/IPNTJ_20220610.pdf)
 
-For design and implementation details, refer to the following slides:
-
-T.Takasu, Pocket SDR: Design, Implementation and Applications, A seminar for
+- T.Takasu, Pocket SDR: Design, Implementation and Applications, A seminar for
 GNSS Software Defined Receivers, Nov 19, 2024
 (https://gpspp.sakura.ne.jp/paper2005/pocketsdr_seminar_202411_revA.pdf)
 
@@ -120,7 +131,6 @@ PocketSDR
     └── utest        # makefile for unit tests
 
 ```
-
 --------------------------------------------------------------------------------
 <div class="pagebreak"></div>
 
