@@ -65,16 +65,16 @@ installation notes, and device-specific caveats.
 ## **Documents**
 
 - Pocket SDR C Library API Reference
-(https://github.com/tomojitakasu/PocketSDR/doc/api_ref.md)
+(https://github.com/tomojitakasu/PocketSDR/tree/master/doc/algo_desc_jp.pdf)
 
 - Pocket SDR Command Reference
-(https://github.com/tomojitakasu/PocketSDR/doc/command_ref.pdf)
+(https://github.com/tomojitakasu/PocketSDR/tree/master/doc/command_ref.pdf)
 
 - Pocket SDR GNSS SDR Algorithm Description
-(https://github.com/tomojitakasu/PocketSDR/doc/algo_desc.pdf)
+(https://github.com/tomojitakasu/PocketSDR/tree/master/doc/algo_desc.pdf)
 
 - Pocket SDR GNSS SDR アルゴリズム解説
-(https://github.com/tomojitakasu/PocketSDR/doc/algo_desc_jp.pdf)
+(https://github.com/tomojitakasu/PocketSDR/tree/master/doc/algo_desc_jp.pdf)
 
 - T.Takasu, An Open Source GNSS SDR: Development and Application, IPNTJ Next GNSS
 Technology WG, February 21, 2022
