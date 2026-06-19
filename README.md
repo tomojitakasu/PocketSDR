@@ -65,7 +65,7 @@ installation notes, and device-specific caveats.
 ## **Documents**
 
 - Pocket SDR C Library API Reference
-(https://github.com/tomojitakasu/PocketSDR/tree/master/doc/algo_desc_jp.pdf)
+(https://github.com/tomojitakasu/PocketSDR/tree/master/doc/api_ref.pdf)
 
 - Pocket SDR Command Reference
 (https://github.com/tomojitakasu/PocketSDR/tree/master/doc/command_ref.pdf)
