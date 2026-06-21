@@ -22,6 +22,9 @@ DLG_MARGIN = (20, 15)  # dialog margin
 BAND_LINK = 'file://' + os.path.dirname(__file__) + '/../doc/signal_bands.pdf'
 SIG_LINK = 'file://' + os.path.dirname(__file__) + '/../doc/signal_IDs.pdf'
 FONT = ('Tahoma', 9, 'normal')
+F_LO = ('1176.450', '1191.795', '1202.025', '1207.140', '1227.600', '1246.000',
+    '1248.060', '1268.520', '1278.750', '1561.098', '1575.420', '1602.000',
+    '1600.995', '2492.028')
 
 # general object class ---------------------------------------------------------
 class Obj: pass
@@ -514,7 +517,7 @@ def ch_opt_panel_new(parent, opt):
         justify=LEFT)
     panel1 = Frame(panel, bg=BG_COLOR)
     panel1.pack(fill=X, pady=(4, 0))
-    label = 'RF       LO_MHz*  I/IQ*  Bits* LPF_MHz'
+    label = 'RF_CH  LO_MHz*  I/IQ*  Bits* LPF_MHz'
     ttk.Label(panel1, text=label).pack(side=LEFT, padx=(4, 0))
     ttk.Label(panel1, text=label).pack(side=RIGHT, padx=(0, 2))
     panel2 = Frame(panel, bg=BG_COLOR)
@@ -531,15 +534,15 @@ def ch_opt_panel_new(parent, opt):
 # generate RF channel options panel --------------------------------------------
 def rfch_opt_panel_new(parent, ch, opt):
     panel = Frame(parent, bg=BG_COLOR)
-    ttk.Label(panel, text='CH%d' % (ch + 1)).pack(side=LEFT, padx=(0, 2))
-    ttk.Entry(panel, width=3, justify=RIGHT, textvariable=opt.lpf_bw[ch],
+    ttk.Label(panel, text=' %d' % (ch + 1)).pack(side=LEFT, padx=(0, 2))
+    ttk.Entry(panel, width=4, justify=RIGHT, textvariable=opt.lpf_bw[ch],
         font=FONT).pack(side=RIGHT, padx=1)
     ttk.Combobox(panel, width=2, justify=CENTER, values=opt.bitss,
         textvariable=opt.bits[ch], font=FONT).pack(side=RIGHT, padx=1)
     ttk.Combobox(panel, width=3, justify=CENTER, values=opt.IQs,
         textvariable=opt.IQ[ch], font=FONT).pack(side=RIGHT, padx=1)
-    ttk.Entry(panel, width=9, justify=RIGHT, textvariable=opt.fo[ch],
-        font=FONT).pack(side=RIGHT, padx=1)
+    ttk.Combobox(panel, width=8, justify=RIGHT, values=F_LO, height=len(F_LO),
+        textvariable=opt.fo[ch], font=FONT).pack(side=RIGHT, padx=1)
     panel.pack(fill=X, padx=(4, 2))
     return panel
 
