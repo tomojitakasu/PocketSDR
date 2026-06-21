@@ -825,7 +825,7 @@ def update_rcv_stat(p):
         'IF Data Rate (MB/s)', 'IF Data Buffer Usage (%)', 'Time (GPST)',
         'Solution Status', 'Latitude (\xb0)', 'Longitude (\xb0)',
         'Altitude (m)', 'Roll/Pitch/Yaw (\xb0)', '# Sats Used/All',
-        'Solution Latency (s)', 'Output', '# PVT/# OBS/NAV Data',
+        'Solution Latency (s)', 'Output', '# PVT/OBS/NAV Data',
         'IF Data Log (MB)')
     stat = get_rcv_stat(rcv_body).split()
     sol = get_rcv_pvt_sol(rcv_body).split()
