@@ -844,7 +844,7 @@ static void write_buff(sdr_rcv_t *rcv, const uint8_t *raw, int64_t ix)
     sdr_cpx8_t *LUTC[8];
     for (int j = 0; j < 8; j++) LUTC[j] = (sdr_cpx8_t *)rcv->rfch[j].LUT;
     int ph0 = (int)((ix * rcv->N) & 3);
-    int nch_lpf = 0;
+    int nch_lpf = 1;
     
     if (rcv->fmt == SDR_FMT_INT8) { // int8
         if (rtoc_of(rcv, 0)) {
