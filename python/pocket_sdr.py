@@ -2027,7 +2027,7 @@ def on_log_filt_change(e, p):
 
 # update Log page --------------------------------------------------------------
 def update_log_page(p):
-    if p.btn1['text'] != 'Resume':
+    if rcv_body and p.btn1['text'] != 'Resume':
         show_log_page(p)
 
 # show Log page ----------------------------------------------------------------
@@ -2051,7 +2051,7 @@ def on_btn_start_push(bar):
         ant_pos, ena = array_read_opt()
         array_ant_pos(rcv_body, ant_pos, ena)
         array_calib_load_file(rcv_body)
-
+        
         status_bar_show('Receiver started. ' + info)
         for i, btn in enumerate(bar.panel.winfo_children()):
             btn.configure(state=NORMAL if i in (1, 7) else DISABLED)
@@ -2219,7 +2219,7 @@ def set_styles():
 def main():
     global sdr_opt, inp_opt, out_opt, sig_opt, sys_opt, array_opt
     global root, stat_bar
-
+    
     # generate root window
     root = Tk()
     root.geometry('%dx%d' % (WIDTH, HEIGHT))
