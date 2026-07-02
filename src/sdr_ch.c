@@ -667,7 +667,7 @@ static void CSK(sdr_ch_t *ch, const sdr_cpx_t *corr)
 static void update_tow(sdr_ch_t *ch, double sec)
 {
     if (ch->tow < 0) return;
-    ch->tow = (ch->tow + (int)(sec / 1e-3)) % (86400 * 7 * 1000);
+    ch->tow = (ch->tow + (int)floor(sec / 1e-3 + 0.5)) % (86400 * 7 * 1000);
 }
 
 // adjust code offset (0 <= ch->coff < ch->T) ----------------------------------

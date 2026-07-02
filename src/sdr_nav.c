@@ -78,13 +78,13 @@
 #define GPST_BDT    14.0      // GPST - BDT (s)
 #define GPST_UTC    18.0      // GPST - UTC (s) (2017-1-1 ~ )
 #define TOFF_L1CA   0.160     // time offset (s) L1CA
-#define TOFF_L1CA_S 1.019     // time offset (s) L1CA SBAS
+#define TOFF_L1CA_S 1.020     // time offset (s) L1CA SBAS
 #define TOFF_L1CD  18.520     // time offset (s) L1CD
-#define TOFF_L1CP  17.999     // time offset (s) L1CP
-#define TOFF_L2CM   0.879     // time offset (s) L2CM
-#define TOFF_L5I    0.439     // time offset (s) L5I
-#define TOFF_L5Q    0.439     // time offset (s) L5Q
-#define TOFF_L5I_S  1.090     // time offset (s) L5I SBAS (BDSBAS)
+#define TOFF_L1CP  18.000     // time offset (s) L1CP
+#define TOFF_L2CM   0.880     // time offset (s) L2CM
+#define TOFF_L5I    0.440     // time offset (s) L5I
+#define TOFF_L5Q    0.440     // time offset (s) L5Q
+#define TOFF_L5I_S  1.092     // time offset (s) L5I SBAS (BDSBAS)
 #define TOFF_L5SI   1.088     // time offset (s) L5SI
 #define TOFF_L6DE   1.0155    // time offset (s) L6D/E
 #define TOFF_G1CA   2.000     // time offset (s) G1CA
@@ -102,12 +102,14 @@
 #define TOFF_B1I_D1 6.220     // time offset (s) B1I D1
 #define TOFF_B1I_D2 0.622     // time offset (s) B1I D2
 #define TOFF_B1CD  18.720     // time offset (s) B1CD
-#define TOFF_B1CP  13.999     // time offset (s) B1CP
-#define TOFF_B2AD   3.119     // time offset (s) B2AD
-#define TOFF_B2AP   0.899     // time offset (s) B2AP
-#define TOFF_B2BI   1.015     // time offset (s) B2BI
+#define TOFF_B1CP  14.000     // time offset (s) B1CP
+#define TOFF_B2AD   3.120     // time offset (s) B2AD
+#define TOFF_B2AP   0.900     // time offset (s) B2AP
+#define TOFF_B2BI   1.016     // time offset (s) B2BI
 #define TOFF_I1SD  18.511     // time offset (s) I1SD
 #define TOFF_I5S    0.320     // time offset (s) I5S
+
+#define TOW_MS(t)  ((int)floor((t) / 1e-3 + 0.5)) // sec -> msec wo/ FP error
 
 // function prototypes in sdr_code.c -------------------------------------------
 int32_t rev_reg(int32_t R, int N);
@@ -361,13 +363,15 @@ static void hex_str(const uint8_t *data, int nbits, char *str, int size)
 // update tow ------------------------------------------------------------------
 static void update_tow(sdr_ch_t *ch, double tow)
 {
+    int tow_ms = TOW_MS(tow);
+
     if (ch->tow <= 0) {
-        ch->tow = (int)(tow / 1e-3);
-    } else if (ch->tow == (int)(tow / 1e-3)) {
+        ch->tow = tow_ms;
+    } else if (ch->tow == tow_ms) {
         ch->tow_v = 1; // tow valid
     } else { // TOW mismatch
-        trace(2, "tow mismatch: sat=%s sig=%s tow=%.3f -> %.3f\n", ch->sat,
-            ch->sig, ch->tow * 1e-3, tow);
+        sdr_log(3, "$LOG,%.3f,%s,%s,%d,TOW MISMATCH %.3f -> %.3f", ch->time,
+            ch->sat, ch->sig, ch->prn, ch->tow * 1e-3, tow);
         ch->tow = -1;
         ch->tow_v = 0; // tow invalid
     }
@@ -505,9 +509,18 @@ static void decode_SBAS_msgs(sdr_ch_t *ch, const uint8_t *bits, int rev)
         buff[i] = bits[i] ^ (uint8_t)rev;
     }
     if (test_CRC(buff, 250)) {
+        int tow_ms = TOW_MS(toff);
+        if (ch->tow > 0 && ((ch->tow - tow_ms) % 1000 + 1000) % 1000 != 0) {
+            // reject re-latch shifted by symbol slip (1 s message period)
+            sdr_log(3, "$LOG,%.3f,%s,%s,%d,TOW MISMATCH %.3f -> %.3f", ch->time,
+                ch->sat, ch->sig, ch->prn, ch->tow * 1e-3, toff);
+            unsync_nav(ch);
+            ch->nav->count[1]++;
+            return;
+        }
         ch->nav->fsync = ch->lock;
         ch->nav->rev = rev;
-        ch->tow = (int)(toff / 1e-3);
+        ch->tow = tow_ms;
         ch->tow_v = 2;
         int off = !strcmp(ch->sig, "L1CA") || !strcmp(ch->sig, "L1S") ? 8 : 6;
         sdr_pack_bits(buff, 250, 0, ch->nav->data); // SBAS message (250 bits)
@@ -764,7 +777,7 @@ static void decode_L1CP(sdr_ch_t *ch)
         ch->tow = -1;
         ch->tow_v = 0;
     } else if ((ch->lock - ch->trk->sec_sync) % ch->len_sec_code == 0) {
-        ch->tow = (int)(TOFF_L1CP / 1e-3);
+        ch->tow = TOW_MS(TOFF_L1CP);
         ch->tow_v = 2; // amb-unresolved
     }
 }
@@ -933,7 +946,7 @@ static void decode_L5Q(sdr_ch_t *ch)
         ch->tow = -1;
         ch->tow_v = 0;
     } else if ((ch->lock - ch->trk->sec_sync) % ch->len_sec_code == 0) {
-        ch->tow = (int)(TOFF_L5Q / 1e-3);
+        ch->tow = TOW_MS(TOFF_L5Q);
         ch->tow_v = 2;
     }
 }
@@ -995,7 +1008,7 @@ static void decode_L6_frame(sdr_ch_t *ch, const uint8_t *syms, int N)
     
     if (ch->nav->nerr >= 0) {
         ch->nav->ssync = ch->nav->fsync = ch->lock;
-        ch->tow = (int)(TOFF_L6DE / 1e-3);
+        ch->tow = TOW_MS(TOFF_L6DE);
         ch->tow_v = 2;
         ch->nav->coff = (off - 1) * ch->T / 10230;
         ch->nav->type = getbitu(data, 40, 5); // L6 vender + facility ID
@@ -1258,7 +1271,7 @@ static void decode_G3OCP(sdr_ch_t *ch)
         ch->tow = -1;
         ch->tow_v = 0;
     } else if ((ch->lock - ch->trk->sec_sync) % ch->len_sec_code == 0) {
-        ch->tow = (int)(TOFF_G3OCP / 1e-3);
+        ch->tow = TOW_MS(TOFF_G3OCP);
         ch->tow_v = 2;
     }
 }
@@ -1362,7 +1375,7 @@ static void decode_E1C(sdr_ch_t *ch)
         ch->tow = -1;
         ch->tow_v = 0;
     } else if ((ch->lock - ch->trk->sec_sync) % ch->len_sec_code == 0) {
-        ch->tow = (int)(TOFF_E1C / 1e-3);
+        ch->tow = TOW_MS(TOFF_E1C);
         ch->tow_v = 2;
     }
 }
@@ -1443,7 +1456,7 @@ static void decode_E5AQ(sdr_ch_t *ch)
         ch->tow = -1;
         ch->tow_v = 0;
     } else if ((ch->lock - ch->trk->sec_sync) % ch->len_sec_code == 0) {
-        ch->tow = (int)(TOFF_E5AQ / 1e-3);
+        ch->tow = TOW_MS(TOFF_E5AQ);
         ch->tow_v = 2;
     }
 }
@@ -1483,7 +1496,7 @@ static void decode_E5BQ(sdr_ch_t *ch)
         ch->tow = -1;
         ch->tow_v = 0;
     } else if ((ch->lock - ch->trk->sec_sync) % ch->len_sec_code == 0) {
-        ch->tow = (int)(TOFF_E5BQ / 1e-3);
+        ch->tow = TOW_MS(TOFF_E5BQ);
         ch->tow_v = 2;
     }
 }
@@ -1504,7 +1517,7 @@ static void decode_gal_CNAV(sdr_ch_t *ch, const uint8_t *syms, int rev)
         ch->nav->ssync = ch->nav->fsync = ch->lock;
         ch->nav->rev = rev;
         sdr_pack_bits(bits, 486, 0, data);
-        ch->tow = (int)(TOFF_E6B / 1e-3);
+        ch->tow = TOW_MS(TOFF_E6B);
         ch->tow_v = 2;
         ch->nav->type = getbitu(data, 20, 5); // C/NAV HAS message ID
         memcpy(ch->nav->data, data, 61); // C/NAV frame (486 bits)
@@ -1555,7 +1568,7 @@ static void decode_E6C(sdr_ch_t *ch)
         ch->tow = -1;
         ch->tow_v = 0;
     } else if ((ch->lock - ch->trk->sec_sync) % ch->len_sec_code == 0) {
-        ch->tow = (int)(TOFF_E6C / 1e-3);
+        ch->tow = TOW_MS(TOFF_E6C);
         ch->tow_v = 2;
     }
 }
@@ -1816,7 +1829,7 @@ static void decode_B1CP(sdr_ch_t *ch)
         ch->tow = -1;
         ch->tow_v = 0;
     } else if ((ch->lock - ch->trk->sec_sync) % ch->len_sec_code == 0) {
-        ch->tow = (int)(TOFF_B1CP / 1e-3);
+        ch->tow = TOW_MS(TOFF_B1CP);
         ch->tow_v = 2;
     }
 }
@@ -1899,7 +1912,7 @@ static void decode_B2AP(sdr_ch_t *ch)
         ch->tow = -1;
         ch->tow_v = 0;
     } else if ((ch->lock - ch->trk->sec_sync) % ch->len_sec_code == 0) {
-        ch->tow = (int)(TOFF_B2AP / 1e-3);
+        ch->tow = TOW_MS(TOFF_B2AP);
         ch->tow_v = 2;
     }
 }
