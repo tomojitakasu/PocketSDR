@@ -144,14 +144,21 @@ export class SolPage {
                 if (i < 3) {
                     p.hline(0, P3);
                     const v = enu.map(e => e[i]);
+                    p.line(t, v, GR);
                     p.dots(t, v, 1.5, P1);
-                    if (n > 0) p.point(t[n-1], v[n-1], 7, P1);
                 }
                 else {
                     p.line(t, this.log.map(s => s.nsat), P2);
                     p.line(t, this.log.map(s => s.ns), P1);
                 }
                 p.end();
+                if (n > 0) { // current value marks over the frame
+                    if (i < 3) this.curMark(p, t[n-1], enu[n-1][i], P1);
+                    else {
+                        this.curMark(p, t[n-1], this.log[n-1].nsat, P2);
+                        this.curMark(p, t[n-1], this.log[n-1].ns, P1);
+                    }
+                }
                 p.textPx(p.ax[0] + 6, p.ax[1] + 10, this.titles[i], FG,
                     'left');
             }
@@ -172,12 +179,16 @@ export class SolPage {
             const e = enu.map(v => v[0]), nn = enu.map(v => v[1]);
             p.line(e, nn, GR);
             p.dots(e, nn, 1.5, P1);
-            if (n > 0) {
+            p.end();
+            if (n > 0) { // current value mark over the frame
                 p.point(e[n-1], nn[n-1], 9, BG);
                 p.point(e[n-1], nn[n-1], 7, P1);
             }
-            p.end();
         }
+    }
+    // current value mark, kept within the y range ----------------------------
+    curMark(p, x, y, color) {
+        p.point(x, Math.min(Math.max(y, p.ylim[0]), p.ylim[1]), 7, color);
     }
     redraw() { // on resize
         this.render();

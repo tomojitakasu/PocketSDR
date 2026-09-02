@@ -39,7 +39,7 @@ body {
     background: var(--bg2);
 }
 button {
-    --font: 11px "Noto Sans", sans-serif;
+    font-size: 11px;
     font-weight: bold;
     color: var(--act);
     border: var(--bd);
@@ -61,7 +61,7 @@ button:disabled {
 
 /* title bar -----------------------------------------------------------------*/
 #titlebar {
-    --font: 11px "Noto Sans", sans-serif;
+    font-size: 11px;
     font-weight: bold;
     display: flex;
     align-items: center;
@@ -113,16 +113,24 @@ button:disabled {
 #tabbar {
     display: flex;
     background: var(--bg1);
-    border-top: solid 1px var(--bg1);
-    border-bottom: var(--bd);
+    border-top: solid 3px var(--bg1);
+    /*border-bottom: var(--bd);*/
+    overflow-x: auto; /* the tabs that do not fit follow the selected page */
+    scrollbar-width: none;
+}
+#tabbar::-webkit-scrollbar {
+    display: none;
 }
 #tabbar .tab {
     color: var(--dis);
     background: var(--bg1);
+    font-size: 11px;
     font-weight: bold;
-    padding: 7px 6px;
+    padding: 6px 4px;
     cursor: pointer;
     user-select: none;
+    white-space: nowrap; /* narrow screens scroll the bar instead of wrapping */
+    flex: none;
 }
 #tabbar .tab.active {
     color: var(--act);
@@ -130,7 +138,6 @@ button:disabled {
     border-top: var(--bd);
     border-left: var(--bd);
     border-right: var(--bd);
-    border-bottom: none;
 }
 
 /* status bar ----------------------------------------------------------------*/
@@ -144,9 +151,23 @@ button:disabled {
     white-space: nowrap;
     overflow: hidden;
 }
+#msg1 { /* a long message is cut instead of pushing the CPU/time out */
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 #msg2 {
     min-width: 120px;
     text-align: right;
+}
+@media (max-width: 620px) { /* the CPU/time on its own line above the message */
+    #statusbar {
+        flex-direction: column-reverse;
+    }
+    #msg2 {
+        min-width: 0;
+        text-align: left;
+    }
 }
 
 /* toolbar ---------------------------------------------------------------------*/
@@ -164,6 +185,7 @@ button:disabled {
     flex: 1;
 }
 .toolbar .ttl {
+    color: var(--act);
     font-size: 11px;
     font-weight: bold;
 }
@@ -191,6 +213,7 @@ button:disabled {
     min-height: 0px;
     background: var(--bg1);
     position: relative;
+    overflow: hidden;
 }
 .page {
     display: none;
@@ -199,6 +222,18 @@ button:disabled {
 }
 .page.active {
     display: flex;
+}
+.page.slide-l { /* slide-in feedback of a page switched by a swipe */
+    animation: page-slide-l 0.15s ease-out;
+}
+.page.slide-r {
+    animation: page-slide-r 0.15s ease-out;
+}
+@keyframes page-slide-l {
+    from { transform: translateX(25%); }
+}
+@keyframes page-slide-r {
+    from { transform: translateX(-25%); }
 }
 
 /* Shared page elements ------------------------------------------------------*/
@@ -237,8 +272,8 @@ button:disabled {
 .ok-txt {
     color: #006600;
 }
-/* compact buttons inside a page body (Array, System Options) */
-.ar-beam button, table.optbl button {
+/* compact buttons inside a page body (Array) */
+.ar-beam button {
     font: var(--font);
     background: var(--bg2);
     border: var(--bd);
@@ -322,7 +357,7 @@ button:disabled {
         padding: 6px 8px;
     }
 }
-@media (max-width: 340px) { /* too narrow for two columns */
+@media (max-width: 300px) { /* too narrow for two columns */
     .rcv-grid {
         grid-template-columns: 1fr;
     }
@@ -616,6 +651,10 @@ table.cfg-tbl th {
     border-bottom: var(--bd);
     margin: 4px 4px;
 }
+.cfg-body input.in-fo { /* room for the drop-down list mark */
+    text-align: right;
+    width: 78px;
+}
 .cfg-body input.in-lpf { /* narrower than the other RF CH fields */
     text-align: right;
     width: 46px;
@@ -681,12 +720,9 @@ table.optbl td.lbl { /* fixed so the value columns of the frames line up */
     color: #333;
     width: 210px;
 }
-table.optbl td.note {
-    color: var(--p2);
-}
 table.optbl input {
     font: var(--font);
-    width: 60px;
+    width: 78px; /* room for the drop-down list mark */
     text-align: right;
     border: var(--bd);
     padding: 2px 2px;

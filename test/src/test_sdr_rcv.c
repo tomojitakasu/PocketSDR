@@ -16,6 +16,7 @@ extern double sdr_t_coh;
 extern double sdr_thres_cn0_ext;
 extern double sdr_max_acq;
 extern int sdr_bump_jump;
+extern int sdr_fast_acq;
 
 static const int EMPTY_TYPES[SDR_MAX_STR] = {0};
 static const char *EMPTY_PATHS[SDR_MAX_STR] = {"", "", "", "", "", "", "", ""};
@@ -290,8 +291,23 @@ static void test_sdr_rcv_setopt_api(void)
     double t_acq0 = sdr_t_acq, t_acq_ext0 = sdr_t_acq_ext;
     double t_coh0 = sdr_t_coh, thres_cn0_ext0 = sdr_thres_cn0_ext;
     double max_acq0 = sdr_max_acq;
-    int bump_jump0 = sdr_bump_jump;
-    
+    int bump_jump0 = sdr_bump_jump, fast_acq0 = sdr_fast_acq;
+    sdr_rcv_t *rcv;
+
+    sdr_rcv_setopt("fast_acq", 1.0);
+    TEST_ASSERT_EQ_INT(1, sdr_fast_acq);
+    rcv = new_rcv_empty(SDR_FMT_INT8, 4e6, "");
+    TEST_ASSERT_EQ_INT(1, rcv->fast_acq);
+    sdr_rcv_free(rcv);
+
+    sdr_rcv_setopt("fast_acq", 0.0);
+    rcv = new_rcv_empty(SDR_FMT_INT8, 4e6, "-FAST_SRCH");
+    TEST_ASSERT_EQ_INT(1, rcv->fast_acq);
+    sdr_rcv_free(rcv);
+    rcv = new_rcv_empty(SDR_FMT_INT8, 4e6, "");
+    TEST_ASSERT_EQ_INT(0, rcv->fast_acq);
+    sdr_rcv_free(rcv);
+
     sdr_rcv_setopt("epoch", 0.2);
     sdr_rcv_setopt("t_acq", 0.04);
     sdr_rcv_setopt("t_acq_ext", 0.12);
@@ -315,6 +331,7 @@ static void test_sdr_rcv_setopt_api(void)
     sdr_rcv_setopt("thres_cn0_ext", thres_cn0_ext0);
     sdr_rcv_setopt("max_acq", max_acq0);
     sdr_rcv_setopt("bump_jump", bump_jump0);
+    sdr_rcv_setopt("fast_acq", fast_acq0);
 }
 
 // test receiver status APIs ---------------------------------------------------

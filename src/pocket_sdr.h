@@ -222,6 +222,7 @@ typedef struct {                // SDR receiver navigation data type
     uint8_t syms[SDR_MAX_NSYM]; // nav symbols buffer
     uint8_t data[SDR_MAX_DATA]; // navigation data buffer
     int lock_sf[16];            // lock time of subframes
+    int week_p, week_n;         // previous decoded week and its repeat count
     int count[2];               // navigation data count (OK, error)
 } sdr_nav_t;
 
@@ -300,6 +301,7 @@ typedef struct {                // SDR PVT type
     ssat_t *ssat;               // satellite status
     rtcm_t *rtcm;               // RTCM control
     double latency;             // solution latency (s)
+    int week_c, ch_c;           // candidate week and its channel for the epoch
     int count[3];               // solution, OBS and NAV count
     struct sdr_rcv_tag *rcv;    // pointer to SDR receiver
     sdr_mutex_t mtx;            // lock flag
@@ -339,6 +341,7 @@ typedef struct {                // SDR antenna array type
 
 #define SDR_WEB_MAX_SIG 64      // max signal entries in Web UI configuration
 #define SDR_WEB_N_LOG  10       // number of receiver log types
+#define SDR_WEB_N_SYS   7       // number of satellite systems in Web UI
 
 typedef struct {                // Web UI receiver configuration type
     int inp;                    // input source (0:USB device,1:file,2:SoapySDR)
@@ -360,10 +363,14 @@ typedef struct {                // Web UI receiver configuration type
     int nsig;                   // number of signal entries
     char sig[SDR_WEB_MAX_SIG][16]; // signal IDs
     char prn[SDR_WEB_MAX_SIG][256]; // PRN number lists
+    char satno[SDR_WEB_N_SYS][64]; // satellite number lists by system
+                                // (GPS,GLONASS,Galileo,QZSS,BeiDou,NavIC,SBAS)
     int str_type[SDR_MAX_STR];  // output stream types (SDR_STR_???)
     char str_path[SDR_MAX_STR][1024]; // output stream paths
     int log_mask[SDR_WEB_N_LOG]; // receiver log type mask (TIME,POS,...,LOG)
     char rfch[1024];            // RF CH assignments (<sig>:<ch>[,...] ...)
+    char sat_asgn[1024];        // satellite No assignments
+                                // ([<sys>:]<sig>:<prn>[,...] ...)
     char opt[1024];             // receiver options
     char fftw[1024];            // FFTW wisdom file path
     int nant;                   // number of array antenna elements
@@ -439,7 +446,7 @@ int sdr_dev_set_filt(sdr_dev_t *dev, int ch, double bw, double freq, int order);
 // sdr_sdev.c
 int sdr_sdev_list(void);
 sdr_sdev_t *sdr_sdev_open(const char *driver, int fmt, double rate, double freq,
-    double bw, double gain);
+    const char *opt);
 void sdr_sdev_close(sdr_sdev_t *sdev);
 int sdr_sdev_start(sdr_sdev_t *sdev);
 int sdr_sdev_stop(sdr_sdev_t *sdev);

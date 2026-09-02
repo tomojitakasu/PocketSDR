@@ -332,7 +332,17 @@ int main(int argc, char **argv)
             fprintf(stderr, "option error: -fo is required for SoapySDR\n");
             return -1;
         }
-        if (!(sdev = sdr_sdev_open(driver, fmt, fs, fo[0], bw * 1e6, gain))) {
+        char sdev_opt[64] = "";
+        size_t len;
+        if (bw > 0.0) {
+            len = strlen(sdev_opt);
+            snprintf(sdev_opt + len, sizeof(sdev_opt) - len, " -BW=%g", bw);
+        }
+        if (gain > 0.0) {
+            len = strlen(sdev_opt);
+            snprintf(sdev_opt + len, sizeof(sdev_opt) - len, " -GAIN=%g", gain);
+        }
+        if (!(sdev = sdr_sdev_open(driver, fmt, fs, fo[0], sdev_opt))) {
             return -1;
         }
         nch = nfile = 1;

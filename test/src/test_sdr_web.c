@@ -372,7 +372,8 @@ static void test_sdr_web_config(void)
         "\"lpf\":\"8.0\",\"toff\":0.5,\"tscale\":2.0,\"conf\":\"dev.conf\","
         "\"conf_ena\":1,\"dev_opt\":\"-GAIN=30.0\"}");
     ws_recv_type(sock, "ack", buff, sizeof(buff));
-    ws_send(sock, "{\"cmd\":\"set_sig\",\"sigs\":\"L1CA:1-8\",\"rfch\":\"\"}");
+    ws_send(sock, "{\"cmd\":\"set_sig\",\"sigs\":\"L1CA:1-8\",\"rfch\":\"\","
+        "\"satno\":\"1-8|1-5/1-10|1-36|1-9|1-63|1-14|120-158\"}");
     ws_recv_type(sock, "ack", buff, sizeof(buff));
     ws_send(sock, "{\"cmd\":\"set_out\",\"types\":\"1,0,0,0,0,0,0,0\","
         "\"paths\":\"sol.nmea|||||||\",\"log_mask\":\"1,1,1,1,1,1,1,1,1,1\","
@@ -389,6 +390,8 @@ static void test_sdr_web_config(void)
     TEST_ASSERT_TRUE(strstr(buff, "\"file\":\"if_data.bin\"") != NULL);
     TEST_ASSERT_TRUE(strstr(buff, "\"fmt\":1") != NULL);
     TEST_ASSERT_TRUE(strstr(buff, "\"sigs\":\"L1CA:1-8\"") != NULL);
+    TEST_ASSERT_TRUE(strstr(buff,
+        "\"satno\":\"1-8|1-5/1-10|1-36|1-9|1-63|1-14|120-158\"") != NULL);
     TEST_ASSERT_TRUE(strstr(buff, "\"conf_ena\":1") != NULL);
     TEST_ASSERT_TRUE(strstr(buff, "\"dev_opt\":\"-GAIN=30.0\"") != NULL);
     TEST_ASSERT_TRUE(strstr(buff, "\"array_sep\":1") != NULL);
@@ -417,6 +420,8 @@ static void test_sdr_web_config(void)
     TEST_ASSERT_TRUE(strstr(buff, "\"inp\":1") != NULL);
     TEST_ASSERT_TRUE(strstr(buff, "\"file\":\"if_data.bin\"") != NULL);
     TEST_ASSERT_TRUE(strstr(buff, "\"sigs\":\"L1CA:1-8\"") != NULL);
+    TEST_ASSERT_TRUE(strstr(buff,
+        "\"satno\":\"1-8|1-5/1-10|1-36|1-9|1-63|1-14|120-158\"") != NULL);
     TEST_ASSERT_TRUE(strstr(buff, "\"conf_ena\":1") != NULL);
     TEST_ASSERT_TRUE(strstr(buff, "\"dev_opt\":\"-GAIN=30.0\"") != NULL);
     TEST_ASSERT_TRUE(strstr(buff, "\"fast_acq\":1") != NULL);

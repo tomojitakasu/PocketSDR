@@ -81,17 +81,21 @@ app.selectCorrCh = (ch) => {
     pages[3].page.setCh(ch);
 };
 
-// switch page -----------------------------------------------------------------
-function selPage(i) {
+// switch page (dir: 1 = swiped left, -1 = swiped right, 0 = no slide) --------
+function selPage(i, dir = 0) {
     if (i == cur) return;
     if (cur >= 0) {
         pages[cur].page.hide();
-        pages[cur].page.el.classList.remove('active');
+        pages[cur].page.el.classList.remove('active', 'slide-l', 'slide-r');
         if (pages[cur].tab) pages[cur].tab.classList.remove('active');
     }
     cur = i;
     pages[cur].page.el.classList.add('active');
-    if (pages[cur].tab) pages[cur].tab.classList.add('active');
+    if (dir) pages[cur].page.el.classList.add(dir > 0 ? 'slide-l' : 'slide-r');
+    if (pages[cur].tab) {
+        pages[cur].tab.classList.add('active');
+        pages[cur].tab.scrollIntoView({block: 'nearest', inline: 'nearest'});
+    }
     pages[cur].page.show();
 }
 
@@ -110,6 +114,52 @@ pages.forEach((p, i) => {
     p.page.el.classList.add('page');
     pagesEl.appendChild(p.page.el);
 });
+
+// left/right swipe on the page area switches to the previous/next tab page ---
+const SWIPE_MIN = 40;    // minimum horizontal distance (px)
+const SWIPE_SLOPE = 0.7; // maximum |dy/dx| accepted as horizontal
+const SWIPE_SCRL = 0.3;  // over a scrolled table: fraction of the page width
+const SWIPE_SCRL_MAX = 200; // and its upper limit (px)
+const tabs = pages.map((p, i) => i).filter((i) => !pages[i].notab);
+let swipe = null;
+
+// nearest horizontally scrollable ancestor, which scrolls with the gesture ----
+function hscroll(el) {
+    for ( ; el && el != pagesEl; el = el.parentElement) {
+        if (el.scrollWidth > el.clientWidth + 1 &&
+            /auto|scroll/.test(getComputedStyle(el).overflowX)) return el;
+    }
+    return null;
+}
+pagesEl.addEventListener('touchstart', (ev) => {
+    if (ev.touches.length > 1) { // pinch or the like is not a swipe
+        swipe = null;
+        return;
+    }
+    const el = hscroll(ev.target);
+    swipe = {x: ev.touches[0].clientX, y: ev.touches[0].clientY, el: el,
+        sl: el ? el.scrollLeft : 0};
+}, {passive: true});
+
+pagesEl.addEventListener('touchend', (ev) => {
+    const s = swipe;
+    swipe = null;
+    if (!s) return;
+    const dx = ev.changedTouches[0].clientX - s.x;
+    const dy = ev.changedTouches[0].clientY - s.y;
+    // a wide table (BB CH, Satellites, Log) scrolls with a short drag, while a
+    // long swipe switches the page and takes the table back where it was
+    const scrl = s.el && s.el.scrollLeft != s.sl;
+    const min = !scrl ? SWIPE_MIN : Math.min(SWIPE_SCRL_MAX,
+        Math.max(SWIPE_MIN, SWIPE_SCRL * pagesEl.clientWidth));
+    if (Math.abs(dx) < min || Math.abs(dy) > SWIPE_SLOPE * Math.abs(dx)) return;
+    const dir = dx < 0 ? 1 : -1, i = tabs.indexOf(cur) + dir;
+    if (!tabs.includes(cur) || i < 0 || i >= tabs.length) return;
+    if (scrl) s.el.scrollLeft = s.sl;
+    selPage(tabs[i], dir);
+}, {passive: true});
+
+pagesEl.addEventListener('touchcancel', () => { swipe = null; });
 
 // redraw the current page on resize (a canvas is scaled as an image otherwise)
 let resizeTimer = null;
@@ -138,11 +188,14 @@ ws.on('rcv_stat', (msg) => {
         'CPU: ' + msg.cpu.toFixed(1) + ' % ') + 'Time: ' + f[0] + ' s';
 });
 ws.on('ack', (msg) => {
-    if (!msg.ok) {
+    if (msg.cmd == 'start') { // the server reports the cause and the input
+        app.msg((msg.ok ? 'Receiver started. ' : 'Receiver start error: ') +
+            (msg.msg || ''));
+    }
+    else if (!msg.ok) {
         app.msg('Command error: ' + msg.cmd +
             (msg.msg ? ' (' + msg.msg + ')' : ''));
     }
-    else if (msg.cmd == 'start') app.msg('Receiver started.');
     else if (msg.cmd == 'stop') app.msg('Receiver stopped.');
 });
 ws.on('error', (msg) => {
@@ -155,7 +208,12 @@ ws.on('open', () => {
     ws.sub('pvt_sol', {cyc: 200}); // solution history collected page-wide
 });
 ws.connect();
-document.getElementById('btn-start').onclick = () => ws.send({cmd: 'start'});
+// the receiver start takes time: show it is in progress until the ack --------
+document.getElementById('btn-start').onclick = () => {
+    document.getElementById('btn-start').disabled = true;
+    app.msg('Receiver is starting ...');
+    ws.send({cmd: 'start'});
+};
 document.getElementById('btn-stop').onclick = () => ws.send({cmd: 'stop'});
 document.getElementById('btn-inp').onclick = () => selPage(7);
 document.getElementById('btn-out').onclick = () => selPage(8);

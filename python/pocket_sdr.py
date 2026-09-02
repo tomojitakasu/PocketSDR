@@ -13,7 +13,7 @@
 #  2026-07-19  1.4  add low-C/N0 acquisition and tracking options
 #  2026-07-24  1.5  support up to 8 output streams with selectable types
 #
-import sys, os, platform, time, re, shutil
+import sys, os, platform, time, re, shutil, traceback
 from collections import deque
 from math import *
 from ctypes import *
@@ -155,18 +155,22 @@ def config_panel_state(p, state):
         else:
             c.configure(state=state)
 
-# start receiver ---------------------------------------------------------------
+# start receiver (info: input source, or its open error on failure) ------------
 def rcv_open(sys_opt, inp_opt, out_opt, sig_opt, array_opt):
     set_rcv_opts(sys_opt)
     set_log_mask(out_opt)
     libsdr.sdr_func_init.argtypes = (c_char_p,)
     libsdr.sdr_func_init(sys_opt.fftw_wisdom_path.get().encode())
     if inp_opt.inp.get() == 1:
-        return rcv_open_file(sys_opt, inp_opt, out_opt, sig_opt, array_opt)
+        src = 'IF data'
+        rcv, info = rcv_open_file(sys_opt, inp_opt, out_opt, sig_opt, array_opt)
     elif inp_opt.type.get() == 'Pocket SDR FE':
-        return rcv_open_dev(sys_opt, inp_opt, out_opt, sig_opt, array_opt)
+        src = 'SDR device'
+        rcv, info = rcv_open_dev(sys_opt, inp_opt, out_opt, sig_opt, array_opt)
     else:
-        return rcv_open_sdev(sys_opt, inp_opt, out_opt, sig_opt, array_opt)
+        src = 'SoapySDR device'
+        rcv, info = rcv_open_sdev(sys_opt, inp_opt, out_opt, sig_opt, array_opt)
+    return rcv, info if rcv else 'Cannot open %s %s' % (src, info)
 
 # build -LPF=... option string -------------------------------------------------
 def lpf_opt_str(inp_opt):
@@ -274,13 +278,42 @@ def rcv_open_file(sys_opt, inp_opt, out_opt, sig_opt, array_opt):
 # get signal options -----------------------------------------------------------
 def get_sig_opt(opt):
     sigs, prns = [], []
+    asgn = parse_sat_asgn(opt.sig_satno.get())
     for i in range(16):
         for j in range(len(opt.sys)):
             if len(opt.sig[j]) <= i: continue
             if not opt.sys_sel[j].get() or not opt.sig_sel[j][i].get(): continue
-            satno = opt.satno[j].get()
-            add_sig(sigs, prns, j, satno, opt.sig[j][i])
+            sig = opt.sig[j][i]
+            s = asgn_prns(asgn, j, sig)
+            if s != None: # an assignment overrides the satellite numbers
+                add_asgn_sig(sigs, prns, j, s, sig)
+            else:
+                add_sig(sigs, prns, j, opt.satno[j].get(), sig)
     return sigs, prns
+
+# parse satellite No assignments "[<sys>:]<sig>:<prns> ..." ---------------------
+def parse_sat_asgn(str):
+    asgn = {}
+    for tok in str.split():
+        s = tok.split(':')
+        if len(s) == 2: # all systems having the signal
+            asgn['*:' + s[0].upper()] = s[1]
+        elif len(s) == 3: # one system
+            asgn[s[0].upper() + ':' + s[1].upper()] = s[2]
+    return asgn
+
+# PRN list of an assignment for a signal (None: not assigned) ------------------
+def asgn_prns(asgn, i, sig):
+    s = asgn.get('GREJCIS'[i] + ':' + sig)
+    return s if s != None else asgn.get('*:' + sig)
+
+# add signals of an assignment -------------------------------------------------
+def add_asgn_sig(sigs, prns, i, satno, sig):
+    if not satno.strip(): return # empty list: no CH for the signal
+    for prn in sdr_func.parse_nums(satno):
+        if sdr_code.sat_id(sig, prn)[0] != 'GREJCIS'[i]: continue
+        sigs.append(sig)
+        prns.append(prn)
 
 # add signals ------------------------------------------------------------------
 def add_sig(sigs, prns, i, satno, sig):
@@ -675,11 +708,21 @@ def btn_bar_new(parent, labels, callbacks):
 
 # button bar callback ----------------------------------------------------------
 def on_btn_bar_push(e, bar):
+    if e.widget.instate(('disabled',)): return
     for i, btn in enumerate(bar.panel.winfo_children()):
         if btn == e.widget:
             bar.callbacks[i](bar)
             root.focus_set()
             return
+
+# set button bar state (0: stopped, 1: starting, 2: running) -------------------
+def set_btn_bar_state(bar, state):
+    ena = (# Start,Stop,Input,Output,Signal,System,Array,Help,Exit
+        (1, 0, 1, 1, 1, 1, 1, 1, 1),  # stopped
+        (0, 0, 0, 0, 0, 0, 0, 1, 0),  # starting
+        (0, 1, 1, 1, 1, 1, 1, 1, 0))[state] # running: options are reference only
+    for i, btn in enumerate(bar.panel.winfo_children()):
+        btn.configure(state=NORMAL if ena[i] else DISABLED)
 
 # generate tool bar ------------------------------------------------------------
 def tool_bar_new(parent):
@@ -2057,9 +2100,16 @@ def show_log_page(p):
 def on_btn_start_push(bar):
     global rcv_body
     if not rcv_body:
-        status_bar_show('')
-        rcv_body, info = rcv_open(sys_opt, inp_opt, out_opt, sig_opt, array_opt)
+        set_btn_bar_state(bar, 1) # the start takes time: show it is in progress
+        status_bar_show('Receiver is starting ...')
+        try:
+            rcv_body, info = rcv_open(sys_opt, inp_opt, out_opt, sig_opt,
+                array_opt)
+        except Exception as e:
+            traceback.print_exc()
+            rcv_body, info = None, 'invalid settings (%s)' % (e)
         if rcv_body == None:
+            set_btn_bar_state(bar, 0)
             status_bar_show('Receiver start error. ' + info)
             return
         # apply enable mask and antenna geometry from array_opt
@@ -2068,8 +2118,7 @@ def on_btn_start_push(bar):
         array_calib_load_file(rcv_body)
         
         status_bar_show('Receiver started. ' + info)
-        for i, btn in enumerate(bar.panel.winfo_children()):
-            btn.configure(state=NORMAL if i in (1, 7) else DISABLED)
+        set_btn_bar_state(bar, 2)
         set_settings_btn_state(rcv_page, DISABLED)
 
 # Stop button push callback ----------------------------------------------------
@@ -2081,8 +2130,7 @@ def on_btn_stop_push(bar):
         
         rcv_close(rcv_body)
         rcv_body = None
-        for i, btn in enumerate(bar.panel.winfo_children()):
-            btn.configure(state=DISABLED if i in (1,) else NORMAL)
+        set_btn_bar_state(bar, 0)
         set_settings_btn_state(rcv_page, NORMAL)
         status_bar_show('Receiver stopped.')
 
@@ -2112,35 +2160,32 @@ def on_settings_save():
     status_bar_show('Settings saved. ' + file)
 
 # Input button push callback ---------------------------------------------------
+#   The options dialogs are reference only while the receiver is running.
 def on_btn_input_push(bar):
     global inp_opt
-    if not rcv_body:
-        inp_opt = sdr_opt.inp_opt_dlg(root, inp_opt)
+    inp_opt = sdr_opt.inp_opt_dlg(root, inp_opt, readonly=rcv_body != None)
 
 # Output button push callback --------------------------------------------------
 def on_btn_output_push(bar):
     global out_opt
-    if not rcv_body:
-        out_opt = sdr_opt.out_opt_dlg(root, out_opt)
+    out_opt = sdr_opt.out_opt_dlg(root, out_opt, readonly=rcv_body != None)
 
 # Signal button push callback --------------------------------------------------
 def on_btn_signal_push(bar):
     global sig_opt
-    if not rcv_body:
-        sig_opt = sdr_opt.sig_opt_dlg(root, sig_opt)
+    sig_opt = sdr_opt.sig_opt_dlg(root, sig_opt, readonly=rcv_body != None)
 
 # System button push callback --------------------------------------------------
 def on_btn_system_push(bar):
     global sys_opt
-    if not rcv_body:
-        sys_opt = sdr_opt.sys_opt_dlg(root, sys_opt)
+    sys_opt = sdr_opt.sys_opt_dlg(root, sys_opt, readonly=rcv_body != None)
 
 # Array button push callback ---------------------------------------------------
 def on_btn_array_push(bar):
     global array_opt
-    if not rcv_body:
-        array_opt = sdr_opt.array_opt_dlg(root, array_opt,
-            geom_load=array_geom_load_file, geom_save=array_geom_save_file)
+    array_opt = sdr_opt.array_opt_dlg(root, array_opt,
+        geom_load=array_geom_load_file, geom_save=array_geom_save_file,
+        readonly=rcv_body != None)
 
 # Help button push callback ----------------------------------------------------
 def on_btn_help_push(bar):
@@ -2265,7 +2310,7 @@ def main():
         on_btn_output_push, on_btn_signal_push, on_btn_system_push,
         on_btn_array_push, on_btn_help_push, on_btn_exit_push)
     btn_bar = btn_bar_new(root, labels, callbacks)
-    btn_bar.panel.winfo_children()[1].configure(state=DISABLED)
+    set_btn_bar_state(btn_bar, 0)
     
     # generate status bar
     stat_bar = status_bar_new(root)

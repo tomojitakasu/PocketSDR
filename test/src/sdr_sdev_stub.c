@@ -19,11 +19,10 @@ int sdr_sdev_list(void)
 }
 
 sdr_sdev_t *sdr_sdev_open(const char *driver, int fmt, double rate,
-    double freq, double bw, double gain)
+    double freq, const char *opt)
 {
     (void)freq;
-    (void)bw;
-    (void)gain;
+    (void)opt;
     if (!driver || (fmt != SDR_FMT_CS8 && fmt != SDR_FMT_CS16)) return NULL;
     
     sdr_sdev_t *sdev = (sdr_sdev_t *)sdr_malloc(sizeof(sdr_sdev_t));

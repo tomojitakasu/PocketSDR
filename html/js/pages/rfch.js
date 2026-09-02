@@ -297,29 +297,39 @@ export class RfchPage {
             p.ylim = [0, 1];
             p.begin();
             const ctx = p.ctx;
+            const boxes = [];
             for (const c of this.chs) {
-                const fo = c.fo * 1e-6;
                 const [lo, hi] = band(c);
                 if (hi < p.xlim[0] || lo > p.xlim[1]) continue;
-                const x0 = p.xp(Math.max(lo, p.xlim[0]));
-                const x1 = p.xp(Math.min(hi, p.xlim[1]));
-                const py0 = p.yp(0.87), py1 = p.yp(0.05);
-                ctx.fillStyle = '#F4F4F2';
-                ctx.fillRect(x0, py0, x1 - x0, py1 - py0);
-                ctx.strokeStyle = FG;
-                ctx.strokeRect(x0 + 0.5, py0 + 0.5, x1 - x0 - 1,
+                boxes.push({ch: c, lo: lo, hi: hi,
+                    x0: p.xp(Math.max(lo, p.xlim[0])),
+                    x1: p.xp(Math.min(hi, p.xlim[1]))});
+            }
+            const py0 = p.yp(0.87), py1 = p.yp(0.05);
+            // fills, frames and texts in separate passes so that a CH box
+            // overlapping another one does not hide its frame or texts
+            ctx.fillStyle = '#F4F4F2';
+            for (const b of boxes) {
+                ctx.fillRect(b.x0, py0, b.x1 - b.x0, py1 - py0);
+            }
+            ctx.strokeStyle = FG;
+            for (const b of boxes) {
+                ctx.strokeRect(b.x0 + 0.5, py0 + 0.5, b.x1 - b.x0 - 1,
                     py1 - py0 - 1);
-                p.textPx((x0 + x1) / 2, py0 - 8, 'CH' + c.ch, P1, 'center',
-                    'middle', plotTitleFont());
-                p.textPx((x0 + x1) / 2, py1 - 9, fo.toFixed(3), FG,
+            }
+            for (const b of boxes) {
+                const xc = (b.x0 + b.x1) / 2;
+                p.textPx(xc, py0 - 8, 'CH' + b.ch.ch, P1, 'center', 'middle',
+                    plotTitleFont());
+                p.textPx(xc, py1 - 9, (b.ch.fo * 1e-6).toFixed(3), FG,
                     'center', 'middle');
                 let k = 0;
-                for (const s of this.sigs[c.ch] || []) {
+                for (const s of this.sigs[b.ch.ch] || []) {
                     const f = SIG_FREQ[s.sig];
-                    if (!f || f < lo || f > hi) continue;
+                    if (!f || f < b.lo || f > b.hi) continue;
                     const color = SYS_COLOR[s.sys] || FG;
                     const py = py0 + 12 + (k++) * 11;
-                    const left = p.xp(f) > (x0 + x1) / 2;
+                    const left = p.xp(f) > xc;
                     p.markPx(p.xp(f), py, 7, color, 1);
                     p.textPx(p.xp(f) + (left ? -6 : 6), py, s.sig, color,
                         left ? 'right' : 'left', 'middle');

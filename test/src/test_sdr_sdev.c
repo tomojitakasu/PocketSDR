@@ -8,7 +8,7 @@ void test_sdr_sdev_stub_push(sdr_sdev_t *sdev, const uint8_t *data, int size);
 // open mock SoapySDR device ---------------------------------------------------
 static sdr_sdev_t *open_mock_sdev(int fmt)
 {
-    sdr_sdev_t *sdev = sdr_sdev_open("mock", fmt, 1.0e6, 1.57542e9, 0.0, 0.0);
+    sdr_sdev_t *sdev = sdr_sdev_open("mock", fmt, 1.0e6, 1.57542e9, "");
     
     TEST_ASSERT_TRUE(sdev != NULL);
     TEST_ASSERT_TRUE(sdev->buff != NULL);
@@ -29,8 +29,8 @@ static void test_sdr_sdev_open_close(void)
 {
     sdr_sdev_t *sdev;
     
-    TEST_ASSERT_TRUE(sdr_sdev_open(NULL, SDR_FMT_CS8, 1.0, 0.0, 0.0, 0.0) == NULL);
-    TEST_ASSERT_TRUE(sdr_sdev_open("mock", SDR_FMT_RAW8, 1.0, 0.0, 0.0, 0.0) == NULL);
+    TEST_ASSERT_TRUE(sdr_sdev_open(NULL, SDR_FMT_CS8, 1.0, 0.0, "") == NULL);
+    TEST_ASSERT_TRUE(sdr_sdev_open("mock", SDR_FMT_RAW8, 1.0, 0.0, "") == NULL);
     
     sdev = open_mock_sdev(SDR_FMT_CS8);
     TEST_ASSERT_EQ_INT(2, sdev->ssize);

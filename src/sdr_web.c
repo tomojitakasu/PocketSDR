@@ -822,6 +822,11 @@ static void send_array_stat(sdr_web_t *web, web_cli_t *cli)
     ws_send_text(cli, buff);
 }
 
+// default satellite number lists by system ------------------------------------
+static const char *def_satno[SDR_WEB_N_SYS] = {
+    "1-32", "-7-6/1-27", "1-36", "1-9", "1-63", "1-14", "120-158"
+};
+
 // system option names ---------------------------------------------------------
 static const char *opt_names[] = {
     "epoch", "lag_epoch", "el_mask", "sp_corr", "t_acq", "t_acq_ext", "t_dll",
@@ -918,6 +923,14 @@ static void send_cfg(sdr_web_t *web, web_cli_t *cli)
     }
     jsn_esc(esc, sizeof(esc), str);
     n += snprintf(buff + n, JSON_BUFF_SIZE - n, "\"sigs\":\"%s\",", esc);
+    for (int i = m = 0; i < SDR_WEB_N_SYS; i++) {
+        m += snprintf(str + m, sizeof(str) - m, "%s%s", i ? "|" : "",
+            c->satno[i]);
+    }
+    jsn_esc(esc, sizeof(esc), str);
+    n += snprintf(buff + n, JSON_BUFF_SIZE - n, "\"satno\":\"%s\",", esc);
+    jsn_esc(esc, sizeof(esc), c->sat_asgn);
+    n += snprintf(buff + n, JSON_BUFF_SIZE - n, "\"satasgn\":\"%s\",", esc);
     jsn_esc(esc, sizeof(esc), c->rfch);
     n += snprintf(buff + n, JSON_BUFF_SIZE - n, "\"rfch\":\"%s\",", esc);
     jsn_esc(esc, sizeof(esc), c->fftw);
@@ -1000,6 +1013,10 @@ static int save_cfg(sdr_web_t *web)
     for (int i = 0; i < c->nsig; i++) {
         fprintf(fp, " %s:%s", c->sig[i], c->prn[i]);
     }
+    fprintf(fp, "\nsatno  =");
+    for (int i = 0; i < SDR_WEB_N_SYS; i++) {
+        fprintf(fp, "%s%s", i ? "|" : " ", c->satno[i]);
+    }
     fprintf(fp, "\ntypes  =");
     for (int i = 0; i < SDR_MAX_STR; i++) {
         fprintf(fp, "%s%d", i ? "," : " ", c->str_type[i]);
@@ -1012,7 +1029,8 @@ static int save_cfg(sdr_web_t *web)
     for (int i = 0; i < SDR_WEB_N_LOG; i++) {
         fprintf(fp, "%s%d", i ? "," : " ", c->log_mask[i]);
     }
-    fprintf(fp, "\nrfch   = %s\n", c->rfch);
+    fprintf(fp, "\nsatasgn = %s\n", c->sat_asgn);
+    fprintf(fp, "rfch   = %s\n", c->rfch);
     fprintf(fp, "opt    = %s\n", c->opt);
     fprintf(fp, "fftw   = %s\n", c->fftw);
     fprintf(fp, "fast_acq = %d\n", c->fast_acq);
@@ -1053,6 +1071,7 @@ static int load_cfg(sdr_web_t *web)
         else if (!strcmp(key, "conf_ena")) c->conf_ena = atoi(val);
         else if (!strcmp(key, "dev_opt")) snprintf(c->dev_opt, sizeof(c->dev_opt), "%s", val);
         else if (!strcmp(key, "driver")) snprintf(c->driver, sizeof(c->driver), "%s", val);
+        else if (!strcmp(key, "satasgn")) snprintf(c->sat_asgn, sizeof(c->sat_asgn), "%s", val);
         else if (!strcmp(key, "rfch"  )) snprintf(c->rfch, sizeof(c->rfch), "%s", val);
         else if (!strcmp(key, "opt"   )) snprintf(c->opt, sizeof(c->opt), "%s", val);
         else if (!strcmp(key, "fftw"  )) snprintf(c->fftw, sizeof(c->fftw), "%s", val);
@@ -1096,6 +1115,14 @@ static int load_cfg(sdr_web_t *web)
                 val = q + 1;
             }
         }
+        else if (!strcmp(key, "satno")) {
+            for (int i = 0; i < SDR_WEB_N_SYS && val; i++) {
+                char *q = strchr(val, '|');
+                if (q) *q = '\0';
+                snprintf(c->satno[i], sizeof(c->satno[0]), "%.63s", val);
+                val = q ? q + 1 : NULL;
+            }
+        }
         else if (!strcmp(key, "sigs")) {
             c->nsig = 0;
             for (char *q = strtok(val, " "); q && c->nsig < SDR_WEB_MAX_SIG;
@@ -1120,12 +1147,27 @@ static int load_cfg(sdr_web_t *web)
     return 1;
 }
 
-// open receiver by configuration ----------------------------------------------
-static sdr_rcv_t *cfg_open(sdr_web_cfg_t *c)
+// input source description for the receiver start message ---------------------
+static void cfg_inp_str(const sdr_web_cfg_t *c, char *str, size_t size)
+{
+    if (c->inp == 1) {
+        snprintf(str, size, "(path=%.160s, toff=%.6g, tscale=%.6g)", c->file,
+            c->toff, c->tscale);
+    } else if (c->inp == 2) {
+        snprintf(str, size, "(driver=%.31s, rate=%.6g Msps, freq=%.6g MHz)",
+            c->driver, c->fs * 1e-6, c->fo[0] * 1e-6);
+    } else {
+        snprintf(str, size, "(bus/port=%d/%d, conf=%.160s)", c->bus, c->port,
+            c->conf_ena ? c->conf_file : "");
+    }
+}
+
+// open receiver by configuration (msg: input source or error cause) -----------
+static sdr_rcv_t *cfg_open(sdr_web_cfg_t *c, char *msg, size_t size)
 {
     const char *sigs[SDR_MAX_NCH], *paths[SDR_MAX_STR];
     int prns[SDR_MAX_NCH], nch = 0;
-    char opt[2048];
+    char opt[2048], inp[224];
     sdr_rcv_t *rcv;
 
     sdr_func_init(c->fftw); // reload FFTW wisdom (receiver is stopped)
@@ -1150,6 +1192,7 @@ static sdr_rcv_t *cfg_open(sdr_web_cfg_t *c)
     for (int i = 0; i < SDR_MAX_STR; i++) {
         paths[i] = c->str_path[i];
     }
+    cfg_inp_str(c, inp, sizeof(inp));
     if (c->inp == 1) {
         rcv = sdr_rcv_open_file(sigs, prns, nch, c->fmt, c->fs, c->fo, c->IQ,
             c->bits, c->toff, c->tscale, c->file, c->str_type, paths, opt);
@@ -1162,20 +1205,26 @@ static sdr_rcv_t *cfg_open(sdr_web_cfg_t *c)
         rcv = sdr_rcv_open_dev(sigs, prns, nch, c->bus, c->port,
             c->conf_ena ? c->conf_file : "", c->str_type, paths, opt);
     }
-    if (rcv && c->nant > 0) {
+    if (!rcv) {
+        snprintf(msg, size, "cannot open %s %s", c->inp == 1 ? "IF data" :
+            c->inp == 2 ? "SoapySDR device" : "SDR device", inp);
+        return NULL;
+    }
+    if (c->nant > 0) {
         int ena[SDR_MAX_RFCH] = {0};
         for (int i = 0; i < c->nant; i++) ena[i] = 1;
         sdr_rcv_array_ant_pos(rcv, (const double *)c->ant_pos, ena);
     }
+    snprintf(msg, size, "%s", inp);
     return rcv;
 }
 
 // start the receiver with the current configuration ---------------------------
-static int start_rcv(sdr_web_t *web)
+static int start_rcv(sdr_web_t *web, char *msg, size_t size)
 {
     sdr_mutex_lock(&web->rcv_mtx);
     if (web->rcv) sdr_rcv_close(web->rcv);
-    web->rcv = cfg_open(&web->cfg);
+    web->rcv = cfg_open(&web->cfg, msg, size);
     sdr_mutex_unlock(&web->rcv_mtx);
     web->sel_ch = 0;
     return web->rcv != NULL;
@@ -1302,7 +1351,7 @@ static int topic_id(const char *name)
 // send command acknowledge ----------------------------------------------------
 static void send_ack(web_cli_t *cli, const char *cmd, int ok, const char *extra)
 {
-    char buff[256];
+    char buff[1024];
 
     snprintf(buff, sizeof(buff), "{\"type\":\"ack\",\"cmd\":\"%s\",\"ok\":%s"
         "%s%s}", cmd, ok ? "true" : "false", extra && *extra ? "," : "",
@@ -1455,9 +1504,11 @@ static void proc_cmd(sdr_web_t *web, web_cli_t *cli, const char *msg)
             send_ack(cli, cmd, 0, "\"msg\":\"receiver already run\"");
         }
         else {
-            int ok = start_rcv(web);
-            send_ack(cli, cmd, ok, ok ? NULL :
-                "\"msg\":\"receiver start error\"");
+            char info[256], esc[512], ext[544];
+            int ok = start_rcv(web, info, sizeof(info));
+            jsn_esc(esc, sizeof(esc), info);
+            snprintf(ext, sizeof(ext), "\"msg\":\"%s\"", esc);
+            send_ack(cli, cmd, ok, ext);
             bcast_hello(web);
         }
     } else if (!strcmp(cmd, "stop")) {
@@ -1531,6 +1582,16 @@ static void proc_cmd(sdr_web_t *web, web_cli_t *cli, const char *msg)
                     c->nsig++;
                 }
             }
+            if (jsn_str(msg, "satno", str, sizeof(str))) {
+                char *p = str;
+                for (int i = 0; i < SDR_WEB_N_SYS && p; i++) {
+                    char *q = strchr(p, '|');
+                    if (q) *q = '\0';
+                    snprintf(c->satno[i], sizeof(c->satno[0]), "%.63s", p);
+                    p = q ? q + 1 : NULL;
+                }
+            }
+            jsn_str(msg, "satasgn", c->sat_asgn, sizeof(c->sat_asgn));
             jsn_str(msg, "rfch", c->rfch, sizeof(c->rfch));
             send_ack(cli, cmd, 1, NULL);
         }
@@ -1951,6 +2012,9 @@ void sdr_web_init_cfg(sdr_web_cfg_t *cfg)
     }
     cfg->tscale = 1.0;
     cfg->bus = cfg->port = -1;
+    for (int i = 0; i < SDR_WEB_N_SYS; i++) {
+        snprintf(cfg->satno[i], sizeof(cfg->satno[0]), "%s", def_satno[i]);
+    }
     for (int i = 0; i < SDR_WEB_N_LOG; i++) { // library defaults
         cfg->log_mask[i] = !(i == 7 || i == 8);
     }
@@ -1968,8 +2032,11 @@ void sdr_web_init_cfg(sdr_web_cfg_t *cfg)
 //
 int sdr_web_start_rcv(sdr_web_t *web)
 {
+    char msg[256];
+
     if (!web || !web->cfg_ena || (web->rcv && web->rcv->state)) return 0;
-    int ok = start_rcv(web);
+    int ok = start_rcv(web, msg, sizeof(msg));
+    if (!ok) fprintf(stderr, "%s\n", msg);
     bcast_hello(web);
     return ok;
 }

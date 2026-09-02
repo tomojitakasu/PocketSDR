@@ -1832,14 +1832,14 @@ extern double time2doy(gtime_t t)
 /* adjust gps week number ------------------------------------------------------
 * adjust gps week number using cpu time
 * args   : int   week       I   not-adjusted gps week number (0-1023)
-* return : adjusted gps week number
+* return : adjusted gps week number (nearest 1024-week era to cpu time)
 *-----------------------------------------------------------------------------*/
 extern int adjgpsweek(int week)
 {
     int w;
     (void)time2gpst(utc2gpst(timeget()),&w);
     if (w<1560) w=1560; /* use 2009/12/1 if time is earlier than 2009/12/1 */
-    return week+(w-week+1)/1024*1024;
+    return week+(w-week+512)/1024*1024;
 }
 /* get tick time ---------------------------------------------------------------
 * get current tick in ms

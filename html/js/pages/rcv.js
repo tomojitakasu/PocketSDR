@@ -393,33 +393,44 @@ export class RcvPage {
         }
         ctx.lineWidth = 1;
     }
+    // C/N0 bar (color null: untracked signal as a short blank bar) -------------
+    drawCn0Bar(p, px, cn0, color) {
+        const ctx = p.ctx;
+        const py0 = p.yp(p.ylim[0]);
+        const py1 = Math.min(color ? p.yp(cn0) : py0, py0 - 4);
+        ctx.fillStyle = color || BG;
+        ctx.fillRect(px - 2.2, py1, 4.4, py0 - py1);
+        ctx.strokeStyle = FG;
+        ctx.lineWidth = LW;
+        ctx.strokeRect(px - 2.2, py1, 4.4, py0 - py1);
+    }
     drawCn0() {
         const p = this.cn0Plot;
         const sys = this.el.querySelector('#rcv-sys').value;
         const sats = this.sats;
+        const sigs = [...new Set([].concat( // signal slots of all satellites
+            ...sats.map(s => this.sigStat[s].map(x => x.sig))))].sort();
         p.xlim = [-0.7, Math.max(sats.length, 1) - 0.3];
         p.begin();
-        const ctx = p.ctx;
         let nuse = 0;
         sats.forEach((sat, i) => {
             const si = this.satInfo[sat] || {pvt: 0};
             const color = (si.pvt ? SYS_COLOR : SYS_COLOR2)[satSys(sat)] ||
                 FG;
             if (si.pvt) nuse++;
-            // ALL: bars stacked (highest C/N0 first), else: side by side
-            const sigs = sys == 'ALL' ?
-                [...this.sigStat[sat]].sort((a, b) => b.cn0 - a.cn0) :
-                this.sigStat[sat];
-            sigs.forEach((s, j) => {
-                const off = sys == 'ALL' ? 0 : (j - (sigs.length - 1) / 2) * 7;
-                const px = p.xp(i) + off, py0 = p.yp(20), py1 = p.yp(s.cn0);
-                if (py0 - py1 < 1.0) return;
-                ctx.fillStyle = color;
-                ctx.fillRect(px - 2.2, py1, 4.4, py0 - py1);
-                ctx.strokeStyle = FG;
-                ctx.lineWidth = LW;
-                ctx.strokeRect(px - 2.2, py1, 4.4, py0 - py1);
-            });
+            if (sys == 'ALL') { // bars stacked (highest C/N0 first)
+                for (const s of [...this.sigStat[sat]].sort(
+                    (a, b) => b.cn0 - a.cn0)) {
+                    this.drawCn0Bar(p, p.xp(i), s.cn0, color);
+                }
+            }
+            else { // one slot per signal, side by side
+                sigs.forEach((sig, j) => {
+                    const s = this.sigStat[sat].find(x => x.sig == sig);
+                    const px = p.xp(i) + (j - (sigs.length - 1) / 2) * 7;
+                    this.drawCn0Bar(p, px, s ? s.cn0 : 0, s ? color : null);
+                });
+            }
         });
         p.end();
         sats.forEach((sat, i) => {
@@ -438,9 +449,7 @@ export class RcvPage {
             }
         }
         else {
-            const sigs = [...new Set([].concat(
-                ...sats.map(s => this.sigStat[s].map(x => x.sig))))];
-            p.textPx(p.ax[2] - 10, p.ax[1] + 16, 'Signals: ' + sigs.join(' '),
+            p.textPx(p.ax[2] - 10, p.ax[1] + 12, 'Signals: ' + sigs.join(' '),
                 FG, 'right');
         }
     }

@@ -15,6 +15,13 @@ const DEF_SAT = { // default satellite number lists (GLONASS: FCNs/slots)
     GPS: '1-32', GLONASS: '-7-6/1-27', Galileo: '1-36', QZSS: '1-9',
     BeiDou: '1-63', NavIC: '1-14', SBAS: '120-158'
 };
+// systems in the order of the satellite number lists of the configuration
+const SYSTEMS = Object.keys(SYS_SIGS);
+
+const SYS_CODE = { // system codes for the satellite No assignments
+    GPS: 'G', GLONASS: 'R', Galileo: 'E', QZSS: 'J', BeiDou: 'C', NavIC: 'I',
+    SBAS: 'S'
+};
 
 // parse number list with ranges (e.g. "1-32,40", "-7-6") ----------------------
 function parseNums(str) {
@@ -76,6 +83,31 @@ function sat2prns(sys, sig, satno) {
     return satno;
 }
 
+// parse satellite No assignments "[<sys>:]<sig>:<prns> ..." ------------------
+function parseSatAsgn(str) {
+    const asgn = {};
+    for (const tok of (str || '').trim().split(/\s+/)) {
+        const p = tok.split(':');
+        // 2 fields: all systems having the signal, 3 fields: one system
+        if (p.length == 2) asgn['*:' + p[0].toUpperCase()] = p[1];
+        else if (p.length == 3) {
+            asgn[p[0].toUpperCase() + ':' + p[1].toUpperCase()] = p[2];
+        }
+    }
+    return asgn;
+}
+
+// PRN list of an assignment for a signal (undefined: not assigned) ------------
+function asgnPrns(asgn, sys, sig) {
+    const s = asgn[SYS_CODE[sys] + ':' + sig];
+    if (s !== undefined) return s;
+    const t = asgn['*:' + sig];
+    if (t === undefined || !t.trim()) return t;
+    // a system-less assignment goes to the systems its PRNs belong to
+    const prns = parseNums(t).filter(p => sigSys(sig, '' + p) == sys);
+    return prns.length ? compNums(prns) : '';
+}
+
 // system of a "SIG:prns" entry (GPS, QZSS and SBAS share signal names) --------
 function sigSys(sig, prns) {
     const cand = Object.keys(SYS_SIGS).filter(s => SYS_SIGS[s].includes(sig));
@@ -83,20 +115,6 @@ function sigSys(sig, prns) {
     const prn = parseNums(prns)[0] || 0; // GPS 1-32, SBAS 120-158, QZSS 183-
     const sys = prn >= 183 ? 'QZSS' : prn >= 120 ? 'SBAS' : 'GPS';
     return cand.includes(sys) ? sys : cand[0];
-}
-
-// PRN list back to satellite number list --------------------------------------
-function prns2sat(sys, sig, prns) {
-    if (sys == 'QZSS') {
-        const nos = parseNums(prns).map(p => {
-            for (let no = 1; no <= 11; no++) {
-                if (qzssNo2Prn(sig, no) == p) return no;
-            }
-            return 0;
-        }).filter(n => n > 0);
-        return nos.length ? compNums(nos) : '';
-    }
-    return prns;
 }
 
 export class SigPage {
@@ -122,16 +140,22 @@ export class SigPage {
                 `<div class="sig-sec" data-sys="${sys}">` +
                 `<label class="sig-head"><input type="checkbox" ` +
                 `class="sg-sys" checked> ${sys}</label>` +
-                `<input type="text" class="sg-prn sig-sat">` +
+                `<input type="text" class="sg-prn sig-sat" ` +
+                `value="${DEF_SAT[sys]}">` +
                 `<span class="sig-grid">` +
                 SYS_SIGS[sys].map(sig =>
                     `<label class="sig-chk"><input type="checkbox" ` +
                     `class="sg-sig" data-sig="${sig}"> ${sig}</label>`
                 ).join('') + `</span></div>`).join('') +
             `<div class="cfg-frm">` +
+            `<div class="cfg-row"><label>Satellite No Assignments</label>` +
+            `<input type="text" id="sg-satno" class="wide"></div>` +
             `<div class="cfg-row"><label>RF CH Assignments</label>` +
             `<input type="text" id="sg-rfch" class="wide"></div>` +
-            `<div class="cfg-note">RF CH Assignments: ` +
+            `<div class="cfg-note">Satellite No Assignments: ` +
+            `[&lt;sys&gt;:]&lt;sig&gt;:&lt;prn&gt;[{,|-}&lt;prn&gt;...] ... ` +
+            `(&lt;sys&gt;: G,R,E,J,C,I,S, empty list: no CH, ` +
+            `overrides Satellite No) / RF CH Assignments: ` +
             `&lt;sig&gt;:&lt;ch&gt;[{,|-}&lt;ch&gt;...] ... (empty: auto) / ` +
             `GLONASS SAT: fcns/slots</div></div>` +
             `</div>`;
@@ -178,15 +202,21 @@ export class SigPage {
         for (const e of this.el.querySelectorAll('.sg-sys')) e.checked = ena;
         this.updateEna();
     }
+    satEl(sys) {
+        return this.el.querySelector(`.sig-sec[data-sys=${sys}] .sg-prn`);
+    }
     populate(cfg) {
         this.el.querySelector('#sg-rfch').value = cfg.rfch;
+        this.el.querySelector('#sg-satno').value = cfg.satasgn || '';
+        const satno = (cfg.satno || '').split('|');
+        SYSTEMS.forEach((sys, i) => { // the satellite numbers are a setting
+            if (satno[i]) this.satEl(sys).value = satno[i];
+        });
         for (const sec of this.el.querySelectorAll('.sig-sec[data-sys]')) {
-            sec.querySelector('.sg-prn').value = DEF_SAT[sec.dataset.sys];
             sec.querySelector('.sg-sys').checked = false;
             for (const e of sec.querySelectorAll('.sg-sig')) e.checked = false;
         }
         // assign "SIG:prns" entries to their systems (the PRN tells them apart)
-        let gloFcn = '', gloSlot = '';
         for (const ent of cfg.sigs.split(/\s+/)) {
             const [sig, prn] = ent.split(':');
             if (!sig || !prn) continue;
@@ -197,23 +227,12 @@ export class SigPage {
             [...sec.querySelectorAll('.sg-sig')].find(
                 e => e.dataset.sig == sig).checked = true;
             sec.querySelector('.sg-sys').checked = true;
-            if (sys == 'GLONASS') {
-                if (sig == 'G1CA' || sig == 'G2CA') gloFcn = gloFcn || prn;
-                else gloSlot = gloSlot || prn;
-            }
-            else {
-                const t = prns2sat(sys, sig, prn);
-                if (t) sec.querySelector('.sg-prn').value = t;
-            }
-        }
-        if (gloFcn || gloSlot) {
-            this.el.querySelector('.sig-sec[data-sys=GLONASS] .sg-prn').value =
-                (gloFcn || '-7-6') + '/' + (gloSlot || '1-27');
         }
         this.setEditable(cfg.ena, cfg.run);
     }
     apply() {
         const sigs = [];
+        const asgn = parseSatAsgn(this.el.querySelector('#sg-satno').value);
         const secs = [...this.el.querySelectorAll('.sig-sec[data-sys]')];
         const nsig = Math.max(...secs.map(
             s => s.querySelectorAll('.sg-sig').length));
@@ -226,11 +245,20 @@ export class SigPage {
                 const sys = sec.dataset.sys;
                 const satno = sec.querySelector('.sg-prn').value.trim() ||
                     DEF_SAT[sys];
-                const prns = sat2prns(sys, e.dataset.sig, satno);
-                if (prns) sigs.push(e.dataset.sig + ':' + prns);
+                // an assignment overrides the satellite numbers of the system
+                let prns = asgnPrns(asgn, sys, e.dataset.sig);
+                if (prns === undefined) {
+                    prns = sat2prns(sys, e.dataset.sig, satno);
+                }
+                if (prns && prns.trim()) {
+                    sigs.push(e.dataset.sig + ':' + prns.trim());
+                }
             }
         }
         this.app.ws.send({cmd: 'set_sig', sigs: sigs.join(' '),
+            satno: SYSTEMS.map(
+                sys => this.satEl(sys).value.trim() || DEF_SAT[sys]).join('|'),
+            satasgn: this.el.querySelector('#sg-satno').value.trim(),
             rfch: this.el.querySelector('#sg-rfch').value});
         this.app.msg('Signal options applied.');
         this.app.ws.get('cfg');

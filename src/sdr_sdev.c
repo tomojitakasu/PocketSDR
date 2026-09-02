@@ -92,58 +92,84 @@ int sdr_sdev_list(void)
 //      fmt         (I)   sampling data format (SDR_FMT_CS8 or _CS16)
 //      rate        (I)   sampling rate (sps)
 //      freq        (I)   carrier center frequency (Hz)
-//      bw          (I)   filter bandwidth (Hz) (<= 0: not set)
-//      gain        (I)   LNA gain control (dB) (<= 0: not set)
+//      opt         (I)   device options separated by spaces ("": all defaults)
+//                          -BW=bw      : filter bandwidth (MHz) (omit: not set)
+//                          -GAIN=gain  : LNA gain (dB) (omit: AGC)
+//                          -EXT_CLOCK  : enable external clock source
 //
 //  return
 //      SoapySDR device pointer (NULL: error)
 //
 sdr_sdev_t *sdr_sdev_open(const char *driver, int fmt, double rate,
-    double freq, double bw, double gain)
+    double freq, const char *opt)
 {
 #ifdef SOAPYSDR
     SoapySDRDevice *dev = NULL;
     SoapySDRStream *str;
     SoapySDRKwargs args;
-    const char *str_fmt;
+    const char *str_fmt, *p;
     const size_t ch = 0;
     size_t chs[1] = {ch};
-    double fs_act = 0.0, fo_act = 0.0;
-    int ok = 0;
+    char drv_name[32];
+    double fs_act = 0.0, fo_act = 0.0, bw = 0.0, gain = 0.0;
+    int ok = 0, ext_clock = 0;
     
     SoapySDR_registerLogHandler(soapy_log_handler);
+    
+    if (!opt) opt = "";
+    if ((p = strstr(opt, "-BW="))) sscanf(p, "-BW=%lf", &bw);
+    if ((p = strstr(opt, "-GAIN="))) sscanf(p, "-GAIN=%lf", &gain);
+    ext_clock = strstr(opt, "-EXT_CLOCK") != NULL;
     
     if (fmt != SDR_FMT_CS8 && fmt != SDR_FMT_CS16) {
         fprintf(stderr, "sdev: format error (only supports CS8 or CS16)\n");
         return NULL;
     }
-    for (int retry = 0; retry < OPEN_RETRY; retry++) {
-        if (strchr(driver, '=') || strchr(driver, ',')) {
-            args = SoapySDRKwargs_fromString(driver);
-        } else {
-            args = SoapySDRKwargs_fromString("");
-            SoapySDRKwargs_set(&args, "driver", driver);
+    if (strchr(driver, '=') || strchr(driver, ',')) {
+        args = SoapySDRKwargs_fromString(driver);
+    } else {
+        args = SoapySDRKwargs_fromString("");
+        SoapySDRKwargs_set(&args, "driver", driver);
+    }
+    const char *drv = SoapySDRKwargs_get(&args, "driver");
+    snprintf(drv_name, sizeof(drv_name), "%s", drv ? drv : driver);
+    
+    if (!strcmp(drv_name, "uhd")) {
+        // B2xx USB transport buffers are sized by device args at make time
+        // (explicit recv_frame_size breaks sc8/sc12 wire formats - do not set)
+        // (Windows: bind B2xx to libusb0 driver - libusbK corrupts streaming)
+        if (!SoapySDRKwargs_get(&args, "num_recv_frames")) {
+            SoapySDRKwargs_set(&args, "num_recv_frames", "512");
         }
+    }
+    for (int retry = 0; retry < OPEN_RETRY; retry++) {
         size_t nfound = 0;
         SoapySDRKwargs *found = SoapySDRDevice_enumerate(&args, &nfound);
         if (nfound > 0) {
-            dev = SoapySDRDevice_make(&found[0]);
+            // enumerate results drop non-identification args
+            for (size_t i = 0; i < args.size; i++) {
+                SoapySDRKwargs_set(found, args.keys[i], args.vals[i]);
+            }
+            dev = SoapySDRDevice_make(found);
         } else {
             dev = SoapySDRDevice_make(&args);
         }
         SoapySDRKwargsList_clear(found, nfound);
-        SoapySDRKwargs_clear(&args);
         if (!dev) {
             fprintf(stderr, "sdev: SoapySDRDevice_make error: %s\n",
                 SoapySDRDevice_lastError());
+            SoapySDRKwargs_clear(&args);
             return NULL;
         }
-        if (bw > 0.0) {
-            (void)SoapySDRDevice_setBandwidth(dev, SOAPY_SDR_RX, ch, bw);
+        if (ext_clock && SoapySDRDevice_setClockSource(dev, "external")) {
+            fprintf(stderr, "sdev: SoapySDRDevice_setClockSource error: %s\n",
+                SoapySDRDevice_lastError());
         }
         SoapySDRDevice_setSampleRate(dev, SOAPY_SDR_RX, ch, rate);
         SoapySDRDevice_setFrequency(dev, SOAPY_SDR_RX, ch, freq, NULL);
-        
+        if (bw > 0.0) { // after rate set - rate change resets the BB filter
+            (void)SoapySDRDevice_setBandwidth(dev, SOAPY_SDR_RX, ch, bw * 1e6);
+        }
         if (gain > 0.0) {
             (void)SoapySDRDevice_setGainMode(dev, SOAPY_SDR_RX, ch, false);
             (void)SoapySDRDevice_setGain(dev, SOAPY_SDR_RX, ch, gain);
@@ -164,6 +190,7 @@ sdr_sdev_t *sdr_sdev_open(const char *driver, int fmt, double rate,
         SoapySDRDevice_unmake(dev);
         dev = NULL;
     }
+    SoapySDRKwargs_clear(&args);
     if (!ok) {
         fprintf(stderr, "sdev: setup failed after %d retries\n", OPEN_RETRY);
         if (dev) SoapySDRDevice_unmake(dev);
@@ -171,15 +198,19 @@ sdr_sdev_t *sdr_sdev_open(const char *driver, int fmt, double rate,
     }
     fprintf(stderr, "sdev: rate=%.6fMsps (req %.3f), LO=%.6fMHz (req %.3f)\n",
         fs_act * 1e-6, rate * 1e-6, fo_act * 1e-6, freq * 1e-6);
+    if (bw > 0.0) {
+        fprintf(stderr, "sdev: BW=%.3fMHz (req %.3f)\n",
+            SoapySDRDevice_getBandwidth(dev, SOAPY_SDR_RX, ch) * 1e-6, bw);
+    }
     str_fmt = fmt == SDR_FMT_CS8 ? SOAPY_SDR_CS8 : SOAPY_SDR_CS16;
     
     // Driver-specific stream args:
     const char *str_args = "";
-    if (!strcmp(driver, "lime")) { // LimeSDR
+    if (!strcmp(drv_name, "lime")) { // LimeSDR
         str_args = "linkFormat=CS12,latency=1";
-    } else if (!strcmp(driver, "uhd")) { // USRP
-        str_args = "num_recv_frames=2048,recv_frame_size=16384,wirefmt=sc8";
-    } else if (!strcmp(driver, "bladerf")) { // bladeRF
+    } else if (!strcmp(drv_name, "uhd")) { // USRP: 12-bit over-the-wire format
+        str_args = "WIRE=sc12";
+    } else if (!strcmp(drv_name, "bladerf")) { // bladeRF
         str_args = "buffers=128,transfers=32,buflen=32768,meta=normal";
     }
     SoapySDRKwargs stream_args = SoapySDRKwargs_fromString(str_args);
@@ -195,7 +226,7 @@ sdr_sdev_t *sdr_sdev_open(const char *driver, int fmt, double rate,
     sdr_sdev_t *sdev = (sdr_sdev_t *)sdr_malloc(sizeof(sdr_sdev_t));
     sdev->dev = (void *)dev;
     sdev->str = (void *)str;
-    snprintf(sdev->driver, sizeof(sdev->driver), "%s", driver);
+    snprintf(sdev->driver, sizeof(sdev->driver), "%s", drv_name);
     sdev->ssize = fmt == SDR_FMT_CS8 ? 2 : 4;
     sdev->rate = fs_act;
     sdev->buff = (uint8_t *)sdr_malloc(BUFF_SIZE * BUFF_CNT);
@@ -253,38 +284,39 @@ static void raise_pri(void)
         fprintf(stderr, "sdev: AvSetMmThreadPriority error (%d)\n",
             (int)GetLastError());
     }
+#else
+    struct sched_param param = {0};
+    param.sched_priority = 50;
+    int err = pthread_setschedparam(pthread_self(), SCHED_FIFO, &param);
+    if (err) {
+        fprintf(stderr, "sdev: pthread_setschedparam error (%s) - grant rtprio "
+            "to enable real-time RX thread\n", strerror(err));
+    }
 #endif
 }
 #endif
 
-// zero-fill dropped samples ---------------------------------------------------
+// write data (NULL: zeros) to ring buffer -------------------------------------
 #ifdef SOAPYSDR
-static void fill_gap(sdr_sdev_t *sdev, int pos, int data_samples,
-    int64_t gap_samples, uint8_t *scratch)
+static void write_buff(sdr_sdev_t *sdev, const uint8_t *data, int64_t size)
 {
-    int64_t gap_bytes = gap_samples * sdev->ssize;
-    int64_t data_bytes = (int64_t)data_samples * sdev->ssize;
     int64_t buf_size = (int64_t)BUFF_SIZE * BUFF_CNT;
+    int64_t pos = sdev->wp % buf_size, off = 0, rem = size;
     
-    if (data_bytes > 0) {
-        memcpy(scratch, sdev->buff + pos, data_bytes);
-    }
-    int64_t fill = pos, rem = gap_bytes;
     while (rem > 0) {
-        int64_t chunk = MIN(rem, buf_size - fill);
-        memset(sdev->buff + fill, 0, chunk);
-        rem -= chunk;
-        fill = (fill + chunk) % buf_size;
-    }
-    int64_t dst = (pos + gap_bytes) % buf_size, off = 0;
-    rem = data_bytes;
-    while (rem > 0) {
-        int64_t chunk = MIN(rem, buf_size - dst);
-        memcpy(sdev->buff + dst, scratch + off, chunk);
+        int64_t chunk = MIN(rem, buf_size - pos);
+        if (data) {
+            memcpy(sdev->buff + pos, data + off, chunk);
+        } else {
+            memset(sdev->buff + pos, 0, chunk);
+        }
         rem -= chunk;
         off += chunk;
-        dst = (dst + chunk) % buf_size;
+        pos = (pos + chunk) % buf_size;
     }
+    sdr_mutex_lock(&sdev->mtx);
+    sdev->wp += size;
+    sdr_mutex_unlock(&sdev->mtx);
 }
 #endif
 
@@ -295,8 +327,8 @@ static void *reader_thread(void *arg)
     sdr_sdev_t *sdev = (sdr_sdev_t *)arg;
     SoapySDRDevice *dev = (SoapySDRDevice *)sdev->dev;
     SoapySDRStream *str = (SoapySDRStream *)sdev->str;
-    uint8_t *gap_buf = (uint8_t *)sdr_malloc(BUFF_SIZE);
-    void *buffs[1];
+    uint8_t *data = (uint8_t *)sdr_malloc(BUFF_SIZE);
+    void *buffs[1] = {data};
     int tns_ena = !strcmp(sdev->driver,"lime") || !strcmp(sdev->driver,"uhd");
     int ret, flags, ovcnt = 0, dropcnt = 0, gapcnt = 0, prev_ret = 0;
     long long tns, tns_prev = 0;
@@ -311,12 +343,9 @@ static void *reader_thread(void *arg)
     }
 #endif
     while (sdev->state) {
-        int pos = (int)(sdev->wp % (BUFF_SIZE * BUFF_CNT));
-        int size = MIN(BUFF_SIZE, (BUFF_SIZE * BUFF_CNT - pos)) / sdev->ssize;
-        buffs[0] = (void *)(sdev->buff + pos);
         flags = 0;
-        ret = SoapySDRDevice_readStream(dev, str, buffs, size, &flags, &tns,
-            READ_TO);
+        ret = SoapySDRDevice_readStream(dev, str, buffs, BUFF_SIZE / sdev->ssize,
+            &flags, &tns, READ_TO);
         if (ret == SOAPY_SDR_TIMEOUT) continue;
         if (ret == SOAPY_SDR_OVERFLOW) {
             ovcnt++;
@@ -352,17 +381,15 @@ static void *reader_thread(void *arg)
         tns_prev = tns;
         
         if (gap_samples > 0) {
-            fill_gap(sdev, pos, ret, gap_samples, gap_buf);
+            write_buff(sdev, NULL, gap_samples * sdev->ssize);
         }
-        sdr_mutex_lock(&sdev->mtx);
-        sdev->wp += gap_samples * sdev->ssize + ret * sdev->ssize;
-        sdr_mutex_unlock(&sdev->mtx);
+        write_buff(sdev, data, (int64_t)ret * sdev->ssize);
     }
     if (ovcnt > 0 || dropcnt > 0 || gapcnt > 0) {
         fprintf(stderr, "sdev: total ts=%.3fs overflow=%d dev-drop=%d drop=%d\n",
             ts_elapsed(tick), ovcnt, dropcnt, gapcnt);
     }
-    sdr_free(gap_buf);
+    sdr_free(data);
 #ifdef WIN32
     timeEndPeriod(TIMER_RES);
 #endif

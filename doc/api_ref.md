@@ -1298,7 +1298,8 @@ Top-level receiver lifecycle and state queries. A receiver wraps a front-end (US
 - `-ARRAY` — output one RTCM3 obs stream per array element (station ID = CH).
 - `-SCALE=<scale>` — raw-to-IF LUT scale for INT8 / CS8 / CS16 formats (0 enables AGC; default 1.0).
 - `-TRACE[=<level>]` — enable debug trace logging at `<level>`.
-- `-FAST_SRCH` — enable fast acquisition. The receiver predicts initial Doppler
+- `-FAST_SRCH` — enable fast acquisition (the `fast_acq` key of
+  `sdr_rcv_setopt()` enables it as well). The receiver predicts initial Doppler
   from `.pocket_navdata.csv` navigation/almanac data plus the last FIX position
   and receiver clock drift rate; the saved position is ignored if its timestamp
   differs from the current GPST by more than one day.
@@ -1388,7 +1389,7 @@ Top-level receiver lifecycle and state queries. A receiver wraps a front-end (US
   `epoch`, `lag_epoch`, `el_mask`, `sp_corr`, `t_acq`, `t_acq_ext`, `t_coh`,
   `t_dll`, `b_dll`, `b_pll`, `b_fll_w`, `b_fll_n`, `max_dop`,
   `thres_cn0_l`, `thres_cn0_ext`, `thres_cn0_u`, `thres_pli`, `lost_th`,
-  `bump_jump`, and `max_acq`.
+  `bump_jump`, `max_acq`, and `fast_acq`.
 - **Notes**:
   - `t_acq_ext` controls assisted-acquisition integration; `t_coh` requests the coherent PLL update interval for synchronized pilot signals; `thres_cn0_ext` is the assisted-acquisition threshold before applying the tracking-loss-plus-1-dB floor.
   - `t_acq_ext`, `t_coh`, and `thres_cn0_ext` accept only values greater than zero. An invalid or unknown key prints an error and leaves the current value unchanged.

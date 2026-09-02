@@ -266,7 +266,7 @@ output paths separated by `|`):
 | `start`    | -                                            | open the receiver from the stored configuration |
 | `stop`     | -                                            | close the running receiver (Web UI stays up) |
 | `set_inp`  | `inp`, `file`, `fmt`, `fs`, `fo`, `IQ`, `bits`, `lpf`, `toff`, `tscale`, `bus`, `port`, `conf`, `conf_ena`, `dev_opt`, `driver` | update input configuration |
-| `set_sig`  | `sigs` ("SIG:prns ..."), `rfch`              | update signal configuration |
+| `set_sig`  | `sigs` ("SIG:prns ..."), `satno`, `satasgn`, `rfch` | update signal configuration |
 | `set_out`  | `types`, `paths`, `log_mask`, `array_sep`    | update output streams |
 | `set_sys`  | `fftw`, `opt`, `fast_acq`                    | update system configuration |
 | `opts_default` | -                                        | restore the default system options |
@@ -286,6 +286,25 @@ as the user typed it instead of gaining and losing `-LPF=` / `-FAST_SRCH` /
 (`-GAIN=` / `-BW=`) are a separate field (`dev_opt`) as in the Tk GUI, and
 the device configuration file has an enable flag (`conf_ena`) so that its
 path survives being switched off.
+
+The satellite number lists of the Signal page are a configuration field of
+their own (`satno[]`, one `|` separated entry per satellite system in the
+order GPS, GLONASS, Galileo, QZSS, BeiDou, NavIC, SBAS) as in the Tk GUI.
+They are the user setting the signal PRN lists are generated from, not the
+other way around: the QZSS number-to-PRN and the GLONASS FCN/slot mapping
+depend on the signal, so a list reconstructed from `sigs` would change with
+the signals selected. Satellite numbers a signal has no PRN for are dropped
+when the receiver channels are created.
+
+A signal needing satellite numbers of its own (GLONASS L1OC/L2OC for example
+is broadcast by a few satellites only, while L1OF is broadcast by all) is
+covered by the satellite number assignments (`satasgn`), a single free-form
+field `[<sys>:]<sig>:<prn>[{,|-}<prn>...] ...` next to the RF CH assignments.
+`<sys>` is one of G,R,E,J,C,I,S and may be omitted, in which case the PRNs
+are distributed over the systems they belong to. An assignment replaces the
+satellite numbers of the system for that signal and holds the PRNs directly,
+not the per-system satellite numbers, so no signal-dependent mapping applies
+to it. An empty PRN list assigns no channel to the signal.
 
 Every command is answered with an `ack` JSON message. `setopt` accepts only
 the key names already handled by `sdr_rcv_setopt()`.
@@ -523,7 +542,19 @@ the server its own AP; see the Summary.
 Responsive layout: the pages reflow below 620 px so a phone can drive the
 receiver — the Receiver page stacks status, sky plot and C/N0 in thirds, the
 RF CH page puts the PSD over the histograms, and the Correlator page stacks
-its three panels.
+its three panels. The status bar shows the CPU load and the receiver time on
+their own line above the message there; in the single-line layout a message
+too long for the bar is cut with an ellipsis instead of pushing them out.
+
+Touch navigation: a left/right swipe on the page area steps to the next or
+previous tab page (Receiver ... Log; the pages of the command bar are not in
+the sequence and do not swipe), with a short slide-in as the feedback, and the
+tab bar scrolls the selected tab into view. The tables of the BB CH,
+Satellites and Log pages are wider than a phone screen, so a gesture over them
+is shared: a short drag scrolls the table sideways as usual, and only a swipe
+longer than 40 % of the page width (200 px at most) switches the page, which
+then puts the table back where the swipe took it from. Everywhere else 40 px
+is enough.
 
 ### Visual style
 

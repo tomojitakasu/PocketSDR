@@ -54,7 +54,7 @@ static const char *usage_text[] = {
     "       [-fmt {INT8|INT8X2|RAW8|RAW16|RAW32|CS8|CS16}] [-f freq]",
     "       [-fo freq[,...]] [-IQ {1|2}[,...]] [-bits {2|3}[,...]",
     "       [-toff toff] [-ti tint] [-p bus,[,port] [-c conf_file]",
-    "       [-driver name] [-gain gain] [-bw bw] [-fd dopp]",
+    "       [-driver name] [-gain gain] [-bw bw] [-EXT_CLOCK] [-fd dopp]",
     "       [-log path] [-nmea path] [-rtcm path] [-raw path] ... [-opt file]",
     "       [-arch nch] [-geom file] [file]",
     NULL
@@ -285,6 +285,9 @@ int main(int argc, char **argv)
             gain = atof(argv[++i]);
         } else if (!strcmp(argv[i], "-bw") && i + 1 < argc) {
             bw = atof(argv[++i]);
+        } else if (!strcmp(argv[i], "-EXT_CLOCK")) {
+            size_t len = strlen(rfch_opt);
+            snprintf(rfch_opt + len, sizeof(rfch_opt) - len, " -EXT_CLOCK");
         } else if (!strcmp(argv[i], "-fd") && i + 1 < argc) {
             max_dop = atof(argv[++i]);
         } else if (!strcmp(argv[i], "-arch") && i + 1 < argc) {

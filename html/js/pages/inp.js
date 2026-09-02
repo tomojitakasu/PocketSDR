@@ -8,6 +8,10 @@ const TYPES = [ // [label, SoapySDR driver] ('': Pocket SDR FE device)
 ];
 const FMTS = ['INT8', 'INT8X2', 'RAW8', 'RAW16', 'RAW16I', 'RAW32', 'CS8',
     'CS16'];
+const F_LO = [ // LO frequency selections (MHz, free input also allowed)
+    '1176.450', '1191.795', '1202.025', '1207.140', '1227.600', '1246.000',
+    '1248.060', '1268.520', '1278.750', '1561.098', '1575.420', '1602.000',
+    '1600.995', '2492.028'];
 const NOTES = [
     '* Automatically configured if &lt;Path&gt;.tag file exists.',
     '** -GAIN=gain_dB -BW=bandwidth_MHz'
@@ -19,7 +23,8 @@ export class InpPage {
         this.el = document.createElement('div');
         const rfch = (ch) =>
             `<tr><td>${ch + 1}</td>` +
-            `<td><input type="number" class="in-fo num" step="any"></td>` +
+            `<td><input type="number" class="in-fo" step="any" ` +
+            `list="in-fo-list"></td>` +
             `<td><select class="in-IQ"><option value="1">I</option>` +
             `<option value="2">IQ</option></select></td>` +
             `<td><select class="in-bits"><option>2</option>` +
@@ -77,6 +82,8 @@ export class InpPage {
                 [0, 1, 2, 3].map(i => rfch(base + i)).join('') +
                 `</tbody></table>`).join('') +
             `</div></div>` +
+            `<datalist id="in-fo-list">` +
+            F_LO.map(f => `<option value="${f}">`).join('') + `</datalist>` +
             `<div class="cfg-note">` +
             NOTES.map(s => `<div>${s}</div>`).join('') + `</div>` +
             `</div>`;

@@ -731,6 +731,7 @@ void sdr_pvt_free(sdr_pvt_t *pvt)
     sdr_free(pvt->nav->eph);
     sdr_free(pvt->nav->geph);
     sdr_free(pvt->nav->seph);
+    sdr_free(pvt->nav->alm);
     sdr_free(pvt->nav);
     sdr_free(pvt->sol);
     sdr_free(pvt->ssat);
@@ -743,6 +744,14 @@ void sdr_pvt_free(sdr_pvt_t *pvt)
 static void init_epoch(sdr_pvt_t *pvt, int64_t ix, sdr_ch_t *ch)
 {
     if (!ch->week) return;
+
+    // a wrong week is baked into pvt->time and never revised, so seed the epoch
+    // only from a week corroborated by another channel or by a repeated decode
+    if (ch->nav->week_n < 2 && (pvt->week_c != ch->week || pvt->ch_c == ch->no)) {
+        pvt->week_c = ch->week;
+        pvt->ch_c = ch->no;
+        return;
+    }
     double tow = floor(ch->tow * 1e-3 / sdr_epoch) * sdr_epoch + sdr_epoch;
     pvt->time = gpst2time(ch->week, tow);
     pvt->ix = ix + ROUND((tow - ch->tow * 1e-3 - 0.07) / SDR_CYC);
@@ -756,7 +765,12 @@ static double gen_prng(gtime_t time, const sdr_ch_t *ch)
     double tau = 0.0, tow = time2gpst(time, &week);
     
     if (ch->week > 0) {
-        tau = (week - ch->week) * 86400.0 * 7 + tow - ch->tow * 1e-3 + ch->coff;
+        // wrap the TOW difference instead of using ch->week: the epoch and the
+        // channel TOW straddle the end of week for a moment at the rollover
+        tau = tow - ch->tow * 1e-3;
+        if (tau > 302400.0) tau -= 86400.0 * 7;
+        else if (tau < -302400.0) tau += 86400.0 * 7;
+        tau += ch->coff;
     } else if (ch->tow_v == 2) { // resolve 100 ms ambiguity (0.05 <= tau < 0.15)
         tau = tow - ch->tow * 1e-3 + ch->coff + ch->nav->coff;
         tau -= floor(tau / 0.1) * 0.1;
@@ -914,6 +928,21 @@ static int test_match_eph(eph_t *eph1, const eph_t *eph2)
     }
 }
 
+// rebase ephemeris week onto signal-derived channel week ----------------------
+static void rebase_eph_week(const sdr_ch_t *ch, eph_t *eph)
+{
+    int dw = ch->week - eph->week;
+
+    if (ch->week <= 0) return;
+    // era shift in 1024-week units keeps the half-week crossover adjustment
+    dw = (dw >= 0 ? dw + 512 : dw - 512) / 1024 * 1024;
+    if (dw == 0) return;
+    eph->week += dw;
+    eph->toe = timeadd(eph->toe, 604800.0 * dw);
+    eph->toc = timeadd(eph->toc, 604800.0 * dw);
+    eph->ttr = timeadd(eph->ttr, 604800.0 * dw);
+}
+
 //------------------------------------------------------------------------------
 //  Update navigation data.
 //
@@ -946,6 +975,7 @@ void sdr_pvt_udnav(sdr_pvt_t *pvt, sdr_ch_t *ch)
         if (ch->nav->type == 3 &&
             decode_frame(data, pvt->nav->eph + sat - 1, NULL, NULL, NULL)) {
             pvt->nav->eph[sat-1].sat = sat;
+            rebase_eph_week(ch, pvt->nav->eph + sat - 1);
             out_log_eph(ch->time, ch->sat, ch->sig, pvt->nav->eph + sat - 1);
             out_rtcm3_nav(pvt->rtcm, sat, 0, pvt->nav, pvt->rcv);
             pvt->count[2]++;

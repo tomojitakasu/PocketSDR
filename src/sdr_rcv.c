@@ -53,6 +53,7 @@
 
 // global variables ------------------------------------------------------------
 double sdr_max_acq = MAX_ACQ;
+int sdr_fast_acq = 0;           // fast acquisition mode (0:off, 1:on)
 
 // real-to-complex state -------------------------------------------------------
 static inline int rtoc_of(const sdr_rcv_t *rcv, int i)
@@ -686,7 +687,7 @@ sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
     if ((p = strstr(opt, "-BUMP_K="))) {
         sscanf(p, "-BUMP_K=%lf", &sdr_bump_k);
     }
-    rcv->fast_acq = strstr(opt, "-FAST_SRCH") ? 1 : 0;
+    rcv->fast_acq = (sdr_fast_acq || strstr(opt, "-FAST_SRCH")) ? 1 : 0;
     rcv->fmt = fmt;
     rcv->fs = fs;
     rcv->nrfch = num_rfch(fmt);
@@ -1767,7 +1768,8 @@ sdr_rcv_t *sdr_rcv_open_dev(const char **sigs, int *prns, int n, int bus,
 //      freq      (I)  Carrier center frequency (Hz)
 //      types     (I)  output stream types as same as sdr_rcv_start()
 //      paths     (I)  output stream paths as same as sdr_rcv_start()
-//      opt       (I)  receiver options (same as sdr_rcv_open_dev())
+//      opt       (I)  receiver options (same as sdr_rcv_open_dev()) and
+//                     device options (same as sdr_sdev_open())
 //
 //  returns:
 //      SDR receiver (NULL: error)
@@ -1777,13 +1779,10 @@ sdr_rcv_t *sdr_rcv_open_sdev(const char **sigs, int *prns, int n,
     const char **paths, const char *opt)
 {
     sdr_sdev_t *sdev;
-    const char *p;
-    double fs, fo[SDR_MAX_RFCH] = {0}, bw = 0.0, gain = 0.0;
+    double fs, fo[SDR_MAX_RFCH] = {0};
     int IQ[SDR_MAX_RFCH] = {0}, bits[SDR_MAX_RFCH] = {0};
     
-    if ((p = strstr(opt, "-GAIN="))) sscanf(p, "-GAIN=%lf", &gain);
-    if ((p = strstr(opt, "-BW="))) sscanf(p, "-BW=%lf", &bw);
-    if (!(sdev = sdr_sdev_open(driver, fmt, rate, freq, bw * 1e6, gain))) {
+    if (!(sdev = sdr_sdev_open(driver, fmt, rate, freq, opt))) {
         return NULL;
     }
     fs = rate;
@@ -1966,5 +1965,6 @@ void sdr_rcv_setopt(const char *opt, double value)
     else if (!strcmp(opt, "lost_th"    )) sdr_lost_th     = (int)value;
     else if (!strcmp(opt, "bump_jump"  )) sdr_bump_jump = (int)value;
     else if (!strcmp(opt, "max_acq"    )) sdr_max_acq     = value;
+    else if (!strcmp(opt, "fast_acq"   )) sdr_fast_acq    = (int)value;
     else fprintf(stderr, "sdr_rcv_setopt error opt=%s\n", opt);
 }

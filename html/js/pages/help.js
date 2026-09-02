@@ -52,6 +52,10 @@ export class HelpPage {
             `</tbody></table>` +
             `<div class="hp-sec">Notes</div>` +
             `<ul class="hp-list">` +
+            `<li>A left or right swipe on the page area switches to the ` +
+            `next or previous page of the tab bar. Over a table wider than ` +
+            `the screen, a short drag scrolls the table and a long swipe ` +
+            `switches the page.</li>` +
             `<li>The options can be edited only while the receiver is ` +
             `stopped. They are restored at the next startup when the AP is ` +
             `started without the -sig option.</li>` +

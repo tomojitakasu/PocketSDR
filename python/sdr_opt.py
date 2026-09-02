@@ -34,6 +34,8 @@ FONT = ('Tahoma', 9, 'normal')
 F_LO = ('1176.450', '1191.795', '1202.025', '1207.140', '1227.600', '1246.000',
     '1248.060', '1268.520', '1278.750', '1561.098', '1575.420', '1602.000',
     '1600.995', '2492.028')
+RO_WIDGETS = (         # widget classes disabled in a reference only dialog
+    'TEntry', 'TCombobox', 'TCheckbutton', 'TRadiobutton', 'TButton')
 
 # general object class ---------------------------------------------------------
 class Obj: pass
@@ -62,10 +64,12 @@ def modal_dlg_new(root, width, height, title='', nocancel=0):
     dlg.panel.pack(fill=BOTH, expand=1, padx=DLG_MARGIN[0], pady=DLG_MARGIN[1])
     dlg.btns = Frame(dlg.panel, bg=BG_COLOR)
     dlg.btns.pack(side=BOTTOM, fill=X)
+    dlg.btn_cancel = None
     if not nocancel:
         btn2 = ttk.Button(dlg.btns, width=12, padding=(2, 2), text='Cancel')
         btn2.bind('<Button-1>', lambda e: on_modal_dlg_cancel(e, dlg))
         btn2.pack(side=RIGHT, padx=1)
+        dlg.btn_cancel = btn2
     btn1 = ttk.Button(dlg.btns, width=12, padding=(2, 2), text='OK')
     btn1.bind('<Button-1>', lambda e: on_modal_dlg_ok(e, dlg))
     btn1.pack(side=TOP if nocancel else RIGHT, padx=1)
@@ -74,8 +78,26 @@ def modal_dlg_new(root, width, height, title='', nocancel=0):
     dlg.win.grab_set()
     return dlg
 
+# set modal dialog to reference only -------------------------------------------
+#   The buttons are bound to <Button-1> which fires even when they are disabled,
+#   so their callbacks check the state as well.
+def modal_dlg_readonly(dlg, title=''):
+    for c in dlg.panel.winfo_children():
+        config_widget_disable(c)
+    if dlg.btn_cancel != None: # the dialog is left by Cancel or the close box
+        dlg.btn_cancel.configure(state=NORMAL)
+    dlg.win.title(title + ' (Reference Only)')
+
+# disable input widgets in a widget tree ---------------------------------------
+def config_widget_disable(w):
+    if w.winfo_class() in RO_WIDGETS or getattr(w, 'ro_dis', 0):
+        w.configure(state=DISABLED)
+    for c in w.winfo_children():
+        config_widget_disable(c)
+
 # modal dialog OK callback -----------------------------------------------------
 def on_modal_dlg_ok(e, dlg):
+    if e.widget.instate(('disabled',)): return
     dlg.ok = 1
     dlg.win.destroy()
 
@@ -88,6 +110,7 @@ def custom_btn_new(parent, label='', font=FONT):
     p = Obj()
     p.panel = Frame(parent, bg='#AAAAAA')
     p.btn = ttk.Label(p.panel, text=label, anchor=CENTER, background='white')
+    p.btn.ro_dis = 1 # disabled as a button in a reference only dialog
     p.btn.pack(expand=1, fill=BOTH, padx=1, pady=1)
     p.btn.bind('<Enter>', lambda e: not e.widget.instate(('disabled',)) and
         e.widget.configure(background = '#DDDDDD'))
@@ -154,6 +177,7 @@ def path_panel_new(parent, label, out=0, var_path=None, var_ena=None, types=[],
 
 # option path button push callback ---------------------------------------------
 def on_path_btn_push(e, p, var, out=0, types=()):
+    if e.widget.instate(('disabled',)): return
     if out:
         path = filedialog.asksaveasfilename(parent=p, title='Output File Path',
             filetypes=types)
@@ -271,6 +295,7 @@ def sig_opt_new(opt_p=None):
     opt.sys_sel = [IntVar() for s in opt.sys]
     opt.satno = [StringVar() for s in opt.sys]
     opt.sig_sel = [[IntVar() for s in opt.sig[i]] for i in range(len(opt.sig))]
+    opt.sig_satno = StringVar()
     opt.sig_rfch = StringVar()
     if opt_p != None:
         for i in range(len(opt.sys_sel)):
@@ -278,6 +303,7 @@ def sig_opt_new(opt_p=None):
             opt.satno[i].set(opt_p.satno[i].get())
             for j in range(len(opt.sig_sel[i])):
                 opt.sig_sel[i][j].set(opt_p.sig_sel[i][j].get())
+        opt.sig_satno.set(opt_p.sig_satno.get())
         opt.sig_rfch.set(opt_p.sig_rfch.get())
     else:
         for i in range(len(opt.satno)):
@@ -462,9 +488,10 @@ def read_opt(val, opt):
         val.set(opt)
 
 # show Input Options dialog ----------------------------------------------------
-def inp_opt_dlg(root, opt):
+def inp_opt_dlg(root, opt, readonly=0):
     opt_new = inp_opt_new(opt)
-    dlg = modal_dlg_new(root, 510, 600, 'Input Options')
+    title = 'Input Options'
+    dlg = modal_dlg_new(root, 510, 600, title)
     panel = Frame(dlg.panel, width=450, bg=BG_COLOR)
     panel.pack(fill=X, pady=4)
     ttk.Label(panel, text='Input Source').pack(side=LEFT, padx=4)
@@ -484,11 +511,13 @@ def inp_opt_dlg(root, opt):
     btn1.bind('<Button-1>', lambda e: on_inp_select(e, 0, p1, p2, p3, p4))
     btn2.bind('<Button-1>', lambda e: on_inp_select(e, 1, p1, p2, p3, p4))
     sel1 = p1.winfo_children()[1].winfo_children()[1]
+    if readonly: modal_dlg_readonly(dlg, title)
     root.wait_window(dlg.win)
     return opt_new if dlg.ok else opt
 
 # input source select callback -------------------------------------------------
 def on_inp_select(e, sel, p1, p2, p3, p4):
+    if e.widget.instate(('disabled',)): return
     inp_opt_enable_update(sel, p1, p2, p3, p4)
 
 # update input options enable --------------------------------------------------
@@ -598,6 +627,7 @@ def rtcm3_to_rinex(status, file):
 
 # callback on button To RINEX --------------------------------------------------
 def on_to_rinex(e, path, status):
+    if e.widget.instate(('disabled',)): return
     init_dir = os.path.dirname(rep_path_time(path.split('::')[0]))
     file = filedialog.askopenfilename(parent=e.widget.master,
         title='RTCM3 File to Convert to RINEX', initialdir=init_dir,
@@ -632,6 +662,7 @@ def on_str_ena_change(p, opt, i):
 
 # output stream path button push callback ----------------------------------------
 def on_str_path_btn_push(e, p, opt, i):
+    if e.widget.instate(('disabled',)): return
     if not opt.path_ena[i].get(): return
     types = STR_FILE_TYPES.get(opt.str_type[i].get(), [('All', '*.*')])
     path = filedialog.asksaveasfilename(parent=p, title='Output File Path',
@@ -647,13 +678,14 @@ def rtcm3_path(opt):
     return ''
 
 # show Output Options dialog ---------------------------------------------------
-def out_opt_dlg(root, opt):
+def out_opt_dlg(root, opt, readonly=0):
     texts = ('Output Streams (File: local_path[::S=tint], TCP: [addr]:port)',
         'Output Receiver Log Types', 'Keywords Replacement in Path',
         '%Y=Year(yyyy) %y=year(yy) %m=month(mm) %d=day(dd) %h=hour(00-23)',
         '%M=minute(00-59) %S=second(00-59)')
     opt_new = out_opt_new(opt)
-    dlg = modal_dlg_new(root, 600, 500, 'Output Options')
+    title = 'Output Options'
+    dlg = modal_dlg_new(root, 600, 500, title)
     panel1 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     panel1.pack(fill=X, pady=2)
     ttk.Label(panel1, text=texts[0], justify=LEFT).pack(fill=X, padx=10,
@@ -682,13 +714,15 @@ def out_opt_dlg(root, opt):
     btn_rnx = ttk.Button(dlg.btns, width=12, padding=(2, 2), text='To RINEX')
     btn_rnx.pack(side=LEFT, padx=1)
     btn_rnx.bind('<Button-1>', lambda e: on_to_rinex(e, rtcm3_path(opt_new), status))
+    if readonly: modal_dlg_readonly(dlg, title)
     root.wait_window(dlg.win)
     return opt_new if dlg.ok else opt
 
 # show Signal Options dialog ---------------------------------------------------
-def sig_opt_dlg(root, opt):
+def sig_opt_dlg(root, opt, readonly=0):
     opt_new = sig_opt_new(opt)
-    dlg = modal_dlg_new(root, 480, 600, 'Signal Options')
+    title = 'Signal Options'
+    dlg = modal_dlg_new(root, 480, 600, title)
     panel1 = Frame(dlg.panel, width=450, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     sig_panels = []
     ttk.Button(dlg.btns, width=12, padding=(2, 2), text='Set All',
@@ -707,10 +741,15 @@ def sig_opt_dlg(root, opt):
         sig_panels.append(panel)
     panel2 = Frame(dlg.panel, width=450, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     panel2.pack(fill=X, pady=2)
+    ttk.Label(panel2, text='Satellite No Assignments ([<sys>:]<sig>:<prn>[-<prn>][,...][ ...])').pack(
+        fill=X, padx=10, pady=4)
+    inp_panel_new(panel2, '', opt_new.sig_satno, width=500, justify=LEFT).pack(
+        padx=(0, 4), pady=(2, 6))
     ttk.Label(panel2, text='RF CH Assignments (<sig>:<ch>[-<ch>][,...][ ...])').pack(
         fill=X, padx=10, pady=4)
     inp_panel_new(panel2, '', opt_new.sig_rfch, width=500, justify=LEFT).pack(
         padx=(0, 4), pady=(2, 6))
+    if readonly: modal_dlg_readonly(dlg, title)
     root.wait_window(dlg.win)
     return opt_new if dlg.ok else opt
 
@@ -747,7 +786,7 @@ def sig_opt_set_all(panels, opt, state):
         on_sig_opt_change(panel, opt.sys_sel[i])
 
 # show System Options dialog ---------------------------------------------------
-def sys_opt_dlg(root, opt):
+def sys_opt_dlg(root, opt, readonly=0):
     labels = ('Epoch Interval for PVT (s)', 'Max Epoch Lag for PVT (s)',
         'Elevation Mask for PVT (\xb0)', 'Correlator Spacing (chip)',
         'Integration for Acquisition (s)', 'Integration for Assisted Acq (s)',
@@ -760,7 +799,8 @@ def sys_opt_dlg(root, opt):
         'Max Code Len for Direct Acq (ms)', 'Carrier Lock Threshold (PLI)',
         'Lost Decision Count (windows)')
     opt_new = sys_opt_new(opt)
-    dlg = modal_dlg_new(root, 660, 500, 'System Options')
+    title = 'System Options'
+    dlg = modal_dlg_new(root, 660, 500, title)
     ttk.Button(dlg.btns, width=12, padding=(2, 2), text='Set Default',
         command=lambda: sys_opt_set_default(opt_new)).pack(side=LEFT, padx=1)
     panel1 = Frame(dlg.panel, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
@@ -818,13 +858,15 @@ def sys_opt_dlg(root, opt):
     ttk.Label(dlg.panel, text='Receiver Options').pack(fill=X, padx=10, pady=4)
     inp_panel_new(dlg.panel, '', opt_new.rcv_options, width=100, justify=LEFT).pack(
         padx=(0, 4), pady=(2, 6))
+    if readonly: modal_dlg_readonly(dlg, title)
     root.wait_window(dlg.win)
     return opt_new if dlg.ok else opt
 
 # show Array Options dialog ----------------------------------------------------
-def array_opt_dlg(root, opt, geom_load=None, geom_save=None):
+def array_opt_dlg(root, opt, geom_load=None, geom_save=None, readonly=0):
     opt_new = array_opt_new(opt)
-    dlg = modal_dlg_new(root, 420, 590, 'Array Options')
+    title = 'Array Options'
+    dlg = modal_dlg_new(root, 420, 590, title)
     sel_panel_new(dlg.panel, 'Number of Array CH',
         sels=['%d' % n for n in range(9)], var=opt_new.no_array, width=8)
     w, h, r = 380, 220, 0.135
@@ -857,12 +899,13 @@ def array_opt_dlg(root, opt, geom_load=None, geom_save=None):
         geom_save))
     btn4.bind('<Button-1>', lambda e: on_btn_clear_push(e, plot, opt_new))
     plot.c.bind('<Configure>', lambda e: on_show_ant_ele_plot(e, plot, opt_new))
+    if readonly: modal_dlg_readonly(dlg, title)
     root.wait_window(dlg.win)
     return opt_new if dlg.ok else opt
 
 # button geometry load push callback -------------------------------------------
 def on_btn_geom_load_push(e, dlg, plot, opt, geom_load):
-    if geom_load is None: return
+    if e.widget.instate(('disabled',)) or geom_load is None: return
     file = filedialog.askopenfilename(parent=dlg.win,
         title='Load Array Geometry',
         filetypes=[('Geometry', '*.geom'), ('All', '*.*')])
@@ -879,7 +922,7 @@ def on_btn_geom_load_push(e, dlg, plot, opt, geom_load):
 
 # button geometry save push callback -------------------------------------------
 def on_btn_geom_save_push(e, dlg, opt, geom_save):
-    if geom_save is None: return
+    if e.widget.instate(('disabled',)) or geom_save is None: return
     n = 0
     for i in range(MAX_RFCH):
         if opt.ena_ele[i].get(): n = i + 1
@@ -923,6 +966,7 @@ def on_btn_update_push(e, plot, opt):
 
 # button clear push callback ---------------------------------------------------
 def on_btn_clear_push(e, plot, opt):
+    if e.widget.instate(('disabled',)): return
     for ch in range(MAX_RFCH):
         opt.posx[ch].set('0.0000')
         opt.posy[ch].set('0.0000')

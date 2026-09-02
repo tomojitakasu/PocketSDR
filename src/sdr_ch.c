@@ -832,7 +832,16 @@ static int CSK(sdr_ch_t *ch, const sdr_cpx16_t *IQ, double coff_frc)
 static void update_tow(sdr_ch_t *ch, double sec)
 {
     if (ch->tow < 0) return;
-    ch->tow = (ch->tow + (int)floor(sec / 1e-3 + 0.5)) % (86400 * 7 * 1000);
+    ch->tow += (int)floor(sec / 1e-3 + 0.5);
+    
+    // the week has to follow the TOW rollover until the next week is decoded
+    if (ch->tow >= 86400 * 7 * 1000) {
+        ch->tow -= 86400 * 7 * 1000;
+        if (ch->week > 0) ch->week++;
+    } else if (ch->tow < 0) {
+        ch->tow += 86400 * 7 * 1000;
+        if (ch->week > 0) ch->week--;
+    }
 }
 
 // adjust code offset (0 <= ch->coff < ch->T) ----------------------------------
