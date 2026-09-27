@@ -113,9 +113,19 @@ static void test_sdr_thread(void)
 #endif
 }
 
+// sdr_sleep_msec() with 1 s or longer ----------------------------------------
+static void test_sdr_sleep_msec_long(void)
+{
+    uint32_t tick = sdr_get_tick();
+    
+    sdr_sleep_msec(1050); // tv_nsec >= 1e9 is invalid for nanosleep
+    TEST_ASSERT_TRUE(sdr_get_tick() - tick >= 1000);
+}
+
 // main ------------------------------------------------------------------------
 int main(void)
 {
+    TEST_RUN(test_sdr_sleep_msec_long);
     TEST_RUN(test_sdr_malloc_free);
     TEST_RUN(test_sdr_get_time);
     TEST_RUN(test_sdr_tick_sleep);

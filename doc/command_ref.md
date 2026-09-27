@@ -179,7 +179,9 @@ Hexadecimal form:
 
 ```
 pocket_dump [-t tsec] [-r] [-p bus[,port]] [-c conf_file] [-q] [-v]
-            [-driver name] [-fmt {CS8|CS16}] [-f fs] [-fo freq]
+            [-driver name] [-fmt {CS8|CS16}] [-f fs] [-fo freq[,...]]
+            [-gain gain] [-bw bw] [-gpio val] [-NO_SYNC]
+|CS16}] [-f fs] [-fo freq]
             [-gain gain] [-bw bw]
             [path [path ...]]
 ```
@@ -189,7 +191,9 @@ pocket_dump [-t tsec] [-r] [-p bus[,port]] [-c conf_file] [-q] [-v]
 Capture and dump digital IF (DIF) data from a Pocket SDR FE device or a
 SoapySDR-supported device. Pocket SDR FE capture writes one output file per RF
 channel unless `-r` is specified. SoapySDR capture writes one complex sample
-stream to the first output path. Capturing stops on the configured duration
+stream to the first output path; with multiple RF channels the channels are
+written channel-planar in blocks of a processing cycle, which `pocket_trk`
+replays as a multi-channel input. Capturing stops on the configured duration
 (`-t`), or by Ctrl-C. A `<path>.tag` companion file is written for each output,
 recording the IF format, sampling rate, LO frequencies, and per-CH sampling type
 / bit width so downstream tools (e.g. `pocket_trk`, `pocket_acq`) can
@@ -208,19 +212,34 @@ auto-configure.
 - `-driver name`
   - Use a SoapySDR device instead of a Pocket SDR FE device. Examples: `lime`,
     `uhd`, `bladerf`, `rtlsdr`, `plutosdr`. Driver-specific arguments accepted
-    by SoapySDR can also be passed.
+    by SoapySDR can also be passed. Multiple devices are specified as specs
+    separated by `;`, and `nchan=<n>` in a spec selects the number of RX
+    channels of the device (default 1), up to 8 RF channels in total.
+    With multiple devices the external clock and time sources are selected and
+    the streams are started at a common time latched by a 1PPS, so a common
+    10 MHz and 1PPS have to be distributed to the devices.
+    - `-driver "driver=uhd,serial=31A1;driver=uhd,serial=31B5"`
+    - `-driver "driver=uhd,serial=31A1,nchan=2"`
 - `-fmt {CS8|CS16}`
   - SoapySDR sample format. [`CS8`]
 - `-f fs`
   - SoapySDR sampling rate in MHz. [`12`]
-- `-fo freq`
-  - SoapySDR RF center frequency in MHz. This option is required with
-    `-driver`.
+- `-fo freq[,...]`
+  - SoapySDR RF center frequency of each RF channel in MHz. This option is
+    required with `-driver`. A channel with an omitted or `0` frequency uses
+    the frequency of the first channel.
 - `-gain gain`
   - SoapySDR RF gain in dB. Omitted or `0`: use automatic gain if the driver
     supports it.
 - `-bw bw`
   - SoapySDR RF bandwidth in MHz. Omitted or `0`: leave driver default.
+- `-gpio val`
+  - Output `val` (0-255) to the GPIO pins of the SoapySDR device (USRP:
+    front-panel GPIO). The pins are set to outputs at the device open.
+- `-NO_SYNC`
+  - With multiple SoapySDR devices, do not synchronize the device times by a
+    1PPS. The devices run on their own clocks and the RF channels of
+    different devices are NOT aligned in samples.
 - `-q`
   - Suppress the runtime status display.
 - `-v`
@@ -305,9 +324,9 @@ pocket_trk [-sig sig -prn prn[,...] [-rfch ch[,...]] ...]
            [-f freq] [-fo freq[,...]] [-IQ {1|2}[,...]] [-bits {2|3}[,...]]
            [-toff toff] [-tscale scale] [-ti tint]
            [-p bus[,port]] [-c conf_file]
-           [-driver name] [-gain gain] [-bw bw] [-fd dopp]
-           [-log path] [-nmea path] [-rtcm path] [-raw path] ...
-           [-arch nch] [-geom file]
+           [-driver name] [-gain gain] [-bw bw] [-gpio val] [-EXT_CLOCK]
+           [-NO_SYNC] [-fd dopp] [-log path] [-nmea path] [-rtcm path] [-raw path] ...
+           [-arch nch] [-geom file] [-sens name[,...]]
            [-h height] [-opt file] [-debug file] [-v] [file]
 ```
 
@@ -328,8 +347,9 @@ The input can be a local file, a TCP stream, a Pocket SDR FE device, or a SoapyS
   - Sampling frequency of the IF data in MHz. [`12.0`]
 - `-fo freq[,...]`
   - LO frequency for each RF channel in MHz, comma-separated. With
-    `RAW8/16/32`, 2/4/8 frequencies are required. With `-driver`, the first
-    frequency is the SoapySDR RF center frequency and is required.
+    `RAW8/16/32`, 2/4/8 frequencies are required. With `-driver`, these are the
+    SoapySDR RF center frequencies of the RF channels and the first one is
+    required; a channel with an omitted or `0` frequency uses the first one.
 - `-IQ {1|2}[,...]`
   - Per-RF-CH sampling type: `1` = I, `2` = IQ. Used with `RAW8/16/32`. [`2,2,2,2,2,2,2,2`]
 - `-bits {2|3}[,...]`
@@ -346,10 +366,28 @@ The input can be a local file, a TCP stream, a Pocket SDR FE device, or a SoapyS
   - Configure the Pocket SDR FE device with a `pocket_conf`-format file before tracking starts.
 - `-driver name`
   - SoapySDR driver name (`lime`, `hackrf`, `rtlsdr`, `sdrplay`, `bladerf`, ...). Selects a SoapySDR device as the input.
+    Multiple devices are specified as specs separated by `;`, and `nchan=<n>`
+    in a spec selects the number of RX channels of the device (default 1), up
+    to 8 RF channels in total. With multiple devices the external clock and
+    time sources are selected and the streams are started at a common time
+    latched by a 1PPS, so a common 10 MHz and 1PPS have to be distributed to
+    the devices. The RF channels are then handled like the RF channels of a
+    multi-CH frontend, including `-RFCH` assignment and `-arch` array
+    combining.
 - `-gain gain`
   - SoapySDR overall gain in dB.
 - `-bw bw`
   - SoapySDR analog filter bandwidth in MHz.
+- `-gpio val`
+  - Output `val` (0-255) to the GPIO pins of the SoapySDR device (USRP:
+    front-panel GPIO). The pins are set to outputs at the device open.
+- `-EXT_CLOCK`
+  - Select the external clock source of the SoapySDR device.
+- `-NO_SYNC`
+  - With multiple SoapySDR devices, do not synchronize the device times by a
+    1PPS. The devices run on their own clocks and the RF channels of
+    different devices are NOT aligned in samples (for non-coherent uses such
+    as a band per device).
 - `-fd dopp`
   - Maximum Doppler frequency to search signals in Hz. Overrides the `max_dop` key in `-opt file` if both are given. [from `-opt file` or default `5000`]
 - `-log path`
@@ -369,6 +407,10 @@ The input can be a local file, a TCP stream, a Pocket SDR FE device, or a SoapyS
 - `-geom file`
   - Array element positions file (body-frame, `pocket_sdr.py` array
     geometry format) applied at startup. [none]
+- `-sens name[,...]`
+  - Sensors of the RF channels of a SoapySDR device to log every 10 s as
+    `$SENS,<time>,<rfch>,<name>,<value>`, e.g. `temp`, `rssi`, `lo_locked`
+    (RF channel) or `ref_locked` (device) of a USRP. [`temp`]
 - `-h height`
   - Console height (rows) for the runtime status display. [`64`]
 - `-opt file`

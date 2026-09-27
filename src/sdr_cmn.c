@@ -139,7 +139,8 @@ void sdr_sleep_msec(int msec)
 #else
     struct timespec ts = {0, 0};
     
-    ts.tv_nsec = (long)(msec * 1000000);
+    ts.tv_sec = msec / 1000;
+    ts.tv_nsec = (long)(msec % 1000) * 1000000L;
     nanosleep(&ts, NULL);
 #endif
 }

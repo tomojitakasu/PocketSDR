@@ -19,6 +19,7 @@
 //  2024-07-02  1.8  support tag file output
 //  2024-11-23  1.9  support Pocket SDR FE 8CH
 //  2026-06-01  1.10 support SoapySDR devices
+//  2026-09-03  1.11 support multiple RF CHs of SoapySDR devices
 //
 #include <signal.h>
 #ifdef WIN32
@@ -54,8 +55,9 @@ static void print_ver(void)
 static void print_usage(void)
 {
     printf("Usage: %s [-t tsec] [-r] [-p bus[,port]] [-c conf_file] [-q]\n"
-        "    [-driver name] [-fmt {CS8|CS16}] [-f fs] [-fo freq]\n"
-        "    [-gain gain] [-bw bw] [path [path ...]]\n", PROG_NAME);
+        "    [-driver name] [-fmt {CS8|CS16}] [-f fs] [-fo freq[,...]]\n"
+        "    [-gain gain] [-bw bw] [-gpio val] [-NO_SYNC] [path [path ...]]\n",
+        PROG_NAME);
     exit(0);
 }
 
@@ -210,21 +212,27 @@ static void dump_data(sdr_dev_t *dev, double tsec, int quiet, int raw, int fmt,
 
 // dump SoapySDR device IF data -----------------------------------------------
 static void dump_sdev_data(sdr_sdev_t *sdev, double tsec, int quiet, int fmt,
-    FILE **fp)
+    double fs, FILE **fp)
 {
     double time = 0.0, time_p = 0.0, sample = 0.0, sample_p = 0.0;
     double rate = 0.0, byte[1] = {0};
-    int ns = sample_byte(fmt), size = SDR_SIZE_UBUFF * ns;
+    int nch = sdev->nch, ns = sample_byte(fmt);
+    // multi-CH data are CH planar in a processing cycle to be replayable
+    int size = (nch > 1 ? (int)(SDR_CYC * fs) : SDR_SIZE_UBUFF) * ns;
     int IQ[1] = {2};
-    uint8_t *buff = (uint8_t *)sdr_malloc(size);
+    uint8_t *data = (uint8_t *)sdr_malloc((size_t)size * nch);
+    uint8_t *buff[SDR_MAX_RFCH];
     
+    for (int i = 0; i < nch; i++) {
+        buff[i] = data + (size_t)i * size;
+    }
     if (!quiet) {
         print_head(1, fmt, 1, IQ, fp);
     }
     uint32_t tick = sdr_get_tick();
     
     if (!sdr_sdev_start(sdev)) {
-        sdr_free(buff);
+        sdr_free(data);
         return;
     }
     
@@ -233,7 +241,7 @@ static void dump_sdev_data(sdr_sdev_t *sdev, double tsec, int quiet, int fmt,
         time = (sdr_get_tick() - tick) * 1e-3;
         while ((n = sdr_sdev_read(sdev, buff, size)) > 0 && !intr) {
             if (fp[0]) {
-                byte[0] += fwrite(buff, 1, n, fp[0]);
+                byte[0] += fwrite(data, 1, (size_t)n * nch, fp[0]);
             }
             sample += n / ns;
         }
@@ -255,7 +263,7 @@ static void dump_sdev_data(sdr_sdev_t *sdev, double tsec, int quiet, int fmt,
         print_stat(1, IQ, fp, time, byte, rate);
         printf("\n");
     }
-    sdr_free(buff);
+    sdr_free(data);
 }
 
 // write tag file --------------------------------------------------------------
@@ -266,11 +274,12 @@ static void write_tag_files(gtime_t time, int raw, int fmt, double fs,
         if (!files[i] || !*files[i] || !strcmp(files[i], "-")) continue;
         
         if (raw) {
-            sdr_tag_write(files[i], PROG_NAME, time, fmt, fs, fo, IQ, bits);
+            sdr_tag_write(files[i], PROG_NAME, time, fmt, nch, fs, fo, IQ,
+                bits);
         } else {
             int fmt_i = IQ[i] == 1 ? SDR_FMT_INT8 : SDR_FMT_INT8X2;
-            sdr_tag_write(files[i], PROG_NAME, time, fmt_i, fs, fo + i, IQ + i,
-                bits + i);
+            sdr_tag_write(files[i], PROG_NAME, time, fmt_i, 1, fs, fo + i,
+                IQ + i, bits + i);
         }
     }
 }
@@ -286,7 +295,7 @@ int main(int argc, char **argv)
     gtime_t dump_time;
     double tsec = 0.0, fs = 12e6, fo[SDR_MAX_RFCH] = {0};
     double gain = 0.0, bw = 0.0;
-    int n = 0, bus = -1, port = -1, raw = 0, quiet = 0;
+    int n = 0, bus = -1, port = -1, raw = 0, quiet = 0, no_sync = 0, gpio = -1;
     int nch, fmt = SDR_FMT_CS8, IQ[SDR_MAX_RFCH], bits[SDR_MAX_RFCH], nfile;
     
     for (int i = 1; i < argc; i++) {
@@ -311,12 +320,17 @@ int main(int argc, char **argv)
         } else if (!strcmp(argv[i], "-f") && i + 1 < argc) {
             fs = atof(argv[++i]) * 1e6;
         } else if (!strcmp(argv[i], "-fo") && i + 1 < argc) {
-            sscanf(argv[++i], "%lf", fo);
-            fo[0] *= 1e6;
+            int nfo = sscanf(argv[++i], "%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf", fo,
+                fo + 1, fo + 2, fo + 3, fo + 4, fo + 5, fo + 6, fo + 7);
+            for (int j = 0; j < nfo; j++) fo[j] *= 1e6;
         } else if (!strcmp(argv[i], "-gain") && i + 1 < argc) {
             gain = atof(argv[++i]);
         } else if (!strcmp(argv[i], "-bw") && i + 1 < argc) {
             bw = atof(argv[++i]);
+        } else if (!strcmp(argv[i], "-gpio") && i + 1 < argc) {
+            gpio = atoi(argv[++i]);
+        } else if (!strcmp(argv[i], "-NO_SYNC")) {
+            no_sync = 1;
         } else if (!strcmp(argv[i], "-q")) {
             quiet = 1;
         } else if (!strcmp(argv[i], "-v")) {
@@ -342,13 +356,25 @@ int main(int argc, char **argv)
             len = strlen(sdev_opt);
             snprintf(sdev_opt + len, sizeof(sdev_opt) - len, " -GAIN=%g", gain);
         }
-        if (!(sdev = sdr_sdev_open(driver, fmt, fs, fo[0], sdev_opt))) {
+        if (no_sync) {
+            len = strlen(sdev_opt);
+            snprintf(sdev_opt + len, sizeof(sdev_opt) - len, " -NO_SYNC");
+        }
+        if (gpio >= 0) {
+            len = strlen(sdev_opt);
+            snprintf(sdev_opt + len, sizeof(sdev_opt) - len, " -GPIO=%d", gpio);
+        }
+        if (!(sdev = sdr_sdev_open(driver, fmt, fs, fo, sdev_opt))) {
             return -1;
         }
-        nch = nfile = 1;
+        nch = sdev->nch;
+        nfile = 1;
         raw = 1;
-        IQ[0] = 2;
-        bits[0] = fmt == SDR_FMT_CS16 ? 16 : 8;
+        for (int i = 0; i < nch; i++) {
+            if (fo[i] <= 0.0) fo[i] = fo[0];
+            IQ[i] = 2;
+            bits[i] = fmt == SDR_FMT_CS16 ? 16 : 8;
+        }
     } else {
         if (!(dev = sdr_dev_open(bus, port))) {
             return -1;
@@ -396,7 +422,7 @@ int main(int argc, char **argv)
     signal(SIGINT, sig_func);
     
     if (sdev) {
-        dump_sdev_data(sdev, tsec, quiet, fmt, fp);
+        dump_sdev_data(sdev, tsec, quiet, fmt, fs, fp);
     } else {
         dump_data(dev, tsec, quiet, raw, fmt, nfile, IQ, bits, fp);
     }

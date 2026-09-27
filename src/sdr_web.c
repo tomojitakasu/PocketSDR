@@ -1199,7 +1199,7 @@ static sdr_rcv_t *cfg_open(sdr_web_cfg_t *c, char *msg, size_t size)
     }
     else if (c->inp == 2) {
         rcv = sdr_rcv_open_sdev(sigs, prns, nch, c->driver, c->fmt, c->fs,
-            c->fo[0], c->str_type, paths, opt);
+            c->fo, c->str_type, paths, opt);
     }
     else {
         rcv = sdr_rcv_open_dev(sigs, prns, nch, c->bus, c->port,

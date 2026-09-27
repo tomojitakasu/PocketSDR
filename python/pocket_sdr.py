@@ -232,19 +232,20 @@ def rcv_open_sdev(sys_opt, inp_opt, out_opt, sig_opt, array_opt):
     fmt = inp_opt.fmts.index(inp_opt.fmt.get()) + 1
     driver = re.findall('\\((.*)\\)', inp_opt.type.get())[0]
     rate = to_float(inp_opt.fs.get()) * 1e6
-    freq = to_float(inp_opt.fo[0].get()) * 1e6
+    fo = [to_float(inp_opt.fo[i].get()) * 1e6 for i in range(8)]
+    c_fo = (c_double * 8)(*fo)
     c_sigs = (c_char_p * len(sigs))(*[s.encode() for s in sigs])
     c_prns = (c_int32 * len(sigs))(*prns)
     c_types, c_paths = get_out_strs(out_opt)
     libsdr.sdr_rcv_open_sdev.argtypes = [POINTER(c_char_p), POINTER(c_int32),
-        c_int32, c_char_p, c_int32, c_double, c_double, POINTER(c_int32),
-        POINTER(c_char_p), c_char_p]
+        c_int32, c_char_p, c_int32, c_double, POINTER(c_double),
+        POINTER(c_int32), POINTER(c_char_p), c_char_p]
     libsdr.sdr_rcv_open_sdev.restype = c_void_p
     info = '(driver=%s, rate=%.3fMsps, freq=%.3fMHz)' % (
-        driver, rate * 1e-6, freq * 1e-6)
+        driver, rate * 1e-6, fo[0] * 1e-6)
     opt = rcv_opt_str(sys_opt, inp_opt, sig_opt, array_opt)
     return libsdr.sdr_rcv_open_sdev(c_sigs, c_prns, len(sigs), driver.encode(),
-        fmt, rate, freq, c_types, c_paths, opt.encode()), info
+        fmt, rate, c_fo, c_types, c_paths, opt.encode()), info
 
 # start receiver by file -------------------------------------------------------
 def rcv_open_file(sys_opt, inp_opt, out_opt, sig_opt, array_opt):
@@ -474,6 +475,15 @@ def get_rfch_stat(rcv, ch):
     return int(stat[0]), int(stat[1]), stat[2] / 1e6, stat[3] / 1e6, \
         int(stat[4]), int(stat[5]), stat[6], int(stat[7])
     # dev, fmt, fs (MHz), fo (MHz), IQ, bits, std-dev, rtoc
+
+# get RF channel sensor value --------------------------------------------------
+def get_rfch_sensor(rcv, ch, name):
+    value = c_double(0.0)
+    libsdr.sdr_rcv_rfch_sensor.argtypes = (c_void_p, c_int32, c_char_p,
+        POINTER(c_double))
+    if not libsdr.sdr_rcv_rfch_sensor(rcv, ch, name.encode(), byref(value)):
+        return None # no such sensor
+    return value.value
 
 # get RF channel PSD -----------------------------------------------------------
 def get_rfch_psd(rcv, ch, tave):
@@ -1074,7 +1084,7 @@ def rfch_page_new(parent):
     ti = ['Power Spectral Density (dB/Hz)', 'Histogram I', 'Histogram Q']
     labels = ['Frequency (MHz)', 'Quantized Value']
     chs = ['ALL'] + [str(i + 1) for i in range(MAX_RFCH + MAX_ARCH)] + \
-        ['1-4', '5-8', '9-12', '13-16']
+        ['1-8', '1-4', '5-8', '9-12', '13-16']
     margin = (35, 25, 25, 40)
     p = Obj()
     p.parent = parent
@@ -1120,7 +1130,7 @@ def rfch_page_new(parent):
             margin, title=ti[1+i], xlabel=labels[1]))
     p.panel3 = Frame(p.panel)
     p.plt3 = []
-    for i in range(4):
+    for i in range(8):
         p.plt3.append(plt.plot_new(p.panel3, 200, 200, (0, 1), (-80, -40),
             margin, title=ti[0], xlabel=labels[0]))
     p.box1.bind('<<ComboboxSelected>>', lambda e: on_rfch_select(e, p))
@@ -1166,6 +1176,17 @@ def update_rfch_page(p):
         p.box3.set('-')
         p.box4.set('-')
         p.box5.set('-')
+    elif ch == '1-8':
+        p.panel1.pack_forget()
+        p.panel2.pack_forget()
+        p.panel3.pack(side=LEFT, expand=1, fill=BOTH)
+        for i in range(8):
+            p.plt3[i].c.place(relx=i % 4 * 0.25, rely=i // 4 * 0.5, relwidth=0.25,
+                relheight=0.5)
+            update_psd_plot(p.plt3[i], i + 1, tave)
+        p.box3.set('-')
+        p.box4.set('-')
+        p.box5.set('-')
     elif pos >= 0:
         p.panel1.pack_forget()
         p.panel2.pack_forget()
@@ -1175,6 +1196,8 @@ def update_rfch_page(p):
             p.plt3[i].c.place(relx=i % 2 * 0.5, rely=i // 2 * 0.5, relwidth=0.5,
                 relheight=0.5)
             update_psd_plot(p.plt3[i], rfch + i, tave)
+        for i in range(4,8):
+            p.plt3[i].c.place_forget()
         p.box3.set('-')
         p.box4.set('-')
         p.box5.set('-')
@@ -2040,7 +2063,7 @@ def on_beam_update(e, p, i):
 # generate Log page ------------------------------------------------------------
 def log_page_new(parent):
     filts = ('', '$TIME', '$POS', '$ATT', '$OBS', '$NAV', '$SAT', '$CH', '$EPH',
-        '$ALM', '$LOG')
+        '$ALM', '$LOG', '$SENS')
     p = Obj()
     p.parent = parent
     p.panel = Frame(parent)

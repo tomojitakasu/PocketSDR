@@ -63,6 +63,8 @@
 //  2026-07-24  1.30 support multiple log streams
 //                   add API sdr_log_add_str(), sdr_log_rm_str()
 //  2026-08-08  1.31 fix memory leak of stream in sdr_str_close()
+//  2026-09-03  1.32 support number of RF CHs in the tag file
+//                   modify API sdr_tag_read(), sdr_tag_write()
 //
 #include <math.h>
 #include <stdarg.h>
@@ -117,9 +119,9 @@ static int fftw_size[MAX_FFTW_PLAN] = {0}; // FFTW plan sizes
 static int log_lvl = 3;            // log level
 static const char *log_types[] = { // log types
     "$TIME,", "$POS,", "$ATT,", "$OBS,", "$NAV,", "$SAT,", "$CH,", "$EPH,",
-    "$ALM,", "$LOG,", NULL
+    "$ALM,", "$LOG,", "$SENS,", NULL
 };
-static int log_mask[16] = {1, 1, 1, 1, 1, 1, 1, 0, 0, 1}; // log mask
+static int log_mask[16] = {1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1}; // log mask
 static stream_t *log_strs[SDR_MAX_STR] = {NULL}; // registered log streams
 static stream_t *log_str_own = NULL; // log stream owned by sdr_log_open()
 static char log_buff[MAX_LOG_BUFF]; // log buffer
@@ -579,6 +581,7 @@ sdr_buff_t *sdr_read_data(const char *file, double fs, int IQ, double T,
 //      prog     (I)  Program name
 //      time     (I)  IF data file recording start time
 //      fmt      (I)  IF data file format (SDR_FMT_???)
+//      nch      (I)  Number of RF channels (<= 0: as defined by fmt)
 //      fs       (I)  Sampling frequency (Hz)
 //      fo       (I)  LO frequencies (Hz)
 //      IQ       (I)  Sampling types (1: I-sampling, 2: IQ-sampling)
@@ -587,14 +590,20 @@ sdr_buff_t *sdr_read_data(const char *file, double fs, int IQ, double T,
 //  return:
 //      Status (1: OK, 0: error)
 //
+//  notes:
+//      If nch exceeds the number of RF channels defined by fmt, the IF data
+//      file is a sequence of channel-planar blocks of SDR_CYC each, so T_CYC
+//      is written to reject a replay with a different processing cycle.
+//
 int sdr_tag_write(const char *file, const char *prog, gtime_t time, int fmt,
-    double fs, const double *fo, const int *IQ, const int *bits)
+    int nch, double fs, const double *fo, const int *IQ, const int *bits)
 {
     FILE *fp;
     char path[1024+4], tstr[32];
     
     if (fmt <= 0 || fmt > SDR_FMT_CS16) return 0;
-    int n = fmt_nch[fmt];
+    int n = nch > 0 ? nch : fmt_nch[fmt];
+    if (n > SDR_MAX_RFCH) n = SDR_MAX_RFCH;
     snprintf(path, sizeof(path), "%.1023s.tag", file);
     time2str(time, tstr, 3);
     
@@ -605,6 +614,10 @@ int sdr_tag_write(const char *file, const char *prog, gtime_t time, int fmt,
     fprintf(fp, "PROG = %s\n", prog);
     fprintf(fp, "TIME = %s\n", tstr);
     fprintf(fp, "FMT  = %s\n", fmt_str[fmt]);
+    fprintf(fp, "NCH  = %d\n", n);
+    if (n > fmt_nch[fmt]) {
+        fprintf(fp, "T_CYC = %.9g\n", SDR_CYC);
+    }
     fprintf(fp, "F_S  = %.9g\n", fs * 1e-6);
     fprintf(fp, "F_LO = ");
     for (int i = 0; i < n; i++) {
@@ -634,19 +647,22 @@ int sdr_tag_write(const char *file, const char *prog, gtime_t time, int fmt,
 //      prog     (IO) Program name (NULL: not read)
 //      time     (IO) IF data file recording start time (NULL: not read)
 //      fmt      (O)  IF data file format (SDR_FMT_???)
+//      nch      (O)  Number of RF channels (NULL: not read)
 //      fs       (O)  Sampling frequency (Hz)
 //      fo       (O)  LO frequencies (Hz)
 //      IQ       (O)  Sampling types (1: I-sampling, 2: IQ-sampling)
 //      bits     (O)  Number of sample bits
 //
 //  return:
-//      Status (1: OK, 0: error)
+//      Status (1: OK, 0: no readable tag file, -1: IF data unusable)
 //
 int sdr_tag_read(const char *file, char *prog, gtime_t *time, int *fmt,
-    double *fs, double *fo, int *IQ, int *bits)
+    int *nch, double *fs, double *fo, int *IQ, int *bits)
 {
     FILE *fp;
     char path[1024+4], buff[256], *p;
+    double t_cyc = 0.0;
+    int n = 0;
     
     snprintf(path, sizeof(path), "%s.tag", file);
     
@@ -678,6 +694,10 @@ int sdr_tag_read(const char *file, char *prog, gtime_t *time, int *fmt,
                 *fmt = i;
                 break;
             }
+        } else if (strstr(buff, "NCH") == buff) {
+            sscanf(p + 2, "%d", &n);
+        } else if (strstr(buff, "T_CYC") == buff) {
+            sscanf(p + 2, "%lf", &t_cyc);
         } else if (strstr(buff, "F_S") == buff) {
             if (sscanf(p + 2, "%lf", fs)) *fs *= 1e6;
         } else if (strstr(buff, "F_LO") == buff) {
@@ -692,14 +712,22 @@ int sdr_tag_read(const char *file, char *prog, gtime_t *time, int *fmt,
                 bits + 3, bits + 4, bits + 5, bits + 6, bits + 7);
         }
     }
+    fclose(fp);
     if (*fmt <= 0 || *fmt > SDR_FMT_CS16) { // format error
         return 0;
     }
-    for (int i = fmt_nch[*fmt]; i < SDR_MAX_RFCH; i++) {
+    if (n <= 0 || n > SDR_MAX_RFCH) n = fmt_nch[*fmt];
+    // channel-planar IF data cannot be split into cycles of a different length
+    if (t_cyc > 0.0 && fabs(t_cyc - SDR_CYC) > 1e-12) {
+        fprintf(stderr, "tag file cycle unmatch %.9g (%.9g expected)\n", t_cyc,
+            SDR_CYC);
+        return -1;
+    }
+    for (int i = n; i < SDR_MAX_RFCH; i++) {
         fo[i] = 0.0;
         IQ[i] = bits[i] = 0;
     }
-    fclose(fp);
+    if (nch) *nch = n;
     return 1;
 }
 

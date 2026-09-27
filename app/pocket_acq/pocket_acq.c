@@ -260,7 +260,7 @@ int main(int argc, char **argv)
     // read tag file
     double fo[SDR_MAX_RFCH];
     int IQ_t[SDR_MAX_RFCH], bits_t[SDR_MAX_RFCH];
-    if (sdr_tag_read(file, NULL, NULL, &fmt, &fs, fo, IQ_t, bits_t)) {
+    if (sdr_tag_read(file, NULL, NULL, &fmt, NULL, &fs, fo, IQ_t, bits_t) > 0) {
         if (fmt != SDR_FMT_INT8 && fmt != SDR_FMT_INT8X2 &&
             fmt != SDR_FMT_CS8 && fmt != SDR_FMT_CS16) {
             fprintf(stderr, "Unsupported format: %s\n", file);

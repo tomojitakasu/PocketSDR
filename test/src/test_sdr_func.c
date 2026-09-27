@@ -145,27 +145,48 @@ static void test_sdr_tag_api(void)
     int bits[SDR_MAX_RFCH] = {4, 2};
     int bits2[SDR_MAX_RFCH] = {0};
     char prog[32] = "";
-    int fmt = 0;
+    int fmt = 0, nch = 0;
     double fs = 0.0;
     
     TEST_ASSERT_EQ_INT(1, sdr_tag_write(TMP_TAG, "utest", time, SDR_FMT_RAW8,
-        24e6, fo, IQ, bits));
-    TEST_ASSERT_EQ_INT(1, sdr_tag_read(TMP_TAG, prog, &time2, &fmt, &fs, fo2,
-        IQ2, bits2));
+        0, 24e6, fo, IQ, bits));
+    TEST_ASSERT_EQ_INT(1, sdr_tag_read(TMP_TAG, prog, &time2, &fmt, &nch, &fs,
+        fo2, IQ2, bits2));
     TEST_ASSERT_TRUE(!strcmp("utest", prog));
     TEST_ASSERT_EQ_INT(SDR_FMT_RAW8, fmt);
+    TEST_ASSERT_EQ_INT(2, nch); // as defined by the format
     TEST_ASSERT_NEAR(24e6, fs, 1.0);
     TEST_ASSERT_NEAR(1575.42e6, fo2[0], 1.0);
     TEST_ASSERT_EQ_INT(2, IQ2[0]);
     TEST_ASSERT_EQ_INT(4, bits2[0]);
     TEST_ASSERT_EQ_INT(0, IQ2[2]);
     
-    TEST_ASSERT_EQ_INT(0, sdr_tag_write(TMP_TAG, "utest", time, 0, fs, fo, IQ,
-        bits));
+    // CH planar IF data of a single CH format
+    TEST_ASSERT_EQ_INT(1, sdr_tag_write(TMP_TAG, "utest", time, SDR_FMT_CS16,
+        4, 24e6, fo, IQ, bits));
+    TEST_ASSERT_EQ_INT(1, sdr_tag_read(TMP_TAG, NULL, NULL, &fmt, &nch, &fs,
+        fo2, IQ2, bits2));
+    TEST_ASSERT_EQ_INT(SDR_FMT_CS16, fmt);
+    TEST_ASSERT_EQ_INT(4, nch);
+    
+    // nch is optional for backward compatibility with old tag files
+    write_file(TMP_BAD_TAG ".tag", "FMT = CS16\n", 11);
+    nch = 0;
+    TEST_ASSERT_EQ_INT(1, sdr_tag_read(TMP_BAD_TAG, NULL, NULL, &fmt, &nch,
+        &fs, fo2, IQ2, bits2));
+    TEST_ASSERT_EQ_INT(1, nch);
+    
+    // a planar IF data of a different processing cycle is unusable
+    write_file(TMP_BAD_TAG ".tag", "FMT = CS16\nNCH = 4\nT_CYC = 0.002\n", 33);
+    TEST_ASSERT_EQ_INT(-1, sdr_tag_read(TMP_BAD_TAG, NULL, NULL, &fmt, &nch,
+        &fs, fo2, IQ2, bits2));
+    
+    TEST_ASSERT_EQ_INT(0, sdr_tag_write(TMP_TAG, "utest", time, 0, 0, fs, fo,
+        IQ, bits));
     
     write_file(TMP_BAD_TAG ".tag", "FMT = -\n", 8);
-    TEST_ASSERT_EQ_INT(0, sdr_tag_read(TMP_BAD_TAG, NULL, NULL, &fmt, &fs, fo2,
-        IQ2, bits2));
+    TEST_ASSERT_EQ_INT(0, sdr_tag_read(TMP_BAD_TAG, NULL, NULL, &fmt, &nch,
+        &fs, fo2, IQ2, bits2));
 }
 
 // sdr_mix_carr() --------------------------------------------------------------

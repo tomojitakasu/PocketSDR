@@ -8,6 +8,7 @@
 #define TMP_LOG1     "tmp_test_rcv_log1.log"
 #define TMP_LOG2     "tmp_test_rcv_log2.log"
 #define TMP_NMEA     "tmp_test_rcv_nmea.nmea"
+#define TMP_IFDATA   "tmp_test_rcv_if.bin"
 
 extern double sdr_epoch;
 extern double sdr_t_acq;
@@ -49,7 +50,7 @@ static sdr_rcv_t *new_rcv_empty(int fmt, double fs, const char *opt)
     int bits[SDR_MAX_RFCH] = {8, 8, 8, 8, 8, 8, 8, 8};
     
     cleanup_files();
-    return sdr_rcv_new(NULL, NULL, 0, fmt, fs, fo, IQ, bits, opt);
+    return sdr_rcv_new(NULL, NULL, 0, fmt, 0, fs, fo, IQ, bits, opt);
 }
 
 // create receiver with array channels -----------------------------------------
@@ -62,7 +63,7 @@ static sdr_rcv_t *new_rcv_array(void)
     int bits[SDR_MAX_RFCH] = {4, 4, 4, 4, 4, 4, 4, 4};
     
     cleanup_files();
-    return sdr_rcv_new(NULL, NULL, 0, SDR_FMT_RAW8, 4e6, fo, IQ, bits,
+    return sdr_rcv_new(NULL, NULL, 0, SDR_FMT_RAW8, 0, 4e6, fo, IQ, bits,
         "-ARCH=1");
 }
 
@@ -76,7 +77,7 @@ static sdr_rcv_t *new_rcv_one_channel(void)
     int bits[SDR_MAX_RFCH] = {8, 8, 8, 8, 8, 8, 8, 8};
     
     cleanup_files();
-    return sdr_rcv_new(sigs, prns, 1, SDR_FMT_INT8, 4e6, fo, IQ, bits,
+    return sdr_rcv_new(sigs, prns, 1, SDR_FMT_INT8, 0, 4e6, fo, IQ, bits,
         "-FAST_SRCH");
 }
 
@@ -128,6 +129,34 @@ static void test_sdr_rcv_new_array_api(void)
     cleanup_files();
 }
 
+// test sdr_rcv_new() RF CH assignment including array CH ----------------------
+static void test_sdr_rcv_new_rfch_api(void)
+{
+    const char *sigs[] = {"L1CA"};
+    int prns[] = {1};
+    double fo[SDR_MAX_RFCH] = {
+        1575.42e6, 1575.42e6, 1575.42e6, 1575.42e6,
+        1575.42e6, 1575.42e6, 1575.42e6, 1575.42e6
+    };
+    int IQ[SDR_MAX_RFCH] = {2, 2, 2, 2, 2, 2, 2, 2};
+    int bits[SDR_MAX_RFCH] = {2, 2, 2, 2, 2, 2, 2, 2};
+    
+    cleanup_files();
+    // FE 8CH + 1 array CH: L1CA on all RF CHs and the array CH (CH 9)
+    sdr_rcv_t *rcv = sdr_rcv_new(sigs, prns, 1, SDR_FMT_RAW32, 0, 4e6, fo, IQ,
+        bits, "-ARCH=1 -RFCH L1CA:1-9 SRCH:9");
+    TEST_ASSERT_TRUE(rcv != NULL);
+    TEST_ASSERT_EQ_INT(8, rcv->nrfch);
+    TEST_ASSERT_EQ_INT(1, rcv->narch);
+    TEST_ASSERT_EQ_INT(9, rcv->nch);
+    for (int i = 0; i < rcv->nch; i++) {
+        TEST_ASSERT_EQ_INT(i, rcv->th[i]->ch->rf_ch);
+        TEST_ASSERT_EQ_INT(i == 8 ? 1 : 0, rcv->th[i]->ch->sig_srch);
+    }
+    sdr_rcv_free(rcv);
+    cleanup_files();
+}
+
 // test sdr_rcv_start() and sdr_rcv_stop() -------------------------------------
 static void test_sdr_rcv_start_stop_api(void)
 {
@@ -169,6 +198,7 @@ static void test_sdr_rcv_open_close_api(void)
     double fo[SDR_MAX_RFCH] = {0};
     int IQ[SDR_MAX_RFCH] = {2, 2, 2, 2, 2, 2, 2, 2};
     int bits[SDR_MAX_RFCH] = {8, 8, 8, 8, 8, 8, 8, 8};
+    double value = 0.0;
     
     rcv = sdr_rcv_open_dev(NULL, NULL, 0, -1, -1, "", EMPTY_TYPES, EMPTY_PATHS,
         "");
@@ -176,19 +206,24 @@ static void test_sdr_rcv_open_close_api(void)
     TEST_ASSERT_EQ_INT(SDR_DEV_USB, rcv->dev);
     TEST_ASSERT_EQ_INT(SDR_FMT_RAW8, rcv->fmt);
     TEST_ASSERT_EQ_INT(2, rcv->nrfch);
+    TEST_ASSERT_EQ_INT(0, sdr_rcv_rfch_sensor(rcv, 1, "temp", &value)); // FE
     sdr_rcv_close(rcv);
     cleanup_files();
     
     rcv = sdr_rcv_open_sdev(NULL, NULL, 0, "stub", SDR_FMT_CS8, 4e6,
-        1575.42e6, EMPTY_TYPES, EMPTY_PATHS, "-GAIN=10 -BW=2");
+        fo, EMPTY_TYPES, EMPTY_PATHS, "-GAIN=10 -BW=2");
     TEST_ASSERT_TRUE(rcv != NULL);
     TEST_ASSERT_EQ_INT(SDR_DEV_SOAPY, rcv->dev);
     TEST_ASSERT_EQ_INT(SDR_FMT_CS8, rcv->fmt);
+    TEST_ASSERT_EQ_INT(1, sdr_rcv_rfch_sensor(rcv, 1, "temp", &value));
+    TEST_ASSERT_NEAR(40.0, value, 1e-12);
+    TEST_ASSERT_EQ_INT(0, sdr_rcv_rfch_sensor(rcv, 2, "temp", &value));
+    TEST_ASSERT_EQ_INT(0, sdr_rcv_rfch_sensor(rcv, 1, "no_such", &value));
     sdr_rcv_close(rcv);
     cleanup_files();
     
     TEST_ASSERT_TRUE(sdr_rcv_open_sdev(NULL, NULL, 0, "stub", SDR_FMT_RAW8,
-        4e6, 1575.42e6, EMPTY_TYPES, EMPTY_PATHS, "") == NULL);
+        4e6, fo, EMPTY_TYPES, EMPTY_PATHS, "") == NULL);
     TEST_ASSERT_TRUE(sdr_rcv_open_file(sigs, prns, 1, SDR_FMT_INT8, 4e6, fo,
         IQ, bits, 0.0, 1.0, "no_such_sdr_rcv_file.bin", EMPTY_TYPES,
         EMPTY_PATHS, "") == NULL);
@@ -473,14 +508,59 @@ static void test_sdr_rcv_array_api(void)
     cleanup_files();
 }
 
+// test CH planar multi-CH IF data replay --------------------------------------
+static void test_sdr_rcv_planar_file_api(void)
+{
+    const double fs = 10000.0;
+    const int nch = 2, N = (int)(SDR_CYC * fs), ncyc = 50;
+    double ep[6] = {2026, 9, 3, 0, 0, 0.0};
+    double fo[SDR_MAX_RFCH] = {1575.42e6, 1575.42e6};
+    int IQ[SDR_MAX_RFCH] = {2, 2}, bits[SDR_MAX_RFCH] = {16, 16};
+    int16_t val[2][2] = {{1000, 1000}, {-1000, -1000}};
+    FILE *fp = fopen(TMP_IFDATA, "wb");
+    
+    TEST_ASSERT_TRUE(fp != NULL);
+    for (int c = 0; c < ncyc; c++) { // CH planar blocks of a cycle
+        for (int k = 0; k < nch; k++) {
+            for (int i = 0; i < N; i++) {
+                fwrite(val[k], sizeof(int16_t), 2, fp);
+            }
+        }
+    }
+    fclose(fp);
+    TEST_ASSERT_EQ_INT(1, sdr_tag_write(TMP_IFDATA, "utest", epoch2time(ep),
+        SDR_FMT_CS16, nch, fs, fo, IQ, bits));
+    
+    sdr_rcv_t *rcv = sdr_rcv_open_file(NULL, NULL, 0, SDR_FMT_CS16, fs, fo, IQ,
+        bits, 0.0, 1.0, TMP_IFDATA, EMPTY_TYPES, EMPTY_PATHS, "-SCALE=1.0");
+    TEST_ASSERT_TRUE(rcv != NULL);
+    TEST_ASSERT_EQ_INT(nch, rcv->nrfch); // number of RF CHs read from the tag
+    
+    for (int i = 0; i < 100 && rcv->ix < 1; i++) sdr_sleep_msec(10);
+    TEST_ASSERT_TRUE(rcv->ix >= 1);
+    
+    // the RF CH planes are separated into their own IF data buffers
+    TEST_ASSERT_EQ_INT( 7, SDR_CPX8_I(rcv->buff[0]->data[0]));
+    TEST_ASSERT_EQ_INT( 7, SDR_CPX8_Q(rcv->buff[0]->data[0]));
+    TEST_ASSERT_EQ_INT(-7, SDR_CPX8_I(rcv->buff[1]->data[0]));
+    TEST_ASSERT_EQ_INT(-7, SDR_CPX8_Q(rcv->buff[1]->data[0]));
+    
+    sdr_rcv_close(rcv);
+    remove(TMP_IFDATA);
+    remove(TMP_IFDATA ".tag");
+    cleanup_files();
+}
+
 // main ------------------------------------------------------------------------
 int main(void)
 {
     cleanup_files();
     TEST_RUN(test_sdr_rcv_new_free_api);
     TEST_RUN(test_sdr_rcv_new_array_api);
+    TEST_RUN(test_sdr_rcv_new_rfch_api);
     TEST_RUN(test_sdr_rcv_start_stop_api);
     TEST_RUN(test_sdr_rcv_open_close_api);
+    TEST_RUN(test_sdr_rcv_planar_file_api);
     TEST_RUN(test_sdr_rcv_multi_str_api);
     TEST_RUN(test_sdr_rcv_str_error_api);
     TEST_RUN(test_sdr_rcv_setopt_api);

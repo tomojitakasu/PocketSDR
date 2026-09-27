@@ -256,7 +256,7 @@ def inp_opt_new(opt_p=None):
 # generate output option variables ---------------------------------------------
 def out_opt_new(opt_p=None):
     opt = Obj()
-    opt.log = ('TIME', 'POS', 'ATT', 'OBS', 'NAV', 'SAT', 'CH', 'EPH', 'ALM', 'LOG')
+    opt.log = ('TIME', 'POS', 'ATT', 'OBS', 'NAV', 'SAT', 'CH', 'EPH', 'ALM', 'LOG', 'SENS')
     opt.path_ena = [IntVar() for i in range(MAX_STR)]
     opt.str_type = [StringVar() for i in range(MAX_STR)]
     opt.path = [StringVar() for i in range(MAX_STR)]
@@ -722,7 +722,7 @@ def out_opt_dlg(root, opt, readonly=0):
 def sig_opt_dlg(root, opt, readonly=0):
     opt_new = sig_opt_new(opt)
     title = 'Signal Options'
-    dlg = modal_dlg_new(root, 480, 600, title)
+    dlg = modal_dlg_new(root, 480, 620, title)
     panel1 = Frame(dlg.panel, width=450, bg=BG_COLOR, relief=GROOVE, borderwidth=2)
     sig_panels = []
     ttk.Button(dlg.btns, width=12, padding=(2, 2), text='Set All',

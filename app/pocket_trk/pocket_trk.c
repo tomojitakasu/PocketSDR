@@ -54,9 +54,10 @@ static const char *usage_text[] = {
     "       [-fmt {INT8|INT8X2|RAW8|RAW16|RAW32|CS8|CS16}] [-f freq]",
     "       [-fo freq[,...]] [-IQ {1|2}[,...]] [-bits {2|3}[,...]",
     "       [-toff toff] [-ti tint] [-p bus,[,port] [-c conf_file]",
-    "       [-driver name] [-gain gain] [-bw bw] [-EXT_CLOCK] [-fd dopp]",
-    "       [-log path] [-nmea path] [-rtcm path] [-raw path] ... [-opt file]",
-    "       [-arch nch] [-geom file] [file]",
+    "       [-driver name] [-gain gain] [-bw bw] [-gpio val] [-EXT_CLOCK]",
+    "       [-NO_SYNC] [-fd dopp] [-log path] [-nmea path] [-rtcm path]",
+    "       [-raw path] ... [-opt file] [-arch nch] [-geom file]",
+    "       [-sens name[,...]] [file]",
     NULL
 };
 
@@ -285,9 +286,16 @@ int main(int argc, char **argv)
             gain = atof(argv[++i]);
         } else if (!strcmp(argv[i], "-bw") && i + 1 < argc) {
             bw = atof(argv[++i]);
+        } else if (!strcmp(argv[i], "-gpio") && i + 1 < argc) {
+            size_t len = strlen(rfch_opt);
+            snprintf(rfch_opt + len, sizeof(rfch_opt) - len, " -GPIO=%d",
+                atoi(argv[++i]));
         } else if (!strcmp(argv[i], "-EXT_CLOCK")) {
             size_t len = strlen(rfch_opt);
             snprintf(rfch_opt + len, sizeof(rfch_opt) - len, " -EXT_CLOCK");
+        } else if (!strcmp(argv[i], "-NO_SYNC")) {
+            size_t len = strlen(rfch_opt);
+            snprintf(rfch_opt + len, sizeof(rfch_opt) - len, " -NO_SYNC");
         } else if (!strcmp(argv[i], "-fd") && i + 1 < argc) {
             max_dop = atof(argv[++i]);
         } else if (!strcmp(argv[i], "-arch") && i + 1 < argc) {
@@ -296,6 +304,10 @@ int main(int argc, char **argv)
                 atoi(argv[++i]));
         } else if (!strcmp(argv[i], "-geom") && i + 1 < argc) {
             geom_file = argv[++i];
+        } else if (!strcmp(argv[i], "-sens") && i + 1 < argc) {
+            size_t len = strlen(rfch_opt);
+            snprintf(rfch_opt + len, sizeof(rfch_opt) - len, " -SENS=%s",
+                argv[++i]);
         } else if (!strcmp(argv[i], "-v")) {
             print_ver();
         } else if (argv[i][0] == '-') {
@@ -337,7 +349,7 @@ int main(int argc, char **argv)
         rcv = sdr_rcv_open_file(sigs, prns, nch, fmt, fs, fo, IQ, bits, toff,
             tscale, file, types, paths, rfch_opt);
     } else if (*driver) {
-        rcv = sdr_rcv_open_sdev(sigs, prns, nch, driver, fmt, fs, fo[0], types,
+        rcv = sdr_rcv_open_sdev(sigs, prns, nch, driver, fmt, fs, fo, types,
             paths, rfch_opt);
     } else {
         rcv = sdr_rcv_open_dev(sigs, prns, nch, bus, port, conf_file, types,

@@ -2,7 +2,7 @@
 
 const TYPES = ['NMEA', 'RTCM3', 'LOG', 'IF Data']; // type value = index + 1
 const LOGS = ['TIME', 'POS', 'ATT', 'OBS', 'NAV', 'SAT', 'CH', 'EPH', 'ALM',
-    'LOG'];
+    'LOG', 'SENS'];
 const NOTES = [
     'Keywords Replacement in Path',
     '%Y=Year(yyyy) %y=year(yy) %m=month(mm) %d=day(dd) %h=hour(00-23)',

@@ -16,7 +16,7 @@
 #define CONV_THRES_A 1e-6       // angle update convergence (rad)
 #define CONV_THRES_B 1e-5       // bias update convergence (m)
 #define MIN_EL      15.0        // elevation mask (deg)
-#define MAX_RMS     0.020       // max RMS of residuals (m)
+#define MAX_RMS     0.100       // max RMS of residuals (m)
 #define NX          (3+SDR_MAX_RFCH)
 #define MAX_NV      ((SDR_MAX_RFCH-1)*MAXOBS)
 #define VAR_INIT_RPY  1.0       // initial covariance for rpy (rad^2)

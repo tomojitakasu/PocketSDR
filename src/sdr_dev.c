@@ -235,7 +235,7 @@ static void *event_handler(void *arg)
         sdr_log(3, "$LOG,%.3f,%s,%d,set thread scheduling error", 0.0, "", 0);
     }
     while (dev->state) {
-        if (libusb_handle_events_timeout(NULL, &to)) continue;
+        if (libusb_handle_events_timeout(dev->usb->ctx, &to)) continue;
     }
     return NULL;
 }

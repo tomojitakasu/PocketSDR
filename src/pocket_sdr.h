@@ -49,8 +49,9 @@ extern "C" {
 
 // constants and macros ------------------------------------------------------
 #define SDR_LIB_NAME   "Pocket SDR" // library name
-#define SDR_LIB_VER    "0.20"   // library version
+#define SDR_LIB_VER    "0.21"   // library version
 #define SDR_MAX_RFCH   8        // max number of RF channels
+#define SDR_MAX_SDEV   8        // max number of SoapySDR devices
 #define SDR_MAX_ARCH   8        // max number of array channels
 #define SDR_MAX_BUFF   (SDR_MAX_RFCH+SDR_MAX_ARCH) // max number of IF buffer
 #define SDR_MAX_REG    11       // max number of registers in a SDR device
@@ -158,16 +159,32 @@ typedef struct {                // Pocket SDR FE device type
     sdr_mutex_t mtx;            // lock flag
 } sdr_dev_t;
 
-typedef struct {                // SoapySDR device type
-    void *dev;                  // SoapySDR device handle
-    void *str;                  // SoapySDR device stream
+struct sdr_sdev_tag;
+
+typedef struct {                // SoapySDR device thread parameter type
+    struct sdr_sdev_tag *sdev;  // SoapySDR device
+    int idev;                   // device index
+} sdr_sdev_th_t;
+
+typedef struct sdr_sdev_tag {   // SoapySDR device type
+    int ndev, nch;              // numbers of devices and RF channels
+    void *dev[SDR_MAX_SDEV];    // SoapySDR device handles
+    void *str[SDR_MAX_SDEV];    // SoapySDR device streams
+    int dev_nch[SDR_MAX_SDEV];  // number of RX channels of each device
+    int dev_ch0[SDR_MAX_SDEV];  // first RF channel of each device
     char driver[32];            // SoapySDR driver
-    uint8_t *buff;              // sample buffer
-    int state;                  // state of sampling thread
-    int64_t rp, wp;             // read/write pointer of sampling data buffer
+    uint8_t *buff[SDR_MAX_RFCH]; // sampling data buffer of each RF channel
+    int64_t bsize;              // size of sampling data buffer (bytes)
+    int64_t wp[SDR_MAX_RFCH];   // write pointer of each RF channel
+    int64_t rp;                 // read pointer (common to all RF channels)
+    int sync;                   // device time sync by 1PPS (1:on,0:off)
+    long long tns0[SDR_MAX_SDEV]; // stream start time of each device (ns)
+                                // (0: set by the first samples received)
+    int state;                  // state of sampling threads
     int ssize;                  // sample size (bytes/sample)
     double rate;                // sample rate (sps)
-    sdr_thread_t thread;        // reading sampling thread
+    sdr_sdev_th_t th[SDR_MAX_SDEV]; // sampling thread parameters
+    sdr_thread_t thread[SDR_MAX_SDEV]; // reading sampling threads
     sdr_mutex_t mtx;            // lock flag
 } sdr_sdev_t;
 
@@ -275,9 +292,9 @@ typedef struct {                // SDR IF data statistics
     double std;                 // IF data std-dev
     double rate, sum;           // IF data rate (MB/s) and total size (MB)
     double buff_use;            // IF data buffer usage (%)
-    double sum_sq[2];           // accumulators {sum, sum-of-squares}
-    double sum_iq[2];           // CS16 accumulators {sum I, sum Q}
-    double sumsq_iq[2];         // CS16 accumulators {sum-of-squares I, Q}
+    double sum_sq[SDR_MAX_RFCH][2]; // accumulators {sum, sum-of-squares}
+    double sum_iq[SDR_MAX_RFCH][2]; // CS8/CS16 accumulators {sum I, sum Q}
+    double sumsq_iq[SDR_MAX_RFCH][2]; // CS8/CS16 {sum-of-squares I, Q}
     int cnt;                    // sample count for stats
 } sdr_stats_t;
 
@@ -317,6 +334,7 @@ typedef struct {                // SDR RF channel type
     int IQ, bits;               // IF sampling types (I:1,I/Q:2), bits
     sdr_lpf_t *lpf;             // LPF state (NULL = disabled)
     void *LUT;                  // raw to IF data LUT (256 or 4*256 entries)
+    void *LUT_Q;                // raw to IF data LUT for Q (CS8/CS16)
 } sdr_rfch_t;
 
 typedef struct {                // SDR array channel type
@@ -340,7 +358,7 @@ typedef struct {                // SDR antenna array type
 } sdr_array_t;
 
 #define SDR_WEB_MAX_SIG 64      // max signal entries in Web UI configuration
-#define SDR_WEB_N_LOG  10       // number of receiver log types
+#define SDR_WEB_N_LOG  11       // number of receiver log types
 #define SDR_WEB_N_SYS   7       // number of satellite systems in Web UI
 
 typedef struct {                // Web UI receiver configuration type
@@ -445,12 +463,13 @@ int sdr_dev_set_filt(sdr_dev_t *dev, int ch, double bw, double freq, int order);
 
 // sdr_sdev.c
 int sdr_sdev_list(void);
-sdr_sdev_t *sdr_sdev_open(const char *driver, int fmt, double rate, double freq,
-    const char *opt);
+sdr_sdev_t *sdr_sdev_open(const char *driver, int fmt, double rate,
+    const double *freq, const char *opt);
 void sdr_sdev_close(sdr_sdev_t *sdev);
 int sdr_sdev_start(sdr_sdev_t *sdev);
 int sdr_sdev_stop(sdr_sdev_t *sdev);
-int sdr_sdev_read(sdr_sdev_t *sdev, uint8_t *buff, int size);
+int sdr_sdev_read(sdr_sdev_t *sdev, uint8_t **buff, int size);
+int sdr_sdev_sensor(sdr_sdev_t *sdev, int ch, const char *name, double *value);
 
 // sdr_conf.c
 int sdr_conf_read(sdr_dev_t *dev, const char *file, int opt);
@@ -469,9 +488,9 @@ void sdr_buff_free(sdr_buff_t *buff);
 sdr_buff_t *sdr_read_data(const char *file, double fs, int IQ, double T,
     double toff);
 int sdr_tag_write(const char *file, const char *prog, gtime_t time, int fmt,
-    double fs, const double *fo, const int *IQ, const int *bits);
+    int nch, double fs, const double *fo, const int *IQ, const int *bits);
 int sdr_tag_read(const char *file, char *prog, gtime_t *time, int *fmt,
-    double *fs, double *fo, int *IQ, int *bits);
+    int *nch, double *fs, double *fo, int *IQ, int *bits);
 void sdr_search_code(const sdr_cpx_t *code_fft, double T,
     const sdr_buff_t *buff, int ix, int N, double fs, double fi,
     const float *fds, int len_fds, float *P);
@@ -616,7 +635,7 @@ void sdr_rcv_array_calib(sdr_rcv_t *rcv, const obsd_t *obs, int nobs,
 
 // sdr_rcv.c
 sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
-    double fs, const double *fo, const int *IQ, const int *bits,
+    int nrfch, double fs, const double *fo, const int *IQ, const int *bits,
     const char *opt);
 void sdr_rcv_free(sdr_rcv_t *rcv);
 int sdr_rcv_start(sdr_rcv_t *rcv, int dev, void *dp, const int *types,
@@ -626,8 +645,8 @@ sdr_rcv_t *sdr_rcv_open_dev(const char **sigs, int *prns, int n, int bus,
     int port, const char *conf_file, const int *types, const char **paths,
     const char *opt);
 sdr_rcv_t *sdr_rcv_open_sdev(const char **sigs, int *prns, int n,
-    const char *driver, int fmt, double rate, double freq, const int *types,
-    const char **paths, const char *opt);
+    const char *driver, int fmt, double rate, const double *fo,
+    const int *types, const char **paths, const char *opt);
 sdr_rcv_t *sdr_rcv_open_file(const char **sigs, int *prns, int n, int fmt,
     double fs, const double *fo, const int *IQ, const int *bits, double toff,
     double tscale, const char *file, const int *types, const char **paths,
@@ -646,6 +665,8 @@ int sdr_rcv_corr_stat(sdr_rcv_t *rcv, int ch, double *stat, double *pos,
 int sdr_rcv_corr_hist(sdr_rcv_t *rcv, int ch, double tspan, double *stat,
     sdr_cpx_t *P);
 int sdr_rcv_rfch_stat(sdr_rcv_t *rcv, int ch, double *stat);
+int sdr_rcv_rfch_sensor(sdr_rcv_t *rcv, int ch, const char *name,
+    double *value);
 int sdr_rcv_rfch_psd(sdr_rcv_t *rcv, int ch, double tave, int N, float *psd);
 int sdr_rcv_rfch_hist(sdr_rcv_t *rcv, int ch, double tave, int *val,
     double *hist1, double *hist2);

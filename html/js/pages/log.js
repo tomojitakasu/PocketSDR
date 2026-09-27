@@ -1,7 +1,7 @@
 // Pocket SDR Web UI - Log page
 
 const FILTERS = ['', '$TIME', '$POS', '$ATT', '$OBS', '$NAV', '$SAT', '$CH',
-    '$EPH', '$ALM', '$LOG'];
+    '$EPH', '$ALM', '$LOG', '$SENS'];
 const MAX_LINES = 2000;
 
 export class LogPage {
