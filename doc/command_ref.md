@@ -181,8 +181,6 @@ Hexadecimal form:
 pocket_dump [-t tsec] [-r] [-p bus[,port]] [-c conf_file] [-q] [-v]
             [-driver name] [-fmt {CS8|CS16}] [-f fs] [-fo freq[,...]]
             [-gain gain] [-bw bw] [-gpio val] [-NO_SYNC]
-|CS16}] [-f fs] [-fo freq]
-            [-gain gain] [-bw bw]
             [path [path ...]]
 ```
 

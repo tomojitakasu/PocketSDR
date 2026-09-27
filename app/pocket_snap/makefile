@@ -12,7 +12,7 @@ INCLUDE = -I$(SRC) -I$(LIB)/RTKLIB/src
 ifeq ($(OS),Windows_NT)
     CC = g++
     INCLUDE += -I$(LIB)/cyusb
-    LDLIBS = $(LIB)/win32/libsdr.a $(LIB)/win32/librtk.a -lwinmm -lws2_32
+    LDLIBS = -static $(LIB)/win32/libsdr.a $(LIB)/win32/librtk.a -lwinmm -lws2_32
     OPTIONS =
     ifeq ($(USE_FFTW),1)
         LDLIBS += -lfftw3f
