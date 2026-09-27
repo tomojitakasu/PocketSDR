@@ -1,8 +1,8 @@
 
-# **Pocket SDR - An Open-Source GNSS SDR,<br> ver. 0.20**
+# **Pocket SDR - An Open-Source GNSS SDR,<br> ver. 0.21**
 
 <div style="text-align: right;">
-<strong>2026-08-08</strong>
+<strong>2026-09-27</strong>
 </div>
 
 ---
@@ -695,5 +695,19 @@ purposes, is prohibited.
   receiver, even on a headless Raspberry Pi, with the settings kept across
   sessions (see doc/design_web_ui.md). Recovered a Pocket SDR FE left streaming
   by a killed session. pocket_trk keeps its command line.
+- **2026-09-27 (v0.21)**: Added multi-device and multi-channel SoapySDR input.
+  Multiple devices (specs separated by `;`, `nchan=<n>` RX channels each, up
+  to 8 RF channels in total) are opened as one multi-channel frontend: with a
+  common 10 MHz and 1PPS, the streams are started at a common time latched by
+  the 1PPS (`-NO_SYNC` to run the devices on their own clocks). The RF
+  channels take per-CH center frequencies, `-RFCH` assignment and `-arch`
+  array combining. Added SoapySDR options `-EXT_CLOCK` and `-gpio`,
+  dropped-sample detection by the HW timestamp gap with zero-fill, and sensor
+  logging (`-sens`, `$SENS`). Switched the UHD wire format to sc12 and tuned
+  the USRP B2xx USB transport. pocket_dump captures multi-channel SoapySDR
+  data (channel-planar, `NCH` in the tag file) for replay by pocket_trk. Fixed
+  the satellite week not being updated on the TOW rollover and sat_id() for
+  BeiDou B1C / B2a / B2I. Added per-system satellite assignments to the Web UI
+  and the `fast_acq` system option.
 
 --------------------------------------------------------------------------------
