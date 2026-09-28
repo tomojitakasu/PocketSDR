@@ -708,6 +708,10 @@ purposes, is prohibited.
   data (channel-planar, `NCH` in the tag file) for replay by pocket_trk. Fixed
   the satellite week not being updated on the TOW rollover and sat_id() for
   BeiDou B1C / B2a / B2I. Added per-system satellite assignments to the Web UI
-  and the `fast_acq` system option.
+  and the `fast_acq` system option. Fixed the loss of all signals at once at
+  high data rates of the Pocket SDR FE (e.g. FE 8CH 24 Msps), caused by a
+  silent overflow of the raw data buffer: the buffer is enlarged to 128 MB,
+  independent of the USB transfers in flight, an overflow is logged, and the
+  receiver thread runs at a higher priority than the channel threads.
 
 --------------------------------------------------------------------------------

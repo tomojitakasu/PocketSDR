@@ -20,6 +20,8 @@
 //  2024-12-30  1.8  add API sdr_dev_get_filt(), sdr_dev_set_filt()
 //  2026-07-04  1.9  fix display corruption by async scheduling error message
 //  2026-08-07  1.10 recover a FE left streaming by a killed session
+//  2026-09-28  1.11 enlarge raw data buffer beyond USB transfers in flight
+//                   detect raw data buffer overflow
 //
 #include "pocket_sdr.h"
 #ifdef WIN32
@@ -28,7 +30,8 @@
 #endif
 
 // constants and macros --------------------------------------------------------
-#define BUFF_SIZE     (SDR_SIZE_UBUFF * SDR_MAX_UBUFF)
+#define NUM_BUFF      128     // number of USB buffers in raw data buffer
+#define BUFF_SIZE     (SDR_SIZE_UBUFF * NUM_BUFF)
 #define TO_TRANSFER   3000    // USB transfer timeout (ms)
 #define TIMER_RES     1       // timer resolution for Windows (ms)
 #define DEV_STOP_MS   50      // settle time after bulk transfer stop (ms)
@@ -157,11 +160,14 @@ static CCyBulkEndPoint *get_bulk_ep(sdr_usb_t *usb, int ep)
 }
 
 // USB event handler thread ----------------------------------------------------
+//   Only SDR_MAX_UBUFF transfers are in flight. A completed transfer is
+//   resubmitted to the buffer SDR_MAX_UBUFF blocks ahead in the raw data
+//   buffer, so the reader may lag behind by up to NUM_BUFF - 1 buffers.
 static void *event_handler(void *arg)
 {
     sdr_dev_t *dev = (sdr_dev_t *)arg;
     CCyBulkEndPoint *ep;
-    uint8_t *ctx[SDR_MAX_UBUFF] = {0};
+    uint8_t *ctx[SDR_MAX_UBUFF] = {0}, *buff[SDR_MAX_UBUFF];
     OVERLAPPED ov[SDR_MAX_UBUFF] = {{0,0,0,0,0}};
     long len = SDR_SIZE_UBUFF;
     
@@ -178,26 +184,29 @@ static void *event_handler(void *arg)
         return 0;
     }
     ep->SetXferSize(SDR_SIZE_UBUFF);
+    int64_t n = dev->wp / len; // next block to submit
     for (int i = 0; i < SDR_MAX_UBUFF; i++) {
         ov[i].hEvent = CreateEvent(NULL, false, false, NULL);
-        ctx[i] = ep->BeginDataXfer(dev->buff + len * i, len, &ov[i]); 
+        buff[i] = dev->buff + len * (int)(n++ % NUM_BUFF);
+        ctx[i] = ep->BeginDataXfer(buff[i], len, &ov[i]);
     }
     for (int i = 0; dev->state; ) {
         if (!ep->WaitForXfer(&ov[i], 100)) {
             continue;
         }
-        if (!ep->FinishDataXfer(dev->buff + len * i, len, &ov[i], ctx[i])) {
+        if (!ep->FinishDataXfer(buff[i], len, &ov[i], ctx[i])) {
             fprintf(stderr, "bulk transfer error\n");
             break;
         }
-        ctx[i] = ep->BeginDataXfer(dev->buff + len * i, len, &ov[i]);
+        buff[i] = dev->buff + len * (int)(n++ % NUM_BUFF);
+        ctx[i] = ep->BeginDataXfer(buff[i], len, &ov[i]);
         sdr_mutex_lock(&dev->mtx);
         dev->wp += len;
         sdr_mutex_unlock(&dev->mtx);
         i = (i + 1) % SDR_MAX_UBUFF;
     }
     for (int i = 0; i < SDR_MAX_UBUFF; i++) {
-        ep->FinishDataXfer(dev->buff + len * i, len, &ov[i], ctx[i]);
+        ep->FinishDataXfer(buff[i], len, &ov[i], ctx[i]);
         CloseHandle(ov[i].hEvent);
     }
     return 0;
@@ -206,6 +215,8 @@ static void *event_handler(void *arg)
 #else // WIN32
 
 // USB bulk transfer callback --------------------------------------------------
+//   The transfers complete in order. A completed transfer is resubmitted to the
+//   buffer SDR_MAX_UBUFF blocks ahead in the raw data buffer.
 static void transfer_cb(struct libusb_transfer *transfer)
 {
     sdr_dev_t *dev = (sdr_dev_t *)transfer->user_data;
@@ -216,8 +227,10 @@ static void transfer_cb(struct libusb_transfer *transfer)
     }
     sdr_mutex_lock(&dev->mtx);
     dev->wp += SDR_SIZE_UBUFF;
+    int64_t n = dev->wp / SDR_SIZE_UBUFF - 1 + SDR_MAX_UBUFF; // next block
     sdr_mutex_unlock(&dev->mtx);
     
+    transfer->buffer = dev->buff + SDR_SIZE_UBUFF * (int)(n % NUM_BUFF);
     libusb_submit_transfer(transfer);
 }
 
@@ -401,12 +414,22 @@ int sdr_dev_stop(sdr_dev_t *dev)
 //  return
 //      data size read (0: insufficent data) (bytes)
 //
+//  notes:
+//      If the reader lags behind so far that the unread data may have been
+//      overwritten by the USB transfers, the unread data are discarded and
+//      dev->novr is incremented.
+//
 int sdr_dev_read(sdr_dev_t *dev, uint8_t *buff, int size)
 {
     sdr_mutex_lock(&dev->mtx);
     int64_t wp = dev->wp;
     sdr_mutex_unlock(&dev->mtx);
     
+    if (wp - dev->rp > BUFF_SIZE - SDR_SIZE_UBUFF) { // raw data buffer overflow
+        dev->rp = wp;
+        dev->novr++;
+        return 0;
+    }
     if (wp < dev->rp + size) {
         return 0;
     }

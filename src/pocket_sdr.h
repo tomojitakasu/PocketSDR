@@ -26,6 +26,7 @@
 //  2026-07-24  1.18 support up to 8 output streams with selectable types
 //  2026-08-01  1.19 add Web UI server APIs (sdr_web.c)
 //  2026-08-02  1.20 add Web UI receiver configuration and lifecycle APIs
+//  2026-09-28  1.21 add raw data buffer overflow count to sdr_dev_t
 //
 #ifndef POCKET_SDR_H
 #define POCKET_SDR_H
@@ -155,6 +156,7 @@ typedef struct {                // Pocket SDR FE device type
     int state;                  // state of USB event handler
     int64_t rp, wp;             // read/write pointer of raw data buffer
     uint8_t *buff;              // raw data buffer
+    int novr;                   // number of raw data buffer overflows
     sdr_thread_t thread;        // USB event handler thread
     sdr_mutex_t mtx;            // lock flag
 } sdr_dev_t;

@@ -28,6 +28,8 @@
 //  2026-09-03  1.14 support multiple RF CHs of SoapySDR devices as CH planar
 //                   IF data
 //                   modify API sdr_rcv_new(), sdr_rcv_open_sdev()
+//  2026-09-28  1.15 log raw data buffer overflow of Pocket SDR FE
+//                   raise receiver thread priority over receiver CH threads
 //
 #include "pocket_sdr.h"
 #ifdef __linux__
@@ -48,6 +50,7 @@
 #define MAX_BUFF_USE 90         // max buffer usage rate (%)
 #define MAX_BAR    12           // C/N0 bar width
 #define SAMPLES_STATS 100       // samples for stats
+#define RCV_PRI    40           // real-time priority of receiver thread (Linux)
 #define AGC_LEVEL  2.3          // target std-dev for auto gain control
 #define LPF_AUTO_BW 0.9         // auto LPF bandwidth ratio (* fs/2) for IQ=1
 #define LOG_LEVEL  3            // default log level
@@ -829,9 +832,15 @@ static int read_data(sdr_rcv_t *rcv, uint8_t *raw, int N)
             return 0; // end of file
         }
     } else if (rcv->dev == SDR_DEV_USB) { // Pocket SDR FE
-        while (!sdr_dev_read((sdr_dev_t *)rcv->dp, raw, N)) {
+        sdr_dev_t *dev = (sdr_dev_t *)rcv->dp;
+        int novr = dev->novr;
+        while (!sdr_dev_read(dev, raw, N)) {
             if (!rcv->state) return 0;
             sdr_sleep_msec(1);
+        }
+        if (dev->novr > novr) {
+            sdr_log(3, "$LOG,%.3f,%s,%d,DEVICE BUFFER OVERFLOW (UNREAD IF DATA "
+                "DISCARDED)", rcv->ix * SDR_CYC, "", 0);
         }
     } else if (rcv->dev == SDR_DEV_SOAPY) { // SoapySDR device
         uint8_t *buff[SDR_MAX_RFCH];
@@ -1392,6 +1401,27 @@ static void out_log_sens(sdr_rcv_t *rcv, double time)
     }
 }
 
+// raise receiver thread priority over receiver CH threads ---------------------
+//   The receiver thread must keep up with the device buffer, while the CH
+//   threads may lag behind within the IF data buffer (log only - async stderr
+//   breaks display).
+static void raise_rcv_pri(void)
+{
+#ifdef WIN32
+    if (!SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST)) {
+        sdr_log(3, "$LOG,%.3f,%s,%d,set receiver thread priority error", 0.0,
+            "", 0);
+    }
+#else
+    struct sched_param param = {0};
+    param.sched_priority = RCV_PRI;
+    if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &param)) {
+        sdr_log(3, "$LOG,%.3f,%s,%d,set receiver thread scheduling error", 0.0,
+            "", 0);
+    }
+#endif
+}
+
 // SDR receiver thread ---------------------------------------------------------
 static void *rcv_thread(void *arg)
 {
@@ -1402,6 +1432,9 @@ static void *rcv_thread(void *arg)
 #ifdef __linux__
     prctl(PR_SET_NAME, "sdr_rcv"); // thread name for top -H
 #endif
+    if (rcv->dev == SDR_DEV_USB || rcv->dev == SDR_DEV_SOAPY) {
+        raise_rcv_pri();
+    }
     
     if ((rcv->dev == SDR_DEV_USB && !sdr_dev_start((sdr_dev_t *)rcv->dp)) ||
         (rcv->dev == SDR_DEV_SOAPY && !sdr_sdev_start((sdr_sdev_t *)rcv->dp))) {
