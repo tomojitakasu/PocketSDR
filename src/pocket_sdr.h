@@ -27,6 +27,7 @@
 //  2026-08-01  1.19 add Web UI server APIs (sdr_web.c)
 //  2026-08-02  1.20 add Web UI receiver configuration and lifecycle APIs
 //  2026-09-28  1.21 add raw data buffer overflow count to sdr_dev_t
+//  2026-09-28  1.22 add receiver sync mode to sdr_pvt_t
 //
 #ifndef POCKET_SDR_H
 #define POCKET_SDR_H
@@ -111,6 +112,10 @@ extern "C" {
 #define SDR_STATE_IDLE 1        // SDR channel state: idle
 #define SDR_STATE_SRCH 2        // SDR channel state: search
 #define SDR_STATE_LOCK 3        // SDR channel state: lock
+
+#define SDR_SYNC_UNKNOWN 0      // receiver sync mode: time unknown
+#define SDR_SYNC_COARSE 1       // receiver sync mode: time by signal TOW/WN
+#define SDR_SYNC_FINE  2        // receiver sync mode: time by PVT fix
 
 #define SDR_FFT_FORWARD 0       // SDR FFT direction forward
 #define SDR_FFT_BACKWARD 1      // SDR FFT direction backward
@@ -313,6 +318,7 @@ typedef struct {                // SDR receiver channel thread type
 typedef struct {                // SDR PVT type
     gtime_t time;               // epoch time
     int64_t ix;                 // epoch cycle (cyc)
+    int sync;                   // receiver sync mode (SDR_SYNC_???)
     int nsat, nch;              // number of satellites and updated channels
     obs_t *obs;                 // observation data
     nav_t *nav;                 // navigation data

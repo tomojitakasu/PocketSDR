@@ -143,6 +143,7 @@ static void test_sdr_pvt_udobs_init_epoch_api(void)
 
     TEST_ASSERT_EQ_INT(0, (int)pvt->ix);
     TEST_ASSERT_EQ_INT(ch.week, pvt->week_c);
+    TEST_ASSERT_EQ_INT(SDR_SYNC_UNKNOWN, pvt->sync);
 
     // the same week from another channel initializes the epoch
     ch.no = 3;
@@ -151,6 +152,35 @@ static void test_sdr_pvt_udobs_init_epoch_api(void)
     TEST_ASSERT_TRUE(pvt->ix > 0);
     TEST_ASSERT_EQ_INT(0, pvt->obs->n);
     TEST_ASSERT_EQ_INT(0, pvt->nch);
+    TEST_ASSERT_EQ_INT(SDR_SYNC_COARSE, pvt->sync);
+    
+    sdr_pvt_free(pvt);
+    cleanup_files();
+}
+
+// test last fix inherited from the nav data file regardless of the CPU time ---
+static void test_sdr_pvt_last_fix_api(void)
+{
+    sdr_rcv_t rcv;
+    sdr_pvt_t *pvt;
+    gtime_t time = gpst2time(2300, 345600.0); // far from the CPU time
+    FILE *fp;
+    
+    cleanup_files();
+    fp = fopen(NAVDATA_FILE, "w");
+    TEST_ASSERT_TRUE(fp != NULL);
+    fprintf(fp, "POS,%ld,%.9f,%.4f,%.4f,%.4f,%.14E,%.14E\n", (long)time.time,
+        time.sec, -3961904.9, 3348993.8, 3698211.6, 1.5e-4, -2.5e-7);
+    fclose(fp);
+    memset(&rcv, 0, sizeof(rcv));
+    pvt = sdr_pvt_new(&rcv);
+    
+    TEST_ASSERT_EQ_INT(1, pvt->last_valid);
+    TEST_ASSERT_NEAR(-3961904.9, pvt->last_rr[0], 1e-3);
+    TEST_ASSERT_NEAR(3698211.6, pvt->last_rr[2], 1e-3);
+    TEST_ASSERT_NEAR(-2.5e-7, pvt->last_dtrd, 1e-15);
+    TEST_ASSERT_NEAR(0.0, timediff(pvt->last_time, time), 1e-6);
+    TEST_ASSERT_EQ_INT(SDR_SYNC_UNKNOWN, pvt->sync);
 
     sdr_pvt_free(pvt);
     cleanup_files();
@@ -369,6 +399,7 @@ int main(void)
     TEST_RUN(test_sdr_pvt_solstr_api);
     TEST_RUN(test_sdr_pvt_udobs_init_epoch_api);
     TEST_RUN(test_sdr_pvt_udobs_init_epoch_rep_api);
+    TEST_RUN(test_sdr_pvt_last_fix_api);
     TEST_RUN(test_sdr_pvt_udobs_update_api);
     TEST_RUN(test_sdr_pvt_udobs_invalid_api);
     TEST_RUN(test_sdr_pvt_udnav_api);

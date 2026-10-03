@@ -30,6 +30,9 @@
 //                   modify API sdr_rcv_new(), sdr_rcv_open_sdev()
 //  2026-09-28  1.15 log raw data buffer overflow of Pocket SDR FE
 //                   raise receiver thread priority over receiver CH threads
+//  2026-09-28  1.16 use the receiver time instead of the CPU time for fast
+//                   acquisition (full search until the receiver sync mode is
+//                   coarse or fine)
 //
 #include "pocket_sdr.h"
 #ifdef __linux__
@@ -1130,16 +1133,18 @@ static int fast_acq(sdr_rcv_t *rcv, sdr_ch_t *ch)
         if (sat <= 0) return 0;
         sys = satsys(sat, &prn);
     }
-    // current time from CPU clock
-    t = utc2gpst(timeget());
+    int64_t ix = get_buff_ix(rcv);
     
     // Snapshot aiding data under PVT lock. Position, clock rate and nav data
-    // must be from one consistent receiver state.
+    // must be from one consistent receiver state. The current time is the
+    // receiver time, not the CPU time: full search until the receiver sync
+    // mode is coarse or fine.
     sdr_mutex_lock(&pvt->mtx);
-    if (!pvt->last_valid) {
+    if (pvt->sync < SDR_SYNC_COARSE || !pvt->last_valid) {
         sdr_mutex_unlock(&pvt->mtx);
         return 0;
     }
+    t = timeadd(pvt->time, (ix - pvt->ix) * SDR_CYC);
     rr[0] = pvt->last_rr[0];
     rr[1] = pvt->last_rr[1];
     rr[2] = pvt->last_rr[2];

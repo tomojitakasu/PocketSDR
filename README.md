@@ -712,6 +712,12 @@ purposes, is prohibited.
   high data rates of the Pocket SDR FE (e.g. FE 8CH 24 Msps), caused by a
   silent overflow of the raw data buffer: the buffer is enlarged to 128 MB,
   independent of the USB transfers in flight, an overflow is logged, and the
-  receiver thread runs at a higher priority than the channel threads.
+  receiver thread runs at a higher priority than the channel threads. Fast
+  acquisition now predicts satellite visibility and Doppler at the receiver
+  time instead of the host PC clock, so it also works for a GNSS simulator and
+  for replayed IF data: the receiver sync mode (unknown, coarse, fine) is
+  introduced, the full search is used until the TOW and the week number of a
+  received signal set the receiver time, and the last fix position is inherited
+  regardless of its time.
 
 --------------------------------------------------------------------------------

@@ -212,7 +212,7 @@ This API reference describes the **Pocket SDR** C library (`libsdr`). The librar
 <br><br>
 
 - `sdr_pvt_t`
-  - PVT state: epoch and cycle index, satellite count, RTKLIB `obs_t`/`nav_t`/`sol_t`/`ssat_t`/`rtcm_t`, latency, sol/obs/nav counters, back-pointer to receiver, and the latest FIX position / receiver clock bias / receiver clock drift rate used by fast acquisition and persisted in `.pocket_navdata.csv`.
+  - PVT state: epoch and cycle index, receiver sync mode (`SDR_SYNC_UNKNOWN` / `SDR_SYNC_COARSE` / `SDR_SYNC_FINE`), satellite count, RTKLIB `obs_t`/`nav_t`/`sol_t`/`ssat_t`/`rtcm_t`, latency, sol/obs/nav counters, back-pointer to receiver, and the latest FIX position / receiver clock bias / receiver clock drift rate used by fast acquisition and persisted in `.pocket_navdata.csv`.
 <br><br>
 
 - `sdr_rfch_t`
@@ -1349,8 +1349,10 @@ Top-level receiver lifecycle and state queries. A receiver wraps a front-end (US
 - `-FAST_SRCH` — enable fast acquisition (the `fast_acq` key of
   `sdr_rcv_setopt()` enables it as well). The receiver predicts initial Doppler
   from `.pocket_navdata.csv` navigation/almanac data plus the last FIX position
-  and receiver clock drift rate; the saved position is ignored if its timestamp
-  differs from the current GPST by more than one day.
+  and receiver clock drift rate, at the receiver time. Until the receiver sync
+  mode becomes coarse (the epoch time set by the TOW/WN of a received signal)
+  the signals are acquired by the full search; the fine mode follows the first
+  PVT fix. The last FIX position is inherited regardless of its timestamp.
 - `-GAIN=<dB>` / `-BW=<MHz>` — SoapySDR gain and analog bandwidth options
   passed through `sdr_rcv_open_sdev()`.
 - `-E5AB_OFF=<ns>` — Galileo E5AltBOC code offset correction.

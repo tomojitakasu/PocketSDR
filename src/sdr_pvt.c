@@ -14,6 +14,8 @@
 //  2026-07-17  1.2  widen pseudorange lower bound for GEO/IGSO epoch seeding
 //                   add nav data consistency tests
 //  2026-07-24  1.3  output NMEA and RTCM3 to multiple streams
+//  2026-09-28  1.4  add receiver sync mode (unknown, coarse, fine)
+//                   inherit the last fix position regardless of the CPU time
 //
 #include "pocket_sdr.h"
 
@@ -25,7 +27,6 @@
 #define STD_ERR        0.015    // std-dev of carrier phase noise (m)
 #define FILE_NAV       ".pocket_navdata.csv" // navigation data file
 #define MAXDTGLO       (86400.0*7.0) // max age of GLONASS almanac (s)
-#define MAXDTPOS       86400.0   // max age of last fix position (s)
 
 #define ROUND(x)   (int)floor((x) + 0.5)
 #define SQRT(x)    ((x) > 0.0 ? sqrt(x) : 0.0)
@@ -657,21 +658,19 @@ static void load_navdata(const char *file, nav_t *nav, sdr_pvt_t *pvt)
             long t;
             double sec, rr[3], dtr, dtrd;
             gtime_t time;
+            // inherit the last fix regardless of the CPU time: the signal time
+            // of a GNSS simulator or a replayed IF data is not the CPU time
             if (sscanf(buff + 4, "%ld,%lf,%lf,%lf,%lf,%lf,%lf", &t, &sec,
                 rr, rr+1, rr+2, &dtr, &dtrd) == 7) {
                 time.time = t;
                 time.sec  = sec;
-                if (fabs(timediff(utc2gpst(timeget()), time)) < MAXDTPOS) {
-                    pvt->last_time  = time;
-                    pvt->last_rr[0] = rr[0];
-                    pvt->last_rr[1] = rr[1];
-                    pvt->last_rr[2] = rr[2];
-                    pvt->last_dtr   = dtr;
-                    pvt->last_dtrd  = dtrd;
-                    pvt->last_valid = 1;
-                } else {
-                    pvt->last_valid = 0;
-                }
+                pvt->last_time  = time;
+                pvt->last_rr[0] = rr[0];
+                pvt->last_rr[1] = rr[1];
+                pvt->last_rr[2] = rr[2];
+                pvt->last_dtr   = dtr;
+                pvt->last_dtrd  = dtrd;
+                pvt->last_valid = 1;
             }
         }
     }
@@ -740,6 +739,17 @@ void sdr_pvt_free(sdr_pvt_t *pvt)
     sdr_free(pvt);
 }
 
+// set receiver sync mode ------------------------------------------------------
+static void set_sync(sdr_pvt_t *pvt, int sync, double time, const char *sig,
+    int prn)
+{
+    static const char *str[] = {"UNKNOWN", "COARSE", "FINE"};
+    
+    if (pvt->sync == sync) return;
+    pvt->sync = sync;
+    sdr_log(3, "$LOG,%.3f,%s,%d,RECEIVER SYNC %s", time, sig, prn, str[sync]);
+}
+
 // initialize epoch time and cycle ---------------------------------------------
 static void init_epoch(sdr_pvt_t *pvt, int64_t ix, sdr_ch_t *ch)
 {
@@ -756,6 +766,7 @@ static void init_epoch(sdr_pvt_t *pvt, int64_t ix, sdr_ch_t *ch)
     pvt->time = gpst2time(ch->week, tow);
     pvt->ix = ix + ROUND((tow - ch->tow * 1e-3 - 0.07) / SDR_CYC);
     pvt->ix = (pvt->ix / 20) * 20; // round by 20 ms
+    set_sync(pvt, SDR_SYNC_COARSE, ch->time, ch->sig, ch->prn);
 }
 
 // generate pseudorange --------------------------------------------------------
@@ -1145,6 +1156,7 @@ static void update_sol(sdr_pvt_t *pvt)
         pvt->last_dtr   = pvt->sol->dtr[0];
         pvt->last_dtrd  = pvt->sol->dtr[5];   // clock drift rate (s/s)
         pvt->last_valid = 1;
+        set_sync(pvt, SDR_SYNC_FINE, time, "", 0);
         
         // output log $POS and NMEA RMC, GGA, GSA and GSV
         out_log_pos(time, pvt->sol, pvt->obs->n);
