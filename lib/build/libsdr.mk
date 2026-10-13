@@ -6,6 +6,7 @@ SRC = ../../src
 USE_SOAPY ?= 1
 USE_FFTW ?= 0
 USE_AVX2 ?= 1
+USE_AVX512 ?= 0
 
 INCLUDE = -I$(SRC) -I../RTKLIB/src
 OPTIONS =
@@ -26,7 +27,9 @@ ifeq ($(OS),Windows_NT)
     INSTALL = ../win32
     INCLUDE += -I../cyusb
     OPTIONS += -DWIN32
-    ifeq ($(USE_AVX2),1)
+    ifeq ($(USE_AVX512),1)
+        OPTIONS += -DAVX512 -mavx512f -mavx512bw -mavx512vl -mavx512vnni
+    else ifeq ($(USE_AVX2),1)
         OPTIONS += -DAVX2 -mavx2 -mfma
     endif
     LDLIBS = $(LIBS) ../cyusb/CyAPI.a -lpthread -lsetupapi -lavrt -lwsock32 -lwinmm
@@ -58,6 +61,8 @@ else
     INCLUDE +=
     ifeq ($(shell uname -m),aarch64)
         OPTIONS += -DNEON -mcpu=native
+    else ifeq ($(USE_AVX512),1)
+        OPTIONS += -DAVX512 -mavx512f -mavx512bw -mavx512vl -mavx512vnni
     else ifeq ($(USE_AVX2),1)
         OPTIONS += -DAVX2 -mavx2 -mfma
     endif

@@ -471,6 +471,25 @@ Note: FFTW3 is GPL-licensed, so a binary linked against it inherits GPL terms. K
 --------------------------------------------------------------------------------
 <div class="pagebreak"></div>
 
+## **Using AVX-512 instructions (optional)**
+
+On x86-64 CPUs with AVX-512 (AMD Zen 4 or later such as Ryzen 9000 series,
+Intel Ice Lake or later), `libsdr` can be built with `USE_AVX512=1` to use the
+AVX-512 versions of the carrier mixer, correlator, LPF and array covariance
+kernels (`-DAVX512`) instead of the default AVX2 ones. The APs link `libsdr`
+statically, so rebuild them after the library. A binary built with
+`USE_AVX512=1` does not run on a CPU without AVX-512.
+```
+$ cd <install_dir>/lib/build
+$ make clean && make USE_AVX512=1 && make install
+$ cd <install_dir>/app
+$ make clean && make && make install
+```
+The unit tests can be built with the same option: `make -C test/utest USE_AVX512=1`.
+
+--------------------------------------------------------------------------------
+<div class="pagebreak"></div>
+
 ## **GNSS SDR Utilities and APs**
 
 Pocket SDR includes the following utilities for the Pocket SDR FE.

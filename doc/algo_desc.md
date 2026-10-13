@@ -2010,8 +2010,8 @@ runs a small fixed-size chip-domain FFT each symbol to search the CSK
 code-phase shift; its E/P/L correlations use the time-domain correlator like
 any other signal.
 
-The low-level carrier mixer and correlator include AVX2 and NEON paths where
-available. Complex samples and code replicas are stored in compact integer
+The low-level carrier mixer and correlator include AVX2, AVX-512 and NEON paths
+where available. Complex samples and code replicas are stored in compact integer
 formats so the hot loops can use vector integer operations.
 
 ### 7.5 Search Load Control and Doppler Assistance
@@ -2082,7 +2082,8 @@ and FFT correlation per bin.
 
 ### 7.10 SIMD Hot Paths
 
-The low-level functions include AVX2 and NEON blocks for two key operations:
+The low-level functions include AVX2, AVX-512 (`-DAVX512`, `USE_AVX512=1`) and
+NEON blocks for two key operations:
 
 - carrier mixing from compact IF samples to `sdr_cpx16_t`;
 - dot products between carrier-wiped samples and code replicas.
@@ -2093,8 +2094,16 @@ operations rather than general floating-point multiplication. The scalar loops
 remain as portable fallbacks.
 
 The implementation keeps the public algorithm independent of the SIMD path.
-Acquisition, tracking, and PVT behavior should not change when AVX2 or NEON is
-not available; only throughput changes.
+Acquisition, tracking, and PVT behavior should not change when AVX2, AVX-512 or
+NEON is not available; only throughput changes.
+
+The AVX-512 path differs from the AVX2 one in two points. The carrier mixer does
+not use the 64K-entry data x carrier LUT; it computes `(I + jQ)(cos - j sin)` in
+int16 lanes, 32 samples per iteration, with the 8-bit phase mapped to the
+carrier by a 256-entry LUT held in registers (`vpermi2w`). The correlator inner
+product uses the VNNI instruction `vpdpbusd` (u8 x s8 to int32) on 32 samples
+per instruction, and the tails are handled by masked loads so no scalar loop
+runs. Both are bit-identical to the scalar path.
 
 The two figures below show the AVX2 vectorization of the two hottest kernels,
 carrier mixing (`mix_carr()`) and the correlator inner product (`dot_IQ_code()`).

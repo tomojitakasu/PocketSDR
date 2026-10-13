@@ -214,6 +214,44 @@ static void test_sdr_mix_carr_api(void)
     sdr_buff_free(buff);
 }
 
+// reference carrier mixing by the LUT formula ---------------------------------
+static void ref_mix_carr(const sdr_buff_t *buff, int ix, int N, double fs,
+    double fc, double phi, sdr_cpx16_t *IQ)
+{
+    double scale = (double)(1 << 24) * 256;
+    uint32_t p = (uint32_t)((phi - floor(phi)) * scale);
+    uint32_t s = (uint32_t)(int)(fc / fs * scale);
+
+    for (int i = 0; i < N; i++, p += s) {
+        int k = p >> 24, I = SDR_CPX8_I(buff->data[ix+i]);
+        int Q = SDR_CPX8_Q(buff->data[ix+i]);
+        int cI = (int)floor(cos(-2.0 * PI * k / 256) / SDR_CSCALE + 0.5);
+        int cQ = (int)floor(sin(-2.0 * PI * k / 256) / SDR_CSCALE + 0.5);
+        IQ[i].I = (int8_t)(I * cI - Q * cQ);
+        IQ[i].Q = (int8_t)(I * cQ + Q * cI);
+    }
+}
+
+// sdr_mix_carr() vs reference for all lengths including SIMD tails ------------
+static void test_sdr_mix_carr_equiv(void)
+{
+    const int NB = 1024;
+    sdr_buff_t *buff = sdr_buff_new(NB, 2);
+    sdr_cpx16_t IQ[256], ref[256];
+
+    for (int i = 0; i < NB; i++) {
+        buff->data[i] = (sdr_cpx8_t)((i * 37 + 11) & 0xFF);
+    }
+    for (int N = 1; N <= 160; N++) {
+        int ix = (N * 7) % 512;
+        double fc = -4200.0 + N * 123.4, phi = 0.0137 * N;
+        ref_mix_carr(buff, ix, N, 24e6, fc, phi, ref);
+        sdr_mix_carr(buff, ix, N, 24e6, fc, phi, IQ);
+        TEST_ASSERT_TRUE(!memcmp(IQ, ref, sizeof(sdr_cpx16_t) * N));
+    }
+    sdr_buff_free(buff);
+}
+
 // sdr_corr_std(), sdr_corr_std_cpx(), sdr_corr_fft(), sdr_corr_fft_cpx(),
 // sdr_search_code() -----------------------------------------------------------
 static void test_sdr_corr_api(void)
@@ -741,6 +779,25 @@ static void test_sdr_lpf_api(void)
     sdr_lpf_free(lpf);
 }
 
+// sdr_lpf_apply() in one call vs. short chunks (SIMD path vs scalar path) -----
+static void test_sdr_lpf_apply_equiv(void)
+{
+    const int N = 1100;
+    sdr_cpx8_t data1[1100], data2[1100];
+    sdr_lpf_t *lpf1 = sdr_lpf_new(3e6, 24e6), *lpf2 = sdr_lpf_new(3e6, 24e6);
+
+    for (int i = 0; i < N; i++) {
+        data1[i] = data2[i] = (sdr_cpx8_t)((i * 53 + 7) & 0xFF);
+    }
+    sdr_lpf_apply(lpf1, data1, N);
+    for (int i = 0; i < N; i += 3) {
+        sdr_lpf_apply(lpf2, data2 + i, N - i < 3 ? N - i : 3);
+    }
+    TEST_ASSERT_TRUE(!memcmp(data1, data2, N));
+    sdr_lpf_free(lpf1);
+    sdr_lpf_free(lpf2);
+}
+
 // main ------------------------------------------------------------------------
 int main(void)
 {
@@ -750,6 +807,7 @@ int main(void)
     TEST_RUN(test_sdr_buff_read_api);
     TEST_RUN(test_sdr_tag_api);
     TEST_RUN(test_sdr_mix_carr_api);
+    TEST_RUN(test_sdr_mix_carr_equiv);
     TEST_RUN(test_sdr_corr_api);
     TEST_RUN(test_sdr_corr_std_equiv);
     TEST_RUN(test_sdr_corr_std_cpx_code_equiv);
@@ -763,6 +821,7 @@ int main(void)
     TEST_RUN(test_sdr_bit_api);
     TEST_RUN(test_sdr_fftw_wisdom_api);
     TEST_RUN(test_sdr_lpf_api);
+    TEST_RUN(test_sdr_lpf_apply_equiv);
     cleanup_files();
     return 0;
 }

@@ -6,6 +6,7 @@
 
 USE_FFTW ?= 0
 USE_AVX2 ?= 1
+USE_AVX512 ?= 0
 
 SRC = ../../src
 LIB = ../../lib
@@ -66,7 +67,9 @@ ifeq ($(OS),Windows_NT)
     LDFLAGS += -Wl,--gc-sections
     SYS_LIBS += -lwinmm -lws2_32
     STATIC_OPT = -static
-    ifeq ($(USE_AVX2),1)
+    ifeq ($(USE_AVX512),1)
+        OPTIONS += -DAVX512 -mavx512f -mavx512bw -mavx512vl -mavx512vnni
+    else ifeq ($(USE_AVX2),1)
         OPTIONS += -DAVX2 -mavx2 -mfma
     endif
 else ifeq ($(UNAME_S),Darwin)
@@ -77,6 +80,8 @@ else ifeq ($(UNAME_S),Darwin)
         INCLUDE += -I/opt/homebrew/include
         LDFLAGS += -L/opt/homebrew/lib
         OPTIONS += -DNEON
+    else ifeq ($(USE_AVX512),1)
+        OPTIONS += -DAVX512 -mavx512f -mavx512bw -mavx512vl -mavx512vnni
     else ifeq ($(USE_AVX2),1)
         OPTIONS += -DAVX2 -mavx2 -mfma
     endif
@@ -85,6 +90,8 @@ else
     SYS_LIBS += -lm -lpthread
     ifeq ($(UNAME_M),aarch64)
         OPTIONS += -DNEON -mcpu=native
+    else ifeq ($(USE_AVX512),1)
+        OPTIONS += -DAVX512 -mavx512f -mavx512bw -mavx512vl -mavx512vnni
     else ifeq ($(USE_AVX2),1)
         OPTIONS += -DAVX2 -mavx2 -mfma
     endif

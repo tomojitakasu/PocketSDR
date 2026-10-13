@@ -611,7 +611,7 @@ Read and write Pocket SDR FE register configuration files (MAX2771 / FX2LP / FX3
 ---
 
 ### Overview
-General DSP and bookkeeping helpers: complex/FFT primitives, IF buffer / file I/O, code search and tracking correlators (scalar + AVX2 paths), Doppler bin generation, PSD utilities, log streams, packed-bit accumulators, and the digital LPF.
+General DSP and bookkeeping helpers: complex/FFT primitives, IF buffer / file I/O, code search and tracking correlators (scalar + AVX2 / AVX-512 paths), Doppler bin generation, PSD utilities, log streams, packed-bit accumulators, and the digital LPF.
 <br>
 
 ### API Functions

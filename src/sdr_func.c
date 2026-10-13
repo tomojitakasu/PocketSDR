@@ -64,6 +64,7 @@
 //                   add API sdr_log_add_str(), sdr_log_rm_str()
 //  2026-08-08  1.31 fix memory leak of stream in sdr_str_close()
 //  2026-09-03  1.32 support number of RF CHs in the tag file
+//  2026-10-14  1.33 add AVX512 codes
 //                   modify API sdr_tag_read(), sdr_tag_write()
 //
 #include <math.h>
@@ -73,7 +74,7 @@
 #if defined(WIN32)
 #include <io.h>
 #endif
-#if defined(AVX2)
+#if defined(AVX512) || defined(AVX2)
 #include <immintrin.h>
 #elif defined(NEON)
 #include <arm_neon.h>
@@ -114,6 +115,9 @@ struct sdr_lpf_tag {              // LPF state struct
 // global variables ------------------------------------------------------------
 static sdr_cpx16_t mix_tbl[NTBL*256] = {{0,0}}; // carrier-mixed-data LUT
 static sdr_cpx16_t mix_tbl_b[NTBL*256] = {{0,0}}; // LUT biased by +128 (u8)
+#if defined(AVX512)
+static int16_t carr_tbl[NTBL] = {0}; // carrier LUT (int8 cos | sin << 8)
+#endif
 static fftwf_plan fftw_plans[MAX_FFTW_PLAN][2] = {{0}}; // FFTW plan buffer
 static int fftw_size[MAX_FFTW_PLAN] = {0}; // FFTW plan sizes
 static int log_lvl = 3;            // log level
@@ -163,6 +167,9 @@ void sdr_func_init(const char *file)
     for (int i = 0; i < NTBL; i++) {
         int8_t carr_I = (int8_t)ROUND(cos(-2.0 * PI * i / NTBL) / SDR_CSCALE);
         int8_t carr_Q = (int8_t)ROUND(sin(-2.0 * PI * i / NTBL) / SDR_CSCALE);
+#if defined(AVX512)
+        carr_tbl[i] = (int16_t)(((int)carr_Q << 8) | (carr_I & 0xFF));
+#endif
         for (int j = 0; j < 256; j++) {
             int8_t I = SDR_CPX8_I(j), Q = SDR_CPX8_Q(j);
             mix_tbl[(j << 8) + i].I = I * carr_I - Q * carr_Q;
@@ -240,7 +247,18 @@ void sdr_cpx_mul(const sdr_cpx_t *a, const sdr_cpx_t *b, int N, float s,
     sdr_cpx_t *c)
 {
     int i = 0;
-#if defined(AVX2)
+#if defined(AVX512)
+    __m512 zs = _mm512_set1_ps(s);
+
+    for ( ; i < N - 7; i += 8) {
+        __m512 za = _mm512_loadu_ps((const float *)(a + i));
+        __m512 zb = _mm512_loadu_ps((const float *)(b + i));
+        __m512 zc = _mm512_mul_ps(_mm512_movehdup_ps(za),
+            _mm512_permute_ps(zb, 0xB1)); // (ai*bi, ai*br)
+        zc = _mm512_fmaddsub_ps(_mm512_moveldup_ps(za), zb, zc);
+        _mm512_storeu_ps((float *)(c + i), _mm512_mul_ps(zc, zs));
+    }
+#elif defined(AVX2)
     __m256 yr = _mm256_set_ps(-1, 1, -1, 1, -1, 1, -1, 1);
     __m256 ys = _mm256_set1_ps(s);
     
@@ -414,7 +432,16 @@ void sdr_lpf_apply(sdr_lpf_t *lpf, sdr_cpx8_t *data, int N)
             Q[i] = lpf->Q[j];
         }
         i = 0;
-#if defined(NEON)
+#if defined(AVX512)
+        for ( ; i + 16 <= n; i += 16) { // unpack 4-bit I/Q to int32
+            __m512i d = _mm512_cvtepi8_epi32(
+                _mm_loadu_si128((const __m128i *)(data + i)));
+            _mm512_storeu_si512((__m512i *)(I + HIST + i),
+                _mm512_srai_epi32(_mm512_slli_epi32(d, 28), 28));
+            _mm512_storeu_si512((__m512i *)(Q + HIST + i),
+                _mm512_srai_epi32(d, 4));
+        }
+#elif defined(NEON)
         for ( ; i + 16 <= n; i += 16) { // unpack 4-bit I/Q to int32
             int8x16_t d = vld1q_s8((const int8_t *)(data + i));
             int8x16_t dI = vshrq_n_s8(vshlq_n_s8(d, 4), 4);
@@ -438,7 +465,40 @@ void sdr_lpf_apply(sdr_lpf_t *lpf, sdr_cpx8_t *data, int N)
             Q[HIST+i] = SDR_CPX8_Q(data[i]);
         }
         i = 0;
-#if defined(AVX2)
+#if defined(AVX512)
+        const __m512i round = _mm512_set1_epi32(1 << (LPF_H_SHIFT - 1));
+        const __m512i cmask = _mm512_set1_epi32(0x0F);
+        const __m512i clo = _mm512_set1_epi32(-7);
+        const __m512i chi = _mm512_set1_epi32(7);
+
+        for ( ; i + 16 <= n; i += 16) {
+            // center tap
+            __m512i xI = _mm512_loadu_si512((const __m512i *)(I + i + LPF_N_TAP / 2));
+            __m512i xQ = _mm512_loadu_si512((const __m512i *)(Q + i + LPF_N_TAP / 2));
+            __m512i hc = _mm512_set1_epi32(lpf->h[LPF_N_TAP/2]);
+            __m512i accI = _mm512_mullo_epi32(xI, hc);
+            __m512i accQ = _mm512_mullo_epi32(xQ, hc);
+
+            for (int k = 0; k < LPF_N_TAP / 2; k++) { // side symmetric taps
+                __m512i xIa = _mm512_loadu_si512((const __m512i *)(I + i + k));
+                __m512i xIb = _mm512_loadu_si512((const __m512i *)(I + i + HIST - k));
+                __m512i xQa = _mm512_loadu_si512((const __m512i *)(Q + i + k));
+                __m512i xQb = _mm512_loadu_si512((const __m512i *)(Q + i + HIST - k));
+                __m512i hk  = _mm512_set1_epi32(lpf->h[k]);
+                accI = _mm512_add_epi32(accI, _mm512_mullo_epi32(_mm512_add_epi32(xIa, xIb), hk));
+                accQ = _mm512_add_epi32(accQ, _mm512_mullo_epi32(_mm512_add_epi32(xQa, xQb), hk));
+            }
+            // round, right shift Q13, clip [-7, 7] and  pack to cpx8
+            accI = _mm512_srai_epi32(_mm512_add_epi32(accI, round), LPF_H_SHIFT);
+            accQ = _mm512_srai_epi32(_mm512_add_epi32(accQ, round), LPF_H_SHIFT);
+            accI = _mm512_max_epi32(clo, _mm512_min_epi32(chi, accI));
+            accQ = _mm512_max_epi32(clo, _mm512_min_epi32(chi, accQ));
+            __m512i qm = _mm512_slli_epi32(_mm512_and_si512(accQ, cmask), 4);
+            __m512i im = _mm512_and_si512(accI, cmask);
+            _mm_storeu_si128((__m128i *)(data + i),
+                _mm512_cvtepi32_epi8(_mm512_or_si512(qm, im)));
+        }
+#elif defined(AVX2)
         const __m256i round = _mm256_set1_epi32(1 << (LPF_H_SHIFT - 1));
         const __m256i cmask = _mm256_set1_epi32(0x0F);
         const __m256i clo = _mm256_set1_epi32(-7);
@@ -860,7 +920,49 @@ static void mix_carr_p(const sdr_buff_t *buff, int ix, int N, uint32_t p,
 {
     const uint8_t *data = buff->data + ix;
     int i = 0;
-#if defined(AVX2)
+#if defined(AVX512)
+    __m512i c0 = _mm512_loadu_si512(carr_tbl), c1 = _mm512_loadu_si512(carr_tbl + 32);
+    __m512i c2 = _mm512_loadu_si512(carr_tbl + 64), c3 = _mm512_loadu_si512(carr_tbl + 96);
+    __m512i c4 = _mm512_loadu_si512(carr_tbl + 128), c5 = _mm512_loadu_si512(carr_tbl + 160);
+    __m512i c6 = _mm512_loadu_si512(carr_tbl + 192), c7 = _mm512_loadu_si512(carr_tbl + 224);
+    __m512i b6 = _mm512_set1_epi16(0x40), b7 = _mm512_set1_epi16(0x80);
+    __m512i lo8 = _mm512_set1_epi16(0xFF);
+    __m512i xbias = _mm512_set1_epi8(tbl == mix_tbl_b ? (char)0x80 : 0);
+    // phases in the lane order of _mm512_packus_epi32() (lane 4L+m <- sample 8L+m)
+    __m512i zpa = _mm512_add_epi32(_mm512_set1_epi32(p), _mm512_mullo_epi32(
+        _mm512_set1_epi32(s), _mm512_setr_epi32(0, 1, 2, 3, 8, 9, 10, 11, 16,
+        17, 18, 19, 24, 25, 26, 27)));
+    __m512i zpb = _mm512_add_epi32(zpa, _mm512_set1_epi32(s * 4));
+    __m512i zs = _mm512_set1_epi32(s * 32);
+
+    for ( ; i < N; i += 32) { // (I + jQ) * (cI + jcQ) in int16, no LUT of data
+        __mmask32 m = (N - i >= 32) ? 0xFFFFFFFFu : (1u << (N - i)) - 1;
+        __m512i d = _mm512_cvtepi8_epi16(_mm256_maskz_loadu_epi8(m, data + i));
+        __m512i dI = _mm512_srai_epi16(_mm512_slli_epi16(d, 12), 12);
+        __m512i dQ = _mm512_srai_epi16(d, 4);
+        // carrier (cI | cQ << 8) of 8-bit phase by 4 x 64-entry LUT
+        __m512i ix = _mm512_packus_epi32(_mm512_srli_epi32(zpa, 24),
+            _mm512_srli_epi32(zpb, 24));
+        __mmask32 k6 = _mm512_test_epi16_mask(ix, b6);
+        __mmask32 k7 = _mm512_test_epi16_mask(ix, b7);
+        __m512i c = _mm512_mask_blend_epi16(k7,
+            _mm512_mask_blend_epi16(k6, _mm512_permutex2var_epi16(c0, ix, c1),
+                _mm512_permutex2var_epi16(c2, ix, c3)),
+            _mm512_mask_blend_epi16(k6, _mm512_permutex2var_epi16(c4, ix, c5),
+                _mm512_permutex2var_epi16(c6, ix, c7)));
+        __m512i cI = _mm512_srai_epi16(_mm512_slli_epi16(c, 8), 8);
+        __m512i cQ = _mm512_srai_epi16(c, 8);
+        zpa = _mm512_add_epi32(zpa, zs);
+        zpb = _mm512_add_epi32(zpb, zs);
+        __m512i re = _mm512_sub_epi16(_mm512_mullo_epi16(dI, cI),
+            _mm512_mullo_epi16(dQ, cQ));
+        __m512i im = _mm512_add_epi16(_mm512_mullo_epi16(dI, cQ),
+            _mm512_mullo_epi16(dQ, cI));
+        __m512i out = _mm512_or_si512(_mm512_and_si512(re, lo8),
+            _mm512_slli_epi16(im, 8));
+        _mm512_mask_storeu_epi16(IQ + i, m, _mm512_xor_si512(out, xbias));
+    }
+#elif defined(AVX2)
     __m256i yp = _mm256_set_epi32(p+s*7, p+s*6, p+s*5, p+s*4, p+s*3, p+s*2, p+s, p);
     __m256i ys = _mm256_set1_epi32(s*8);
     
@@ -958,7 +1060,15 @@ void sdr_mix_carr(const sdr_buff_t *buff, int ix, int N, double fs, double fc,
 static void cvt_cpx16(const sdr_cpx16_t *IQ, int N, sdr_cpx_t *cpx)
 {
     int i = 0;
-#if defined(AVX2)
+#if defined(AVX512)
+    __m512 zs = _mm512_set1_ps(SDR_CSCALE);
+
+    for ( ; i < N - 7; i += 8) { // 8 samples = 16 x int8
+        __m128i xiq = _mm_loadu_si128((const __m128i *)(IQ + i));
+        __m512 ziq = _mm512_cvtepi32_ps(_mm512_cvtepi8_epi32(xiq));
+        _mm512_storeu_ps((float *)(cpx + i), _mm512_mul_ps(ziq, zs));
+    }
+#elif defined(AVX2)
     __m256 ys = _mm256_set1_ps(SDR_CSCALE);
     
     for ( ; i < N - 3; i += 4) { // 4 samples = 8 x int8
@@ -1056,12 +1166,40 @@ static sdr_buff_t *buff_new_cpx(const sdr_cpx_t *buff, int len_buff, int ix,
     return buff_cpx8;
 }
 
+#if defined(AVX512)
+// accumulate u8 x s8 products of 64 bytes to int32 lanes ---------------------
+static __m512i dot_u8s8(__m512i acc, __m512i a, __m512i b)
+{
+#if defined(__AVX512VNNI__)
+    return _mm512_dpbusd_epi32(acc, a, b);
+#else
+    return _mm512_add_epi32(acc, _mm512_madd_epi16(_mm512_maddubs_epi16(a, b),
+        _mm512_set1_epi16(1)));
+#endif
+}
+#endif
+
 // accumulate inner product of +128-biased IQ data and int8 code (csum debias) --
 static void dot_IQ_code_acc(const sdr_cpx16_t *IQ, const int8_t *code,
     const int32_t *csum, int N, int32_t *sumI, int32_t *sumQ)
 {
     int i = 0;
-#if defined(AVX2)
+#if defined(AVX512)
+    __m512i zsumI = _mm512_setzero_si512(), zsumQ = _mm512_setzero_si512();
+
+    for ( ; i < N; i += 32) { // tail by masked loads
+        __mmask32 m = (N - i >= 32) ? 0xFFFFFFFFu : (1u << (N - i)) - 1;
+        __m512i zdata = _mm512_maskz_loadu_epi16(m, IQ + i); // biased u8
+        __m512i zcodeI = _mm512_cvtepu8_epi16(
+            _mm256_maskz_loadu_epi8(m, code + i));           // (c,0) pairs
+        zsumI = dot_u8s8(zsumI, zdata, zcodeI);
+        zsumQ = dot_u8s8(zsumQ, zdata, _mm512_slli_epi16(zcodeI, 8)); // (0,c)
+    }
+    // remove data bias: sum((d+128)*c) = sum(d*c) + 128*sum(c)
+    int32_t b = 128 * (csum[N] - csum[0]);
+    *sumI += _mm512_reduce_add_epi32(zsumI) - b;
+    *sumQ += _mm512_reduce_add_epi32(zsumQ) - b;
+#elif defined(AVX2)
     __m256i ysumI = _mm256_setzero_si256();
     __m256i ysumQ = _mm256_setzero_si256();
     __m256i yones = _mm256_set1_epi16(1);
@@ -1131,7 +1269,26 @@ static void dot_IQ_code2_acc(const sdr_cpx16_t *IQ, const int8_t *codeI,
     int32_t *sII, int32_t *sIQ, int32_t *sQI, int32_t *sQQ)
 {
     int i = 0;
-#if defined(AVX2)
+#if defined(AVX512)
+    __m512i zII = _mm512_setzero_si512(), zIQ = _mm512_setzero_si512();
+    __m512i zQI = _mm512_setzero_si512(), zQQ = _mm512_setzero_si512();
+
+    for ( ; i < N; i += 32) { // tail by masked loads
+        __mmask32 m = (N - i >= 32) ? 0xFFFFFFFFu : (1u << (N - i)) - 1;
+        __m512i zdata = _mm512_maskz_loadu_epi16(m, IQ + i); // biased u8
+        __m512i cI = _mm512_cvtepu8_epi16(_mm256_maskz_loadu_epi8(m, codeI + i));
+        __m512i cQ = _mm512_cvtepu8_epi16(_mm256_maskz_loadu_epi8(m, codeQ + i));
+        zII = dot_u8s8(zII, zdata, cI);                        // (cI,0) pairs
+        zIQ = dot_u8s8(zIQ, zdata, _mm512_slli_epi16(cI, 8)); // (0,cI) pairs
+        zQI = dot_u8s8(zQI, zdata, cQ);
+        zQQ = dot_u8s8(zQQ, zdata, _mm512_slli_epi16(cQ, 8));
+    }
+    int32_t bI = 128 * (csumI[N] - csumI[0]), bQ = 128 * (csumQ[N] - csumQ[0]);
+    *sII += _mm512_reduce_add_epi32(zII) - bI;
+    *sIQ += _mm512_reduce_add_epi32(zIQ) - bI;
+    *sQI += _mm512_reduce_add_epi32(zQI) - bQ;
+    *sQQ += _mm512_reduce_add_epi32(zQQ) - bQ;
+#elif defined(AVX2)
     __m256i yII = _mm256_setzero_si256(), yIQ = _mm256_setzero_si256();
     __m256i yQI = _mm256_setzero_si256(), yQQ = _mm256_setzero_si256();
     __m256i yones = _mm256_set1_epi16(1);
