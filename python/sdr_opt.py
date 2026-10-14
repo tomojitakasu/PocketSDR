@@ -977,22 +977,23 @@ def on_btn_clear_push(e, plot, opt):
 def plot_ant_ele(plot, opt):
    dx = 0.05 # grid interval
    plt.plot_clear(plot)
-   color = plt.GR_COLOR
+   fcolor = plt.FG_COLOR
+   gcolor = plt.GR_COLOR
    for i in range(-6, 7):
-       plt.plot_poly(plot, [i * dx, i * dx], plot.yl, color if i else '#CCCCCC')
-       plt.plot_poly(plot, plot.xl, [i * dx, i * dx], color if i else '#CCCCCC')
-   plt.plot_circle(plot, 0, 0, 0.13, color='blue')
-   plt.plot_circle(plot, 0, 0, 0.0951, color=color)
+       plt.plot_poly(plot, [i * dx, i * dx], plot.yl, gcolor)
+       plt.plot_poly(plot, plot.xl, [i * dx, i * dx], gcolor)
+   plt.plot_circle(plot, 0, 0, 0.13, color=gcolor)
+   plt.plot_circle(plot, 0, 0, 0.0951, color=gcolor)
    for ch in range(MAX_RFCH):
       if opt.ena_ele[ch].get():
           x = float(opt.posx[ch].get())
           y = float(opt.posy[ch].get())
-          plt.plot_circle(plot, x, y, 0.022, color='blue')
-          plt.plot_text(plot, x, y, '%d' % (ch + 1), color='blue')
-   plot_ant_mark(plot, 0, plot.yl[1] - 0.01, 'blue')
+          plt.plot_circle(plot, x, y, 0.022, color=fcolor)
+          plt.plot_text(plot, x, y, '%d' % (ch + 1), color=fcolor)
+   plot_ant_mark(plot, 0, plot.yl[1] - 0.01, fcolor)
 
 # plot antenna mark ------------------------------------------------------------
 def plot_ant_mark(plot, x, y, color):
     dx, dy = (0, 0.005, -0.005, 0), (0.004, -0.004, -0.004, 0.004)
     plt.plot_poly(plot, [x + d for d in dx], [y + d for d in dy], color=color,
-        fill=1)
+        fill=color)

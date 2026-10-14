@@ -15,7 +15,6 @@ from tkinter import *
 # constants --------------------------------------------------------------------
 BG_COLOR = 'white'     # background color
 FG_COLOR = '#555555'   # foreground color
-#GR_COLOR = '#DDDDDD'   # grid color
 GR_COLOR = '#E4E4E4'   # grid color
 TICK_SIZE = 6          # tick size
 FONT = ('Tahoma', 9, 'normal')
@@ -68,6 +67,7 @@ def plot_update(plt):
 
 # plot clear -------------------------------------------------------------------
 def plot_clear(plt, tag=''):
+    plt.c.configure(bg=BG_COLOR)
     plt.c.delete('all' if tag == '' else tag)
 
 # set plot x-limit -------------------------------------------------------------
@@ -97,35 +97,40 @@ def plot_pos(plt, x, y):
     return xp, yp
 
 # plot rectangle ---------------------------------------------------------------
-def plot_rect(plt, x1, y1, x2, y2, color=FG_COLOR, fill=None, tag=''):
+def plot_rect(plt, x1, y1, x2, y2, color='', fill=None, tag=''):
     if color == None: return
+    if color == '': color = FG_COLOR
     xp1, yp1 = plot_pos(plt, x1, y1)
     xp2, yp2 = plot_pos(plt, x2, y2)
     plt.c.create_rectangle(xp1, yp1, xp2, yp2, outline=color, fill=fill,
         tag=tag)
 
 # plot circle ------------------------------------------------------------------
-def plot_circle(plt, x, y, r, color=FG_COLOR, fill=None, tag=''):
+def plot_circle(plt, x, y, r, color='', fill=None, tag=''):
     if color == None: return
+    if color == '': color = FG_COLOR
     xp, yp = plot_pos(plt, x, y)
     xs, ys = plot_scale(plt)
     plt.c.create_oval(xp - r * xs, yp - r * ys, xp + r * xs, yp + r * ys,
         outline=color, fill=fill, tag=tag)
 
 # plot polyline ----------------------------------------------------------------
-def plot_poly(plt, x, y, color=FG_COLOR, width=1, fill=0, tag=''):
+def plot_poly(plt, x, y, color='', fill=None, width=1, tag=''):
     if color == None or len(x) <= 1: return
+    if color == '': color = FG_COLOR
     xp, yp = plot_pos(plt, x, y)
     xp_yp = [(xp[i], yp[i]) for i in range(len(xp))]
-    if fill:
-        plt.c.create_polygon(xp_yp, outline=color, fill=color, width=width,
-            tag=tag)
-    else:
+    if fill == None:
         plt.c.create_line(xp_yp, fill=color, width=width, tag=tag)
+    else:
+        plt.c.create_polygon(xp_yp, outline=color, fill=fill, width=width,
+            tag=tag)
 
 # plot dots --------------------------------------------------------------------
-def plot_dots(plt, x, y, color=FG_COLOR, fill=FG_COLOR, size=3, tag=''):
+def plot_dots(plt, x, y, color='', fill='', size=3, tag=''):
     if color == None: return
+    if color == '': color = FG_COLOR
+    if fill == '': fill = FG_COLOR
     xp, yp = plot_pos(plt, x, y)
     xp_yp = set([(int(xp[i]), int(yp[i])) for i in range(len(xp))])
     for xy in xp_yp:
@@ -139,17 +144,19 @@ def plot_dots(plt, x, y, color=FG_COLOR, fill=FG_COLOR, size=3, tag=''):
                 outline=color, fill=fill, tag=tag)
 
 # plot text --------------------------------------------------------------------
-def plot_text(plt, x, y, text, color=FG_COLOR, anchor=CENTER, font=None,
+def plot_text(plt, x, y, text, color='', anchor=CENTER, font=None,
     angle=0, tag=''):
     if color == None: return
+    if color == '': color = FG_COLOR
     if font == None: font = plt.font
     xp, yp = plot_pos(plt, x, y)
     plt.c.create_text(xp, yp, text=text, fill=color, font=font, anchor=anchor,
         angle=angle)
 
 # plot frame and ticks ---------------------------------------------------------
-def plot_frm(plt, color=FG_COLOR, tag=''):
+def plot_frm(plt, color='', tag=''):
     if color == None: return
+    if color == '': color = FG_COLOR
     xs, ys = plot_scale(plt)
     if plt.tick & 1:
         d = TICK_SIZE / ys
@@ -164,8 +171,9 @@ def plot_frm(plt, color=FG_COLOR, tag=''):
     plot_rect(plt, plt.xl[0], plt.yl[0], plt.xl[1], plt.yl[1], color, tag=tag)
 
 # plot grid --------------------------------------------------------------------
-def plot_grid(plt, color=GR_COLOR, tag=''):
+def plot_grid(plt, color='', tag=''):
     if color == None: return
+    if color == '': color = GR_COLOR
     xs, ys = plot_scale(plt)
     if plt.tick & 1:
         for x in get_ticks(plt.xl, xs, plt.taxis):
@@ -175,8 +183,9 @@ def plot_grid(plt, color=GR_COLOR, tag=''):
             plot_poly(plt, plt.xl, [y, y], color, tag=tag)
 
 # plot tick labels -------------------------------------------------------------
-def plot_tick_labels(plt, color=FG_COLOR, tag=''):
+def plot_tick_labels(plt, color='', tag=''):
     if color == None: return
+    if color == '': color = FG_COLOR
     xs, ys = plot_scale(plt)
     if plt.tick & 4:
         for x in get_ticks(plt.xl, xs, plt.taxis):
@@ -194,7 +203,10 @@ def time_label(x):
     return '%02d:%02d:%02d' % (x // 3600, x % 3600 // 60, x % 60)
 
 # plot axis --------------------------------------------------------------------
-def plot_axis(plt, fcolor=FG_COLOR, gcolor=GR_COLOR, tcolor=FG_COLOR, tag=''):
+def plot_axis(plt, fcolor='', gcolor='', tcolor='', tag=''):
+    if fcolor == '': fcolor = FG_COLOR
+    if gcolor == '': gcolor = GR_COLOR
+    if tcolor == '': tcolor = FG_COLOR
     w, h = plt.c.winfo_width(), plt.c.winfo_height()
     plt.c.create_polygon(0, 0, 0, h + 1, plt.m[0], h + 1, plt.m[0], plt.m[2],
         w + 1, plt.m[2], w + 1, 0, outline=BG_COLOR, fill=BG_COLOR, tag=tag)
@@ -215,7 +227,9 @@ def plot_axis(plt, fcolor=FG_COLOR, gcolor=GR_COLOR, tcolor=FG_COLOR, tag=''):
         font=plt.font, fill=tcolor, tag=tag)
 
 # plot skyplot -----------------------------------------------------------------
-def plot_sky(plt, color=FG_COLOR, gcolor=GR_COLOR, tag=''):
+def plot_sky(plt, color='', gcolor='', tag=''):
+    if color == '': color = FG_COLOR
+    if gcolor == '': gcolor = GR_COLOR
     for az in np.arange(0, 360, 30):
         x, y = sin(az * pi / 180), cos(az * pi / 180)
         plot_poly(plt, [0, x], [0, y], gcolor, tag=tag)
@@ -272,7 +286,8 @@ def plot_image(plt, xc, yc, half, data, vmin, vmax, lut=None, tag=''):
     return (M * z) / (2.0 * xs) # actual half-extent (plot)
 
 # mask outside of skyplot ------------------------------------------------------
-def plot_sky_mask(plt, half, color=BG_COLOR, n_arc=24, tag=''):
+def plot_sky_mask(plt, half, color='', n_arc=24, tag=''):
+    if color == '': color = BG_COLOR
     xs, ys = plot_scale(plt)
     if xs <= 0: return
     xc, yc = plot_pos(plt, 0, 0)

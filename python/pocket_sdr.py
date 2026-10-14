@@ -45,6 +45,7 @@ BG_COLOR2  = BG_COLOR1       # background color 2
 P1_COLOR   = '#003020'       # plot color 1
 P2_COLOR   = '#888844'       # plot color 2
 P3_COLOR   = '#BBBBBB'       # plot color 3
+P4_COLOR   = '#F8F8F8'       # plot color 4
 WARN_COLOR = '#FF4000'       # warning color
 SDR_N_CORR = (6+101)         # number of correlators
 SDR_N_HIST = 5000            # number of correlator history
@@ -53,6 +54,8 @@ MAX_RCVLOG = 2000            # max receiver logs
 MAX_SOLLOG = 3600            # max solution logs
 MAX_RFCH   = 8               # max number of RF CH
 MAX_ARCH   = 8               # max number of array CH
+AJ_PI      = 1               # anti-jamming mode: power inversion
+AJ_THRES_COMP = 2.0          # AJ strong component threshold (* noise floor)
 MAX_STR    = 8               # max number of output streams
 STR_TYPES  = {'NMEA': 1, 'RTCM3': 2, 'LOG': 3, 'IF Data': 4} # SDR_STR_???
 GAIN_OVL_M = 100             # array gain overlay grid size (M x M)
@@ -195,6 +198,9 @@ def rcv_opt_str(sys_opt, inp_opt, sig_opt, array_opt):
     narch = to_int(array_opt.no_array.get())
     if narch > 0:
         opt += ' -ARCH=%d' % (narch)
+        if array_opt.aj_ch.get() != 'NONE':
+            opt += ' -AJ=%s:%s' % (array_opt.aj_ch.get(),
+                array_opt.aj_ref.get())
     return opt
 
 # get output stream types and paths ---------------------------------------------
@@ -616,6 +622,25 @@ def array_get_beam(rcv, arch):
         return None
     return az.value, el.value # (rad)
 
+# set array CH anti-jamming mode (0:off, 1:PI) ---------------------------------
+def array_set_aj(rcv, arch, mode, ref):
+    libsdr.sdr_rcv_array_set_aj.argtypes = (c_void_p, c_int32, c_int32, c_int32)
+    return libsdr.sdr_rcv_array_set_aj(rcv, arch, mode, ref)
+
+# get array CH anti-jamming state ----------------------------------------------
+def array_get_aj(rcv, arch):
+    mode, ref, supp = c_int32(0), c_int32(0), c_double(0.0)
+    w = np.zeros(MAX_RFCH * 2, dtype='float64')
+    eig = np.zeros(MAX_RFCH, dtype='float64')
+    libsdr.sdr_rcv_array_get_aj.argtypes = (c_void_p, c_int32, POINTER(c_int32),
+        POINTER(c_int32), ctypeslib.ndpointer('float64'), POINTER(c_double),
+        ctypeslib.ndpointer('float64'))
+    n = libsdr.sdr_rcv_array_get_aj(rcv, arch, byref(mode), byref(ref), w,
+        byref(supp), eig)
+    if n <= 0:
+        return None
+    return mode.value, ref.value, w[0::2] + 1j * w[1::2], supp.value, eig[:n]
+
 # set array element positions and enable flags ---------------------------------
 def array_ant_pos(rcv, ant_pos, ena):
     n = len(ena)
@@ -660,7 +685,7 @@ def get_rcv_pvt_sol(rcv):
 
 # get satellite color ----------------------------------------------------------
 def sat_color(sat, sel=0):
-    colors = (('#006600', '#EE9900', '#CC00CC', '#0000AA', '#CC0000', '#007777',
+    colors = (('#008800', '#EE9900', '#CC00CC', '#4444FF', '#CC0000', '#007777',
         '#777777'), ('#88AA88', '#F8CC88', '#EE88EE', '#8888CC', '#E08888',
         '#88BBBB', '#BBBBBB'))
     for i in range(len(colors[0])):
@@ -747,12 +772,21 @@ def status_bar_new(parent):
     panel = Frame(parent, height=SB_HEIGHT)
     panel.pack(side=BOTTOM, fill=X, pady=(0, 4))
     bar.msg1 = ttk.Label(panel, anchor=W, background='white',
-        foreground='darkblue', padding=(4, 0))
+        foreground='darkblue', padding=(8, 0))
     bar.msg2 = ttk.Label(panel, width=20, anchor=CENTER, background='white',
-        foreground='darkblue', padding=(4, 0))
+        foreground='darkblue', padding=(2, 0))
+    bar.txt1 = ttk.Label(panel, text='L', anchor=CENTER, width=3, foreground='darkblue')
     bar.msg1.pack(side=LEFT, expand=1, fill=X, padx=2)
+    bar.txt1.pack(side=RIGHT, padx=2)
     bar.msg2.pack(side=RIGHT, padx=2)
+    bar.txt1.bind('<Button-1>', lambda e: on_bar_txt1_push(e))
     return bar
+
+# bar.txt1 push callback -------------------------------------------------------
+def on_bar_txt1_push(e):
+    txt = e.widget.cget('text');
+    e.widget.configure(text='D' if txt == 'L' else 'L')
+    set_theme(txt == 'L')
 
 # show status bar --------------------------------------------------------------
 def status_bar_show(text):
@@ -795,10 +829,10 @@ def rcv_page_new(parent):
     p.toolbar = tool_bar_new(p.panel)
     p.label_opt = ttk.Label(p.toolbar, text='Options')
     p.label_opt.pack(side=LEFT, padx=(8, 2))
-    p.btn_load = ttk.Button(p.toolbar, width=8, text='Load',
+    p.btn_load = ttk.Button(p.toolbar, width=6, text='Load',
         command=on_settings_load)
     p.btn_load.pack(side=LEFT)
-    p.btn_save = ttk.Button(p.toolbar, width=8, text='Save',
+    p.btn_save = ttk.Button(p.toolbar, width=6, text='Save',
         command=on_settings_save)
     p.btn_save.pack(side=LEFT)
     p.txt1 = ttk.Label(p.toolbar)
@@ -885,6 +919,7 @@ def update_rcv_page(p):
     update_str_stat(p.ind)
     update_sky_plot(p.plt1, sys, rfch)
     update_sig_plot(p.plt2, sys, rfch)
+    ttk.Style().configure('w.TCheckbutton', background=plt.BG_COLOR)
 
 # update receiver status panel -------------------------------------------------
 def update_rcv_stat(p):
@@ -938,12 +973,53 @@ def read_calib_rpy_file(file=CALIB_FILE):
         pass
     return [0.0, 0.0, 0.0]
 
+# body-to-ENU rotation R = Rz(yaw) Ry(pitch) Rx(roll) --------------------------
+def rot_body_enu(rpy):
+    cr, sr = cos(rpy[0]), sin(rpy[0])
+    cp, sp = cos(rpy[1]), sin(rpy[1])
+    cy, sy = cos(rpy[2]), sin(rpy[2])
+    return np.array([
+        [cy*cp, cy*sp*sr - sy*cr, cy*sp*cr + sy*sr],
+        [sy*cp, sy*sp*sr + cy*cr, sy*sp*cr - cy*sr],
+        [-sp,   cp*sr,            cp*cr           ]])
+
+# unit vectors toward skyplot grid points (ENU) --------------------------------
+def sky_grid_los():
+    g = np.linspace(-1.0, 1.0, GAIN_OVL_M)
+    X, Y = np.meshgrid(g, g)
+    az = np.arctan2(X, Y)
+    el = np.maximum(0.0, (1.0 - np.sqrt(np.minimum(X * X + Y * Y, 1.0))) *
+        np.pi / 2)
+    ce = np.cos(el)
+    return np.stack([np.sin(az) * ce, np.cos(az) * ce, np.sin(el)], axis=-1)
+
+# plot array gain image on skyplot ---------------------------------------------
+def plot_gain_image(p, resp):
+    gain = 20.0 * np.log10(np.abs(resp) + 1e-30)
+    actual_half = plt.plot_image(p, 0.0, 0.0, 1.0, gain[::-1], -30, 20,
+        tag='gain')
+    plt.plot_sky_mask(p, actual_half, n_arc=24, tag='gain')
+    p.c.tag_lower('gain')
+
+# overlay PI array gain by weights and calibrated RF CH phases -----------------
+def draw_pi_gain_overlay(p, rpy, bias, w):
+    ant_pos, ena = array_read_opt()
+    pos = np.asarray(ant_pos, dtype=float).reshape(-1, 3)
+    k = 2.0 * np.pi / (CLIGHT / 1.57542e9)
+    proj = sky_grid_los() @ (pos @ rot_body_enu(rpy).T).T
+    resp = np.sum(np.conj(w) * np.exp(1j * k * (proj + bias)), axis=-1)
+    plot_gain_image(p, resp)
+
 # overlay array gain -----------------------------------------------------------
 def draw_array_gain_overlay(p, arch):
     if rcv_body:
         stat = array_calib_stat(rcv_body)
         if not stat: return
         rpy = stat[1]
+        aj = array_get_aj(rcv_body, arch - 1)
+        if aj and aj[0] == AJ_PI:
+            draw_pi_gain_overlay(p, rpy, stat[2], aj[2])
+            return
     else:
         rpy = read_calib_rpy_file()
     ant_pos, ena = array_read_opt()
@@ -961,31 +1037,12 @@ def draw_array_gain_overlay(p, arch):
         az_b = to_float(array_page.beam_az[m].get()) * D2R
         el_b = to_float(array_page.beam_el[m].get()) * D2R
     lam = CLIGHT / 1.57542e9
-    g = np.linspace(-1.0, 1.0, GAIN_OVL_M)
-    X, Y = np.meshgrid(g, g)
-    R2 = X * X + Y * Y
-    az = np.arctan2(X, Y)
-    el = np.maximum(0.0, (1.0 - np.sqrt(np.minimum(R2, 1.0))) * np.pi / 2)
-
-    cr, sr = cos(rpy[0]), sin(rpy[0])
-    cp, sp = cos(rpy[1]), sin(rpy[1])
-    cy, sy = cos(rpy[2]), sin(rpy[2])
-    Rmat = np.array([ # body-to-ENU rotation R = Rz(yaw) Ry(pitch) Rx(roll)
-        [cy*cp, cy*sp*sr - sy*cr, cy*sp*cr + sy*sr],
-        [sy*cp, sy*sp*sr + cy*cr, sy*sp*cr - cy*sr],
-        [-sp,   cp*sr,            cp*cr           ]])
-    pos_enu = pos @ Rmat.T
-    ce = np.cos(el)
-    e_enu = np.stack([np.sin(az) * ce, np.cos(az) * ce, np.sin(el)], axis=-1)
-    proj = e_enu @ pos_enu.T
+    pos_enu = pos @ rot_body_enu(rpy).T
+    proj = sky_grid_los() @ pos_enu.T
     e_b = np.array([sin(az_b) * cos(el_b), cos(az_b) * cos(el_b), sin(el_b)])
     proj_b = e_b @ pos_enu.T
     resp = np.sum(np.exp(1j * (2.0 * np.pi / lam) * (proj - proj_b)), axis=-1)
-    gain = 20.0 * np.log10(np.abs(resp) + 1e-30)
-    gain_img = gain[::-1]
-    actual_half = plt.plot_image(p, 0.0, 0.0, 1.0, gain_img, -30, 20, tag='gain')
-    plt.plot_sky_mask(p, actual_half, n_arc=24, tag='gain')
-    p.c.tag_lower('gain')
+    plot_gain_image(p, resp)
 
 # update skyplot ---------------------------------------------------------------
 def update_sky_plot(p, sys, rfch):
@@ -1016,7 +1073,9 @@ def update_sky_plot(p, sys, rfch):
     plt.plot_sky(p, gcolor=None)
 
     if rcv_body and arch > MAX_RFCH:
-        draw_beam_mark(p, arch)
+        aj = array_get_aj(rcv_body, arch - 1)
+        if not aj or aj[0] != AJ_PI:
+            draw_beam_mark(p, arch)
     
 # draw beam direction mark ------------------------------------------------------
 def draw_beam_mark(p, arch):
@@ -1227,9 +1286,11 @@ def update_psd_plot(p, ch, tave):
     plt.plot_clear(p)
     plt.plot_xlim(p, [f[0], f[-1]])
     plt.plot_ylim(p, [-85, -45])
+    f = np.append(f, [f[-1], f[0]])
+    psd = np.append(psd, [-85, -85])
+    plt.plot_poly(p, f, psd, color=P1_COLOR, fill=P4_COLOR)
     plt.plot_axis(p, fcolor=None, tcolor=None)
     plt.plot_poly(p, [fo, fo], p.yl, color=plt.GR_COLOR)
-    plt.plot_poly(p, f, psd, color=P1_COLOR)
     plot_filt(p, ch, fo, fs, rtoc)
     plt.plot_axis(p, gcolor=None)
     xs, ys = plt.plot_scale(p)
@@ -1255,7 +1316,7 @@ def update_freq_plot(p):
             xs, ys = plt.plot_scale(p[i])
             xl = [fo, fo + fs / 2] if IQ == 1 else [fo - fs / 2, fo + fs / 2]
             yl = [p[i].yl[0] + 5 / ys, p[i].yl[1] - 20 / ys]
-            plt.plot_rect(p[i], xl[0], yl[0], xl[1], yl[1], fill='#F8F8F8')
+            plt.plot_rect(p[i], xl[0], yl[0], xl[1], yl[1], fill=P4_COLOR)
         for ch in range(1, 9):
             dev, fmt, fs, fo, IQ, bits, std, rtoc = get_rfch_stat(rcv_body, ch)
             xs, ys = plt.plot_scale(p[i])
@@ -1297,7 +1358,7 @@ def plot_sig_freq(p, xl, yp):
     y = p.yl[1] - yp / ys
     for i in range(len(sig_opt.sys)):
         if not sig_opt.sys_sel[i].get(): continue
-        color = color=sat_color('GREJCIS'[i])
+        color = sat_color('GREJCIS'[i])
         for j, sig in enumerate(sig_opt.sig[i]):
             if not sig_opt.sig_sel[i][j].get(): continue
             freq = sdr_code.sig_freq(sig) / 1e6
@@ -1337,7 +1398,7 @@ def plot_hist(p, bits, val, hist):
     plt.plot_axis(p, fcolor=None, tcolor=None)
     w = 6 / xs * 5 / xl[bits]
     for i in range(len(val)):
-        plt.plot_rect(p, val[i] - w, 0, val[i] + w, hist[i], fill=P1_COLOR)
+        plt.plot_rect(p, val[i] - w, 0, val[i] + w, hist[i], fill=P4_COLOR)
     plt.plot_xlim(p, [-xl[bits], xl[bits]])
     plt.plot_ylim(p, [0, yl[bits]])
     plt.plot_axis(p, gcolor=None)
@@ -1573,19 +1634,21 @@ def update_corr_plot1(p, coff, fs, npos, pos, w, C, aveC, aveI, type, rng):
     else:
         ti, yl = '\u221A (\u03A3 (I\xb2+Q\xb2) / N)', [0, rng]
     plt.plot_clear(p)
-    #plt.plot_xlim(p, [x[npos], x[-1]])
-    plt.plot_xlim(p, [x[0] - w * 5e2, x[0] + w * 5e2])
+    xl = [x[0] - w * 5e2, x[0] + w * 5e2]
+    plt.plot_xlim(p, xl)
     plt.plot_ylim(p, yl)
     xs, ys = plt.plot_scale(p)
     p.title = ti
-    plt.plot_axis(p, fcolor=None, tcolor=None)
-    plt.plot_poly(p, [coff, coff], p.yl, color='grey')
-    plt.plot_poly(p, p.xl, [0, 0], color='grey')
-    plt.plot_dots(p, [coff], [0], color=plt.FG_COLOR, size=3)
     y = D.real if type == 'I' else D.imag if type == 'Q' \
         else abs(D) if type == 'IQ' else aveI if type == 'AveI' \
         else np.sqrt(aveC)
-    plt.plot_poly(p, x[npos:], y[npos:], color=P2_COLOR)
+    xx = np.append(x[npos:], [xl[1], xl[1], xl[0], xl[0]])
+    yy = np.append(y[npos:], [y[-1], yl[0], yl[0], y[npos]])
+    plt.plot_poly(p, xx, yy, color=P2_COLOR, fill=P4_COLOR)
+    plt.plot_axis(p, fcolor=None, tcolor=None)
+    plt.plot_poly(p, [coff, coff], p.yl, color=plt.FG_COLOR)
+    plt.plot_poly(p, p.xl, [0, 0], color=plt.FG_COLOR)
+    plt.plot_dots(p, [coff], [0], color=plt.FG_COLOR, size=3)
     plt.plot_dots(p, x[npos:], y[npos:], color=P2_COLOR, fill=P1_COLOR, size=3)
     plt.plot_dots(p, x[:npos], y[:npos], color=P1_COLOR, fill=P1_COLOR, size=9)
     plt.plot_axis(p, gcolor=None)
@@ -1597,7 +1660,8 @@ def update_corr_plot1(p, coff, fs, npos, pos, w, C, aveC, aveI, type, rng):
             'Integ = %s s' % (sys_opt.t_dll.get()), anchor=NE)
 
 # plot scale -------------------------------------------------------------------
-def plot_scale(p, x, y, w, label, color=plt.FG_COLOR):
+def plot_scale(p, x, y, w, label, color=''):
+    if color == '': color = plt.FG_COLOR
     xs, ys = plt.plot_scale(p)
     d = 6 / ys
     plt.plot_poly(p, [x - w / 2, x + w / 2], [y, y], color=color)
@@ -1916,6 +1980,8 @@ def array_page_new(parent):
     ttk.Label(panel4, text='ARRAY CH BEAM DIRECTION', font=get_font(1, 'bold')).pack(pady=4)
     p.beam_az = [StringVar() for i in range(MAX_ARCH)]
     p.beam_el = [StringVar() for i in range(MAX_ARCH)]
+    p.aj_mode = [StringVar(value='BEAM') for i in range(MAX_ARCH)]
+    p.aj_text = []
     p.beam_panel = []
     for i in range(MAX_ARCH):
         p.beam_az[i].set('0.000')
@@ -1938,21 +2004,53 @@ def on_array_mode_change(e, p):
 
 # generate beam directions -----------------------------------------------------
 def gen_beam_dirs(parent, p, i):
-    panel = Frame(parent, height=25, width=380, bg=BG_COLOR1)
+    panel = Frame(parent, height=25, width=760, bg=BG_COLOR1)
     panel.pack_propagate(0)
     panel.pack(pady=1)
     btn = ttk.Button(panel, width=6, text='Update')
     btn.pack(side=RIGHT, padx=1)
     ttk.Label(panel, text='\xb0').pack(side=RIGHT, padx=(0, 4))
-    el = ttk.Entry(panel, width=10, justify='right', textvariable=p.beam_el[i])
+    el = ttk.Entry(panel, width=8, justify='right', textvariable=p.beam_el[i])
     el.pack(side=RIGHT, padx=1)
     ttk.Label(panel, text='\xb0  EL').pack(side=RIGHT)
-    az = ttk.Entry(panel, width=10, justify='right', textvariable=p.beam_az[i])
+    az = ttk.Entry(panel, width=8, justify='right', textvariable=p.beam_az[i])
     az.pack(side=RIGHT, padx=2)
     ttk.Label(panel, text='  AZ').pack(side=RIGHT)
     ttk.Label(panel, text='  CH%-2d' % (i + 9), font=get_font(0, 'bold')).pack(side=LEFT, padx=2)
+    box = ttk.Combobox(panel, width=5, state='readonly', values=['BEAM', 'PI'],
+        textvariable=p.aj_mode[i], justify=CENTER, font=get_font())
+    box.pack(side=LEFT, padx=4)
+    text = Label(panel, font=get_font(), bg=BG_COLOR1, anchor=W)
+    text.pack(side=LEFT, expand=1, fill=X, padx=4)
+    p.aj_text.append(text)
     btn.bind('<Button-1>', lambda e: on_beam_update(e, p, i))
+    box.bind('<<ComboboxSelected>>', lambda e: on_aj_mode_change(e, p, i))
     return panel
+
+# Array page anti-jamming mode change callback ---------------------------------
+def on_aj_mode_change(e, p, i):
+    if not rcv_body: return
+    mode = AJ_PI if p.aj_mode[i].get() == 'PI' else 0
+    ref = max(to_int(array_opt.aj_ref.get()) - 1, 0)
+    array_set_aj(rcv_body, i + MAX_RFCH, mode, ref)
+
+# update anti-jamming status of array CHs --------------------------------------
+def update_aj_stat(p, narch):
+    for i in range(MAX_ARCH):
+        aj = array_get_aj(rcv_body, i + MAX_RFCH) if i < narch else None
+        if not aj:
+            p.aj_text[i].configure(text='')
+            continue
+        mode, ref, w, supp, eig = aj
+        p.aj_mode[i].set('PI' if mode == AJ_PI else 'BEAM')
+        if mode != AJ_PI:
+            p.aj_text[i].configure(text='')
+            continue
+        ncomp = int(np.sum(eig > AJ_THRES_COMP))
+        eig_db = ' '.join('%.0f' % (10.0 * log10(max(v, 1e-9))) for v in eig) \
+            if np.max(eig) > 0.0 else '-'
+        p.aj_text[i].configure(text='REF:CH%d SUPP:%5.1fdB NCOMP:%d EIG:%s' % (
+            ref + 1, 10.0 * log10(max(supp, 1e-9)), ncomp, eig_db))
 
 # update Array page ------------------------------------------------------------
 def update_array_page(p):
@@ -1960,6 +2058,7 @@ def update_array_page(p):
     narch = to_int(array_opt.no_array.get())
     for i in range(MAX_ARCH):
         config_panel_state(p.beam_panel[i], NORMAL if i < narch else DISABLED)
+    update_aj_stat(p, narch)
     stat = array_calib_stat(rcv_body)
     if not stat: return
     run, rpy, bias, rms, nep = stat
@@ -2063,7 +2162,7 @@ def on_beam_update(e, p, i):
 # generate Log page ------------------------------------------------------------
 def log_page_new(parent):
     filts = ('', '$TIME', '$POS', '$ATT', '$OBS', '$NAV', '$SAT', '$CH', '$EPH',
-        '$ALM', '$LOG', '$SENS')
+        '$ALM', '$LOG', '$SENS', '$AJ')
     p = Obj()
     p.parent = parent
     p.panel = Frame(parent)
@@ -2274,6 +2373,26 @@ def pages_update(note, pages):
     stat_bar.msg2.configure(text=text)
     return UD_CYCLE1 if i in (1, 3) else UD_CYCLE2 # update interval (ms)
 
+# set color theme --------------------------------------------------------------
+def set_theme(dark=0):
+    global P1_COLOR, P2_COLOR, P3_COLOR, P4_COLOR
+    if dark:
+        P1_COLOR = '#CCCCAA'
+        P2_COLOR = '#888855'
+        P3_COLOR = '#888888'
+        P4_COLOR = '#002866'
+        plt.BG_COLOR = '#002233'
+        plt.FG_COLOR = '#EEEEDD'
+        plt.GR_COLOR = '#444433'
+    else:
+        P1_COLOR = '#003020'
+        P2_COLOR = '#888844'
+        P3_COLOR = '#BBBBBB'
+        P4_COLOR = '#F8F8F8'
+        plt.BG_COLOR = '#FFFFFF'
+        plt.FG_COLOR = '#555555'
+        plt.GR_COLOR = '#E4E4E4'
+
 # set styles -------------------------------------------------------------------
 def set_styles():
     style = ttk.Style()
@@ -2287,10 +2406,9 @@ def set_styles():
     style.map('TLabel', background=[(DISABLED, BG_COLOR1)])
     style.configure('TEntry', font=get_font(), background='white')
     style.configure('TCheckbutton', font=get_font(), background=BG_COLOR1)
-    style.configure('w.TCheckbutton', font=get_font(), background='white')
+    style.configure('w.TCheckbutton', font=get_font(), background=plt.BG_COLOR)
     style.map('TCheckbutton', background=[(DISABLED, BG_COLOR1)])
-    style.configure('Treeview', font=get_font(), rowheight=ROW_HEIGHT,
-        foreground=P1_COLOR)
+    style.configure('Treeview', font=get_font(), rowheight=ROW_HEIGHT)
     style.configure('Treeview.Heading', font=get_font())
     style.configure('TNotebook', background=BG_COLOR1)
     style.configure('TNotebook.Tab', font=get_font(1), padding=(20, 2))
@@ -2311,6 +2429,9 @@ def main():
     root.title(name + ' ver.' + ver)
     root.protocol("WM_DELETE_WINDOW", on_root_close)
     root.bind("<Configure>", on_root_resize)
+    
+    # set theme
+    set_theme(0)
     
     # set styles
     set_styles()
