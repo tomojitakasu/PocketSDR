@@ -63,6 +63,8 @@
 //  2026-07-24  1.30 support multiple log streams
 //                   add API sdr_log_add_str(), sdr_log_rm_str()
 //  2026-08-08  1.31 fix memory leak of stream in sdr_str_close()
+//  2026-10-16  1.32 share DFT of IF data among Doppler bins in
+//                   sdr_search_code()
 //
 #include <math.h>
 #include <stdarg.h>
@@ -703,6 +705,54 @@ int sdr_tag_read(const char *file, char *prog, gtime_t *time, int *fmt,
     return 1;
 }
 
+// parallel code search with DFT of IF data shared by Doppler bins -------------
+//   (DFT of IF data mixed with fds[i] = DFT mixed with fds[0] shifted by k[i])
+static int search_code_dft(const sdr_cpx_t *code_fft, const sdr_buff_t *buff,
+    int ix, int N, double fs, double fi, const float *fds, int len_fds,
+    float *P)
+{
+    int *k = (int *)sdr_malloc(sizeof(int) * len_fds);
+    
+    for (int i = 0; i < len_fds; i++) {
+        double s = (fds[i] - fds[0]) * N / fs;
+        if (fabs(s - floor(s + 0.5)) > 1e-3) {
+            sdr_free(k);
+            return 0;
+        }
+        k[i] = ((int)floor(s + 0.5) % N + N) % N;
+    }
+    sdr_cpx_t *X = sdr_cpx_malloc(N), *C = sdr_cpx_malloc(2 * N);
+    sdr_cpx16_t *IQ = (sdr_cpx16_t *)C;
+    
+    // mix carrier of fds[0] and DFT
+    sdr_mix_carr(buff, ix, N, fs, fi + fds[0], 0.0, IQ);
+    for (int i = 0; i < N; i++) {
+        C[N+i][0] = IQ[i].I * SDR_CSCALE;
+        C[N+i][1] = IQ[i].Q * SDR_CSCALE;
+    }
+    int stat = sdr_cpx_fft(C + N, N, SDR_FFT_FORWARD, X);
+    
+    for (int i = 0; stat && i < len_fds; i++) {
+        
+        // ifft(shift(X, k) * code_fft) / N^2
+        sdr_cpx_mul(X + k[i], code_fft, N - k[i], 1.0f / N / N, C);
+        sdr_cpx_mul(X, code_fft + N - k[i], k[i], 1.0f / N / N, C + N - k[i]);
+        (void)sdr_cpx_fft(C, N, SDR_FFT_BACKWARD, C + N);
+        
+        // add correlation power
+        for (int j = 0; j < N; j++) {
+            P[i*N+j] += SQR(C[N+j][0]) + SQR(C[N+j][1]); // abs(C[j]) ** 2
+        }
+        if (i % 22 == 21) { // release cpu
+            sdr_sleep_msec(1);
+        }
+    }
+    sdr_free(k);
+    sdr_cpx_free(X);
+    sdr_cpx_free(C);
+    return stat;
+}
+
 //------------------------------------------------------------------------------
 //  Parallel code search in digitized IF data.
 //
@@ -726,6 +776,9 @@ void sdr_search_code(const sdr_cpx_t *code_fft, double T,
     const sdr_buff_t *buff, int ix, int N, double fs, double fi,
     const float *fds, int len_fds, float *P)
 {
+    if (search_code_dft(code_fft, buff, ix, N, fs, fi, fds, len_fds, P)) {
+        return;
+    }
     sdr_cpx_t *C = sdr_cpx_malloc(N);
     
     for (int i = 0; i < len_fds; i++) {
