@@ -1,7 +1,7 @@
 # Pocket SDR Command Reference
 
 <div style="text-align: right;">
-<strong>ver.0.20  2026-08-07</strong>
+<strong>ver.0.21  2026-10-21</strong>
 </div>
 
 ---

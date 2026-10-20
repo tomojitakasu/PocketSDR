@@ -1,7 +1,7 @@
 # Pocket SDR C Library API Reference
 
 <div style="text-align: right;">
-<strong>ver.0.20  2026-08-07</strong>
+<strong>ver.0.21  2026-10-21</strong>
 </div>
 
 ---
@@ -744,14 +744,14 @@ General DSP and bookkeeping helpers: complex/FFT primitives, IF buffer / file I/
 - **Return**: heap-allocated float array (free with `sdr_free()`)
 <br><br>
 
-**`void sdr_corr_std(const sdr_buff_t *buff, int ix, int N, double fs, double fc, double phi, const int8_t *code, double coff, const double *pos, int n, int pol, sdr_cpx_t *corr, sdr_cpx_t *C)`**
+**`void sdr_corr_std(const sdr_buff_t *buff, int ix, int N, double fs, double fc, double phi, const int8_t *code, const int32_t *code_sum, const int8_t *code_Q, const int32_t *code_sum_Q, int scale, double coff, const double *pos, int n, int pol, sdr_cpx_t *corr, sdr_cpx_t *C)`**
 <br>
-- **Description**: Standard time-domain correlator with fused carrier wipeoff. Mixes the carrier (`fc`, `phi`) and correlates against the real-code replicas in a single chunked pass over `buff[ix..ix+N)`, without an intermediate baseband buffer. `code` is the resampled code bank (`N x SDR_N_CODES`, `int8_t` values -1/0/1, I=Q implied). Writes `n` correlations to `corr` and the pre/post code-wrap prompt correlations to `C[0..1]` (bit-transition handling). `pol` selects the code polarity handling over the wrap-around: 0 detects a data-bit flip (normal tracking), 1 assumes fixed polarity (symbol-aligned circular window, e.g. L6 CSK).
+- **Description**: Standard time-domain correlator with fused carrier wipeoff. Mixes the carrier (`fc`, `phi`) and correlates against the code replicas in a single chunked pass over `buff[ix..ix+N)`, without an intermediate baseband buffer. `code` is the resampled code bank (`N x SDR_N_CODES`, `int8_t` values, I=Q implied) and `code_sum` its prefix sums (`(N+1) x SDR_N_CODES`, used to remove the +128 data bias of the uint8 x int8 inner products). `code_Q` / `code_sum_Q` are the imaginary code bank for complex replicas (NULL for a real code); with them the correlation is `sum(IQ * conj(code + j*code_Q))`. `scale` is the code amplitude scale (1 for -1/0/+1 codes); correlations are normalized by it. Writes `n` correlations to `corr` and the pre/post code-wrap prompt correlations to `C[0..1]` (bit-transition handling). `pol` selects the code polarity handling over the wrap-around: 0 detects a data-bit flip (normal tracking), +1/-1 assumes fixed polarity (symbol-aligned circular window, e.g. L6 CSK).
 <br><br>
 
-**`void sdr_corr_std_cpx_code(const sdr_cpx16_t *IQ, const sdr_cpx16_t *code, int N, double coff, const double *pos, int n, sdr_cpx_t *corr, sdr_cpx_t *C)`**
+**`void sdr_corr_std2(const sdr_buff_t *buff, int ix, int N, double fs, double fc, double phi, const int8_t *code, const int32_t *code_sum, const int8_t *code_Q, const int32_t *code_sum_Q, const int8_t *code2, const int32_t *code2_sum, const int8_t *code2_Q, const int32_t *code2_sum_Q, int scale, double coff, const double *pos, int n, int pol, sdr_cpx_t *corr, sdr_cpx_t *C)`**
 <br>
-- **Description**: Time-domain correlator with complex code (`sdr_cpx16_t` replicas, E5ABQ) on IF-carrier-mixed samples.
+- **Description**: `sdr_corr_std()` with separate code banks for the part after the code wrap-around: `code2*` (NULL = same as `code*`) allow a replica whose sideband combination sign differs across the wrap-around, which `pol` cannot express (E5 AltBOC a/b combining).
 <br><br>
 
 **`void sdr_corr_std_cpx(const sdr_cpx_t *buff, int len_buff, int ix, int N, double fs, double fc, double phi, const float *code, const double *pos, int n, sdr_cpx_t *corr)`**

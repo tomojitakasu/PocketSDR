@@ -2,7 +2,7 @@
 # **Pocket SDR - An Open-Source GNSS SDR,<br> ver. 0.21**
 
 <div style="text-align: right;">
-<strong>2026-09-27</strong>
+<strong>2026-10-21</strong>
 </div>
 
 ---
@@ -714,29 +714,22 @@ purposes, is prohibited.
   receiver, even on a headless Raspberry Pi, with the settings kept across
   sessions (see doc/design_web_ui.md). Recovered a Pocket SDR FE left streaming
   by a killed session. pocket_trk keeps its command line.
-- **2026-09-27 (v0.21)**: Added multi-device and multi-channel SoapySDR input.
-  Multiple devices (specs separated by `;`, `nchan=<n>` RX channels each, up
-  to 8 RF channels in total) are opened as one multi-channel frontend: with a
-  common 10 MHz and 1PPS, the streams are started at a common time latched by
-  the 1PPS (`-NO_SYNC` to run the devices on their own clocks). The RF
-  channels take per-CH center frequencies, `-RFCH` assignment and `-arch`
-  array combining. Added SoapySDR options `-EXT_CLOCK` and `-gpio`,
-  dropped-sample detection by the HW timestamp gap with zero-fill, and sensor
-  logging (`-sens`, `$SENS`). Switched the UHD wire format to sc12 and tuned
-  the USRP B2xx USB transport. pocket_dump captures multi-channel SoapySDR
-  data (channel-planar, `NCH` in the tag file) for replay by pocket_trk. Fixed
-  the satellite week not being updated on the TOW rollover and sat_id() for
-  BeiDou B1C / B2a / B2I. Added per-system satellite assignments to the Web UI
-  and the `fast_acq` system option. Fixed the loss of all signals at once at
-  high data rates of the Pocket SDR FE (e.g. FE 8CH 24 Msps), caused by a
-  silent overflow of the raw data buffer: the buffer is enlarged to 128 MB,
-  independent of the USB transfers in flight, an overflow is logged, and the
-  receiver thread runs at a higher priority than the channel threads. Fast
-  acquisition now predicts satellite visibility and Doppler at the receiver
-  time instead of the host PC clock, so it also works for a GNSS simulator and
-  for replayed IF data: the receiver sync mode (unknown, coarse, fine) is
-  introduced, the full search is used until the TOW and the week number of a
-  received signal set the receiver time, and the last fix position is inherited
-  regardless of its time.
+- **2026-10-21 (v0.21)**: Added multi-device and multi-channel SoapySDR input:
+  devices sharing a common 10 MHz and 1PPS are opened as one multi-channel
+  frontend (up to 8 RF channels) with the streams started at a common time,
+  including `-RFCH` assignment and `-arch` array combining. Added SoapySDR
+  options `-EXT_CLOCK` and `-gpio`, dropped-sample zero-fill, sensor logging
+  (`-sens`), and multi-channel SoapySDR capture by pocket_dump for replay.
+  Enlarged the Pocket SDR FE raw data buffer to 128 MB with overflow logging
+  and a raised receiver thread priority, fixing the loss of all signals at
+  once at high data rates. Fast acquisition now predicts the satellites at
+  the receiver time instead of the host PC clock, so it also works for a GNSS
+  simulator and replayed IF data. Added AVX512 kernels for the carrier mixer,
+  correlators, LPF and complex multiply (`USE_AVX512=1`). Added a dark theme
+  to pocket_sdr.py. Fixed the satellite week not updated on the TOW rollover,
+  sat_id() for BeiDou B1C / B2a / B2I, the start-time dependent fractional
+  carrier phase bias between channels that broke the integer double-difference
+  ambiguities (GitHub issue #97), and potential buffer overflows in the
+  pocket_web JSON replies (GitHub issue #98).
 
 --------------------------------------------------------------------------------
