@@ -177,13 +177,25 @@ def search_sig(ch, time, buff, ix):
         ch.acq.P_sum[:][:] = 0.0
         ch.acq.n_sum = 0
 
+# initial carrier NCO phase ------------------------------------------------------
+def init_phi(fi, time):
+    # phi = frac(fi * time) on the common receiver time origin to cancel the
+    # start-time dependent fractional carrier phase bias between CHs
+    # (time on 1 ms grid; split the product to avoid precision loss)
+    n = int(floor(time / 1e-3 + 0.5))
+    s, r = n // 1000, n % 1000
+    k = (int(floor(fi)) * r) % 1000
+    fi_f = fi - floor(fi)
+    phi = fi_f * s + (fi_f * r + k) * 1e-3
+    return phi - floor(phi)
+
 # start tracking ---------------------------------------------------------------
 def start_track(ch, fd, coff, cn0):
     ch.state = 'LOCK'
     ch.lock = 0
     ch.fd = fd
     ch.coff = coff
-    ch.phi = 0.0
+    ch.phi = init_phi(ch.fi, ch.time)
     ch.adr = 0.0
     ch.cn0 = cn0
     trk_init(ch.trk)

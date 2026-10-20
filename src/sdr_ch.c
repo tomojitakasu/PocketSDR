@@ -515,6 +515,21 @@ static void trk_init(sdr_trk_t *trk)
     memset(trk->aveI, 0, sizeof(double) * SDR_MAX_CORR);
 }
 
+// initial carrier NCO phase ----------------------------------------------------
+static double init_phi(double fi, double time)
+{
+    // phi = frac(fi * time) on the common receiver time origin to cancel the
+    // start-time dependent fractional carrier phase bias between CHs
+    // (time = cycle count * SDR_CYC; split the product to avoid precision
+    // loss for large time)
+    int64_t n = (int64_t)floor(time / SDR_CYC + 0.5);
+    int64_t s = n / 1000, r = n % 1000;
+    int64_t k = ((int64_t)floor(fi) * r) % 1000; // floor(fi) * s: integer
+    double fi_f = fi - floor(fi);
+    double phi = fi_f * s + (fi_f * r + k) * 1e-3;
+    return phi - floor(phi);
+}
+
 // start tracking --------------------------------------------------------------
 static void start_track(sdr_ch_t *ch, double time, double fd, double coff,
     double cn0)
@@ -524,7 +539,8 @@ static void start_track(sdr_ch_t *ch, double time, double fd, double coff,
     ch->lock = 0;
     ch->fd = fd;
     ch->coff = coff;
-    ch->phi = ch->adr = 0.0;
+    ch->phi = init_phi(ch->fi, time);
+    ch->adr = 0.0;
     ch->cn0 = cn0;
     ch->pli = 1.0;
     ch->lost_cnt = 0;
