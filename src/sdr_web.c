@@ -349,6 +349,18 @@ static int jsn_esc(char *buff, int size, const char *str)
     return n;
 }
 
+// append formatted text to a bounded buffer (truncation-safe) -----------------
+static int str_cat(char *buff, size_t size, int n, const char *fmt, ...)
+{
+    if (n < 0 || (size_t)n >= size) return (int)size; // buffer already full
+    va_list ap;
+    va_start(ap, fmt);
+    int m = vsnprintf(buff + n, size - n, fmt, ap);
+    va_end(ap);
+    if (m < 0) return n;
+    return (size_t)(n + m) >= size ? (int)size : n + m; // clamp on truncation
+}
+
 // write little-endian values to binary buffer ---------------------------------
 static uint8_t *bin_u16(uint8_t *p, uint16_t v)
 {
@@ -858,19 +870,19 @@ static void get_opts(double *vals)
 static void send_opts(sdr_web_t *web, web_cli_t *cli)
 {
     double vals[N_OPT];
-    char buff[1024], esc[1024];
+    char buff[4096], esc[1024];
     int n = 0;
 
     get_opts(vals);
-    n += snprintf(buff + n, sizeof(buff) - n, "{\"type\":\"opts\"");
+    n = str_cat(buff, sizeof(buff), n, "{\"type\":\"opts\"");
     for (int i = 0; i < N_OPT; i++) {
-        n += snprintf(buff + n, sizeof(buff) - n, ",\"%s\":%.6g",
+        n = str_cat(buff, sizeof(buff), n, ",\"%s\":%.6g",
             opt_names[i], vals[i]);
     }
     jsn_esc(esc, sizeof(esc), web->cfg.fftw);
-    n += snprintf(buff + n, sizeof(buff) - n, ",\"fftw\":\"%s\"", esc);
+    n = str_cat(buff, sizeof(buff), n, ",\"fftw\":\"%s\"", esc);
     jsn_esc(esc, sizeof(esc), web->cfg.opt);
-    snprintf(buff + n, sizeof(buff) - n, ",\"opt\":\"%s\",\"fast_acq\":%d,"
+    str_cat(buff, sizeof(buff), n, ",\"opt\":\"%s\",\"fast_acq\":%d,"
         "\"ena\":%d,\"run\":%d}", esc, web->cfg.fast_acq, web->cfg_ena,
         web->rcv && web->rcv->state ? 1 : 0);
     ws_send_text(cli, buff);
@@ -883,76 +895,76 @@ static void send_cfg(sdr_web_t *web, web_cli_t *cli)
     char *buff = web->json_buff, esc[4096], str[4096];
     int n = 0, m;
 
-    n += snprintf(buff + n, JSON_BUFF_SIZE - n, "{\"type\":\"cfg\","
+    n = str_cat(buff, JSON_BUFF_SIZE, n, "{\"type\":\"cfg\","
         "\"ena\":%d,\"run\":%d,\"inp\":%d,\"fmt\":%d,\"fs\":%.6f,",
         web->cfg_ena, web->rcv && web->rcv->state ? 1 : 0, c->inp, c->fmt,
         c->fs * 1e-6);
     jsn_esc(esc, sizeof(esc), c->file);
-    n += snprintf(buff + n, JSON_BUFF_SIZE - n, "\"file\":\"%s\",", esc);
+    n = str_cat(buff, JSON_BUFF_SIZE, n, "\"file\":\"%s\",", esc);
     for (int i = m = 0; i < SDR_MAX_RFCH; i++) {
         m += snprintf(str + m, sizeof(str) - m, "%s%.6f", i ? "," : "",
             c->fo[i] * 1e-6);
     }
-    n += snprintf(buff + n, JSON_BUFF_SIZE - n, "\"fo\":\"%s\",", str);
+    n = str_cat(buff, JSON_BUFF_SIZE, n, "\"fo\":\"%s\",", str);
     for (int i = m = 0; i < SDR_MAX_RFCH; i++) {
         m += snprintf(str + m, sizeof(str) - m, "%s%d", i ? "," : "",
             c->IQ[i]);
     }
-    n += snprintf(buff + n, JSON_BUFF_SIZE - n, "\"IQ\":\"%s\",", str);
+    n = str_cat(buff, JSON_BUFF_SIZE, n, "\"IQ\":\"%s\",", str);
     for (int i = m = 0; i < SDR_MAX_RFCH; i++) {
         m += snprintf(str + m, sizeof(str) - m, "%s%d", i ? "," : "",
             c->bits[i]);
     }
-    n += snprintf(buff + n, JSON_BUFF_SIZE - n, "\"bits\":\"%s\","
+    n = str_cat(buff, JSON_BUFF_SIZE, n, "\"bits\":\"%s\","
         "\"toff\":%.3f,\"tscale\":%.3f,\"bus\":%d,\"port\":%d,", str,
         c->toff, c->tscale, c->bus, c->port);
     for (int i = m = 0; i < SDR_MAX_RFCH; i++) {
         m += snprintf(str + m, sizeof(str) - m, "%s%.3f", i ? "," : "",
             c->lpf_bw[i]);
     }
-    n += snprintf(buff + n, JSON_BUFF_SIZE - n, "\"lpf\":\"%s\","
+    n = str_cat(buff, JSON_BUFF_SIZE, n, "\"lpf\":\"%s\","
         "\"fast_acq\":%d,\"array_sep\":%d,", str, c->fast_acq, c->array_sep);
     jsn_esc(esc, sizeof(esc), c->conf_file);
-    n += snprintf(buff + n, JSON_BUFF_SIZE - n, "\"conf\":\"%s\","
+    n = str_cat(buff, JSON_BUFF_SIZE, n, "\"conf\":\"%s\","
         "\"conf_ena\":%d,\"driver\":\"%s\",", esc, c->conf_ena, c->driver);
     jsn_esc(esc, sizeof(esc), c->dev_opt);
-    n += snprintf(buff + n, JSON_BUFF_SIZE - n, "\"dev_opt\":\"%s\",", esc);
+    n = str_cat(buff, JSON_BUFF_SIZE, n, "\"dev_opt\":\"%s\",", esc);
     for (int i = m = 0; i < c->nsig && m < (int)sizeof(str) - 300; i++) {
         m += snprintf(str + m, sizeof(str) - m, "%s%s:%s", i ? " " : "",
             c->sig[i], c->prn[i]);
     }
     jsn_esc(esc, sizeof(esc), str);
-    n += snprintf(buff + n, JSON_BUFF_SIZE - n, "\"sigs\":\"%s\",", esc);
+    n = str_cat(buff, JSON_BUFF_SIZE, n, "\"sigs\":\"%s\",", esc);
     for (int i = m = 0; i < SDR_WEB_N_SYS; i++) {
         m += snprintf(str + m, sizeof(str) - m, "%s%s", i ? "|" : "",
             c->satno[i]);
     }
     jsn_esc(esc, sizeof(esc), str);
-    n += snprintf(buff + n, JSON_BUFF_SIZE - n, "\"satno\":\"%s\",", esc);
+    n = str_cat(buff, JSON_BUFF_SIZE, n, "\"satno\":\"%s\",", esc);
     jsn_esc(esc, sizeof(esc), c->sat_asgn);
-    n += snprintf(buff + n, JSON_BUFF_SIZE - n, "\"satasgn\":\"%s\",", esc);
+    n = str_cat(buff, JSON_BUFF_SIZE, n, "\"satasgn\":\"%s\",", esc);
     jsn_esc(esc, sizeof(esc), c->rfch);
-    n += snprintf(buff + n, JSON_BUFF_SIZE - n, "\"rfch\":\"%s\",", esc);
+    n = str_cat(buff, JSON_BUFF_SIZE, n, "\"rfch\":\"%s\",", esc);
     jsn_esc(esc, sizeof(esc), c->fftw);
-    n += snprintf(buff + n, JSON_BUFF_SIZE - n, "\"fftw\":\"%s\",", esc);
+    n = str_cat(buff, JSON_BUFF_SIZE, n, "\"fftw\":\"%s\",", esc);
     for (int i = m = 0; i < SDR_MAX_STR; i++) {
         m += snprintf(str + m, sizeof(str) - m, "%s%d", i ? "," : "",
             c->str_type[i]);
     }
-    n += snprintf(buff + n, JSON_BUFF_SIZE - n, "\"types\":\"%s\",", str);
+    n = str_cat(buff, JSON_BUFF_SIZE, n, "\"types\":\"%s\",", str);
     for (int i = m = 0; i < SDR_MAX_STR && m < (int)sizeof(str) - 2; i++) {
         m += snprintf(str + m, sizeof(str) - m, "%s%s", i ? "|" : "",
             c->str_path[i]);
     }
     jsn_esc(esc, sizeof(esc), str);
-    n += snprintf(buff + n, JSON_BUFF_SIZE - n, "\"paths\":\"%s\",", esc);
+    n = str_cat(buff, JSON_BUFF_SIZE, n, "\"paths\":\"%s\",", esc);
     for (int i = m = 0; i < SDR_WEB_N_LOG; i++) {
         m += snprintf(str + m, sizeof(str) - m, "%s%d", i ? "," : "",
             c->log_mask[i]);
     }
-    n += snprintf(buff + n, JSON_BUFF_SIZE - n, "\"log_mask\":\"%s\",", str);
+    n = str_cat(buff, JSON_BUFF_SIZE, n, "\"log_mask\":\"%s\",", str);
     jsn_esc(esc, sizeof(esc), c->opt);
-    snprintf(buff + n, JSON_BUFF_SIZE - n, "\"opt\":\"%s\"}", esc);
+    str_cat(buff, JSON_BUFF_SIZE, n, "\"opt\":\"%s\"}", esc);
     ws_send_text(cli, buff);
 }
 

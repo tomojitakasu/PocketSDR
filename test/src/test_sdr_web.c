@@ -135,7 +135,7 @@ static sock_t ws_open(void)
 // send a masked WebSocket text frame -------------------------------------------
 static void ws_send(sock_t sock, const char *text)
 {
-    uint8_t buff[1024], mask[4] = {0x12, 0x34, 0x56, 0x78};
+    uint8_t buff[4096], mask[4] = {0x12, 0x34, 0x56, 0x78};
     int len = (int)strlen(text), n = 0;
 
     TEST_ASSERT_TRUE(len < (int)sizeof(buff) - 8);
@@ -431,6 +431,47 @@ static void test_sdr_web_config(void)
     remove(TEST_INI);
 }
 
+// oversized fftw/opt must not overflow the opts reply (issue #98) --------------
+static void test_sdr_web_opts_overflow(void)
+{
+    char cmd[2048], buff[8192], fftw[1024], opt[1024];
+    sdr_web_cfg_t cfg;
+    sdr_web_t *web = start_server();
+
+    sdr_web_init_cfg(&cfg);
+    sdr_web_set_cfg(web, &cfg, ""); // enable configuration edits, no settings file
+
+    sock_t sock = ws_open();
+    ws_recv_type(sock, "hello", buff, sizeof(buff));
+    TEST_ASSERT_TRUE(strstr(buff, "\"cfg_ena\":1") != NULL);
+
+    // a long fftw alone pushes the reply past the former 1024-byte stack buffer
+    memset(fftw, 'A', 900); fftw[900] = '\0';
+    memset(opt,  'B', 400); opt[400]  = '\0';
+    snprintf(cmd, sizeof(cmd),
+        "{\"cmd\":\"set_sys\",\"fftw\":\"%s\",\"opt\":\"%s\"}", fftw, opt);
+    ws_send(sock, cmd);
+    ws_recv_type(sock, "ack", buff, sizeof(buff));
+    TEST_ASSERT_TRUE(strstr(buff, "\"cmd\":\"set_sys\"") != NULL);
+    TEST_ASSERT_TRUE(strstr(buff, "\"ok\":true") != NULL);
+
+    // the opts reply is complete JSON and round-trips both long values intact
+    ws_send(sock, "{\"cmd\":\"get\",\"topic\":\"opts\"}");
+    ws_recv_type(sock, "opts", buff, sizeof(buff));
+    int len = (int)strlen(buff);
+    TEST_ASSERT_TRUE(len > 1024);           // exceeds the former buffer size
+    TEST_ASSERT_TRUE(buff[len - 1] == '}'); // not truncated mid-object
+    TEST_ASSERT_TRUE(strstr(buff, fftw) != NULL);
+    TEST_ASSERT_TRUE(strstr(buff, opt) != NULL);
+
+    // the server survived the oversized reply: a further command still answers
+    ws_send(sock, "{\"cmd\":\"get\",\"topic\":\"opts\"}");
+    ws_recv_type(sock, "opts", buff, sizeof(buff));
+
+    sock_close(sock);
+    sdr_web_stop(web);
+}
+
 // sdr_web_start_rcv() ----------------------------------------------------------
 static void test_sdr_web_start_rcv(void)
 {
@@ -476,6 +517,7 @@ int main(void)
     TEST_RUN(test_sdr_web_command);
     TEST_RUN(test_sdr_web_init_cfg);
     TEST_RUN(test_sdr_web_config);
+    TEST_RUN(test_sdr_web_opts_overflow);
     TEST_RUN(test_sdr_web_start_rcv);
 
     remove(TEST_HTML "/index.html");
