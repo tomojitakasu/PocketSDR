@@ -17,6 +17,8 @@
 //  History:
 //  2024-04-10  1.0  new
 //  2024-05-13  1.1  support H/W rev.A with -DREV_A
+//  2026-10-16  1.2  restart GPIF state machine with DMA channel in
+//                   app_start() to fix 16 KB block misorder after USB reset
 //
 #include <stdio.h>
 #include <stdint.h>
@@ -396,6 +398,9 @@ static int app_start(void)
         &dcfg)) {
         return 0;
     }
+    // load GPIF configuration (GPIF restarted with the DMA channel)
+    if (CyU3PGpifLoad(&CyFxGpifConfig)) return 0;
+    
     // set data counter for socket switch
     CyU3PGpifInitDataCounter(0, dcfg.size / 2 - 2, CyFalse, CyTrue, 1);
     
@@ -404,6 +409,8 @@ static int app_start(void)
         CyU3PDmaMultiChannelSetSuspend(&dma_ch, CyFalse, CyTrue)) {
         return 0;
     }
+    // start GPIF state machine
+    if (CyU3PGpifSMStart(RESET, ALPHA_RESET)) return 0;
     app_act = 1;
     return 1;
 }
@@ -414,6 +421,9 @@ static int app_stop(void)
     if (!app_act) return 1;
     
     stop_bulk();
+    
+    // stop GPIF state machine
+    CyU3PGpifDisable(CyTrue);
     
     // flush buffer
     CyU3PUsbFlushEp(EP_BULK_IN);
@@ -595,12 +605,6 @@ static int app_init(void)
     pclk.clkDiv = 2;
     pclk.clkSrc = CY_U3P_SYS_CLK;
     if (CyU3PPibInit(CyTrue, &pclk)) return 0;
-    
-    // load GPIF configuration
-    if (CyU3PGpifLoad(&CyFxGpifConfig)) return 0;
-    
-    // start GPIF state machine
-    if (CyU3PGpifSMStart(RESET, ALPHA_RESET)) return 0;
     
     // initialize GPIO module
     CyU3PGpioClock_t gclk = {0};
