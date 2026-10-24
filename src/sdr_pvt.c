@@ -1145,6 +1145,9 @@ static void update_sol(sdr_pvt_t *pvt)
     // point positioning with L1 pseudorange
     if (pntpos(obs, nobs, pvt->nav, &opt, pvt->sol, NULL, pvt->ssat, msg)) {
         
+        // update satellite az/el angles (incl. unhealthy satellites)
+        update_azel(pvt->nav, pvt->sol, pvt->ssat);
+        
         // correct solution time
         corr_sol_time(pvt->sol);
         
