@@ -1756,7 +1756,8 @@ def update_sats_page(p):
                 vals.append('%.1f' % (cn0[j]))
         while len(vals) <= len(cols):
             vals.append('-')
-        tag = '' if pvt[i] else 'unhealthy' if svh[i] else 'no_pvt'
+        svh_u = svh[i] & 0xEE if s[0] == 'J' else svh[i] # mask QZSS L1C/A, L1C/B health
+        tag = '' if pvt[i] else 'unhealthy' if svh_u else 'no_pvt'
         p.tbl1.insert('', END, iid=s, values=vals, tags=tag)
     p.tbl1.tag_configure('no_pvt', foreground=P2_COLOR)
     p.tbl1.tag_configure('unhealthy', foreground=WARN_COLOR)

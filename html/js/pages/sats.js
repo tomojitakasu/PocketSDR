@@ -72,7 +72,9 @@ export class SatsPage {
             const sigs = this.sigStat[sat];
             nsig += sigs.length;
             if (si.pvt) nuse++;
-            const cls = si.eph && si.svh ? 'unhealthy' :
+            // mask QZSS L1C/A, L1C/B health
+            const svh = satSys(sat) == 'J' ? si.svh & 0xEE : si.svh;
+            const cls = si.eph && svh ? 'unhealthy' :
                 si.pvt ? '' : 'idle';
             let cells =
                 `<td class="c">${sat}</td>` +
