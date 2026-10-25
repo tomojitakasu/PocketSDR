@@ -68,6 +68,8 @@
 //                   modify API sdr_tag_read(), sdr_tag_write()
 //  2026-10-16  1.34 share DFT of IF data among Doppler bins in
 //                   sdr_search_code()
+//  2026-10-17  1.35 NEON carrier mixing of 64 phases by table lookup (vqtbl4q)
+//                   in mix_carr_p() (-DMIX_LUT_SCALAR: LUT of 256 phases)
 //
 #include <math.h>
 #include <stdarg.h>
@@ -120,6 +122,7 @@ static sdr_cpx16_t mix_tbl_b[NTBL*256] = {{0,0}}; // LUT biased by +128 (u8)
 #if defined(AVX512)
 static int16_t carr_tbl[NTBL] = {0}; // carrier LUT (int8 cos | sin << 8)
 #endif
+static int8_t carr_6I[64] = {0}, carr_6Q[64] = {0}; // carrier of 64 phases
 static fftwf_plan fftw_plans[MAX_FFTW_PLAN][2] = {{0}}; // FFTW plan buffer
 static int fftw_size[MAX_FFTW_PLAN] = {0}; // FFTW plan sizes
 static int log_lvl = 3;            // log level
@@ -172,6 +175,10 @@ void sdr_func_init(const char *file)
 #if defined(AVX512)
         carr_tbl[i] = (int16_t)(((int)carr_Q << 8) | (carr_I & 0xFF));
 #endif
+        if (i < 64) {
+            carr_6I[i] = (int8_t)ROUND(cos(-2.0 * PI * i / 64) / SDR_CSCALE);
+            carr_6Q[i] = (int8_t)ROUND(sin(-2.0 * PI * i / 64) / SDR_CSCALE);
+        }
         for (int j = 0; j < 256; j++) {
             int8_t I = SDR_CPX8_I(j), Q = SDR_CPX8_Q(j);
             mix_tbl[(j << 8) + i].I = I * carr_I - Q * carr_Q;
@@ -1036,6 +1043,33 @@ static void mix_carr_p(const sdr_buff_t *buff, int ix, int N, uint32_t p,
         for (int j = 0; j < 16; j++) {
             IQ[i+j] = tbl[idx[j]];
         }
+    }
+#elif defined(NEON) && !defined(MIX_LUT_SCALAR)
+    // carrier of 64 phases by table lookup (vqtbl4q) and int8 products
+    int8x16x4_t tI = vld1q_s8_x4(carr_6I), tQ = vld1q_s8_x4(carr_6Q);
+    int8x16_t bias = vdupq_n_s8(tbl == mix_tbl_b ? (int8_t)0x80 : 0);
+    uint32_t p4[4] = {p, p + s, p + s * 2, p + s * 3};
+    uint32x4_t yp0 = vld1q_u32(p4);
+    uint32x4_t yp1 = vaddq_u32(yp0, vdupq_n_u32(s * 4));
+    uint32x4_t yp2 = vaddq_u32(yp0, vdupq_n_u32(s * 8));
+    uint32x4_t yp3 = vaddq_u32(yp0, vdupq_n_u32(s * 12));
+    uint32x4_t ys16 = vdupq_n_u32(s * 16);
+    
+    for ( ; i < N - 15; i += 16) {
+        uint8x16_t idx = vcombine_u8(
+            vmovn_u16(vshrq_n_u16(vcombine_u16(vshrn_n_u32(yp0, 16), vshrn_n_u32(yp1, 16)), 10)),
+            vmovn_u16(vshrq_n_u16(vcombine_u16(vshrn_n_u32(yp2, 16), vshrn_n_u32(yp3, 16)), 10)));
+        yp0 = vaddq_u32(yp0, ys16);
+        yp1 = vaddq_u32(yp1, ys16);
+        yp2 = vaddq_u32(yp2, ys16);
+        yp3 = vaddq_u32(yp3, ys16);
+        int8x16_t cI = vqtbl4q_s8(tI, idx), cQ = vqtbl4q_s8(tQ, idx);
+        int8x16_t d = vld1q_s8((const int8_t *)data + i);
+        int8x16_t dI = vshrq_n_s8(vshlq_n_s8(d, 4), 4), dQ = vshrq_n_s8(d, 4);
+        int8x16x2_t o;
+        o.val[0] = veorq_s8(vmlsq_s8(vmulq_s8(dI, cI), dQ, cQ), bias);
+        o.val[1] = veorq_s8(vmlaq_s8(vmulq_s8(dI, cQ), dQ, cI), bias);
+        vst2q_s8((int8_t *)(IQ + i), o);
     }
 #elif defined(NEON)
     uint32_t p4[4] = {p, p + s, p + s * 2, p + s * 3};
