@@ -15,6 +15,8 @@
 //                   add nav data consistency tests
 //  2026-07-24  1.3  output NMEA and RTCM3 to multiple streams
 //  2026-09-28  1.4  add receiver sync mode (unknown, coarse, fine)
+//  2026-10-25  1.5  accept observation data of the channels with the TOW
+//                   carried over a re-acquisition
 //                   inherit the last fix position regardless of the CPU time
 //
 #include "pocket_sdr.h"
@@ -886,7 +888,7 @@ void sdr_pvt_udobs(sdr_pvt_t *pvt, int64_t ix, sdr_ch_t *ch)
     }
     if (pvt->ix > 0 && ix == pvt->ix) { // update observation data
         if (ch->state == SDR_STATE_LOCK && ch->tow >= 0 && ch->tow_v > 0 &&
-            (ch->nav->fsync > 0 || ch->trk->sec_sync > 0)) {
+            (ch->nav->fsync > 0 || ch->trk->sec_sync > 0 || ch->tow_pred)) {
             update_obs(pvt->time, pvt->obs, ch);
         }
         pvt->nch++;

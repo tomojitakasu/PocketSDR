@@ -38,6 +38,10 @@
 //  2026-07-19  1.25 add pre-combined E5ABQ replicas (a+b, a-b) to correlate
 //                   both sidebands in one pass once the polarity is calibrated
 //  2026-07-19  1.26 improve low-C/N0 acquisition and pilot tracking
+//  2026-10-24  1.27 save the lock count at signal lost (ch->lost_lock) to
+//                   enable the Doppler-aided re-acquisition
+//  2026-10-25  1.28 carry over the decoded TOW and week across a
+//                   re-acquisition for fast re-fix (GLONASS FDMA excluded)
 //
 #include <ctype.h>
 #include <math.h>
@@ -530,10 +534,39 @@ static double init_phi(double fi, double time)
     return phi - floor(phi);
 }
 
+// carry over decoded TOW across a re-acquisition -------------------------------
+//   The frozen TOW is advanced by the receiver sample clock and snapped to the
+//   integer-ms grid, which resolves the code cycle ambiguity (error budget
+//   << 0.5 ms within SDR_TO_REACQ). The first frame decode confirms or rejects
+//   the carried TOW (update_tow()). GLONASS FDMA is excluded: the same FCN can
+//   be re-acquired from the antipodal satellite.
+static int carry_over_tow(sdr_ch_t *ch, double time, double coff)
+{
+    if (ch->tow_v != 1 || ch->tow < 0 || ch->week <= 0) return 0;
+    if (ch->lost_lock * ch->T < SDR_MIN_LOCK) return 0;
+    if (time < ch->time || time > ch->time + SDR_TO_REACQ) return 0;
+    if (!strcmp(ch->sig, "G1CA") || !strcmp(ch->sig, "G2CA")) return 0;
+
+    double tow = ch->tow * 1e-3 + (time - ch->time) + (coff - ch->coff);
+    int tow_ms = (int)floor(tow / 1e-3 + 0.5);
+    if (fabs(tow - tow_ms * 1e-3) > 0.35e-3) return 0; // snap residual
+    if (tow_ms >= 86400 * 7 * 1000) {
+        tow_ms -= 86400 * 7 * 1000;
+        ch->week++;
+    }
+    ch->tow = tow_ms;
+    ch->tow_pred = 1;
+    sdr_log(3, "$LOG,%.3f,%s,%s,%d,TOW CARRY OVER (%.3f)", time, ch->sat,
+        ch->sig, ch->prn, tow_ms * 1e-3);
+    return 1;
+}
+
 // start tracking --------------------------------------------------------------
 static void start_track(sdr_ch_t *ch, double time, double fd, double coff,
     double cn0)
 {
+    int carry = carry_over_tow(ch, time, coff);
+
     ch->state = SDR_STATE_LOCK;
     ch->time = time;
     ch->lock = 0;
@@ -545,9 +578,12 @@ static void start_track(sdr_ch_t *ch, double time, double fd, double coff,
     ch->pli = 1.0;
     ch->lost_cnt = 0;
     ch->pli_valid = 0;
-    ch->week = 0;
-    ch->tow = -1;
-    ch->tow_v = 0;
+    if (!carry) {
+        ch->week = 0;
+        ch->tow = -1;
+        ch->tow_v = 0;
+        ch->tow_pred = 0;
+    }
     trk_init(ch->trk);
     sdr_nav_init(ch->nav);
 }
@@ -786,6 +822,7 @@ static void test_lost(sdr_ch_t *ch)
     if (ch->lost_cnt < sdr_lost_th) return;
     
     ch->state = SDR_STATE_IDLE;
+    ch->lost_lock = ch->lock;
     ch->lock = 0;
     ch->trk->sec_sync = ch->trk->sec_pol = 0;
     ch->nav->ssync = ch->nav->fsync = ch->nav->rev = 0;

@@ -33,6 +33,13 @@
 //  2026-09-28  1.16 use the receiver time instead of the CPU time for fast
 //                   acquisition (full search until the receiver sync mode is
 //                   coarse or fine)
+//  2026-10-24  1.17 add a fast signal search slot dedicated to re-acquisition
+//                   and same-satellite assisted acquisition (2 concurrent
+//                   signal search channels)
+//                   bound the signal search scan time by pre-collected assist
+//                   anchors and a per-cycle test cap
+//                   fix the re-acquisition aid never applied (ch->lock cleared
+//                   at signal lost before the re_acq() test)
 //
 #include "pocket_sdr.h"
 #ifdef __linux__
@@ -45,12 +52,13 @@
 #define TH_CYC     50           // receiver channel thread cycle (ms)
 #define SCALE_CYC  1000         // scale update cycle (* SDR_CYC)
 #define SENS_CYC   10000        // sensor log cycle (* SDR_CYC)
-#define TO_REACQ   60.0         // re-acquisition timeout (s)
+#define TO_REACQ   SDR_TO_REACQ // re-acquisition timeout (s)
 #define FAST_DOP   500.0        // fast acquisition Doppler half-width (Hz)
-#define MIN_LOCK   2.0          // min lock time for re-acquisition (s)
+#define MIN_LOCK   SDR_MIN_LOCK // min lock time for re-acquisition (s)
 #define NUM_COL    106          // number of channel status columns
 #define MAX_ACQ    4.0          // max code length for direct acquisition (ms)
 #define MAX_BUFF_USE 90         // max buffer usage rate (%)
+#define SRCH_SCAN_MAX 32        // max IDLE CHs tested by fast search slot (/cyc)
 #define MAX_BAR    12           // C/N0 bar width
 #define SAMPLES_STATS 100       // samples for stats
 #define RCV_PRI    40           // real-time priority of receiver thread (Linux)
@@ -188,18 +196,21 @@ static int get_nch_trk(sdr_rcv_t *rcv, char *sys)
 static int print_head(sdr_rcv_t *rcv, char *buff, int size)
 {
     char solstr[128] = "", sys[16] = "";
-    int n = 0, nch_bb = 0, nch_trk = 0, ch_srch = 0;
+    int n = 0, nch_bb = 0, nch_trk = 0, ch_srch[SDR_NSRCH] = {0};
     double buff_use = 0.0;
-    
+
     if (rcv) {
         nch_bb = rcv->nch;
         nch_trk = get_nch_trk(rcv, sys);
-        ch_srch = rcv->ich + 1;
+        for (int i = 0; i < SDR_NSRCH; i++) {
+            ch_srch[i] = rcv->ich[i] + 1;
+        }
         buff_use = rcv->stats.buff_use;
         sdr_pvt_solstr(rcv->pvt, solstr, sizeof(solstr));
     }
-    n += ap_str(buff + n, size - n, " %-*s BUFF:%3.0f%% SRCH:%4d LOCK:%4d/%4d\n",
-        NUM_COL - 36, solstr, buff_use, ch_srch, nch_trk, nch_bb);
+    n += ap_str(buff + n, size - n, " %-*s BUFF:%3.0f%% SRCH:%4d,%4d "
+        "LOCK:%4d/%4d\n", NUM_COL - 41, solstr, buff_use,
+        ch_srch[SDR_SRCH_FAST], ch_srch[SDR_SRCH_NORM], nch_trk, nch_bb);
     n += ap_str(buff + n, size - n, "%4s %2s %4s %5s %3s %8s %4s %-12s %11s "
         "%7s %11s %4s %5s %4s %4s %3s\n", "CH", "RF", "SAT", "SIG", "PRN",
         "LOCK(s)", "C/N0", "(dB-Hz)", "COFF(ms)", "DOP(Hz)", "ADR(cyc)", "SYNC",
@@ -779,7 +790,9 @@ sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
     for (int i = 0; i < nbuff; i++) {
         rcv->buff[i] = sdr_buff_new(rcv->N * MAX_BUFF, 2); // IQ
     }
-    rcv->ich = -1;
+    for (int i = 0; i < SDR_NSRCH; i++) {
+        rcv->ich[i] = -1;
+    }
     snprintf(rcv->opt, sizeof(rcv->opt), "%s", opt);
     sdr_mutex_init(&rcv->mtx);
 
@@ -1044,7 +1057,7 @@ static void write_buff(sdr_rcv_t *rcv, const uint8_t *raw, int64_t ix)
 // re-acquisition --------------------------------------------------------------
 static int re_acq(sdr_rcv_t *rcv, sdr_ch_t *ch)
 {
-    if (ch->lock * ch->T < MIN_LOCK) return 0;
+    if (ch->lost_lock * ch->T < MIN_LOCK) return 0;
     if (get_buff_ix(rcv) * SDR_CYC < ch->time + TO_REACQ) {
         ch->acq->fd_ext = (float)ch->fd;
         ch->acq->fd_ext_valid = 1;
@@ -1055,13 +1068,26 @@ static int re_acq(sdr_rcv_t *rcv, sdr_ch_t *ch)
     return 0;
 }
 
-// assisted acquisition --------------------------------------------------------
-static int assist_acq(sdr_rcv_t *rcv, sdr_ch_t *ch)
+// collect assist anchor channels (stably locked) -------------------------------
+static int get_assist_anchors(sdr_rcv_t *rcv, int *anchor)
 {
+    int n = 0;
     for (int i = 0; i < rcv->nch; i++) {
-        sdr_ch_t *ch_i = rcv->th[i]->ch;
-        if (strcmp(ch->sat, ch_i->sat) || ch_i->state != SDR_STATE_LOCK ||
-            ch_i->lock * ch_i->T < MIN_LOCK) continue;
+        sdr_ch_t *ch = rcv->th[i]->ch;
+        if (ch->state == SDR_STATE_LOCK && ch->lock * ch->T >= MIN_LOCK) {
+            anchor[n++] = i;
+        }
+    }
+    return n;
+}
+
+// assisted acquisition --------------------------------------------------------
+static int assist_acq(sdr_rcv_t *rcv, sdr_ch_t *ch, const int *anchor,
+    int n_anchor)
+{
+    for (int i = 0; i < n_anchor; i++) {
+        sdr_ch_t *ch_i = rcv->th[anchor[i]]->ch;
+        if (strcmp(ch->sat, ch_i->sat)) continue;
         ch->acq->fd_ext = (float)(ch_i->fd * ch->fc / ch_i->fc);
         ch->acq->fd_ext_valid = 1;
         return 1;
@@ -1344,22 +1370,57 @@ static void update_buff_use(sdr_rcv_t *rcv)
     }
 }
 
-// update signal search channel ------------------------------------------------
-static void update_srch_ch(sdr_rcv_t *rcv)
+// signal search slot busy ? ----------------------------------------------------
+static int srch_slot_busy(sdr_rcv_t *rcv, int slot)
 {
-    if (rcv->stats.buff_use > MAX_BUFF_USE) { // IF data buffer full ?
+    if (rcv->ich[slot] < 0) return 0;
+    sdr_ch_t *ch = rcv->th[rcv->ich[slot]]->ch;
+    return ch->state == SDR_STATE_SRCH && ch->srch_slot == slot;
+}
+
+// start signal search ----------------------------------------------------------
+static void start_srch(sdr_ch_t *ch, int slot)
+{
+    ch->srch_slot = slot;
+    ch->state = SDR_STATE_SRCH;
+}
+
+// update fast signal search slot (re-acquisition and assisted acquisition) -----
+//   The scan runs in the receiver thread every cycle while the slot is free, so
+//   the IDLE channels tested per call are capped to bound the scan time.
+static void update_srch_fast(sdr_rcv_t *rcv, const int *anchor, int n_anchor)
+{
+    int n_test = 0;
+
+    if (srch_slot_busy(rcv, SDR_SRCH_FAST)) {
         return;
     }
-    // signal search channel busy ?
-    if (rcv->ich >= 0 && rcv->th[rcv->ich]->ch->state == SDR_STATE_SRCH) {
+    for (int i = 0; i < rcv->nch && n_test < SRCH_SCAN_MAX; i++) {
+        // search next IDLE channel eligible for aided acquisition
+        rcv->ich[SDR_SRCH_FAST] = (rcv->ich[SDR_SRCH_FAST] + 1) % rcv->nch;
+        sdr_ch_t *ch = rcv->th[rcv->ich[SDR_SRCH_FAST]]->ch;
+        if (ch->state != SDR_STATE_IDLE) continue;
+
+        n_test++;
+        if (re_acq(rcv, ch) || assist_acq(rcv, ch, anchor, n_anchor)) {
+            start_srch(ch, SDR_SRCH_FAST);
+            break;
+        }
+    }
+}
+
+// update normal signal search slot ----------------------------------------------
+static void update_srch_norm(sdr_rcv_t *rcv, const int *anchor, int n_anchor)
+{
+    if (srch_slot_busy(rcv, SDR_SRCH_NORM)) {
         return;
     }
     for (int i = 0; i < rcv->nch; i++) {
         // search next IDLE channel
-        rcv->ich = (rcv->ich + 1) % rcv->nch;
-        sdr_ch_t *ch = rcv->th[rcv->ich]->ch;
+        rcv->ich[SDR_SRCH_NORM] = (rcv->ich[SDR_SRCH_NORM] + 1) % rcv->nch;
+        sdr_ch_t *ch = rcv->th[rcv->ich[SDR_SRCH_NORM]]->ch;
         if (ch->state != SDR_STATE_IDLE) continue;
-        
+
         // fast acquisition: skip invisible satellites, aid visible ones
         if (rcv->fast_acq) {
             int w = fast_acq(rcv, ch);
@@ -1369,17 +1430,34 @@ static void update_srch_ch(sdr_rcv_t *rcv)
                 int nw = (int)(2.0 * FAST_DOP * ch->T + 1);
                 if (nw < 3) nw = 3;
                 ch->acq->fd_ext_n = nw;
-                ch->state = SDR_STATE_SRCH;
+                start_srch(ch, SDR_SRCH_NORM);
                 break;
             }
         }
         // re-acquisition, assisted-acquisition or short code cycle
-        if (re_acq(rcv, ch) || assist_acq(rcv, ch) ||
+        if (re_acq(rcv, ch) || assist_acq(rcv, ch, anchor, n_anchor) ||
             (ch->T <= sdr_max_acq * 1e-3 && ch->sig_srch)) {
-            ch->state = SDR_STATE_SRCH;
+            start_srch(ch, SDR_SRCH_NORM);
             break;
         }
     }
+}
+
+// update signal search channels -------------------------------------------------
+static void update_srch_ch(sdr_rcv_t *rcv)
+{
+    int anchor[SDR_MAX_NCH], n_anchor;
+
+    if (rcv->stats.buff_use > MAX_BUFF_USE) { // IF data buffer full ?
+        return;
+    }
+    if (srch_slot_busy(rcv, SDR_SRCH_FAST) &&
+        srch_slot_busy(rcv, SDR_SRCH_NORM)) {
+        return;
+    }
+    n_anchor = get_assist_anchors(rcv, anchor);
+    update_srch_fast(rcv, anchor, n_anchor);
+    update_srch_norm(rcv, anchor, n_anchor);
 }
 
 // output sensor log -----------------------------------------------------------

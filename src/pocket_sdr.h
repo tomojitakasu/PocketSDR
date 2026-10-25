@@ -28,6 +28,9 @@
 //  2026-08-02  1.20 add Web UI receiver configuration and lifecycle APIs
 //  2026-09-28  1.21 add raw data buffer overflow count to sdr_dev_t
 //  2026-09-28  1.22 add receiver sync mode to sdr_pvt_t
+//  2026-10-24  1.23 add fast and normal signal search slots to sdr_rcv_t
+//  2026-10-25  1.24 add TOW carry-over state to sdr_ch_t for fast re-fix
+//                   after re-acquisition
 //
 #ifndef POCKET_SDR_H
 #define POCKET_SDR_H
@@ -51,7 +54,7 @@ extern "C" {
 
 // constants and macros ------------------------------------------------------
 #define SDR_LIB_NAME   "Pocket SDR" // library name
-#define SDR_LIB_VER    "0.21"   // library version
+#define SDR_LIB_VER    "0.22"   // library version
 #define SDR_MAX_RFCH   8        // max number of RF channels
 #define SDR_MAX_SDEV   8        // max number of SoapySDR devices
 #define SDR_MAX_ARCH   8        // max number of array channels
@@ -112,6 +115,13 @@ extern "C" {
 #define SDR_STATE_IDLE 1        // SDR channel state: idle
 #define SDR_STATE_SRCH 2        // SDR channel state: search
 #define SDR_STATE_LOCK 3        // SDR channel state: lock
+
+#define SDR_SRCH_FAST  0        // signal search slot: re-acq/assisted-acq
+#define SDR_SRCH_NORM  1        // signal search slot: others
+#define SDR_NSRCH      2        // number of signal search slots
+
+#define SDR_MIN_LOCK   2.0      // min lock time to aid re-acquisition (s)
+#define SDR_TO_REACQ   60.0     // re-acquisition timeout (s)
 
 #define SDR_SYNC_UNKNOWN 0      // receiver sync mode: time unknown
 #define SDR_SYNC_COARSE 1       // receiver sync mode: time by signal TOW/WN
@@ -254,6 +264,7 @@ typedef struct {                // SDR receiver channel type
     int no;                     // channel number
     int rf_ch;                  // RF channel
     int sig_srch;               // signal search flag
+    int srch_slot;              // signal search slot (SDR_SRCH_???)
     int state;                  // channel state
     double time;                // receiver time
     char sat[16];               // satellite ID
@@ -276,7 +287,9 @@ typedef struct {                // SDR receiver channel type
     double pli;                 // carrier lock indicator (cos 2*phi, [-1,1])
     int week, tow;              // week number (week), TOW (ms)
     int tow_v;                  // TOW flag (0:invalid,1:valid,2:amb-unresolved)
+    int tow_pred;               // TOW carried over at re-acq, unconfirmed
     int lock, lost;             // lock and lost counts
+    int lost_lock;              // lock count at last signal lost (for re-acq)
     int lost_cnt;               // lost decision counter (C/N0/PLI windows)
     int pli_valid;              // PLI valid flag (0: before first C/N0 window)
     int costas;                 // Costas PLL flag
@@ -412,7 +425,7 @@ typedef struct sdr_rcv_tag {    // SDR receiver type
     int N;                      // IF data cycle (sample)
     int nch, nrfch;             // number of BB and RF channels
     int narch;                  // number of array channels
-    int ich;                    // signal search channel index
+    int ich[SDR_NSRCH];         // signal search channel indices
     int64_t ix;                 // IF data cycle count (cyc)
     sdr_rfch_t rfch[SDR_MAX_RFCH]; // RF channels (array CHs derive from rfch[0])
     sdr_arch_t arch[SDR_MAX_ARCH]; // per-array-CH beam state (relative index)

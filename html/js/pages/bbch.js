@@ -52,16 +52,17 @@ export class BbchPage {
         if (!this.active) return;
         const lines = msg.str.split('\n');
         const m = lines[0].match(
-            /BUFF: *(\d+)% SRCH: *(\d+) LOCK: *(\d+)\/ *(\d+)/);
+            /BUFF: *(\d+)% SRCH: *(\d+), *(\d+) LOCK: *(\d+)\/ *(\d+)/);
         if (m) {
             const buff = this.el.querySelector('#bb-buff');
             buff.textContent = 'BUFF: ' + m[1] + '%';
             buff.className = 'mono ' + (parseInt(m[1]) < 90 ? 'ok-txt' :
                 'warn-txt');
-            this.el.querySelector('#bb-srch').textContent = 'SRCH: ' + m[2];
+            this.el.querySelector('#bb-srch').textContent =
+                'SRCH: ' + m[2] + ',' + m[3];
             this.el.querySelector('#bb-lock').textContent =
-                'LOCK: ' + m[3] + '/' + m[4];
-            this.srch = parseInt(m[2]);
+                'LOCK: ' + m[4] + '/' + m[5];
+            this.srch = [parseInt(m[2]), parseInt(m[3])];
         }
         let html = '';
         for (const line of lines.slice(2)) {
@@ -71,7 +72,7 @@ export class BbchPage {
             const cn0 = parseFloat(f[6]);
             const bar = Math.min(Math.max((cn0 - 25.0) / 25.0, 0.0), 1.0) * 90;
             const cls = parseFloat(f[5]) <= 0.0 ? 'idle' :
-                parseInt(f[0]) == this.srch ? 'srch' : '';
+                this.srch && this.srch.includes(parseInt(f[0])) ? 'srch' : '';
             const cells = f.map((v, i) => {
                 if (i == 7) return `<td class="l bar"><span class="cn0bar" ` +
                     `style="width:${bar.toFixed(0)}%"></span></td>`;

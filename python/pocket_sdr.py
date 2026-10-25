@@ -1428,7 +1428,7 @@ def bbch_page_new(parent):
     sdr_opt.link_label_new(p.toolbar, text='?', link=sdr_opt.SIG_LINK).pack(
         side=LEFT, padx=6)
     p.txt1 = ttk.Label(p.toolbar, width=12)
-    p.txt2 = ttk.Label(p.toolbar, width=10, anchor=E)
+    p.txt2 = ttk.Label(p.toolbar, width=15, anchor=E)
     p.txt3 = ttk.Label(p.toolbar, width=14, anchor=E)
     p.txt3.pack(side=RIGHT, padx=(2, 15))
     p.txt2.pack(side=RIGHT, padx=2)
@@ -1469,12 +1469,14 @@ def update_bbch_page(p):
         rfch=(0 if rfch == 'ALL' else int(rfch)))
     w = (40, 22, 36, 52, 32, 68, 38, 70, 82, 62, 84, 44, 48, 36, 34, 32)
     a = 'ecccceeweeeceeee'
-    buff, srch, lock = stat[0][72:82], stat[0][82:92], stat[0][92:]
+    m = re.search(r'(BUFF: *\d+%) (SRCH: *\d+, *\d+) (LOCK: *\d+/ *\d+)',
+        stat[0])
+    buff, srch, lock = m.groups() if m else ('BUFF:  0%', 'SRCH:', 'LOCK:')
     p.txt1.configure(text=buff)
     p.txt2.configure(text=srch)
     p.txt3.configure(text=lock)
     buff_use = int(re.split('[:%]', buff)[1])
-    srch_ch = int(re.split('[:]', srch)[1])
+    srch_ch = [int(s) for s in re.split('[:,]', srch)[1:] if s.strip()]
     p.txt1.configure(foreground='green' if buff_use < 90 else WARN_COLOR)
     for c in p.tbl1.get_children():
        p.tbl1.delete(c)
@@ -1488,7 +1490,7 @@ def update_bbch_page(p):
         vals = s.split()
         vals[7] = bar_cn0(float(vals[6]), int(ws * w[7]))
         tag = 'idle' if float(vals[5]) == 0.0 else ''
-        tag = 'srch' if int(vals[0]) == srch_ch else tag
+        tag = 'srch' if int(vals[0]) in srch_ch else tag
         p.tbl1.insert('', END, iid=vals[0], values=vals, tags=tag)
     p.tbl1.tag_configure('idle', foreground=P2_COLOR)
     p.tbl1.tag_configure('srch', foreground='blue')

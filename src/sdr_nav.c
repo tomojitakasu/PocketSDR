@@ -55,6 +55,8 @@
 //  2025-02-18  1.7  flip symbol polarity
 //  2025-03-28  1.8  fix symbol table access violation problem
 //  2026-06-13  1.9  update symbol-sync algorithm in symb_sync()
+//  2026-10-25  1.10 confirm or reject the TOW carried over a re-acquisition
+//                   in update_tow()
 //
 #include "pocket_sdr.h"
 
@@ -368,12 +370,14 @@ static void update_tow(sdr_ch_t *ch, double tow)
     if (ch->tow <= 0) {
         ch->tow = tow_ms;
     } else if (ch->tow == tow_ms) {
-        ch->tow_v = 1; // tow valid
+        ch->tow_v = 1; // tow valid (or carried tow confirmed)
+        ch->tow_pred = 0;
     } else { // TOW mismatch
         sdr_log(3, "$LOG,%.3f,%s,%s,%d,TOW MISMATCH %.3f -> %.3f", ch->time,
             ch->sat, ch->sig, ch->prn, ch->tow * 1e-3, tow);
         ch->tow = -1;
         ch->tow_v = 0; // tow invalid
+        ch->tow_pred = 0;
     }
 }
 
@@ -427,6 +431,7 @@ static void unsync_nav(sdr_ch_t *ch)
     ch->nav->coff = 0.0;
     ch->tow = -1;
     ch->tow_v = 0;
+    ch->tow_pred = 0;
 }
 
 // initialize symbol tables ----------------------------------------------------
