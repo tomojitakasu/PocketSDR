@@ -6,6 +6,10 @@
 //      Document Open Service Signal B1C (Version 1.0), December, 2017
 //  [2] E.Li et al., Trellis-based Extended Min-Sum algorithm for non-binary LDPC
 //      codes and its hardware structure, IEEE Trans. on Communications, 2013
+//  [3] A.Voicila et al., Low-complexity decoding for non-binary LDPC codes in
+//      high order fields, IEEE Trans. on Communications, 2010
+//  [4] D.Declercq and M.Fossorier, Decoding algorithms for nonbinary LDPC codes
+//      over GF(q), IEEE Trans. on Communications, 2007
 //
 //  Author:
 //  T.TAKASU
@@ -13,6 +17,10 @@
 //  History:
 //  2024-01-25  1.0  port sdr_nb_ldpc.py to C
 //  2026-06-13  1.1  hard-decision -> soft-decision
+//  2026-10-26  1.2  redesign decoder: extrinsic EMS (NM=8) with compensation
+//                   offset, input LLR normalization, cached Tanner graph and
+//                   layered check node schedule; add sum-product retry on EMS
+//                   failure
 //
 #include <math.h>
 #include "pocket_sdr.h"
@@ -21,12 +29,38 @@
 #define N_GF        6           // number of GF(q) bits
 #define Q_GF        (1<<N_GF)   // number of GF(q) elements
 #define MAX_ITER    15          // max number of iterations
-#define NM_EMS      4           // LLR truncation size of EMS
-#define ERR_PROB    1e-5        // error probability of input codes
-
+#define NM_EMS      8           // LLR truncation size of EMS
+#ifndef EMS_OFFSET
+#define EMS_OFFSET  2.0f        // compensation offset of truncated LLRs ([3])
+#endif
+#ifndef LLR_AVE
+#define LLR_AVE     4.0f        // normalized average of input bit |LLR|
+#endif
+#ifndef MAX_ITER_SP
+#define MAX_ITER_SP 15          // max iterations of sum-product retry (0: off)
+#endif
+#define P_FLOOR     1e-15       // floor of symbol probability relative to max
+#define DC_H        4           // row weight of H-matrix
 #define MAX_H_M     128         // max rows of H-matrix
 #define MAX_H_N     256         // max columns of H-matrix
-#define MAX_EDGE    1024        // max number of Tanner graph edges
+#define MAX_VDEG    8           // max degree of variable node
+#define MAX_GRAPH   8           // max number of cached Tanner graphs
+#define MAX_LLR     1e30f       // LLR of impossible GF(q) element
+
+// type definitions --------------------------------------------------------------
+typedef struct {                // truncated LLR message (llr ascending, llr[0]=0)
+    uint8_t sym[NM_EMS];
+    float llr[NM_EMS];
+} nb_msg_t;
+
+typedef struct {                // Tanner graph
+    const uint8_t (*H_idx)[4];  // cache key
+    int m, n, ne;               // numbers of checks, variables and edges
+    uint16_t *ce_var;           // edge (check-major) -> variable index
+    uint8_t *ce_h, *ce_hinv;    // edge -> H element and its inverse
+    int *ve_ptr;                // variable -> index range in ve_edge
+    uint16_t *ve_edge;          // variable-major edge list
+} nb_graph_t;
 
 // GF(q) tables -----------------------------------------------------------------
 static const uint8_t GF_VEC[Q_GF] = { // power -> vector ([1])
@@ -42,8 +76,12 @@ static const uint8_t GF_POW[Q_GF] = { // vector -> power ([1])
     10, 61, 46, 30, 50, 22, 39, 43, 29, 60, 42, 21, 20, 59, 57, 58
 };
 static uint8_t GF_MUL[Q_GF][Q_GF] = {{0}}; // multiply
+static uint8_t GF_INV[Q_GF] = {0};         // inverse
 
-// get index of min value in array ---------------------------------------------
+// lock for GF(q) table and Tanner graph cache initialization ---------------------
+static sdr_mutex_t init_mtx = SDR_MUTEX_INIT;
+
+// get index of min value in array -----------------------------------------------
 static int argmin(const float *L, int n)
 {
     int j = 0;
@@ -53,28 +91,7 @@ static int argmin(const float *L, int n)
     return j;
 }
 
-// swap index ------------------------------------------------------------------
-static void swap_idx(int *idx, int i, int j)
-{
-    int idx_tmp = idx[i];
-    idx[i] = idx[j];
-    idx[j] = idx_tmp;
-}
-
-// get index of sorted array ---------------------------------------------------
-static void argsort(const float *L, int n, int *idx)
-{
-    for (int i = 0; i < n; i++) {
-        idx[i] = i;
-    }
-    for (int i = 0; i < n - 1; i++) { // bubble sort
-        for (int j = n - 2; j >= i; j--) {
-            if (L[idx[j]] > L[idx[j+1]]) swap_idx(idx, j, j + 1);
-        }
-    }
-}
-
-// initialize GF(q) table ------------------------------------------------------
+// initialize GF(q) tables --------------------------------------------------------
 static void init_table(void)
 {
     if (GF_MUL[1][1]) {
@@ -84,14 +101,15 @@ static void init_table(void)
         for (int j = 1; j < Q_GF; j++) {
             GF_MUL[i][j] = GF_VEC[(GF_POW[i] + GF_POW[j]) % (Q_GF - 1)];
         }
+        GF_INV[i] = GF_VEC[(Q_GF - 1 - GF_POW[i]) % (Q_GF - 1)];
     }
 }
 
-// convert soft binary codes to GF(q) hard-decision codes ----------------------
+// convert soft binary codes to GF(q) hard-decision codes -------------------------
 static void soft2gf(const uint8_t *syms, int n, uint8_t *code)
 {
     memset(code, 0, n);
-    
+
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < N_GF; j++) {
             code[i] = (code[i] << 1) + (syms[i*N_GF+j] >= 128 ? 1 : 0);
@@ -99,7 +117,7 @@ static void soft2gf(const uint8_t *syms, int n, uint8_t *code)
     }
 }
 
-// convert GF(q) codes to binary codes -----------------------------------------
+// convert GF(q) codes to binary codes --------------------------------------------
 static void gf2bin(const uint8_t *code, int n, uint8_t *syms)
 {
     for (int i = 0; i < n; i++) {
@@ -109,206 +127,391 @@ static void gf2bin(const uint8_t *code, int n, uint8_t *syms)
     }
 }
 
-// Tanner graph edges ----------------------------------------------------------
-static int graph_edge(const uint8_t H_idx[][4], const uint8_t H_ele[][4], int m,
-    int *ie, int *je, uint8_t *he)
+// generate Tanner graph ----------------------------------------------------------
+static int gen_graph(nb_graph_t *g, const uint8_t H_idx[][4],
+    const uint8_t H_ele[][4], int m, int n)
 {
-    int ne = 0;
-    
+    int ne = m * DC_H, vdeg[MAX_H_N] = {0};
+
     for (int i = 0; i < m; i++) {
-        for (int j = 0; j < 4 && ne < MAX_EDGE; j++) {
-            ie[ne] = i;
-            je[ne] = H_idx[i][j];
-            he[ne++] = H_ele[i][j];
+        for (int j = 0; j < DC_H; j++) {
+            if (H_idx[i][j] >= n || !H_ele[i][j]) return 0;
+            if (++vdeg[H_idx[i][j]] > MAX_VDEG) return 0;
         }
     }
-    return ne;
-}
+    g->m = m;
+    g->n = n;
+    g->ne = ne;
+    g->ce_var = (uint16_t *)sdr_malloc(sizeof(uint16_t) * ne * 2);
+    g->ve_edge = g->ce_var + ne;
+    g->ce_h = (uint8_t *)sdr_malloc(sizeof(uint8_t) * ne * 2);
+    g->ce_hinv = g->ce_h + ne;
+    g->ve_ptr = (int *)sdr_malloc(sizeof(int) * (n + 1));
 
-// copy LLR (L1 = L2.copy()) ---------------------------------------------------
-static void copy_LLR(float *L1, const float *L2)
-{
-    for (int i = 0; i < Q_GF; i++) {
-        L1[i] = L2[i];
+    for (int i = 0; i < m; i++) {
+        for (int j = 0; j < DC_H; j++) {
+            g->ce_var[i*DC_H+j] = H_idx[i][j];
+            g->ce_h[i*DC_H+j] = H_ele[i][j];
+            g->ce_hinv[i*DC_H+j] = GF_INV[H_ele[i][j]];
+            g->ve_ptr[H_idx[i][j]+1]++;
+        }
     }
-}
-
-// add LLR (L1 += L2) ----------------------------------------------------------
-static void add_LLR(float *L1, const float *L2)
-{
-    for (int i = 0; i < Q_GF; i++) {
-        L1[i] += L2[i];
-    }
-}
-
-// normalize LLR (L -= min(L)) -------------------------------------------------
-static void norm_LLR(float *L)
-{
-    float minL = L[argmin(L, Q_GF)];
-    
-    for (int i = 0; i < Q_GF; i++) {
-        L[i] -= minL;
-    }
-}
-
-// initialize LLR by soft binary codes -----------------------------------------
-static void init_LLR_soft(const uint8_t *syms, int n, float **L)
-{
-    const float scale = -logf((float)ERR_PROB) / 255.0f;
-    
     for (int i = 0; i < n; i++) {
-        for (int j = 0; j < Q_GF; j++) {
-            float cost = 0.0f;
-            
-            for (int k = 0; k < N_GF; k++) {
-                int bit = (j >> (N_GF - 1 - k)) & 1;
-                uint8_t sym = syms[i*N_GF+k];
-                cost += (float)(bit ? 255 - sym : sym) * scale;
-            }
-            L[i][j] = cost;
-        }
+        g->ve_ptr[i+1] += g->ve_ptr[i];
     }
-}
-
-// NB-LDPC parity check --------------------------------------------------------
-static int check_parity(const int *ie, const int *je, const uint8_t *he, int ne,
-    int m, const uint8_t *code)
-{
-    uint8_t s[MAX_H_M] = {0};
-    
+    int pos[MAX_H_N];
+    memcpy(pos, g->ve_ptr, sizeof(int) * n);
     for (int i = 0; i < ne; i++) {
-        s[ie[i]] ^= GF_MUL[he[i]][code[je[i]]];
-    }
-    for (int i = 0; i < m; i++) {
-        if (s[i] != 0) return 0;
+        g->ve_edge[pos[g->ce_var[i]]++] = (uint16_t)i;
     }
     return 1;
 }
 
-// permute VN->CN message ------------------------------------------------------
-static void permute_V2C(uint8_t h, const float *V2C, float *V2C_p)
+// get cached Tanner graph --------------------------------------------------------
+static const nb_graph_t *get_graph(const uint8_t H_idx[][4],
+    const uint8_t H_ele[][4], int m, int n)
 {
-    for (int i = 0; i < Q_GF; i++) {
-        V2C_p[GF_MUL[h][i]] = V2C[i];
+    static nb_graph_t graphs[MAX_GRAPH] = {{0}};
+
+    if (m <= 0 || m > MAX_H_M || n <= 0 || n > MAX_H_N) return NULL;
+
+    for (int i = 0; i < MAX_GRAPH; i++) {
+        if (graphs[i].H_idx == H_idx && graphs[i].m == m && graphs[i].n == n) {
+            return graphs + i;
+        }
+        if (!graphs[i].H_idx) {
+            if (!gen_graph(graphs + i, H_idx, H_ele, m, n)) return NULL;
+            graphs[i].H_idx = H_idx;
+            return graphs + i;
+        }
+    }
+    return NULL;
+}
+
+// NB-LDPC parity check -----------------------------------------------------------
+static int check_parity(const nb_graph_t *g, const uint8_t *code)
+{
+    for (int i = 0; i < g->ne; i += DC_H) {
+        uint8_t s = 0;
+        for (int j = 0; j < DC_H; j++) {
+            s ^= GF_MUL[g->ce_h[i+j]][code[g->ce_var[i+j]]];
+        }
+        if (s) return 0;
+    }
+    return 1;
+}
+
+// initialize posterior LLRs by soft binary codes with scale normalization --------
+static void init_LLR(const uint8_t *syms, int n, float *P)
+{
+    double ave = 0.0;
+
+    for (int i = 0; i < n * N_GF; i++) {
+        ave += fabs(syms[i] - 127.5);
+    }
+    float scale = LLR_AVE / (float)(ave / (n * N_GF)); // min of ave = 0.5
+
+    for (int i = 0; i < n; i++) {
+        float absL[N_GF];
+        uint8_t hard = 0;
+
+        for (int j = 0; j < N_GF; j++) {
+            uint8_t sym = syms[i*N_GF+j];
+            hard = (hard << 1) + (sym >= 128 ? 1 : 0);
+            absL[j] = fabsf(sym - 127.5f) * scale;
+        }
+        for (int x = 0; x < Q_GF; x++) {
+            float cost = 0.0f;
+            uint8_t diff = (uint8_t)x ^ hard;
+
+            for (int j = 0; j < N_GF; j++) {
+                if (diff & (1 << (N_GF - 1 - j))) cost += absL[j];
+            }
+            P[i*Q_GF+x] = cost;
+        }
     }
 }
 
-// permute CN->VN message ------------------------------------------------------
-static void permute_C2V(uint8_t h, const float *C2V, float *C2V_p)
+// truncate LLRs to NM smallest elements (ascending, normalized to llr[0]=0) ------
+static void trunc_LLR(const float *met, nb_msg_t *msg)
 {
-    for (int i = 0; i < Q_GF; i++) {
-        C2V_p[i] = C2V[GF_MUL[h][i]];
+    int nk = 0;
+
+    for (int x = 0; x < Q_GF; x++) {
+        float L = met[x];
+
+        if (nk >= NM_EMS && L >= msg->llr[NM_EMS-1]) continue;
+        int k = nk < NM_EMS ? nk++ : NM_EMS - 1;
+        for ( ; k > 0 && msg->llr[k-1] > L; k--) {
+            msg->llr[k] = msg->llr[k-1];
+            msg->sym[k] = msg->sym[k-1];
+        }
+        msg->llr[k] = L;
+        msg->sym[k] = (uint8_t)x;
+    }
+    for (int k = NM_EMS - 1; k >= 0; k--) {
+        msg->llr[k] -= msg->llr[0];
     }
 }
 
-// extended-min-sum (EMS) of LLRs (L1 = min(L1 + L2)) ([2]) --------------------
-static void ext_min_sum(float *L1, const float *L2)
+// combine messages by extended-min-sum (out = min(u + w)) ([2],[3]) --------------
+static void comb_msg(const nb_msg_t *u, const nb_msg_t *w, nb_msg_t *out)
 {
-    float Ls[Q_GF], maxL;
-    int idx1[Q_GF], idx2[Q_GF];
-    
-    if (L1[0] < 0.0) { // first sum
-        copy_LLR(L1, L2);
-        return;
+    float best[Q_GF];
+
+    for (int x = 0; x < Q_GF; x++) {
+        best[x] = MAX_LLR;
     }
-    argsort(L1, Q_GF, idx1);
-    argsort(L2, Q_GF, idx2);
-    maxL = L1[idx1[NM_EMS-1]] + L2[idx2[NM_EMS-1]];
-    
-    for (int i = 0; i < Q_GF; i++) {
-        Ls[i] = maxL;
+    for (int i = 0; i < NM_EMS; i++) {
+        for (int j = 0; j < NM_EMS; j++) {
+            uint8_t s = u->sym[i] ^ w->sym[j];
+            float L = u->llr[i] + w->llr[j];
+
+            if (L < best[s]) best[s] = L;
+        }
     }
-    for (int k = 0; k < NM_EMS; k++) {
-        for (int m = 0; m < NM_EMS; m++) {
-            int i = idx1[k], j = idx2[m];
-            if (L1[i] + L2[j] < Ls[i^j]) {
-                Ls[i^j] = L1[i] + L2[j];
+    trunc_LLR(best, out);
+}
+
+// update check node and posteriors by layered schedule ([3]) ---------------------
+static void update_check(const nb_graph_t *g, int i, float *P, float *EC2V,
+    uint8_t *code)
+{
+    nb_msg_t V2C[DC_H], C2V[DC_H], f1, b2;
+    float met[Q_GF], ext[Q_GF];
+
+    // extrinsic VN->CN messages in edge domain (y = h * x)
+    for (int j = 0; j < DC_H; j++) {
+        int e = i * DC_H + j;
+        const float *Pv = P + g->ce_var[e] * Q_GF;
+        const float *E = EC2V + e * Q_GF;
+        const uint8_t *mul = GF_MUL[g->ce_h[e]];
+
+        for (int x = 0; x < Q_GF; x++) {
+            met[mul[x]] = Pv[x] - E[x];
+        }
+        trunc_LLR(met, V2C + j);
+    }
+    // CN->VN messages by forward-backward recursion
+    comb_msg(V2C + 2, V2C + 3, &b2);
+    comb_msg(V2C + 1, &b2, C2V);
+    comb_msg(V2C + 0, &b2, C2V + 1);
+    comb_msg(V2C + 0, V2C + 1, &f1);
+    comb_msg(&f1, V2C + 3, C2V + 2);
+    comb_msg(&f1, V2C + 2, C2V + 3);
+
+    // update posteriors with offset compensation of truncated LLRs
+    for (int j = 0; j < DC_H; j++) {
+        int e = i * DC_H + j, v = g->ce_var[e];
+        float *Pv = P + v * Q_GF, *E = EC2V + e * Q_GF;
+        const uint8_t *inv = GF_MUL[g->ce_hinv[e]];
+        float fill = C2V[j].llr[NM_EMS-1] + EMS_OFFSET;
+
+        for (int x = 0; x < Q_GF; x++) {
+            ext[x] = fill;
+        }
+        for (int k = 0; k < NM_EMS; k++) {
+            ext[inv[C2V[j].sym[k]]] = C2V[j].llr[k];
+        }
+        for (int x = 0; x < Q_GF; x++) {
+            Pv[x] += ext[x] - E[x];
+            E[x] = ext[x];
+        }
+        code[v] = (uint8_t)argmin(Pv, Q_GF);
+    }
+}
+
+// get index of max value in array -------------------------------------------------
+static int argmax(const double *p, int n)
+{
+    int j = 0;
+    for (int i = 1; i < n; i++) {
+        if (p[i] > p[j]) j = i;
+    }
+    return j;
+}
+
+// Walsh-Hadamard transform (in-place, self-inverse up to factor Q) ----------------
+static void walsh_trans(double *p)
+{
+    for (int h = 1; h < Q_GF; h *= 2) {
+        for (int i = 0; i < Q_GF; i += h * 2) {
+            for (int j = i; j < i + h; j++) {
+                double a = p[j], b = p[j+h];
+                p[j] = a + b;
+                p[j+h] = a - b;
             }
         }
     }
-    copy_LLR(L1, Ls);
 }
 
-// decode NB-LDPC by soft-decision input ---------------------------------------
+// normalize symbol probabilities with scale-invariant floor ----------------------
+static void norm_prob(double *p)
+{
+    double pmax = p[argmax(p, Q_GF)], sum = 0.0;
+
+    if (pmax <= 0.0) { // all zero or roundoff negatives
+        for (int x = 0; x < Q_GF; x++) {
+            p[x] = 1.0 / Q_GF;
+        }
+        return;
+    }
+    double pmin = pmax * P_FLOOR; // also clears roundoff negatives
+
+    for (int x = 0; x < Q_GF; x++) {
+        if (p[x] < pmin) p[x] = pmin;
+        sum += p[x];
+    }
+    for (int x = 0; x < Q_GF; x++) {
+        p[x] /= sum;
+    }
+}
+
+// decode NB-LDPC by sum-product with Walsh-domain convolution ([1],[4]) -----------
+static int decode_SP(const nb_graph_t *g, const uint8_t *syms, uint8_t *code)
+{
+    int n = g->n, ne = g->ne, ok = 0;
+    float *L = (float *)sdr_malloc(sizeof(float) * n * Q_GF);
+    double *Pc = (double *)sdr_malloc(sizeof(double) * (n + ne * 2) * Q_GF);
+    double *V2C = Pc + n * Q_GF, *C2V = V2C + ne * Q_GF;
+
+    // channel symbol probabilities by normalized LLRs
+    init_LLR(syms, n, L);
+    for (int i = 0; i < n; i++) {
+        for (int x = 0; x < Q_GF; x++) {
+            Pc[i*Q_GF+x] = exp(-(double)L[i*Q_GF+x]);
+        }
+        norm_prob(Pc + i * Q_GF);
+    }
+    sdr_free(L);
+
+    // initialize VN->CN messages in edge domain (y = h * x)
+    for (int e = 0; e < ne; e++) {
+        const double *pv = Pc + g->ce_var[e] * Q_GF;
+        const uint8_t *mul = GF_MUL[g->ce_h[e]];
+
+        for (int x = 0; x < Q_GF; x++) {
+            V2C[e*Q_GF+mul[x]] = pv[x];
+        }
+    }
+    for (int iter = 0; iter < MAX_ITER_SP && !ok; iter++) {
+        // update check nodes (XOR convolution as product in Walsh domain)
+        for (int i = 0; i < g->ne; i += DC_H) {
+            double T[DC_H][Q_GF], f1[Q_GF], b2[Q_GF], *out;
+
+            for (int j = 0; j < DC_H; j++) {
+                memcpy(T[j], V2C + (i + j) * Q_GF, sizeof(T[j]));
+                walsh_trans(T[j]);
+            }
+            for (int x = 0; x < Q_GF; x++) {
+                f1[x] = T[0][x] * T[1][x];
+                b2[x] = T[2][x] * T[3][x];
+            }
+            for (int j = 0; j < DC_H; j++) {
+                out = C2V + (i + j) * Q_GF;
+                for (int x = 0; x < Q_GF; x++) {
+                    out[x] = j == 0 ? T[1][x] * b2[x] :
+                             j == 1 ? T[0][x] * b2[x] :
+                             j == 2 ? f1[x] * T[3][x] : f1[x] * T[2][x];
+                }
+                walsh_trans(out); // inverse up to factor Q absorbed by norm
+                norm_prob(out);
+            }
+        }
+        // update variable nodes and GF(q) codes
+        for (int i = 0; i < n; i++) {
+            int nd = g->ve_ptr[i+1] - g->ve_ptr[i];
+            const uint16_t *edge = g->ve_edge + g->ve_ptr[i];
+            double post[Q_GF], out[Q_GF];
+
+            for (int x = 0; x < Q_GF; x++) {
+                post[x] = Pc[i*Q_GF+x];
+            }
+            for (int d = 0; d < nd; d++) {
+                const double *c2v = C2V + edge[d] * Q_GF;
+                const uint8_t *mul = GF_MUL[g->ce_h[edge[d]]];
+
+                for (int x = 0; x < Q_GF; x++) {
+                    post[x] *= c2v[mul[x]];
+                }
+            }
+            code[i] = (uint8_t)argmax(post, Q_GF);
+
+            for (int d = 0; d < nd; d++) {
+                const uint8_t *mul = GF_MUL[g->ce_h[edge[d]]];
+
+                for (int x = 0; x < Q_GF; x++) {
+                    out[x] = Pc[i*Q_GF+x];
+                }
+                for (int f = 0; f < nd; f++) {
+                    if (f == d) continue;
+                    const double *c2v = C2V + edge[f] * Q_GF;
+                    const uint8_t *mulf = GF_MUL[g->ce_h[edge[f]]];
+
+                    for (int x = 0; x < Q_GF; x++) {
+                        out[x] *= c2v[mulf[x]];
+                    }
+                }
+                norm_prob(out);
+                for (int x = 0; x < Q_GF; x++) {
+                    V2C[edge[d]*Q_GF+mul[x]] = out[x];
+                }
+            }
+        }
+        ok = check_parity(g, code);
+    }
+    sdr_free(Pc);
+    return ok;
+}
+
+// decode NB-LDPC by soft-decision input ------------------------------------------
 int sdr_decode_NB_LDPC(const uint8_t H_idx[][4], const uint8_t H_ele[][4],
     int m, int n, const uint8_t *syms, uint8_t *syms_dec)
 {
-    float *V2C[MAX_EDGE], *C2V[MAX_EDGE], *L[MAX_H_N], Ls[Q_GF];
-    uint8_t code[MAX_H_N], he[MAX_EDGE];
-    int iter, ne, ie[MAX_EDGE], je[MAX_EDGE], nerr = -1;
-    
-    // initialize GF(q) tables
+    uint8_t code[MAX_H_N];
+    int nerr = -1;
+
+    if (m <= 0 || n <= 0) {
+        return (m == 0 && n == 0) ? 0 : -1;
+    }
+    // initialize GF(q) tables and get cached Tanner graph (channels run in
+    // separate threads: see ch_thread() in sdr_rcv.c)
+    sdr_mutex_lock(&init_mtx);
     init_table();
-    
+    const nb_graph_t *g = get_graph(H_idx, H_ele, m, n);
+    sdr_mutex_unlock(&init_mtx);
+    if (!g) return -1;
+
     // convert soft binary codes to GF(q) hard-decision codes
     soft2gf(syms, n, code);
-    
-    // Tanner graph edges
-    ne = graph_edge(H_idx, H_ele, m, ie, je, he);
-    for (int i = 0; i < ne; i++) {
-        V2C[i] = (float *)sdr_malloc(sizeof(float) * Q_GF);
-        C2V[i] = (float *)sdr_malloc(sizeof(float) * Q_GF);
-    }
-    // initialize LLR and VN->CN messages
-    for (int i = 0; i < n; i++) {
-        L[i] = (float *)sdr_malloc(sizeof(float) * Q_GF);
-    }
-    init_LLR_soft(syms, n, L);
-    
-    for (int i = 0; i < ne; i++) {
-        permute_V2C(he[i], L[je[i]], V2C[i]);
-    }
-    for (iter = 0; iter < MAX_ITER; iter++) {
-        // parity check
-        if (check_parity(ie, je, he, ne, m, code)) {
-            nerr = 0;
-            for (int i = 0; i < n * N_GF; i++) {
-                uint8_t sym = (code[i/N_GF] >> (N_GF-1-i%N_GF)) & 1;
-                if (sym != (syms[i] >= 128 ? 1 : 0)) nerr++;
+
+    if (!check_parity(g, code)) {
+        // initialize normalized posterior LLRs (EC2V cleared by sdr_malloc)
+        float *P = (float *)sdr_malloc(sizeof(float) * (n + g->ne) * Q_GF);
+        float *EC2V = P + n * Q_GF;
+
+        init_LLR(syms, n, P);
+
+        for (int iter = 0; iter < MAX_ITER; iter++) {
+            for (int i = 0; i < g->m; i++) {
+                update_check(g, i, P, EC2V, code);
             }
-            gf2bin(code, m, syms_dec);
-            break;
+            if (check_parity(g, code)) break;
         }
-        // update check nodes
-        for (int i = 0; i < ne; i++) {
-            Ls[0] = -1.0; // initial LLR
-            for (int j = 0; j < ne; j++) {
-                if (ie[i] == ie[j] && i != j) {
-                    ext_min_sum(Ls, V2C[j]);
-                }
-            }
-            norm_LLR(Ls);
-            permute_C2V(he[i], Ls, C2V[i]);
-        }
-        // update variable nodes
-        for (int i = 0; i < ne; i++) {
-            copy_LLR(Ls, L[je[i]]);
-            for (int j = 0; j < ne; j++) {
-                if (je[i] == je[j] && i != j) {
-                    add_LLR(Ls, C2V[j]);
-                }
-            }
-            norm_LLR(Ls);
-            permute_V2C(he[i], Ls, V2C[i]);
-        }
-        // update LLR and GF(q) codes
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < ne; j++) {
-                if (i == je[j]) {
-                    add_LLR(L[i], C2V[j]);
-                }
-            }
-            norm_LLR(L[i]);
-            code[i] = (uint8_t)argmin(L[i], Q_GF);
+        sdr_free(P);
+
+        // sum-product retry on EMS failure
+        if (MAX_ITER_SP > 0 && !check_parity(g, code)) {
+            decode_SP(g, syms, code);
         }
     }
-    for (int i = 0; i < ne; i++) {
-        sdr_free(V2C[i]);
-        sdr_free(C2V[i]);
-    }
-    for (int i = 0; i < n; i++) {
-        sdr_free(L[i]);
+    if (check_parity(g, code)) {
+        nerr = 0;
+        for (int i = 0; i < n * N_GF; i++) {
+            uint8_t sym = (code[i/N_GF] >> (N_GF-1-i%N_GF)) & 1;
+            if (sym != (syms[i] >= 128 ? 1 : 0)) nerr++;
+        }
+        gf2bin(code, m, syms_dec);
     }
     return nerr;
 }
-

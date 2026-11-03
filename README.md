@@ -1,8 +1,8 @@
 
-# **Pocket SDR - An Open-Source GNSS SDR,<br> ver. 0.21**
+# **Pocket SDR - An Open-Source GNSS SDR,<br> ver. 0.22**
 
 <div style="text-align: right;">
-<strong>2026-10-21</strong>
+<strong>2026-11-03</strong>
 </div>
 
 ---
@@ -731,5 +731,21 @@ purposes, is prohibited.
   carrier phase bias between channels that broke the integer double-difference
   ambiguities (GitHub issue #97), and potential buffer overflows in the
   pocket_web JSON replies (GitHub issue #98).
+- **2026-11-03 (v0.22)**: Redesigned the NB-LDPC decoder internals for the
+  BeiDou B1C / B2a / B2b navigation data: extrinsic EMS with truncated
+  messages and a compensation offset, a layered update schedule, a cached
+  Tanner graph, and a full-alphabet sum-product retry on EMS failure. The
+  error-correction performance is improved by 1.6-1.9 dB and the decoding is
+  7-17x faster, on par with GNSS-SDR (see doc/update_nb_ldpc_decoder.md).
+  Added fast / normal signal search slots and carried over the TOW across a
+  re-acquisition for a fast re-fix after a signal interruption. Shared the
+  DFT of the IF data among the Doppler bins in sdr_search_code() to speed up
+  the signal search (GitHub PR #99). Added NEON carrier mixing of 64 phases
+  by table lookup to the tracking correlator (GitHub PR #101). Fixed the
+  16 KB block misorder of the FE 4CH / 8CH IF data after a USB reset (GitHub
+  PR #100), the azimuth / elevation angles not updated for unhealthy
+  satellites while the PVT solution is available, and the satellite health
+  evaluation on the Satellites pages of the GUI and the Web UI by masking
+  the QZSS L1C/A and L1C/B health flags.
 
 --------------------------------------------------------------------------------
