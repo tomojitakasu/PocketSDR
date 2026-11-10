@@ -382,13 +382,13 @@ def stropen(type, mode, path):
         
 # close stream -----------------------------------------------------------------
 def strclose(stream):
-    if str != None:
+    if stream is not None:
         librtk.strclose(c_void_p(stream))
         librtk.strfree(c_void_p(stream))
 
 # write stream -----------------------------------------------------------------
 def strwrite(stream, buff):
-    if str == None or buff.dtype != 'uint8':
+    if stream is None or buff.dtype != 'uint8':
         return 0
     p = buff.ctypes.data_as(POINTER(c_uint8))
     return librtk.strwrite(c_void_p(stream), p, len(buff))
@@ -430,7 +430,7 @@ def strstat(stream):
 # get stream summary -----------------------------------------------------------
 def strsum(stream):
     inb, inr, outb, outr = c_int(), c_int(), c_int(), c_int()
-    librtk.strsum(c_void_p(streaam), byref(inb), byref(inr), byref(outb),
+    librtk.strsum(c_void_p(stream), byref(inb), byref(inr), byref(outb),
         byref(outr))
     return inb.value, inr.value, outb.value, outr.value
 
