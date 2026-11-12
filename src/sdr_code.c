@@ -1037,7 +1037,7 @@ static int8_t *gen_code_L5I(int prn, int *N)
         }
         L5I[prn-1] = (int8_t *)sdr_malloc(*N);
         for (int i = 0; i < *N; i++) {
-            L5I[prn-1][i] = L5_XA[i] * L5_XB[(i + L5I_XB_adv[prn-1]) % (*N)];
+            L5I[prn-1][i] = L5_XA[i] * L5_XB[(i + L5I_XB_adv[prn-1]) % 8191];
         }
     }
     return L5I[prn-1];
@@ -1057,7 +1057,7 @@ static int8_t *gen_code_L5Q(int prn, int *N)
         }
         L5Q[prn-1] = (int8_t *)sdr_malloc(*N);
         for (int i = 0; i < *N; i++) {
-            L5Q[prn-1][i] = L5_XA[i] * L5_XB[(i + L5Q_XB_adv[prn-1]) % (*N)];
+            L5Q[prn-1][i] = L5_XA[i] * L5_XB[(i + L5Q_XB_adv[prn-1]) % 8191];
         }
     }
     return L5Q[prn-1];

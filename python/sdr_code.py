@@ -1208,7 +1208,7 @@ def gen_code_L5I(prn):
         if len(L5_XA) == 0:
             L5_XA = gen_code_L5_XA(N)
             L5_XB = gen_code_L5_XB(N)
-        L5I[prn] = L5_XA * np.roll(L5_XB, -L5I_XB_adv[prn-1])
+        L5I[prn] = L5_XA * L5_XB[(np.arange(N) + L5I_XB_adv[prn-1]) % 8191]
     return L5I[prn]
 
 # generate L5Q code ([2]) ------------------------------------------------------
@@ -1221,7 +1221,7 @@ def gen_code_L5Q(prn):
         if len(L5_XA) == 0:
             L5_XA = gen_code_L5_XA(N)
             L5_XB = gen_code_L5_XB(N)
-        L5Q[prn] = L5_XA * np.roll(L5_XB, -L5Q_XB_adv[prn-1])
+        L5Q[prn] = L5_XA * L5_XB[(np.arange(N) + L5Q_XB_adv[prn-1]) % 8191]
     return L5Q[prn]
 
 # generate L5SI code ([15]) ----------------------------------------------------
