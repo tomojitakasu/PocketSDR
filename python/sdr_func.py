@@ -225,12 +225,12 @@ def psd(data, N, fs, IQ):
 # open log ---------------------------------------------------------------------
 def log_open(path):
     global log_str
-    m = re.search(r'([^:]*):([^:]+)', path)
+    m = re.match(r'([^:]*):([0-9]+)', path)
     if not m: # file
         log_str = sdr_rtk.stropen(sdr_rtk.STR_FILE, sdr_rtk.STR_MODE_W, path)
     elif not m.group(1): # TCP server
         log_str = sdr_rtk.stropen(sdr_rtk.STR_TCPSVR, sdr_rtk.STR_MODE_W, path)
-    elif not m.group(2): # TCP client
+    else: # TCP client
         log_str = sdr_rtk.stropen(sdr_rtk.STR_TCPCLI, sdr_rtk.STR_MODE_W, path)
     if not log_str:
         print('log stream open error %s' % (path))

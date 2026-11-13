@@ -167,7 +167,7 @@ def show_usage():
 #         decoded navigation data and code offset, including navigation data
 #         decoded. The stream path should be one of the followings.
 #
-#         (1) local file  file path without ':'. The file path can be contain
+#         (1) local file  file path. The file path can contain
 #             time keywords (%Y, %m, %d, %h, %M) as same as RTKLIB stream.
 #         (2) TCP server  :port
 #         (3) TCP client  address:port
