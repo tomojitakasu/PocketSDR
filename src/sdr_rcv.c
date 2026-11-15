@@ -761,7 +761,7 @@ sdr_rcv_t *sdr_rcv_new(const char **sigs, const int *prns, int n, int fmt,
         rcv->rfch[i].bits = (fmt == SDR_FMT_INT8 || fmt == SDR_FMT_INT8X2 ||
             fmt == SDR_FMT_CS8) ? 8 : (fmt == SDR_FMT_CS16 ? 16 : bits[i]);
     }
-    rcv->N = (int)(SDR_CYC * fs);
+    rcv->N = (int)(SDR_CYC * fs + 0.5);
     
     for (int i = 0; i < n && rcv->nch < SDR_MAX_NCH; i++) {
         int ch[SDR_MAX_BUFF] = {0};
@@ -2057,7 +2057,7 @@ static sdr_rcv_t *rcv_open_file(const char **sigs, int *prns, int n, int fmt,
     int64_t off;
     if (num_rfch(fmt) == 1 && nch > 1) {
         // CH planar: seek in whole cycles to keep the RF CHs aligned
-        int N = (int)(SDR_CYC * fs);
+        int N = (int)(SDR_CYC * fs + 0.5);
         off = (int64_t)(toff / SDR_CYC + 0.5) * N * sample_byte(fmt) * nch;
     } else {
         off = (int64_t)(fs * toff * sample_byte(fmt));

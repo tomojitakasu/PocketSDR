@@ -218,7 +218,7 @@ static void dump_sdev_data(sdr_sdev_t *sdev, double tsec, int quiet, int fmt,
     double rate = 0.0, byte[1] = {0};
     int nch = sdev->nch, ns = sample_byte(fmt);
     // multi-CH data are CH planar in a processing cycle to be replayable
-    int size = (nch > 1 ? (int)(SDR_CYC * fs) : SDR_SIZE_UBUFF) * ns;
+    int size = (nch > 1 ? (int)(SDR_CYC * fs + 0.5) : SDR_SIZE_UBUFF) * ns;
     int IQ[1] = {2};
     uint8_t *data = (uint8_t *)sdr_malloc((size_t)size * nch);
     uint8_t *buff[SDR_MAX_RFCH];

@@ -381,7 +381,7 @@ static sdr_trk_t *trk_new(const char *sig, int prn, const int8_t *code,
     memset(trk->sumI, 0, sizeof(double) * SDR_MAX_CORR);
     memset(trk->aveP, 0, sizeof(double) * SDR_MAX_CORR);
     memset(trk->aveI, 0, sizeof(double) * SDR_MAX_CORR);
-    int N = (int)(fs * T);
+    int N = (int)(fs * T + 0.5);
     if (!strcmp(sig, "L6D") || !strcmp(sig, "L6E")) {
         trk->code_fft = sdr_cpx_malloc(CSK_NFFT);
         gen_csk_code_fft(code, len_code, !strcmp(sig, "L6E") ? 1 : 0,
@@ -464,7 +464,7 @@ sdr_ch_t *sdr_ch_new(const char *sig, int prn, double fs, double fi)
     ch->fs = fs;
     ch->fi = sdr_shift_freq(sig, prn, fi);
     ch->T = sdr_code_cyc(sig);
-    ch->N = (int)(fs * ch->T);
+    ch->N = (int)(fs * ch->T + 0.5);
     ch->fd = ch->coff = ch->phi = ch->adr = ch->cn0 = ch->pli = 0.0;
     ch->lock = ch->lost = ch->lost_cnt = ch->pli_valid = 0;
     ch->costas = strcmp(ch->sig, "L6D") && strcmp(ch->sig, "L6E");
