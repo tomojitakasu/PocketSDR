@@ -241,6 +241,33 @@ static void test_sdr_pvt_udobs_update_api(void)
     cleanup_files();
 }
 
+// test sdr_pvt_udobs() SNR saturation -----------------------------------------
+static void test_sdr_pvt_udobs_snr_saturate(void)
+{
+    sdr_rcv_t rcv;
+    sdr_pvt_t *pvt = new_test_pvt(&rcv);
+    sdr_ch_t ch;
+    sdr_trk_t trk;
+    sdr_nav_t nav;
+    int64_t ix = 123456;
+    
+    setup_channel(&ch, &trk, &nav);
+    pvt->time = gpst2time(ch.week, ch.tow * 1e-3 + 0.075);
+    pvt->ix = ix;
+    ch.cn0 = 65.4;
+    sdr_pvt_udobs(pvt, ix, &ch);
+    TEST_ASSERT_EQ_INT(1, pvt->obs->n);
+    TEST_ASSERT_EQ_INT(65400, pvt->obs->data[0].SNR[0]);
+    
+    ch.cn0 = 70.0;
+    sdr_pvt_udobs(pvt, ix, &ch);
+    TEST_ASSERT_EQ_INT(1, pvt->obs->n);
+    TEST_ASSERT_EQ_INT(65535, pvt->obs->data[0].SNR[0]);
+    
+    sdr_pvt_free(pvt);
+    cleanup_files();
+}
+
 // test sdr_pvt_udobs() invalid observations -----------------------------------
 static void test_sdr_pvt_udobs_invalid_api(void)
 {
@@ -401,6 +428,7 @@ int main(void)
     TEST_RUN(test_sdr_pvt_udobs_init_epoch_rep_api);
     TEST_RUN(test_sdr_pvt_last_fix_api);
     TEST_RUN(test_sdr_pvt_udobs_update_api);
+    TEST_RUN(test_sdr_pvt_udobs_snr_saturate);
     TEST_RUN(test_sdr_pvt_udobs_invalid_api);
     TEST_RUN(test_sdr_pvt_udnav_api);
     TEST_RUN(test_adjgpsweek_nearest_era);

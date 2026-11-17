@@ -837,7 +837,7 @@ static double gen_cphas(const sdr_ch_t *ch, double P)
 static void update_obs(gtime_t time, obs_t *obs, sdr_ch_t *ch)
 {
     uint8_t code = sig2code(ch->sig);
-    double P = gen_prng(time, ch);
+    double P = gen_prng(time, ch), snr;
     int i, idx = ch->obs_idx, sat;
     
     if (strstr(ch->sat, "R-") || strstr(ch->sat, "R+")) return;
@@ -859,7 +859,8 @@ static void update_obs(gtime_t time, obs_t *obs, sdr_ch_t *ch)
     obs->data[i].P[idx] = P;
     obs->data[i].L[idx] = gen_cphas(ch, P);
     obs->data[i].D[idx] = (float)ch->fd;
-    obs->data[i].SNR[idx] = (uint16_t)(ch->cn0 / SNR_UNIT + 0.5);
+    snr = ch->cn0 / SNR_UNIT + 0.5; // saturate to the uint16_t range of SNR
+    obs->data[i].SNR[idx] = (uint16_t)(snr < 0.0 ? 0.0 : (snr > 65535.0 ? 65535.0 : snr));
     if (ch->lock * ch->T <= 2.0 || fabs(ch->trk->err_phas) > 0.25) {
         obs->data[i].LLI[idx] |= 1; // PLL unlock
     }
